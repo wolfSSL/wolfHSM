@@ -1449,21 +1449,13 @@ int wh_Client_KeyCacheDmaRequest(whClientContext* c, uint32_t flags,
     }
     memset(req, 0, sizeof(*req));
 
-    /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
-    c->dma.asyncCtx.buf.sz = 0;
-
-    /* PRE-translate the input key buffer. POST runs in the Response, not here:
-     * the server reads the buffer between request and response, so an
-     * in-request POST would free the scratch too early (use-after-free). */
-    ret = wh_Client_DmaProcessClientAddress(
-        c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
-        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    /* PRE-translate the input key buffer and stash it for the Response POST.
+     * POST runs in the Response, not here: the server reads the buffer between
+     * request and response, so an in-request POST would free the scratch too
+     * early (use-after-free). */
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)keyAddr,
+                                keySz, WH_DMA_OPER_CLIENT_READ_PRE, &keyAddrPtr);
     if (ret == WH_ERROR_OK) {
-        c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
-        c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
-        c->dma.asyncCtx.buf.sz          = keySz;
-        c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
-
         /* Build and send the request now that the buffer is mapped. */
         req->id       = keyId;
         req->flags    = flags;
@@ -1506,6 +1498,8 @@ int wh_Client_KeyCacheDmaResponse(whClientContext* c, uint16_t* keyId)
     }
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mapping; POST runs once the response arrives. */
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1572,20 +1566,12 @@ int wh_Client_KeyExportDmaRequest(whClientContext* c, uint16_t keyId,
         return WH_ERROR_BADARGS;
     }
 
-    /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
-    c->dma.asyncCtx.buf.sz = 0;
-
     /* PRE-translate the output key buffer; the server fills it and the
      * Response POST copies the result back and releases it. */
-    ret = wh_Client_DmaProcessClientAddress(
-        c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
-        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)keyAddr,
+                                keySz, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                &keyAddrPtr);
     if (ret == WH_ERROR_OK) {
-        c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
-        c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
-        c->dma.asyncCtx.buf.sz          = keySz;
-        c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
-
         /* Build and send the request now that the buffer is mapped. */
         req->id       = keyId;
         req->key.addr = (uint64_t)keyAddrPtr;
@@ -1623,6 +1609,8 @@ int wh_Client_KeyExportDmaResponse(whClientContext* c, uint8_t* label,
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
                                 (uint8_t*)resp);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mapping; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
         return rc;
     }
@@ -1701,19 +1689,11 @@ int wh_Client_KeyExportPublicDmaRequest(whClientContext* c, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
-    c->dma.asyncCtx.buf.sz = 0;
-
     /* PRE-translate the output public key buffer; see KeyExportDmaRequest. */
-    ret = wh_Client_DmaProcessClientAddress(
-        c, (uintptr_t)keyAddr, (void**)&keyAddrPtr, keySz,
-        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)keyAddr,
+                                keySz, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                &keyAddrPtr);
     if (ret == WH_ERROR_OK) {
-        c->dma.asyncCtx.buf.xformedAddr = keyAddrPtr;
-        c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)keyAddr;
-        c->dma.asyncCtx.buf.sz          = keySz;
-        c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
-
         /* Build and send the request now that the buffer is mapped. */
         req->id       = keyId;
         req->algo     = algo;
@@ -1754,6 +1734,8 @@ int wh_Client_KeyExportPublicDmaResponse(whClientContext* c, uint8_t* label,
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
                                 (uint8_t*)resp);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mapping; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
         return rc;
     }

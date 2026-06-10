@@ -708,33 +708,23 @@ int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
         return WH_ERROR_REQUEST_PENDING;
     }
 
-    /* Clear both slots up front: a metadata-only object leaves the data slot
-     * unset, and the Response must not POST a stale (shared-union) size. */
-    c->dma.asyncCtx.nvmAdd.meta.sz = 0;
-    c->dma.asyncCtx.nvmAdd.data.sz = 0;
+    /* One op in flight: clear both slots up front so a metadata-only object -
+     * or a failed metadata PRE that skips the data PRE - leaves the data slot's
+     * POST a no-op and never acts on a stale (shared-union) size. */
+    memset(&c->dma.asyncCtx.nvmAdd, 0, sizeof(c->dma.asyncCtx.nvmAdd));
 
     /* PRE-translate the metadata struct (fixed size) and the optional data
      * buffer; the matching Response POST releases them. */
-    ret = wh_Client_DmaProcessClientAddress(
-        c, (uintptr_t)metadata, (void**)&metaAddrPtr, sizeof(whNvmMetadata),
-        WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.nvmAdd.meta,
+                                (uintptr_t)metadata, sizeof(whNvmMetadata),
+                                WH_DMA_OPER_CLIENT_READ_PRE, &metaAddrPtr);
     if (ret == WH_ERROR_OK) {
-        c->dma.asyncCtx.nvmAdd.meta.xformedAddr = metaAddrPtr;
-        c->dma.asyncCtx.nvmAdd.meta.clientAddr  = (uintptr_t)metadata;
-        c->dma.asyncCtx.nvmAdd.meta.sz          = sizeof(whNvmMetadata);
-        c->dma.asyncCtx.nvmAdd.meta.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
-    }
-
-    if (ret == WH_ERROR_OK && data != NULL && data_len > 0) {
-        ret = wh_Client_DmaProcessClientAddress(
-            c, (uintptr_t)data, (void**)&dataAddrPtr, data_len,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        if (ret == WH_ERROR_OK) {
-            c->dma.asyncCtx.nvmAdd.data.xformedAddr = dataAddrPtr;
-            c->dma.asyncCtx.nvmAdd.data.clientAddr  = (uintptr_t)data;
-            c->dma.asyncCtx.nvmAdd.data.sz          = data_len;
-            c->dma.asyncCtx.nvmAdd.data.postOper    = WH_DMA_OPER_CLIENT_READ_POST;
-        }
+        /* len 0 (no data buffer) is a no-op in the helper, leaving dataAddrPtr
+         * at 0 so no raw, untranslated pointer reaches the message. */
+        ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.nvmAdd.data,
+                                    (uintptr_t)data,
+                                    (data != NULL) ? data_len : 0,
+                                    WH_DMA_OPER_CLIENT_READ_PRE, &dataAddrPtr);
     }
 
     msg.metadata_hostaddr = (uint64_t)metaAddrPtr;
@@ -771,6 +761,8 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mappings; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
         return rc;
     }
@@ -836,23 +828,13 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
         return WH_ERROR_REQUEST_PENDING;
     }
 
-    /* Clear the slot up front so a skipped PRE leaves nothing for POST. */
-    c->dma.asyncCtx.buf.sz = 0;
-
     /* PRE-translate the output data buffer (only when there is one); the server
-     * writes the NVM contents and the Response POST copies them back. Skipping
-     * the empty case keeps a raw, untranslated pointer out of the message. */
-    if (data != NULL && data_len > 0) {
-        ret = wh_Client_DmaProcessClientAddress(
-            c, (uintptr_t)data, (void**)&dataAddrPtr, data_len,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        if (ret == WH_ERROR_OK) {
-            c->dma.asyncCtx.buf.xformedAddr = dataAddrPtr;
-            c->dma.asyncCtx.buf.clientAddr  = (uintptr_t)data;
-            c->dma.asyncCtx.buf.sz          = data_len;
-            c->dma.asyncCtx.buf.postOper    = WH_DMA_OPER_CLIENT_WRITE_POST;
-        }
-    }
+     * writes the NVM contents and the Response POST copies them back. len 0 (no
+     * buffer) is a no-op in the helper, keeping a raw, untranslated pointer out
+     * of the message. */
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)data,
+                                (data != NULL) ? data_len : 0,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE, &dataAddrPtr);
 
     if (ret == WH_ERROR_OK) {
         msg.id            = id;
@@ -885,6 +867,8 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mapping; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
         return rc;
     }

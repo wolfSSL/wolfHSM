@@ -97,12 +97,67 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
     return rc;
 }
 
+int wh_Client_DmaAsyncPre(whClientContext* client, whClientDmaAsyncBuf* buf,
+                          uintptr_t clientAddr, uint64_t len, whDmaOper preOper,
+                          uintptr_t* outXformedAddr)
+{
+    int       rc       = WH_ERROR_OK;
+    uintptr_t addr     = 0;
+    whDmaOper postOper = WH_DMA_OPER_CLIENT_READ_POST;
+
+    if (client == NULL || buf == NULL || outXformedAddr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* The POST always matches the PRE's direction, so derive it here rather
+     * than have every caller pass (and risk mismatching) both halves. */
+    switch (preOper) {
+        case WH_DMA_OPER_CLIENT_READ_PRE:
+            postOper = WH_DMA_OPER_CLIENT_READ_POST;
+            break;
+        case WH_DMA_OPER_CLIENT_WRITE_PRE:
+            postOper = WH_DMA_OPER_CLIENT_WRITE_POST;
+            break;
+        default:
+            /* Caller passed a POST or otherwise invalid operation, not a PRE. */
+            return WH_ERROR_BADARGS;
+    }
+
+    /* Clear the whole slot up front so a skipped or failed PRE leaves nothing
+     * for the matching POST (run in the Response) to act on. */
+    memset(buf, 0, sizeof(*buf));
+    *outXformedAddr = 0;
+
+    /* Nothing to map (e.g. an optional buffer that is absent): leave the slot
+     * cleared and report success with a 0 transformed address. */
+    if (len == 0) {
+        return WH_ERROR_OK;
+    }
+
+    rc = wh_Client_DmaProcessClientAddress(client, clientAddr, (void**)&addr,
+                                           (size_t)len, preOper,
+                                           (whDmaFlags){0});
+    if (rc == WH_ERROR_OK) {
+        buf->xformedAddr = addr;
+        buf->clientAddr  = clientAddr;
+        buf->sz          = len;
+        buf->postOper    = postOper;
+        *outXformedAddr  = addr;
+    }
+    return rc;
+}
+
 int wh_Client_DmaAsyncPost(whClientContext* client, whClientDmaAsyncBuf* buf)
 {
     int       rc;
     uintptr_t addr;
 
-    if (client == NULL || buf == NULL || buf->sz == 0) {
+    if (client == NULL || buf == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Nothing stashed (PRE was skipped or the slot was already cleaned up):
+     * a legitimate no-op, distinct from the NULL-arg misuse above. */
+    if (buf->sz == 0) {
         return WH_ERROR_OK;
     }
 
@@ -110,9 +165,9 @@ int wh_Client_DmaAsyncPost(whClientContext* client, whClientDmaAsyncBuf* buf)
     rc   = wh_Client_DmaProcessClientAddress(client, buf->clientAddr,
                                              (void**)&addr, (size_t)buf->sz,
                                              buf->postOper, (whDmaFlags){0});
-    /* Clear the slot even on failure so a later Response cannot re-run the
-     * POST; the failure is returned to the caller. */
-    buf->sz = 0;
+    /* Clear the whole slot even on failure so a later Response cannot re-run
+     * the POST; the failure is returned to the caller. */
+    memset(buf, 0, sizeof(*buf));
     return rc;
 }
 #endif /* WOLFHSM_CFG_DMA */

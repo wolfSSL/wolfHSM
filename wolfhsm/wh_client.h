@@ -3384,18 +3384,46 @@ int wh_Client_DmaProcessClientAddress(struct whClientContext_t* client,
 
 
 /**
+ * @brief Runs the PRE half of a DMA buffer mapping and stashes it (INTERNAL).
+ *
+ * Shared between the client *Dma source files; not port-facing. Clears the
+ * slot, translates clientAddr for preOper, and on success stashes the mapping
+ * (translated address, client address, length, and the matching POST operation)
+ * so the matching Response can run wh_Client_DmaAsyncPost(). The POST direction
+ * is derived from preOper (READ_PRE -> READ_POST, WRITE_PRE -> WRITE_POST), so
+ * the caller cannot pair them inconsistently. The translated address is returned
+ * in outXformedAddr for the caller to place in the request message. When len is
+ * 0 (e.g. an optional buffer that is absent) it is a no-op: the slot stays
+ * cleared and outXformedAddr is set to 0.
+ *
+ * @param[in] client Pointer to the client context.
+ * @param[in,out] buf The slot to clear and populate with the mapping.
+ * @param[in] clientAddr Original client address to translate.
+ * @param[in] len Length of the buffer (0 to skip / clear only).
+ * @param[in] preOper Client PRE operation (READ_PRE or WRITE_PRE).
+ * @param[out] outXformedAddr Receives the translated address (0 when skipped).
+ * @return WH_ERROR_OK on success or skip, WH_ERROR_BADARGS on NULL args or a
+ *         non-PRE operation, or the port PRE callback's error.
+ */
+int wh_Client_DmaAsyncPre(struct whClientContext_t* client,
+                          whClientDmaAsyncBuf* buf, uintptr_t clientAddr,
+                          uint64_t len, whDmaOper preOper,
+                          uintptr_t* outXformedAddr);
+
+/**
  * @brief Runs the POST half of a stashed DMA buffer mapping (INTERNAL).
  *
  * Shared between the client *Dma source files; not port-facing. Releases (and,
  * for a server-write buffer, copies back) a mapping stashed by the matching
- * Request, using buf->postOper for the direction. No-op when buf is NULL or
- * buf->sz is 0; clears buf->sz (even on failure) so a later Response cannot
- * re-run it.
+ * Request, using buf->postOper for the direction. A no-op (WH_ERROR_OK) when
+ * buf->sz is 0; clears the whole slot (even on failure) so a later Response
+ * cannot re-run it.
  *
  * @param[in] client Pointer to the client context.
  * @param[in,out] buf The stashed single-buffer mapping to clean up.
- * @return WH_ERROR_OK, or the port POST callback's error (e.g. a failed unmap
- *         or copy-back); WH_ERROR_OK when there is nothing to clean up.
+ * @return WH_ERROR_OK on success or when there is nothing to clean up
+ *         (buf->sz == 0), WH_ERROR_BADARGS on NULL client/buf, or the port POST
+ *         callback's error (e.g. a failed unmap or copy-back).
  */
 int wh_Client_DmaAsyncPost(struct whClientContext_t* client,
                            whClientDmaAsyncBuf*       buf);
