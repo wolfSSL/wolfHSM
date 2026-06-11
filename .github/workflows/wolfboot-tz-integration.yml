@@ -1,0 +1,165 @@
+# Nightly integration: build wolfBoot's STM32H5 TrustZone demo against
+# the latest wolfHSM main and run it under the m33mu emulator. This
+# catches drift between wolfHSM and wolfBoot main (in either direction)
+# that the pinned-submodule per-PR builds do not. The full client suite
+# runs software RSA and ECC, which is slow under the emulator, so this
+# is a nightly job rather than a per-PR gate.
+#
+# On failure it opens (or updates) a tracking issue assigned to
+# wolfSSL-Bot.
+
+name: wolfBoot TrustZone integration nightly (m33mu)
+
+on:
+  schedule:
+    # 07:00 UTC daily
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  wolfboot-stm32h5-tz-wolfhsm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/wolfssl/wolfboot-ci-m33mu:latest
+
+    steps:
+      - name: Checkout wolfHSM (this repo, main)
+        uses: actions/checkout@v4
+        with:
+          path: wolfHSM
+
+      - name: Checkout wolfBoot master
+        # Switch `ref` to `master` once wolfBoot PR #769 lands; until
+        # then the STM32H5 demo only exists on that PR.
+        uses: actions/checkout@v4
+        with:
+          repository: wolfSSL/wolfBoot
+          ref: refs/pull/769/head
+          path: wolfBoot
+          # Skip lib/wolfHSM submodule init - we replace it with this
+          # checkout. Other submodules still need to come down.
+          submodules: false
+
+      - name: Initialise wolfBoot submodules (except lib/wolfHSM)
+        working-directory: wolfBoot
+        run: |
+          git config -f .gitmodules submodule.lib/wolfHSM.update none
+          git submodule update --init --recursive
+
+      - name: Point lib/wolfHSM at this checkout
+        working-directory: wolfBoot
+        run: |
+          rm -rf lib/wolfHSM
+          ln -s "$GITHUB_WORKSPACE/wolfHSM" lib/wolfHSM
+          ls -l lib/wolfHSM
+
+      - name: Build wolfBoot STM32H5 TZ demo
+        working-directory: wolfBoot/port/stmicro/stm32h5-tz-wolfhsm
+        run: make
+
+      - name: Run wolfHSM whTest_ClientConfig under m33mu
+        working-directory: wolfBoot/port/stmicro/stm32h5-tz-wolfhsm
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/m33mu-wolfhsm-persist
+          cp out/wolfboot.bin out/image_v1_signed.bin /tmp/m33mu-wolfhsm-persist/
+          cd /tmp/m33mu-wolfhsm-persist
+          # m33mu timeout below the 60 min job timeout so a hung run
+          # still produces a log. Software RSA keygen dominates.
+          m33mu wolfboot.bin image_v1_signed.bin:0x60000 \
+              --persist --uart-stdout --timeout 3000 \
+              --expect-bkpt 0x7d --quit-on-faults \
+              2>&1 | tee /tmp/m33mu-wolfhsm.log
+
+      - name: Verify wolfHSM whTest_ClientConfig
+        run: |
+          grep -q "wolfHSM whTest_ClientConfig PASSED" /tmp/m33mu-wolfhsm.log
+          grep -q "RNG DEVID=0x5748534D SUCCESS"       /tmp/m33mu-wolfhsm.log
+          grep -q "AES GCM DEVID=0x5748534D SUCCESS"   /tmp/m33mu-wolfhsm.log
+          grep -q "RSA SUCCESS"                        /tmp/m33mu-wolfhsm.log
+          grep -q "ECC ephemeral ECDH SUCCESS"         /tmp/m33mu-wolfhsm.log
+          grep -q "SHA256 DEVID=0x5748534D SUCCESS"    /tmp/m33mu-wolfhsm.log
+          grep -q "HKDF SUCCESS"                       /tmp/m33mu-wolfhsm.log
+          grep -q "\\[BKPT\\] imm=0x7d"                /tmp/m33mu-wolfhsm.log
+          grep -q "\\[EXPECT BKPT\\] Success"          /tmp/m33mu-wolfhsm.log
+
+      - name: Archive emulator log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m33mu-wolfhsm.log
+          path: /tmp/m33mu-wolfhsm.log
+
+      - name: Open or update tracking issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const marker = 'nightly-tz-integration';
+            const title = 'Nightly wolfBoot TrustZone (m33mu) integration failed';
+            const body = [
+              'The nightly wolfBoot STM32H5 TrustZone integration run failed.',
+              '',
+              `Run: ${runUrl}`,
+              '',
+              'This builds wolfBoot main against wolfHSM main and runs the',
+              'STM32H5 demo under m33mu. A failure usually means a regression',
+              'in the NSC transport, the wolfBoot port, or a wolfHSM/wolfBoot',
+              'API drift. The emulator log is attached to the run as an artifact.',
+            ].join('\n');
+
+            // Reuse one open tracking issue instead of opening a new one
+            // every night.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: marker,
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Still failing as of ${runUrl}`,
+              });
+              return;
+            }
+
+            // Best-effort label create (ignore if it already exists).
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: marker,
+                color: 'b60205',
+              });
+            } catch (e) { /* label exists */ }
+
+            try {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [marker],
+                assignees: ['wolfSSL-Bot'],
+              });
+            } catch (e) {
+              // Assignee may not be assignable; retry without it so the
+              // issue still gets filed.
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [marker],
+              });
+            }
