@@ -71,6 +71,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Authentication Methods](#authentication-methods)
     - [Sessions and the Authorization Gate](#sessions-and-the-authorization-gate)
     - [Permissions](#permissions)
+    - [User Management Invariants](#user-management-invariants)
     - [Pluggable Backend](#pluggable-backend)
 
 ## Cryptography and wolfCrypt Integration
@@ -1102,6 +1103,21 @@ The helper macros `WH_AUTH_SET_ALLOWED_GROUP`, `WH_AUTH_SET_ALLOWED_ACTION`, `WH
 `whAuthPermissions` also carries a small per-user `keyIds` allowlist and the data model includes a `CheckKeyAuthorization` callback intended to constrain which keys a user may exercise. Per-key authorization is a placeholder in the current implementation — the callback is defined but no crypto or key handler invokes it yet.
 
 Holding an action bit lets a session issue a request, but the backend still enforces per-target authorization on top of it. In the default base backend, `USER_SET_CREDENTIALS` lets a non-admin update its **own** credentials only (a cross-user credential change additionally requires admin and otherwise fails with `WH_ERROR_ACCESS`), while `USER_DELETE` and `USER_SET_PERMISSIONS` remain admin-only regardless of the action bit. The caller's `whUserId` is passed to the backend as `current_user_id` so it can distinguish a self-service change from a cross-user one. A custom auth backend may implement a different per-target policy.
+
+### User Management Invariants
+
+Beyond the group/action gate, the core enforces a fixed set of invariants on user-management operations before the request reaches the storage backend. These checks live in `wh_Auth_UserAdd` (and its peers in `wh_auth.c`) so that they hold for every backend, including custom ones, and a backend cannot accidentally relax them.
+
+When a session adds a user with `wh_Auth_UserAdd`, the following rules apply to a **non-admin** caller. An admin caller is exempt from rules 1 through 3 and is passed straight through to the backend.
+
+1. **Only an admin can create an admin.** A non-admin caller that requests the admin flag on the new user is rejected with `WH_AUTH_PERMISSION_ERROR`. This complements the existing rule that a non-admin cannot promote an existing user to admin.
+2. **New permissions must be a subset of the caller's own.** Every group bit, every action bit, and every entry in the new user's `keyIds` allowlist must already be held by the creating user. If the new user would gain any group, action, or key the caller does not itself possess, the request fails with `WH_AUTH_PERMISSION_ERROR`. A non-admin can therefore only ever delegate down, and cannot mint a user more privileged than itself.
+3. **Non-admins cannot create credential-less users.** A non-admin caller must supply non-empty credentials for the new user. A `NULL` or zero-length credential is rejected with `WH_AUTH_PERMISSION_ERROR`. This prevents a non-admin from creating a back-door account that anyone can assume without authenticating. An admin may still create a user with no credentials, for example to provision the credential separately.
+4. **No duplicate usernames.** The base backend rejects an add whose username matches an existing user with `WH_ERROR_BADARGS`, regardless of the caller's privilege.
+
+Credential updates through `wh_Auth_UserSetCredentials` add a further check on top of the self-service rule described under [Permissions](#permissions). When the target user already has a credential set, the caller must also present the matching **current** credential. The base backend verifies it in constant time before accepting the replacement, and a missing or mismatched current credential fails with `WH_ERROR_ACCESS`. PINs are hashed with SHA-256 for both the comparison and storage, so the plaintext PIN is never retained.
+
+`wh_Auth_UserDelete` and `wh_Auth_UserSetPermissions` remain admin-only operations in the base backend.
 
 ### Pluggable Backend
 
