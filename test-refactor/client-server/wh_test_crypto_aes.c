@@ -448,7 +448,7 @@ static int whTest_CryptoAesCbcStreaming(whClientContext* ctx)
  * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left; an
  * oversized value would cause an out-of-bounds read disclosing server-side
  * memory across the HSM trust boundary. */
-int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
+static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
 {
     int           devId = WH_DEV_ID;
     int           ret   = 0;
@@ -1110,6 +1110,9 @@ int whTest_Crypto_Aes(whClientContext* ctx)
     /* CBC streaming drives the request/response API directly (INVALID_DEVID),
      * so it is not devId-routed -- run it once. */
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCbcStreaming(ctx));
+#endif
+#ifdef WOLFSSL_AES_COUNTER
+    WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCtrLeftOob(ctx));
 #endif
     /* TODO: port legacy AES async + DMA-async coverage (comm-buffer & DMA, round-trip & KAT) -- the only remaining legacy crypto parity gap; deferred to follow-up PR. */
     return 0;
