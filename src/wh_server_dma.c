@@ -77,10 +77,12 @@ int wh_Server_DmaRegisterMemCopyCb(whServerContext* server,
 int wh_Server_DmaRegisterAllowList(whServerContext*                server,
                                    const whServerDmaAddrAllowList* allowlist)
 {
-    if (NULL == server || NULL == allowlist) {
+    if (NULL == server) {
         return WH_ERROR_BADARGS;
     }
 
+    /* A NULL allowlist clears any previously registered list (no enforcement),
+     * symmetric with wh_Server_DmaRegisterCb(NULL). */
     server->dma.dmaAddrAllowList = allowlist;
 
     return WH_ERROR_OK;

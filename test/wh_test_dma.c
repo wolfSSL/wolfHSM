@@ -37,6 +37,230 @@
 #include "wh_test_common.h"
 #include "wh_test_dma.h"
 
+/*
+ * Shared "bounce-pool" translating DMA callback harness.
+ *
+ * Models a split-address-space port: the server can only reach a dedicated pool,
+ * not arbitrary client RAM. The client callback bounces each buffer through a
+ * pool slot and hands the server the pool address; the server callback rejects
+ * (WH_ERROR_ACCESS) any address outside the pool, so a *Dma API that forgot to
+ * translate is caught. Freed slots are poisoned, so a premature POST
+ * (use-after-free) corrupts the data, and a POST matching no live slot is
+ * counted as a stray/double POST.
+ *
+ * Missing translation is caught in both harnesses; the use-after-free class is
+ * deterministic only in the single-thread pump harness, where the client POST
+ * is ordered before the server read.
+ *
+ * Single-client only: the allocator is mutated only by the (serialized) client
+ * side; the server just reads/writes pool bytes, with happens-before provided
+ * by the request/response round-trip through the transport.
+ */
+struct whClientContext_t; /* opaque: callbacks only use the pointer */
+struct whServerContext_t; /* opaque: callbacks only use the pointer */
+
+/* Generous headroom for the few buffers one op maps concurrently (the largest
+ * being an ML-DSA-sized key); the pool recycles between ops. */
+#define BOUNCE_POOL_SIZE \
+    ((64 * 1024) + (8 * WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE))
+#define BOUNCE_POOL_SLOTS 64
+#define BOUNCE_POISON_BYTE ((uint8_t)0xEF)
+
+typedef struct {
+    int       inUse;
+    uintptr_t base; /* address within g_bouncePool */
+    size_t    len;
+} bounceSlot;
+
+static uint8_t    g_bouncePool[BOUNCE_POOL_SIZE];
+static bounceSlot g_bounceSlots[BOUNCE_POOL_SLOTS];
+static size_t     g_bounceUsed;        /* bump offset into the pool */
+static int        g_bounceOutstanding; /* slots currently allocated */
+static int        g_bounceStrayPost;   /* len>0 POSTs with no matching slot */
+static int        g_bounceAllocBudget; /* allocs still allowed; <0 = unlimited */
+
+void whTestDma_BounceReset(void)
+{
+    memset(g_bouncePool, BOUNCE_POISON_BYTE, sizeof(g_bouncePool));
+    memset(g_bounceSlots, 0, sizeof(g_bounceSlots));
+    g_bounceUsed        = 0;
+    g_bounceOutstanding = 0;
+    g_bounceStrayPost   = 0;
+    g_bounceAllocBudget = -1;
+}
+
+int whTestDma_BounceOutstanding(void)
+{
+    return g_bounceOutstanding;
+}
+
+int whTestDma_BounceStrayPosts(void)
+{
+    return g_bounceStrayPost;
+}
+
+void whTestDma_BounceSetAllocBudget(int allocs)
+{
+    g_bounceAllocBudget = allocs;
+}
+
+static bounceSlot* _bounceAlloc(size_t len)
+{
+    int    i;
+    size_t aligned = (len + 7u) & ~(size_t)7u; /* 8-byte align slices */
+
+    /* Injected failure for exercising leak-recovery paths; no diagnostic. */
+    if (g_bounceAllocBudget == 0) {
+        return NULL;
+    }
+
+    if (g_bounceUsed + aligned > sizeof(g_bouncePool)) {
+        /* With recycle-on-empty this usually means a leaked mapping (PRE
+         * without POST) rather than a too-small pool. */
+        WH_ERROR_PRINT("wh_test bounce: pool exhausted (used %u + %u > %u, "
+                       "%d outstanding); likely a leaked DMA mapping\n",
+                       (unsigned)g_bounceUsed, (unsigned)aligned,
+                       (unsigned)sizeof(g_bouncePool), g_bounceOutstanding);
+        return NULL;
+    }
+    for (i = 0; i < BOUNCE_POOL_SLOTS; i++) {
+        if (!g_bounceSlots[i].inUse) {
+            g_bounceSlots[i].inUse = 1;
+            g_bounceSlots[i].base  = (uintptr_t)&g_bouncePool[g_bounceUsed];
+            g_bounceSlots[i].len   = len;
+            g_bounceUsed += aligned;
+            g_bounceOutstanding++;
+            if (g_bounceAllocBudget > 0) {
+                g_bounceAllocBudget--;
+            }
+            return &g_bounceSlots[i];
+        }
+    }
+    WH_ERROR_PRINT("wh_test bounce: out of slots (%d); raise BOUNCE_POOL_SLOTS "
+                   "or check for a leaked mapping\n",
+                   BOUNCE_POOL_SLOTS);
+    return NULL;
+}
+
+static bounceSlot* _bounceFind(uintptr_t base)
+{
+    int i;
+    for (i = 0; i < BOUNCE_POOL_SLOTS; i++) {
+        if (g_bounceSlots[i].inUse && g_bounceSlots[i].base == base) {
+            return &g_bounceSlots[i];
+        }
+    }
+    return NULL;
+}
+
+static void _bounceFree(bounceSlot* s)
+{
+    /* Poison on free so any read of a stale (post-POST) slot is detectable. */
+    memset((void*)s->base, BOUNCE_POISON_BYTE, s->len);
+    s->inUse = 0;
+    s->base  = 0;
+    s->len   = 0;
+    g_bounceOutstanding--;
+    /* Recycle the whole pool once every slot has been released, so a long run
+     * of operations cannot exhaust the bump offset. */
+    if (g_bounceOutstanding == 0) {
+        g_bounceUsed = 0;
+    }
+}
+
+int whTestDma_BounceClientCb(struct whClientContext_t* client,
+                             uintptr_t clientAddr, void** xformedAddr,
+                             size_t len, whDmaOper oper, whDmaFlags flags)
+{
+    bounceSlot* s;
+    (void)client;
+    (void)flags;
+
+    /* Zero-length operations carry no data and are never dereferenced by the
+     * server; pass the address through untouched (no slot needed). */
+    if (len == 0) {
+        *xformedAddr = (void*)clientAddr;
+        return WH_ERROR_OK;
+    }
+
+    switch (oper) {
+        case WH_DMA_OPER_CLIENT_READ_PRE:
+            /* Server is about to read client memory: copy it into a pool slot
+             * and hand the server the pool address. */
+            s = _bounceAlloc(len);
+            if (s == NULL) {
+                return WH_ERROR_ABORTED;
+            }
+            memcpy((void*)s->base, (void*)clientAddr, len);
+            *xformedAddr = (void*)s->base;
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_PRE:
+            /* Server is about to write client memory: give it a pool slot to
+             * write into. */
+            s = _bounceAlloc(len);
+            if (s == NULL) {
+                return WH_ERROR_ABORTED;
+            }
+            *xformedAddr = (void*)s->base;
+            break;
+
+        case WH_DMA_OPER_CLIENT_READ_POST:
+            /* Release (and poison) the slot. A len>0 POST matching no live slot
+             * is a stray/double POST (a real port would free a bogus pointer);
+             * record it. */
+            s = _bounceFind((uintptr_t)*xformedAddr);
+            if (s != NULL) {
+                _bounceFree(s);
+            }
+            else {
+                g_bounceStrayPost++;
+            }
+            break;
+
+        case WH_DMA_OPER_CLIENT_WRITE_POST:
+            /* Server done writing: copy the result back to the client buffer,
+             * then release (and poison) the slot. See READ_POST on stray. */
+            s = _bounceFind((uintptr_t)*xformedAddr);
+            if (s != NULL) {
+                memcpy((void*)clientAddr, (void*)s->base, len);
+                _bounceFree(s);
+            }
+            else {
+                g_bounceStrayPost++;
+            }
+            break;
+    }
+    return WH_ERROR_OK;
+}
+
+int whTestDma_BounceServerCb(struct whServerContext_t* server,
+                             uintptr_t clientAddr, void** serverPtr, size_t len,
+                             whDmaOper oper, whDmaFlags flags)
+{
+    uintptr_t base = (uintptr_t)g_bouncePool;
+    (void)server;
+    (void)oper;
+    (void)flags;
+
+    /* An address outside the pool means a *Dma path skipped translation and
+     * sent a raw client pointer; reject it. Overflow-safe: clientAddr - base is
+     * only formed once clientAddr >= base. */
+    if (len > 0) {
+        if (clientAddr < base || clientAddr - base > sizeof(g_bouncePool) ||
+            len > sizeof(g_bouncePool) - (clientAddr - base)) {
+            WH_ERROR_PRINT("wh_test bounce: server got untranslated address %p "
+                           "(len %u) outside the DMA pool\n",
+                           (void*)clientAddr, (unsigned)len);
+            return WH_ERROR_ACCESS;
+        }
+    }
+
+    /* Pool address is directly usable by the server in this same process. */
+    *serverPtr = (void*)clientAddr;
+    return WH_ERROR_OK;
+}
+
 static int whTest_DmaAllowListBasic(void)
 {
     int                rc;

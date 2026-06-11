@@ -695,19 +695,57 @@ int wh_Client_NvmAddObjectDmaRequest(whClientContext* c,
                                      whNvmMetadata*   metadata,
                                      whNvmSize data_len, const uint8_t* data)
 {
-    whMessageNvm_AddObjectDmaRequest msg = {0};
+    whMessageNvm_AddObjectDmaRequest msg         = {0};
+    uintptr_t                        metaAddrPtr = 0;
+    uintptr_t                        dataAddrPtr = 0;
+    int                              ret         = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy: don't acquire a mapping a rejected send would leak. */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    msg.metadata_hostaddr = (uint64_t)(uintptr_t)metadata;
-    msg.data_hostaddr     = (uint64_t)(uintptr_t)data;
-    msg.data_len          = data_len;
+    /* One op in flight: clear both slots up front so a metadata-only object -
+     * or a failed metadata PRE that skips the data PRE - leaves the data slot's
+     * POST a no-op and never acts on a stale (shared-union) size. */
+    memset(&c->dma.asyncCtx.nvmAdd, 0, sizeof(c->dma.asyncCtx.nvmAdd));
 
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
-                                 WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA,
-                                 sizeof(msg), &msg);
+    /* PRE-translate the metadata struct (fixed size) and the optional data
+     * buffer; the matching Response POST releases them. */
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.nvmAdd.meta,
+                                (uintptr_t)metadata, sizeof(whNvmMetadata),
+                                WH_DMA_OPER_CLIENT_READ_PRE, &metaAddrPtr);
+    if (ret == WH_ERROR_OK) {
+        /* len 0 (no data buffer) is a no-op in the helper, leaving dataAddrPtr
+         * at 0 so no raw, untranslated pointer reaches the message. */
+        ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.nvmAdd.data,
+                                    (uintptr_t)data,
+                                    (data != NULL) ? data_len : 0,
+                                    WH_DMA_OPER_CLIENT_READ_PRE, &dataAddrPtr);
+    }
+
+    msg.metadata_hostaddr = (uint64_t)metaAddrPtr;
+    /* 0 when there is no data buffer to DMA (dataAddrPtr is set only by the
+     * data PRE); never forward a raw, untranslated client pointer. */
+    msg.data_hostaddr = (uint64_t)dataAddrPtr;
+    msg.data_len      = data_len;
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                    WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA,
+                                    sizeof(msg), &msg);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        /* Send/PRE failed: release whatever was acquired (helper no-ops on the
+         * unset slot), in reverse order. */
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
+    }
+    return ret;
 }
 
 int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -723,6 +761,11 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mappings; POST runs once the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -738,6 +781,13 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
             }
         }
     }
+
+    /* POST cleanup for both slots, reverse acquisition order. These are
+     * READ inputs the server has already consumed and the object is stored
+     * server-side, so releasing the client-side mappings is cleanup; a release
+     * failure must not override an otherwise-successful result. */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.data);
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.nvmAdd.meta);
     return rc;
 }
 
@@ -766,19 +816,42 @@ int wh_Client_NvmReadDmaRequest(whClientContext* c, whNvmId id,
                                 whNvmSize offset, whNvmSize data_len,
                                 uint8_t* data)
 {
-    whMessageNvm_ReadDmaRequest msg = {0};
+    whMessageNvm_ReadDmaRequest msg         = {0};
+    uintptr_t                   dataAddrPtr = 0;
+    int                         ret         = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy: don't acquire a mapping a rejected send would leak. */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    msg.id            = id;
-    msg.offset        = offset;
-    msg.data_len      = data_len;
-    msg.data_hostaddr = (uint64_t)(uintptr_t)data;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
-                                 WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
-                                 &msg);
+    /* PRE-translate the output data buffer (only when there is one); the server
+     * writes the NVM contents and the Response POST copies them back. len 0 (no
+     * buffer) is a no-op in the helper, keeping a raw, untranslated pointer out
+     * of the message. */
+    ret = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)data,
+                                (data != NULL) ? data_len : 0,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE, &dataAddrPtr);
+
+    if (ret == WH_ERROR_OK) {
+        msg.id            = id;
+        msg.offset        = offset;
+        msg.data_len      = data_len;
+        msg.data_hostaddr = (uint64_t)dataAddrPtr;
+
+        ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_NVM,
+                                    WH_MESSAGE_NVM_ACTION_READDMA, sizeof(msg),
+                                    &msg);
+    }
+
+    /* On any failure release the mapping; POST no-ops on the unset slot. */
+    if (ret != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return ret;
 }
 
 int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -794,6 +867,11 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    /* NOTREADY: response not in yet - return without POST so the pending
+     * request keeps its mapping; POST runs once the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -807,6 +885,17 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
             if (out_rc != NULL) {
                 *out_rc = msg.rc;
             }
+        }
+    }
+
+    /* POST cleanup: copy the server's writes back into the caller's buffer and
+     * release the mapping. This is a WRITE-back: if it fails the caller has no
+     * valid data, so surface the POST failure over an otherwise-successful
+     * result. */
+    {
+        int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+        if (rc == WH_ERROR_OK) {
+            rc = postRc;
         }
     }
     return rc;
