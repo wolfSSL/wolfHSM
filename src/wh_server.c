@@ -89,16 +89,23 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->auth = config->auth;
     /* auth context is externally owned; clear any stale session left over from
      * a prior connection (Logout first so backend callback runs). */
-    if (server->auth != NULL &&
-        server->auth->user.user_id != WH_USER_ID_INVALID) {
-        whUserId stale_id  = server->auth->user.user_id;
-        int      logout_rc = wh_Auth_Logout(server->auth, stale_id);
-        if (logout_rc != WH_ERROR_OK) {
-            WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
+    if (server->auth != NULL) {
+        if (server->auth->user.user_id != WH_USER_ID_INVALID) {
+            whUserId stale_id = server->auth->user.user_id;
+
+            rc = wh_Auth_Logout(server->auth, stale_id);
+            if (rc != WH_ERROR_OK) {
+                WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
                    "Stale auth session force-cleared during server init after "
                    "logout failure");
+            }
         }
-        (void)wh_Auth_Reset(server->auth);
+        rc = wh_Auth_Reset(server->auth);
+        if (rc != WH_ERROR_OK) {
+            WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
+                   "Failed to clear auth session during server init");
+            return rc;
+        }
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 #ifdef WOLFHSM_CFG_HWKEYSTORE
@@ -200,17 +207,21 @@ int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
         server->connected != WH_COMM_DISCONNECTED &&
         server->auth != NULL &&
         server->auth->user.user_id != WH_USER_ID_INVALID) {
-        whUserId user_id   = server->auth->user.user_id;
-        int      logout_rc = wh_Auth_Logout(server->auth, user_id);
+        whUserId user_id = server->auth->user.user_id;
+        int      rc      = wh_Auth_Logout(server->auth, user_id);
 
-        if (logout_rc != WH_ERROR_OK) {
+        if (rc != WH_ERROR_OK) {
             WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
                    "Auth session force-cleared on disconnect after logout "
                    "failure");
         }
-        /* Always reset so a stale identity can never carry over to the next
-         * connection, even if the backend logout failed. */
-        (void)wh_Auth_Reset(server->auth);
+        rc = wh_Auth_Reset(server->auth);
+        if (rc != WH_ERROR_OK) {
+            WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
+                   "Failed to clear auth session on disconnect");
+            server->connected = connected;
+            return rc;
+        }
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 

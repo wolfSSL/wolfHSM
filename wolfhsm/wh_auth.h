@@ -274,13 +274,14 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id);
 /**
  * @brief Force-clear the local session state, dropping any logged-in user.
  *
- * Unconditionally zeroes only the session (user) state, leaving the
+ * Zeroes only the session (user) state under the auth lock, leaving the
  * externally-owned configuration (callbacks, context, lock) intact. Does not
- * invoke the backend logout callback.
+ * invoke the backend logout callback. If the lock can not be acquired the
+ * session is left unchanged and the lock error is returned.
  *
  * @param[in] context Pointer to the auth context.
- * @return int WH_ERROR_OK, WH_ERROR_BADARGS for a NULL context, or the lock
- *         error if the lock could not be acquired (session is still cleared).
+ * @return int WH_ERROR_OK on success, WH_ERROR_BADARGS for a NULL context, or
+ *         the lock error if the lock could not be acquired.
  */
 int wh_Auth_Reset(whAuthContext* context);
 

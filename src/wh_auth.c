@@ -184,7 +184,8 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
 }
 
 
-/* returns result of locking, clears context user regardless of lock success. */
+/* Clears the local session under the auth lock. Fails without clearing if
+ * the lock can not be acquired, to avoid racing an in-flight login. */
 int wh_Auth_Reset(whAuthContext* context)
 {
     int rc;
@@ -193,12 +194,11 @@ int wh_Auth_Reset(whAuthContext* context)
         return WH_ERROR_BADARGS;
     }
 
-    /* Best-effort lock, but clear the session regardless */
     rc = WH_AUTH_LOCK(context);
-    memset(&context->user, 0, sizeof(whAuthUser));
     if (rc == WH_ERROR_OK) {
+        memset(&context->user, 0, sizeof(whAuthUser));
         (void)WH_AUTH_UNLOCK(context);
-    }
+    } /* LOCK() */
     return rc;
 }
 
