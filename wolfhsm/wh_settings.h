@@ -47,6 +47,14 @@
  *  can be wrapped
  *      Default: 512
  *
+ *  WOLFHSM_CFG_HWKEYSTORE - If defined, include the hardware keystore
+ *  front-end module and hardware-only key (WH_KEYTYPE_HW) support
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE - The maximum size (in bytes) of a key
+ *  served by a hardware keystore backend
+ *      Default: 32
+ *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
  *      Default: Not defined
@@ -463,6 +471,12 @@
 #if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_KEYWRAP)
 #error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
+
+#if defined(WOLFHSM_CFG_HWKEYSTORE)
+#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE
+#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE 32
+#endif
+#endif /* WOLFHSM_CFG_HWKEYSTORE */
 
 /* Trusted cert verify cache requires the certificate manager and crypto.
  * Enforce here so downstream code can gate on

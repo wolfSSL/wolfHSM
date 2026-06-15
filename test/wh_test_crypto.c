@@ -15312,6 +15312,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_Client_DataWrap(client);
     }
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+    /* Hardware-only KEK tests need the in-process test server, which binds
+     * the test hardware keystore; external (client-only) servers may not */
+    if (ret == 0) {
+        ret = whTest_Client_HwKeystore(client);
+    }
+#endif
 #endif
 
 #ifndef NO_AES
@@ -15968,6 +15975,17 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .cb = whTestDma_BounceServerCb,
     };
 #endif
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
+    /* Hardware keystore front-end backed by the test getKey callback. The
+     * callback is defined in wh_test_keywrap.c, so only bind it when the
+     * keywrap suite (its sole consumer) is compiled in */
+    static const whHwKeystoreCb hwksCb        = WH_TEST_HWKEYSTORE_CB;
+    whHwKeystoreContext         hwKeystore[1] = {{0}};
+    whHwKeystoreConfig          hwksConf[1]   = {{
+                   .cb      = &hwksCb,
+                   .context = NULL,
+    }};
+#endif
 
     whServerConfig s_conf[1] = {{
         .comm_config = cs_conf,
@@ -15977,9 +15995,15 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 #ifdef WOLFHSM_CFG_DMA
         .dmaConfig   = &serverDmaConfig,
 #endif
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
+        .hwKeystore = hwKeystore,
+#endif
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwKeystore, hwksConf));
+#endif
 
 #ifdef WOLFHSM_CFG_DMA
     whTestDma_BounceReset();
@@ -16016,6 +16040,9 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     }
 
     wh_Nvm_Cleanup(nvm);
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
+    (void)wh_HwKeystore_Cleanup(hwKeystore);
+#endif
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
 

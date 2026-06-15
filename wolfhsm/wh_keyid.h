@@ -68,6 +68,7 @@ typedef uint16_t whKeyId;
  * - Regular keys: Simple numeric ID (e.g., 5)
  * - Global keys: ID with WH_KEYID_CLIENT_GLOBAL_FLAG set
  * - Wrapped keys: ID with WH_KEYID_CLIENT_WRAPPED_FLAG set
+ * - Hardware-only keys: ID with WH_KEYID_CLIENT_HW_FLAG set
  * - Wrapped metadata: Must use full WH_MAKE_KEYID() construction including type
  *    and metadata when populating the ID field in metadata to be wrapped
  *
@@ -78,9 +79,17 @@ typedef uint16_t whKeyId;
 /* Bit 9: Client-to-server signal for wrapped key */
 #define WH_KEYID_CLIENT_WRAPPED_FLAG ((whKeyId)0x0200)
 
+/* Bit 10: Client-to-server signal for a hardware-only key. The key material
+ * lives exclusively in a hardware keystore (see wolfhsm/wh_hwkeystore.h) and
+ * is fetched on demand by the server. It never enters the key cache or NVM
+ * and is never returned to a client. Such keys are only usable as KEKs in
+ * the keywrap API */
+#define WH_KEYID_CLIENT_HW_FLAG ((whKeyId)0x0400)
+
 /* Combined mask of all client-facing flags */
-#define WH_CLIENT_KEYID_FLAGS_MASK \
-    (WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
+#define WH_CLIENT_KEYID_FLAGS_MASK                                \
+    (WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG | \
+     WH_KEYID_CLIENT_HW_FLAG)
 
 /* Macro to construct a server-unique keyid */
 #define WH_MAKE_KEYID(_type, _user, _id)                           \
@@ -93,6 +102,7 @@ typedef uint16_t whKeyId;
 
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 #define WH_KEYID_ISWRAPPED(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_WRAPPED)
+#define WH_KEYID_ISHW(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_HW)
 
 /* Reserve USER=0 for global keys in the internal keyId encoding.
  * This is server-internal; clients use WH_KEYID_CLIENT_GLOBAL_FLAG from
@@ -105,6 +115,7 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_SHE 0x2     /* SKE keys are AES or CMAC binary arrays */
 #define WH_KEYTYPE_COUNTER 0x3 /* Monotonic counter */
 #define WH_KEYTYPE_WRAPPED 0x4 /* Wrapped key metadata */
+#define WH_KEYTYPE_HW 0x5 /* HW-only key. Port-specific */
 
 /* Convert a keyId to a pointer to be stored in wolfcrypt devctx */
 #define WH_KEYID_TO_DEVCTX(_k) ((void*)((intptr_t)(_k)))
@@ -117,10 +128,12 @@ typedef uint16_t whKeyId;
  * (TYPE + USER + ID). Client flags are:
  * - 0x0100 (bit 8): WH_KEYID_CLIENT_GLOBAL_FLAG  → USER = 0
  * - 0x0200 (bit 9): WH_KEYID_CLIENT_WRAPPED_FLAG → TYPE = WH_KEYTYPE_WRAPPED
+ * - 0x0400 (bit 10): WH_KEYID_CLIENT_HW_FLAG → TYPE = WH_KEYTYPE_HW
  *
  * @param type Key type to use as the TYPE field. Input value is ignored and
- *  WH_KEYTYPE_WRAPPED is used if the input clientId has the
- *  WH_CLIENT_KEYID_WRAPPED flag set.
+ *  WH_KEYTYPE_WRAPPED or WH_KEYTYPE_HW is used if the input clientId has
+ *  the corresponding flag set. If both flags are set, HW takes
+ *  precedence.
  * @param clientId Client identifier to use as USER field. Must be in
  *  [1, WH_CLIENT_ID_MAX] (0 is reserved for WH_KEYUSER_GLOBAL);
  *  wh_Client_Init() and the server's INIT handling enforce this so callers
@@ -138,6 +151,7 @@ whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
  * client-facing format (ID + flags). Server encoding is converted to flags:
  * - USER = 0 (WH_KEYUSER_GLOBAL)  → 0x0100 (WH_KEYID_CLIENT_GLOBAL_FLAG)
  * - TYPE = WH_KEYTYPE_WRAPPED     → 0x0200 (WH_KEYID_CLIENT_WRAPPED_FLAG)
+ * - TYPE = WH_KEYTYPE_HW          → 0x0400 (WH_KEYID_CLIENT_HW_FLAG)
  *
  * This ensures clients can identify global and wrapped keys after they are
  * returned from server operations (cache, key generation, etc.).
