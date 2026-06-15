@@ -48,6 +48,7 @@
 #endif
 
 #include "wh_test_common.h"
+#include "wh_test_list.h"
 #include "wh_test_posix_server.h"
 
 #define POSIX_FLASH_SIZE       (1024 * 1024)
@@ -82,20 +83,34 @@ static whServerCryptoContext _crypto;
 #ifndef TEST_ADMIN_PIN
 #define TEST_ADMIN_PIN "1234"
 #endif
-/* Auth manager backed by the in-memory base backend. The server
- * provisions a single admin user with full permissions so the client
- * suite can authenticate; the client logs in as admin at connect (see
- * whTestPosix_Client_Init). */
+
+/* Counter for checking CheckRequestAuthorization callback */
+static int _checkReqAuthCount = 0;
+
+static int _countCheckRequestAuth(void* context, int err, uint16_t user_id,
+                                  uint16_t group, uint16_t action)
+{
+    (void)context;
+    (void)user_id;
+    (void)group;
+    (void)action;
+    _checkReqAuthCount++;
+    return err;
+}
+
+/* Hook into CheckRequestAuthorization callback to ensure it fires.
+ * Note that CheckKeyAuthorization is not implemented, so it is not checked. */
 static whAuthCb _authCb = {
-    .Init               = wh_Auth_BaseInit,
-    .Cleanup            = wh_Auth_BaseCleanup,
-    .Login              = wh_Auth_BaseLogin,
-    .Logout             = wh_Auth_BaseLogout,
-    .UserAdd            = wh_Auth_BaseUserAdd,
-    .UserDelete         = wh_Auth_BaseUserDelete,
-    .UserSetPermissions = wh_Auth_BaseUserSetPermissions,
-    .UserGet            = wh_Auth_BaseUserGet,
-    .UserSetCredentials = wh_Auth_BaseUserSetCredentials,
+    .Init                      = wh_Auth_BaseInit,
+    .Cleanup                   = wh_Auth_BaseCleanup,
+    .Login                     = wh_Auth_BaseLogin,
+    .Logout                    = wh_Auth_BaseLogout,
+    .CheckRequestAuthorization = _countCheckRequestAuth,
+    .UserAdd                   = wh_Auth_BaseUserAdd,
+    .UserDelete                = wh_Auth_BaseUserDelete,
+    .UserSetPermissions        = wh_Auth_BaseUserSetPermissions,
+    .UserGet                   = wh_Auth_BaseUserGet,
+    .UserSetCredentials        = wh_Auth_BaseUserSetCredentials,
 };
 static whAuthContext _auth;
 #endif
@@ -221,4 +236,19 @@ int whTestPosix_Server_Cleanup(whServerContext* server)
 whTransportMemConfig* whTestPosix_Server_GetTransportConfig(void)
 {
     return &_tmCfg;
+}
+
+
+int whTestPosix_Server_VerifyAuthCallbacks(void)
+{
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    /* The request-auth hook fires on every gated request, so expect non-0.
+     * Note that the key-auth hook is an unwired placeholder, and is not
+     * checked. */
+    WH_TEST_ASSERT_RETURN(_checkReqAuthCount > 0);
+    return WH_TEST_SUCCESS;
+#else
+    /* Nothing to verify without authentication compiled in. */
+    return WH_TEST_SKIPPED;
+#endif
 }

@@ -55,4 +55,10 @@ int whTestPosix_Server_Cleanup(whServerContext* server);
  */
 whTransportMemConfig* whTestPosix_Server_GetTransportConfig(void);
 
+/*
+ * Verify the server's configured request-authorization callback was
+ * actually invoked. Skip when authentication is disabled.
+ */
+int whTestPosix_Server_VerifyAuthCallbacks(void);
+
 #endif /* WH_TEST_POSIX_SERVER_H_ */

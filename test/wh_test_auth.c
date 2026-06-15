@@ -1770,6 +1770,9 @@ int whTest_AuthMEM(void)
         "Verifying authorization override callbacks were called...\n");
     WH_TEST_ASSERT_RETURN(test_checkRequestAuthorizationCalled > 0);
 
+    /* Note that CheckKeyAuthorization is not implemented yet, so 
+     * test_checkKeyAuthorizationCalled is not checked here. */
+
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_CleanupMemory());
 
     return WH_TEST_SUCCESS;
