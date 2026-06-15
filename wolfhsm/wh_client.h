@@ -2908,6 +2908,18 @@ int wh_Client_CertVerifyCacheSetEnabled(whClientContext* c, uint8_t enable,
 
 #ifdef WOLFHSM_CFG_DMA
 
+/*
+ * Certificate DMA API notes (apply to every wh_Client_Cert*Dma* below):
+ *
+ * - Each *DmaRequest translates the cert buffer and the matching *DmaResponse
+ *   releases it, using the single shared per-client DMA slot (see
+ *   whClientDmaAsyncCtx): only ONE *Dma operation (cert/key/NVM) may be in
+ *   flight at a time. Pair the split Request/Response one-at-a-time; issuing a
+ *   second Request first overwrites the slot and leaks the earlier mapping.
+ * - A *DmaRequest (hence a blocking *Dma call) may return
+ *   WH_ERROR_REQUEST_PENDING if a prior request has not been consumed.
+ */
+
 /**
  * @brief Sends a request to add a trusted certificate to NVM storage using DMA.
  *
