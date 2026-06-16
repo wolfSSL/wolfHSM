@@ -3219,50 +3219,127 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 
 #ifdef WOLFSSL_HAVE_LMS
 
-/* Bind / read the wolfHSM key id stored in key->devCtx. */
+/**
+ * @brief Bind a wolfHSM keyId into an LmsKey's devCtx.
+ *
+ * @param[in] key   LmsKey to update.
+ * @param[in] keyId Server-side keyId to store in key->devCtx.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsSetKeyId(LmsKey* key, whKeyId keyId);
+
+/**
+ * @brief Read the wolfHSM keyId stored in an LmsKey's devCtx.
+ *
+ * @param[in]  key   LmsKey to query.
+ * @param[out] outId Receives the keyId held in key->devCtx.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsGetKeyId(LmsKey* key, whKeyId* outId);
 
-/* Generate an LMS key on the server. The key's parameter set
- * (levels/height/winternitz) must be bound on the in-memory key before this
- * call (e.g. via wc_LmsKey_SetParameters). On success the key's devCtx
- * carries the server-side keyId.
+/**
+ * @brief Generate an LMS key on the server.
  *
- * If flags include WH_NVM_FLAGS_EPHEMERAL, the server returns the public key
- * via DMA and the caller can sign with it as long as it remains cached on
- * the server. Otherwise the key is committed to the keystore. */
+ * The key's parameter set (levels/height/winternitz) must be bound on the
+ * in-memory key before this call (e.g. via wc_LmsKey_SetParameters). On
+ * success the key's devCtx carries the server-side keyId. If flags include
+ * WH_NVM_FLAGS_EPHEMERAL, the server returns the public key via DMA and the
+ * caller can sign with it while it remains cached on the server; otherwise the
+ * key is committed to the keystore.
+ *
+ * @param[in]     ctx          Pointer to the client context.
+ * @param[in,out] key          LmsKey with its parameter set bound; on success
+ *                             its devCtx carries the keyId.
+ * @param[in,out] inout_key_id On entry an optional requested keyId; on success
+ *                             the assigned keyId. May be NULL.
+ * @param[in]     flags        NVM flags for the new key.
+ * @param[in]     label_len    Length of label in bytes (0 if none).
+ * @param[in]     label        Optional label, or NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
                             whKeyId* inout_key_id, whNvmFlags flags,
                             uint16_t label_len, uint8_t* label);
 
-/* Convenience wrapper: WH_NVM_FLAGS_EPHEMERAL keygen, returns pub via DMA. */
+/**
+ * @brief Convenience wrapper for an ephemeral keygen returning the public key.
+ *
+ * Equivalent to wh_Client_LmsMakeKeyDma with WH_NVM_FLAGS_EPHEMERAL; the public
+ * key is returned via DMA into the in-memory key.
+ *
+ * @param[in]     ctx Pointer to the client context.
+ * @param[in,out] key LmsKey with its parameter set bound.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsMakeExportKeyDma(whClientContext* ctx, LmsKey* key);
 
-/* Sign msg with an HSM-resident LMS key (key->devCtx carries the keyId).
- * The new private state is committed atomically to NVM by the server before
- * the signature is returned. */
+/**
+ * @brief Sign a message with an HSM-resident LMS key.
+ *
+ * The keyId is taken from key->devCtx. The new private state is committed
+ * atomically to NVM by the server before the signature is returned.
+ *
+ * @param[in]     ctx   Pointer to the client context.
+ * @param[in]     msg   Message to sign.
+ * @param[in]     msgSz Length of msg in bytes.
+ * @param[out]    sig   Buffer to receive the signature.
+ * @param[in,out] sigSz On entry the capacity of sig; on success the signature
+ *                      length.
+ * @param[in]     key   LmsKey whose devCtx carries the keyId.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                          byte* sig, word32* sigSz, LmsKey* key);
 
-/* Verify sig against msg using an HSM-resident LMS key. *res is set to 1 on
- * success, 0 on signature mismatch. */
+/**
+ * @brief Verify a signature using an HSM-resident LMS key.
+ *
+ * @param[in]  ctx   Pointer to the client context.
+ * @param[in]  sig   Signature to verify.
+ * @param[in]  sigSz Length of sig in bytes.
+ * @param[in]  msg   Message that was signed.
+ * @param[in]  msgSz Length of msg in bytes.
+ * @param[out] res   Set to 1 on a valid signature, 0 on mismatch.
+ * @param[in]  key   LmsKey whose devCtx carries the keyId.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
                            const byte* msg, word32 msgSz, int* res,
                            LmsKey* key);
 
-/* Query remaining signatures on an HSM-resident LMS key. */
+/**
+ * @brief Query the remaining signatures on an HSM-resident LMS key.
+ *
+ * @param[in]  ctx      Pointer to the client context.
+ * @param[in]  key      LmsKey whose devCtx carries the keyId.
+ * @param[out] sigsLeft Receives the count of remaining signatures.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
                              word32* sigsLeft);
 
-/* Import a verify-only LMS public key into the keystore. The in-memory key
- * must have its parameter set bound and the public key loaded (e.g. via
- * wc_LmsKey_SetParameters + wc_LmsKey_ImportPubRaw). On success the key's
- * devCtx carries the server-side keyId, usable with wh_Client_LmsVerifyDma.
+/**
+ * @brief Import a verify-only LMS public key into the keystore.
  *
- * No private state is stored, so the key cannot sign. Pass a specific keyId in
- * *inout_keyId to provision to a known slot (or WH_KEYID_ERASED to be
- * assigned one), and WH_NVM_FLAGS_NONMODIFIABLE to pin it against later
- * replacement. Committed to NVM unless flags include WH_NVM_FLAGS_EPHEMERAL. */
+ * The in-memory key must have its parameter set bound and the public key
+ * loaded (e.g. via wc_LmsKey_SetParameters + wc_LmsKey_ImportPubRaw). On
+ * success the key's devCtx carries the server-side keyId, usable with
+ * wh_Client_LmsVerifyDma. No private state is stored, so the key cannot sign.
+ *
+ * @param[in]     ctx         Pointer to the client context.
+ * @param[in,out] key         LmsKey with its parameter set bound and public
+ *                            key loaded; on success its devCtx carries the
+ *                            keyId.
+ * @param[in,out] inout_keyId On entry a specific keyId to provision, or
+ *                            WH_KEYID_ERASED to be assigned one; on success the
+ *                            keyId. May be NULL.
+ * @param[in]     flags       NVM flags; WH_NVM_FLAGS_NONMODIFIABLE pins the
+ *                            key, and it is committed to NVM unless
+ *                            WH_NVM_FLAGS_EPHEMERAL is set.
+ * @param[in]     label_len   Length of label in bytes (0 if none).
+ * @param[in]     label       Optional label, or NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_LmsImportPubKey(whClientContext* ctx, LmsKey* key,
                               whKeyId* inout_keyId, whNvmFlags flags,
                               uint16_t label_len, uint8_t* label);
@@ -3271,34 +3348,126 @@ int wh_Client_LmsImportPubKey(whClientContext* ctx, LmsKey* key,
 
 #ifdef WOLFSSL_HAVE_XMSS
 
+/**
+ * @brief Bind a wolfHSM keyId into an XmssKey's devCtx.
+ *
+ * @param[in] key   XmssKey to update.
+ * @param[in] keyId Server-side keyId to store in key->devCtx.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssSetKeyId(XmssKey* key, whKeyId keyId);
+
+/**
+ * @brief Read the wolfHSM keyId stored in an XmssKey's devCtx.
+ *
+ * @param[in]  key   XmssKey to query.
+ * @param[out] outId Receives the keyId held in key->devCtx.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssGetKeyId(XmssKey* key, whKeyId* outId);
 
-/* Generate an XMSS / XMSS^MT key on the server. The parameter string must be
- * bound on the in-memory key (via wc_XmssKey_SetParamStr) before this call.
+/**
+ * @brief Generate an XMSS / XMSS^MT key on the server.
+ *
+ * The parameter string must be bound on the in-memory key (via
+ * wc_XmssKey_SetParamStr) before this call. On success the key's devCtx
+ * carries the server-side keyId. If flags include WH_NVM_FLAGS_EPHEMERAL, the
+ * server returns the public key via DMA and the caller can sign with it while
+ * it remains cached on the server; otherwise the key is committed to the
+ * keystore.
+ *
+ * @param[in]     ctx          Pointer to the client context.
+ * @param[in,out] key          XmssKey with its parameter string bound; on
+ *                             success its devCtx carries the keyId.
+ * @param[in,out] inout_key_id On entry an optional requested keyId; on success
+ *                             the assigned keyId. May be NULL.
+ * @param[in]     flags        NVM flags for the new key.
+ * @param[in]     label_len    Length of label in bytes (0 if none).
+ * @param[in]     label        Optional label, or NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
                              whKeyId* inout_key_id, whNvmFlags flags,
                              uint16_t label_len, uint8_t* label);
 
+/**
+ * @brief Convenience wrapper for an ephemeral keygen returning the public key.
+ *
+ * Equivalent to wh_Client_XmssMakeKeyDma with WH_NVM_FLAGS_EPHEMERAL; the
+ * public key is returned via DMA into the in-memory key.
+ *
+ * @param[in]     ctx Pointer to the client context.
+ * @param[in,out] key XmssKey with its parameter string bound.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssMakeExportKeyDma(whClientContext* ctx, XmssKey* key);
 
+/**
+ * @brief Sign a message with an HSM-resident XMSS key.
+ *
+ * The keyId is taken from key->devCtx. The new private state is committed
+ * atomically to NVM by the server before the signature is returned.
+ *
+ * @param[in]     ctx   Pointer to the client context.
+ * @param[in]     msg   Message to sign.
+ * @param[in]     msgSz Length of msg in bytes.
+ * @param[out]    sig   Buffer to receive the signature.
+ * @param[in,out] sigSz On entry the capacity of sig; on success the signature
+ *                      length.
+ * @param[in]     key   XmssKey whose devCtx carries the keyId.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                           byte* sig, word32* sigSz, XmssKey* key);
 
+/**
+ * @brief Verify a signature using an HSM-resident XMSS key.
+ *
+ * @param[in]  ctx   Pointer to the client context.
+ * @param[in]  sig   Signature to verify.
+ * @param[in]  sigSz Length of sig in bytes.
+ * @param[in]  msg   Message that was signed.
+ * @param[in]  msgSz Length of msg in bytes.
+ * @param[out] res   Set to 1 on a valid signature, 0 on mismatch.
+ * @param[in]  key   XmssKey whose devCtx carries the keyId.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
                             word32 sigSz, const byte* msg, word32 msgSz,
                             int* res, XmssKey* key);
 
+/**
+ * @brief Query the remaining signatures on an HSM-resident XMSS key.
+ *
+ * @param[in]  ctx      Pointer to the client context.
+ * @param[in]  key      XmssKey whose devCtx carries the keyId.
+ * @param[out] sigsLeft Receives the count of remaining signatures.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
                               word32* sigsLeft);
 
-/* Import a verify-only XMSS / XMSS^MT public key into the keystore. The
- * in-memory key must have its parameter string bound and the public key loaded
- * (e.g. via wc_XmssKey_SetParamStr + wc_XmssKey_ImportPubRaw). Semantics match
- * wh_Client_LmsImportPubKey: no private state is stored (verify only), the key
- * may be pinned with WH_NVM_FLAGS_NONMODIFIABLE, and it is committed to NVM
- * unless flags include WH_NVM_FLAGS_EPHEMERAL. */
+/**
+ * @brief Import a verify-only XMSS / XMSS^MT public key into the keystore.
+ *
+ * The in-memory key must have its parameter string bound and the public key
+ * loaded (e.g. via wc_XmssKey_SetParamStr + wc_XmssKey_ImportPubRaw). Semantics
+ * match wh_Client_LmsImportPubKey: no private state is stored (verify only) so
+ * the key cannot sign, it may be pinned with WH_NVM_FLAGS_NONMODIFIABLE, and it
+ * is committed to NVM unless flags include WH_NVM_FLAGS_EPHEMERAL.
+ *
+ * @param[in]     ctx         Pointer to the client context.
+ * @param[in,out] key         XmssKey with its parameter string bound and
+ *                            public key loaded; on success its devCtx carries
+ *                            the keyId.
+ * @param[in,out] inout_keyId On entry a specific keyId to provision, or
+ *                            WH_KEYID_ERASED to be assigned one; on success the
+ *                            keyId. May be NULL.
+ * @param[in]     flags       NVM flags (see wh_Client_LmsImportPubKey).
+ * @param[in]     label_len   Length of label in bytes (0 if none).
+ * @param[in]     label       Optional label, or NULL.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
 int wh_Client_XmssImportPubKey(whClientContext* ctx, XmssKey* key,
                                whKeyId* inout_keyId, whNvmFlags flags,
                                uint16_t label_len, uint8_t* label);
