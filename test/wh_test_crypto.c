@@ -13349,6 +13349,31 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Verify the public key matches when read back */
+    if (ret == 0) {
+        whKeyId  pubId     = WH_KEYID_ERASED;
+        word32   pubLen    = 0;
+        uint8_t  pubBuf[128];
+        uint16_t pubBufLen = (uint16_t)sizeof(pubBuf);
+        if ((wh_Client_LmsGetKeyId(key, &pubId) == 0) &&
+            !WH_KEYID_ISERASED(pubId) &&
+            (wc_LmsKey_GetPubLen(key, &pubLen) == 0) &&
+            (pubLen <= sizeof(pubBuf))) {
+            int pubRet = wh_Client_KeyExportPublic(ctx, pubId, WH_KEY_ALGO_LMS,
+                                                   NULL, 0, pubBuf, &pubBufLen);
+            if (pubRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT("LMS export pub failed: ret=%d\n", pubRet);
+                ret = pubRet;
+            }
+            else if (((word32)pubBufLen != pubLen) ||
+                     (memcmp(pubBuf, key->pub, pubLen) != 0)) {
+                WH_ERROR_PRINT("LMS export pub mismatch len=%u expected=%u\n",
+                               (unsigned)pubBufLen, (unsigned)pubLen);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+
     /* The generic export API must refuse to return the private key state.
      * Keygen forces WH_NVM_FLAGS_NONEXPORTABLE, so export of the resident
      * key is denied with WH_ERROR_ACCESS. */
@@ -13551,6 +13576,31 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         if (wc_XmssKey_SigsLeft(key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
             ret = -1;
+        }
+    }
+
+    /* Verify the public key matches when read back */
+    if (ret == 0) {
+        whKeyId  pubId     = WH_KEYID_ERASED;
+        word32   pubLen    = 0;
+        uint8_t  pubBuf[128];
+        uint16_t pubBufLen = (uint16_t)sizeof(pubBuf);
+        if ((wh_Client_XmssGetKeyId(key, &pubId) == 0) &&
+            !WH_KEYID_ISERASED(pubId) &&
+            (wc_XmssKey_GetPubLen(key, &pubLen) == 0) &&
+            (pubLen <= sizeof(pubBuf))) {
+            int pubRet = wh_Client_KeyExportPublic(ctx, pubId, WH_KEY_ALGO_XMSS,
+                                                   NULL, 0, pubBuf, &pubBufLen);
+            if (pubRet != WH_ERROR_OK) {
+                WH_ERROR_PRINT("XMSS export pub failed: ret=%d\n", pubRet);
+                ret = pubRet;
+            }
+            else if (((word32)pubBufLen != pubLen) ||
+                     (memcmp(pubBuf, key->pk, pubLen) != 0)) {
+                WH_ERROR_PRINT("XMSS export pub mismatch len=%u expected=%u\n",
+                               (unsigned)pubBufLen, (unsigned)pubLen);
+                ret = WH_ERROR_ABORTED;
+            }
         }
     }
 

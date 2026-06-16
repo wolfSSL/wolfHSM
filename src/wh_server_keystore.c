@@ -70,6 +70,12 @@
 #ifdef WOLFSSL_HAVE_MLKEM
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
 #endif
+#ifdef WOLFSSL_HAVE_LMS
+#include "wolfssl/wolfcrypt/wc_lms.h"
+#endif
+#ifdef WOLFSSL_HAVE_XMSS
+#include "wolfssl/wolfcrypt/wc_xmss.h"
+#endif
 
 static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         int* out_big, uint8_t** out_buffer,
@@ -587,6 +593,66 @@ static int _ExportMlkemPublicKey(whServerContext* server, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_LMS
+/* Emit the raw LMS public key for a cached/committed key. Stateful private
+ * state stays in the HSM; only the public bytes leave. */
+static int _ExportLmsPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int    ret;
+    LmsKey key[1];
+    word32 pubLen = 0;
+
+    ret = wc_LmsKey_Init(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_LmsKeyCacheExport(server, keyId, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_LmsKey_GetPubLen(key, &pubLen);
+        }
+        if (ret == WH_ERROR_OK) {
+            if (pubLen > (word32)*outSz) {
+                ret = WH_ERROR_NOSPACE;
+            }
+            else {
+                memcpy(out, key->pub, pubLen);
+                *outSz = (uint16_t)pubLen;
+            }
+        }
+        wc_LmsKey_Free(key);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+static int _ExportXmssPublicKey(whServerContext* server, whKeyId keyId,
+    uint8_t* out, uint16_t* outSz)
+{
+    int     ret;
+    XmssKey key[1];
+    word32  pubLen = 0;
+
+    ret = wc_XmssKey_Init(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Server_XmssKeyCacheExport(server, keyId, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_XmssKey_GetPubLen(key, &pubLen);
+        }
+        if (ret == WH_ERROR_OK) {
+            if (pubLen > (word32)*outSz) {
+                ret = WH_ERROR_NOSPACE;
+            }
+            else {
+                memcpy(out, key->pk, pubLen);
+                *outSz = (uint16_t)pubLen;
+            }
+        }
+        wc_XmssKey_Free(key);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_XMSS */
 
 int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
 {
@@ -2195,6 +2261,18 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                         stage, &stageMax);
                             break;
                     #endif /* WOLFSSL_HAVE_MLKEM */
+                    #ifdef WOLFSSL_HAVE_LMS
+                        case WH_KEY_ALGO_LMS:
+                            ret = _ExportLmsPublicKey(server, serverKeyId,
+                                                      stage, &stageMax);
+                            break;
+                    #endif /* WOLFSSL_HAVE_LMS */
+                    #ifdef WOLFSSL_HAVE_XMSS
+                        case WH_KEY_ALGO_XMSS:
+                            ret = _ExportXmssPublicKey(server, serverKeyId,
+                                                       stage, &stageMax);
+                            break;
+                    #endif /* WOLFSSL_HAVE_XMSS */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
@@ -2398,6 +2476,18 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                         out, &max_der);
                             break;
                     #endif /* WOLFSSL_HAVE_MLKEM */
+                    #ifdef WOLFSSL_HAVE_LMS
+                        case WH_KEY_ALGO_LMS:
+                            ret = _ExportLmsPublicKey(server, serverKeyId,
+                                                      out, &max_der);
+                            break;
+                    #endif /* WOLFSSL_HAVE_LMS */
+                    #ifdef WOLFSSL_HAVE_XMSS
+                        case WH_KEY_ALGO_XMSS:
+                            ret = _ExportXmssPublicKey(server, serverKeyId,
+                                                       out, &max_der);
+                            break;
+                    #endif /* WOLFSSL_HAVE_XMSS */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;

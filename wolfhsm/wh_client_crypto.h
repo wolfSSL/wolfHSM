@@ -3211,6 +3211,12 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 #ifdef WOLFHSM_CFG_DMA
 
+/* The raw public key is returned via DMA at keygen time (see the MakeKey
+ * functions below). To retrieve it again later from just a keyId, use the
+ * generic wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_LMS or
+ * WH_KEY_ALGO_XMSS, ...). The private state is non-exportable and cannot be
+ * read back by any path. */
+
 #ifdef WOLFSSL_HAVE_LMS
 
 /* Bind / read the wolfHSM key id stored in key->devCtx. */

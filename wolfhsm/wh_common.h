@@ -156,6 +156,8 @@ enum WH_KEY_ALGO_ENUM {
     WH_KEY_ALGO_ED25519    = 4,
     WH_KEY_ALGO_MLDSA      = 5,
     WH_KEY_ALGO_MLKEM      = 6,
+    WH_KEY_ALGO_LMS        = 7,
+    WH_KEY_ALGO_XMSS       = 8,
 };
 
 #endif /* !WOLFHSM_WH_COMMON_H_ */
