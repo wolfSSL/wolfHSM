@@ -1047,9 +1047,11 @@ int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
         ret = wh_Crypto_LmsSerializeKey(key, slotCapacity, cacheBuf, &blobSize);
     }
     if (ret == WH_ERROR_OK) {
-        cacheMeta->id     = keyId;
-        cacheMeta->len    = blobSize;
-        cacheMeta->flags  = flags;
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if ((label != NULL) && (label_len > 0)) {
             memcpy(cacheMeta->label, label, label_len);
@@ -1103,9 +1105,11 @@ int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
                                          &blobSize);
     }
     if (ret == WH_ERROR_OK) {
-        cacheMeta->id     = keyId;
-        cacheMeta->len    = blobSize;
-        cacheMeta->flags  = flags;
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
         cacheMeta->access = WH_NVM_ACCESS_ANY;
         if ((label != NULL) && (label_len > 0)) {
             memcpy(cacheMeta->label, label, label_len);

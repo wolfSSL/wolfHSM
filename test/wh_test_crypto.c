@@ -13349,6 +13349,25 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* The generic export API must refuse to return the private key state.
+     * Keygen forces WH_NVM_FLAGS_NONEXPORTABLE, so export of the resident
+     * key is denied with WH_ERROR_ACCESS. */
+    if (ret == 0) {
+        whKeyId  exportId = WH_KEYID_ERASED;
+        uint8_t  expBuf[256];
+        uint16_t expLen   = (uint16_t)sizeof(expBuf);
+        if ((wh_Client_LmsGetKeyId(key, &exportId) == 0) &&
+            !WH_KEYID_ISERASED(exportId)) {
+            int expRet =
+                wh_Client_KeyExport(ctx, exportId, NULL, 0, expBuf, &expLen);
+            if (expRet != WH_ERROR_ACCESS) {
+                WH_ERROR_PRINT("LMS export not blocked: ret=%d "
+                               "(expected WH_ERROR_ACCESS)\n", expRet);
+                ret = (expRet == 0) ? WH_ERROR_ABORTED : expRet;
+            }
+        }
+    }
+
     if (keyInited) {
         whKeyId evictId = WH_KEYID_ERASED;
         if ((wh_Client_LmsGetKeyId(key, &evictId) == 0) &&
@@ -13491,6 +13510,25 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         if (wc_XmssKey_SigsLeft(key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
             ret = -1;
+        }
+    }
+
+    /* The generic export API must refuse to return the private key state.
+     * Keygen forces WH_NVM_FLAGS_NONEXPORTABLE, so export of the resident
+     * key is denied with WH_ERROR_ACCESS. */
+    if (ret == 0) {
+        whKeyId  exportId = WH_KEYID_ERASED;
+        uint8_t  expBuf[256];
+        uint16_t expLen   = (uint16_t)sizeof(expBuf);
+        if ((wh_Client_XmssGetKeyId(key, &exportId) == 0) &&
+            !WH_KEYID_ISERASED(exportId)) {
+            int expRet =
+                wh_Client_KeyExport(ctx, exportId, NULL, 0, expBuf, &expLen);
+            if (expRet != WH_ERROR_ACCESS) {
+                WH_ERROR_PRINT("XMSS export not blocked: ret=%d "
+                               "(expected WH_ERROR_ACCESS)\n", expRet);
+                ret = (expRet == 0) ? WH_ERROR_ABORTED : expRet;
+            }
         }
     }
 
