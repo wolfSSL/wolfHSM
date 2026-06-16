@@ -517,20 +517,27 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 #define WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS  0x4C4D5301u /* 'LMS\1' */
 #define WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS 0x584D5301u /* 'XMS\1' */
 
-int wh_Crypto_IsStatefulSigBlob(const uint8_t* buffer, uint16_t size)
+int wh_Crypto_IsStatefulSigPrivBlob(const uint8_t* buffer, uint16_t size)
 {
     uint32_t magic;
+    uint16_t privLen;
 
-    if ((buffer == NULL) || (size < sizeof(magic))) {
+    /* Need the full fixed header to read privLen at offset 6. */
+    if ((buffer == NULL) || (size < WH_CRYPTO_STATEFUL_SIG_HEADER_SZ)) {
         return 0;
     }
     /* Magic is stored native-order at offset 0; match what deserialize
      * requires before it would accept the blob. */
     memcpy(&magic, buffer, sizeof(magic));
-    return ((magic == WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS) ||
-            (magic == WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS))
-               ? 1
-               : 0;
+    if ((magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS) &&
+        (magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS)) {
+        return 0;
+    }
+    /* Only blobs carrying private key state are import-forbidden; a
+     * public-only blob (privLen == 0) is a verify key and is allowed. The
+     * deserialize path reads this same field to decide priv vs pub. */
+    memcpy(&privLen, buffer + 6, sizeof(privLen));
+    return (privLen > 0) ? 1 : 0;
 }
 
 static int _StatefulSigEncodeHeader(uint8_t* buffer, uint32_t magic,
@@ -659,15 +666,60 @@ int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
     if ((ret != 0) || (expectPubLen != pubLen)) {
         return WH_ERROR_BADARGS;
     }
-    if (privLen != (uint16_t)HSS_PRIVATE_KEY_LEN(key->params->hash_len)) {
+    /* privLen == 0 denotes a public-only (verify) key: load pub, no priv. */
+    if ((privLen != 0) &&
+        (privLen != (uint16_t)HSS_PRIVATE_KEY_LEN(key->params->hash_len))) {
         return WH_ERROR_BADARGS;
     }
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pub, p, pubLen);
-    p += pubLen;
-    memcpy(key->priv_raw, p, privLen);
+    if (privLen > 0) {
+        p += pubLen;
+        memcpy(key->priv_raw, p, privLen);
+    }
 
+    return WH_ERROR_OK;
+}
+
+int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
+                                 uint8_t* buffer, uint16_t* out_size)
+{
+    word32   pubLen32 = 0;
+    uint16_t pubLen;
+    uint16_t paramLen = 3;          /* levels, height, winternitz */
+    uint32_t totalLen;
+    int      ret;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL) ||
+        (key->params == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_LmsKey_GetPubLen(key, &pubLen32);
+    if (ret != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    pubLen = (uint16_t)pubLen32;
+
+    totalLen = (uint32_t)WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen + pubLen;
+    if (totalLen > max_size) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Public-only blob: privLen == 0, no private section follows. */
+    (void)_StatefulSigEncodeHeader(buffer,
+                                   WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS,
+                                   pubLen, 0, paramLen);
+
+    buffer[WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + 0] = key->params->levels;
+    buffer[WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + 1] = key->params->height;
+    buffer[WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + 2] = key->params->width;
+
+    memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen,
+           key->pub, pubLen);
+
+    *out_size = (uint16_t)totalLen;
     return WH_ERROR_OK;
 }
 #endif /* WOLFSSL_HAVE_LMS */
@@ -772,18 +824,67 @@ int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
     if ((ret != 0) || (expectPubLen != pubLen)) {
         return WH_ERROR_BADARGS;
     }
-    ret = wc_XmssKey_GetPrivLen(key, &expectPrivLen);
-    if ((ret != 0) || (expectPrivLen != privLen)) {
-        return WH_ERROR_BADARGS;
+    /* privLen == 0 denotes a public-only (verify) key. */
+    if (privLen != 0) {
+        ret = wc_XmssKey_GetPrivLen(key, &expectPrivLen);
+        if ((ret != 0) || (expectPrivLen != privLen)) {
+            return WH_ERROR_BADARGS;
+        }
     }
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pk, p, pubLen);
-    /* The private key is left in the slot blob; downstream paths read it
-     * via the bridge ReadCb against the cached slot (sk is allocated by
-     * Reload, not by deserialize). */
+    /* The private key (if any) is left in the slot blob; downstream paths
+     * read it via the bridge ReadCb against the cached slot (sk is allocated
+     * by Reload, not by deserialize). */
     (void)privLen;
 
+    return WH_ERROR_OK;
+}
+
+int wh_Crypto_XmssSerializePubKey(XmssKey* key, const char* paramStr,
+                                  uint16_t max_size, uint8_t* buffer,
+                                  uint16_t* out_size)
+{
+    word32   pubLen32 = 0;
+    uint16_t pubLen;
+    uint16_t paramLen;
+    uint32_t totalLen;
+    size_t   strLen;
+    int      ret;
+
+    if ((key == NULL) || (paramStr == NULL) || (buffer == NULL) ||
+        (out_size == NULL) || (key->params == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_XmssKey_GetPubLen(key, &pubLen32);
+    if (ret != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    pubLen = (uint16_t)pubLen32;
+
+    strLen = strlen(paramStr);
+    if (strLen >= 0xFFFFu) {
+        return WH_ERROR_BADARGS;
+    }
+    paramLen = (uint16_t)(strLen + 1);  /* include NUL */
+
+    totalLen = (uint32_t)WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen + pubLen;
+    if (totalLen > max_size) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Public-only blob: privLen == 0, no private section follows. */
+    (void)_StatefulSigEncodeHeader(buffer,
+                                   WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS,
+                                   pubLen, 0, paramLen);
+
+    memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ, paramStr, paramLen);
+    memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen,
+           key->pk, pubLen);
+
+    *out_size = (uint16_t)totalLen;
     return WH_ERROR_OK;
 }
 #endif /* WOLFSSL_HAVE_XMSS */

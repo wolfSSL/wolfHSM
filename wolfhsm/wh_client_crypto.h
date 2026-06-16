@@ -3254,6 +3254,19 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
 int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
                              word32* sigsLeft);
 
+/* Import a verify-only LMS public key into the keystore. The in-memory key
+ * must have its parameter set bound and the public key loaded (e.g. via
+ * wc_LmsKey_SetParameters + wc_LmsKey_ImportPubRaw). On success the key's
+ * devCtx carries the server-side keyId, usable with wh_Client_LmsVerifyDma.
+ *
+ * No private state is stored, so the key cannot sign. Pass a specific keyId in
+ * *inout_keyId to provision to a known slot (or WH_KEYID_ERASED to be
+ * assigned one), and WH_NVM_FLAGS_NONMODIFIABLE to pin it against later
+ * replacement. Committed to NVM unless flags include WH_NVM_FLAGS_EPHEMERAL. */
+int wh_Client_LmsImportPubKey(whClientContext* ctx, LmsKey* key,
+                              whKeyId* inout_keyId, whNvmFlags flags,
+                              uint16_t label_len, uint8_t* label);
+
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
@@ -3279,6 +3292,16 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
 
 int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
                               word32* sigsLeft);
+
+/* Import a verify-only XMSS / XMSS^MT public key into the keystore. The
+ * in-memory key must have its parameter string bound and the public key loaded
+ * (e.g. via wc_XmssKey_SetParamStr + wc_XmssKey_ImportPubRaw). Semantics match
+ * wh_Client_LmsImportPubKey: no private state is stored (verify only), the key
+ * may be pinned with WH_NVM_FLAGS_NONMODIFIABLE, and it is committed to NVM
+ * unless flags include WH_NVM_FLAGS_EPHEMERAL. */
+int wh_Client_XmssImportPubKey(whClientContext* ctx, XmssKey* key,
+                               whKeyId* inout_keyId, whNvmFlags flags,
+                               uint16_t label_len, uint8_t* label);
 
 #endif /* WOLFSSL_HAVE_XMSS */
 

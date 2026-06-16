@@ -136,11 +136,12 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
  * full blob layout is documented in wh_crypto.c. */
 #define WH_CRYPTO_STATEFUL_SIG_HEADER_SZ 12
 
-/* Returns 1 if buffer begins with an LMS/XMSS stateful-sig slot-blob magic,
- * else 0. Used to reject client attempts to import (and thereby roll back)
- * stateful private key state through the generic keystore/NVM paths. Only the
- * on-HSM keygen may produce these blobs. */
-int wh_Crypto_IsStatefulSigBlob(const uint8_t* buffer, uint16_t size);
+/* Returns 1 if buffer is an LMS/XMSS stateful-sig slot-blob that carries
+ * private key state (privLen > 0), else 0. Used to reject client attempts to
+ * import (and thereby roll back) private state through the generic
+ * keystore/NVM paths. A public-only blob (privLen == 0) is a verify key and
+ * returns 0 so it may be imported. */
+int wh_Crypto_IsStatefulSigPrivBlob(const uint8_t* buffer, uint16_t size);
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
@@ -164,6 +165,12 @@ int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
  * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on malformed blob. */
 int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
                                 LmsKey* key);
+
+/* Store the public half of an LmsKey (parameter set + public key, no private
+ * state) into a byte sequence. Produces a public-only slot blob (privLen == 0)
+ * suitable for importing a verify-only key. */
+int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
+                                 uint8_t* buffer, uint16_t* out_size);
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
@@ -176,6 +183,13 @@ int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
 /* Restore an XmssKey from a byte sequence */
 int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
                                  XmssKey* key);
+
+/* Store the public half of an XmssKey (param string + public key, no secret
+ * state) into a byte sequence. Produces a public-only slot blob
+ * (privLen == 0) suitable for importing a verify-only key. */
+int wh_Crypto_XmssSerializePubKey(XmssKey* key, const char* paramStr,
+                                  uint16_t max_size, uint8_t* buffer,
+                                  uint16_t* out_size);
 #endif /* WOLFSSL_HAVE_XMSS */
 
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */

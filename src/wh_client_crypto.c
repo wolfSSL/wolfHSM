@@ -10783,6 +10783,43 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
     return ret;
 }
 
+int wh_Client_LmsImportPubKey(whClientContext* ctx, LmsKey* key,
+                              whKeyId* inout_keyId, whNvmFlags flags,
+                              uint16_t label_len, uint8_t* label)
+{
+    int      ret;
+    uint8_t  blob[256];
+    uint16_t blobSz = (uint16_t)sizeof(blob);
+    uint16_t keyId16;
+
+    if ((ctx == NULL) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Build a public-only slot blob from the loaded public key, then provision
+     * it via the generic keystore. The server stores no private state, so the
+     * key is verify-only. */
+    ret = wh_Crypto_LmsSerializePubKey(key, blobSz, blob, &blobSz);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId16 = (uint16_t)((inout_keyId != NULL) ? *inout_keyId
+                                               : WH_KEYID_ERASED);
+    ret = wh_Client_KeyCache(ctx, (uint32_t)flags, label, label_len, blob,
+                             blobSz, &keyId16);
+    if ((ret == WH_ERROR_OK) && ((flags & WH_NVM_FLAGS_EPHEMERAL) == 0)) {
+        ret = wh_Client_KeyCommit(ctx, (whNvmId)keyId16);
+    }
+    if (ret == WH_ERROR_OK) {
+        wh_Client_LmsSetKeyId(key, (whKeyId)keyId16);
+        if (inout_keyId != NULL) {
+            *inout_keyId = (whKeyId)keyId16;
+        }
+    }
+    return ret;
+}
+
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
@@ -11167,6 +11204,49 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
         }
     }
 
+    return ret;
+}
+
+int wh_Client_XmssImportPubKey(whClientContext* ctx, XmssKey* key,
+                               whKeyId* inout_keyId, whNvmFlags flags,
+                               uint16_t label_len, uint8_t* label)
+{
+    int         ret;
+    uint8_t     blob[256];
+    uint16_t    blobSz = (uint16_t)sizeof(blob);
+    uint16_t    keyId16;
+    const char* paramStr = NULL;
+
+    if ((ctx == NULL) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_XmssKey_GetParamStr(key, &paramStr);
+    if (ret != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Build a public-only slot blob, then provision it via the generic
+     * keystore. The server stores no secret state, so the key is verify-only.
+     */
+    ret = wh_Crypto_XmssSerializePubKey(key, paramStr, blobSz, blob, &blobSz);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId16 = (uint16_t)((inout_keyId != NULL) ? *inout_keyId
+                                               : WH_KEYID_ERASED);
+    ret = wh_Client_KeyCache(ctx, (uint32_t)flags, label, label_len, blob,
+                             blobSz, &keyId16);
+    if ((ret == WH_ERROR_OK) && ((flags & WH_NVM_FLAGS_EPHEMERAL) == 0)) {
+        ret = wh_Client_KeyCommit(ctx, (whNvmId)keyId16);
+    }
+    if (ret == WH_ERROR_OK) {
+        wh_Client_XmssSetKeyId(key, (whKeyId)keyId16);
+        if (inout_keyId != NULL) {
+            *inout_keyId = (whKeyId)keyId16;
+        }
+    }
     return ret;
 }
 

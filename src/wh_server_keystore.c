@@ -780,7 +780,7 @@ static int _KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
     /* Checked calls must refuse access to the LMX/XMSS private key */
-    if (checked && wh_Crypto_IsStatefulSigBlob(in, (uint16_t)meta->len)) {
+    if (checked && wh_Crypto_IsStatefulSigPrivBlob(in, (uint16_t)meta->len)) {
         return WH_ERROR_ACCESS;
     }
 #endif
@@ -1827,7 +1827,7 @@ static int _HandleKeyUnwrapAndCacheRequest(
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
     /* Stateful (LMS/XMSS) private key state must never enter the keystore via
      * unwrap; that would permit a signature-index roll-back. */
-    if (wh_Crypto_IsStatefulSigBlob(key, (uint16_t)metadata.len)) {
+    if (wh_Crypto_IsStatefulSigPrivBlob(key, (uint16_t)metadata.len)) {
         return WH_ERROR_ACCESS;
     }
 #endif
@@ -2923,7 +2923,7 @@ int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
     /* Checked calls must refuse access to the LMX/XMSS private key */
     if ((ret == 0) && checked &&
-        wh_Crypto_IsStatefulSigBlob(buffer, (uint16_t)meta->len)) {
+        wh_Crypto_IsStatefulSigPrivBlob(buffer, (uint16_t)meta->len)) {
         ret = WH_ERROR_ACCESS;
     }
 #endif

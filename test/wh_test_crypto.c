@@ -13374,6 +13374,72 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Public-key import: provision a verify-only copy of this key's public
+     * half under a new keyId, verify the signature made above against it, and
+     * confirm signing with it is refused (no private state). */
+    if (ret == 0) {
+        LmsKey  pubKey[1];
+        int     pubInited = 0;
+        word32  pubLen    = 0;
+        uint8_t pubRaw[128];
+        whKeyId pubKeyId  = WH_KEYID_ERASED;
+        int     vres      = 0;
+
+        ret = wc_LmsKey_GetPubLen(key, &pubLen);
+        if ((ret == 0) && (pubLen > sizeof(pubRaw))) {
+            ret = BUFFER_E;
+        }
+        if (ret == 0) {
+            ret = wc_LmsKey_ExportPubRaw(key, pubRaw, &pubLen);
+        }
+        if (ret == 0) {
+            ret = wc_LmsKey_Init(pubKey, NULL, devId);
+        }
+        if (ret == 0) {
+            pubInited = 1;
+            ret = wc_LmsKey_SetParameters(pubKey, WH_TEST_LMS_LEVELS,
+                                          WH_TEST_LMS_HEIGHT,
+                                          WH_TEST_LMS_WINTERNITZ);
+        }
+        if (ret == 0) {
+            ret = wc_LmsKey_ImportPubRaw(pubKey, pubRaw, pubLen);
+        }
+        /* EPHEMERAL keeps it cache-only for an easy cleanup; production would
+         * pin with WH_NVM_FLAGS_NONMODIFIABLE and commit. */
+        if (ret == 0) {
+            ret = wh_Client_LmsImportPubKey(ctx, pubKey, &pubKeyId,
+                                            WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS import pub failed: ret=%d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_LmsVerifyDma(ctx, whTest_LmsSigBuf, sigLen, msg,
+                                         msgSz, &vres, pubKey);
+            if ((ret == 0) && (vres != 1)) {
+                WH_ERROR_PRINT("LMS verify with imported pub failed\n");
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        if (ret == 0) {
+            word32 tmpSigLen = (word32)sizeof(whTest_LmsSigBuf);
+            int    signRet =
+                wh_Client_LmsSignDma(ctx, msg, msgSz, whTest_LmsSigBuf,
+                                     &tmpSigLen, pubKey);
+            if (signRet == 0) {
+                WH_ERROR_PRINT("LMS sign with verify-only key unexpectedly "
+                               "succeeded\n");
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        if (!WH_KEYID_ISERASED(pubKeyId)) {
+            (void)wh_Client_KeyEvict(ctx, pubKeyId);
+        }
+        if (pubInited) {
+            wc_LmsKey_Free(pubKey);
+        }
+    }
+
     /* The generic export API must refuse to return the private key state.
      * Keygen forces WH_NVM_FLAGS_NONEXPORTABLE, so export of the resident
      * key is denied with WH_ERROR_ACCESS. */
@@ -13401,6 +13467,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         int      impRet;
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &lmsMagic, sizeof(lmsMagic));
+        fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
         impRet = wh_Client_KeyCache(ctx, 0, NULL, 0, fakeBlob,
                                     (uint16_t)sizeof(fakeBlob), &impId);
         if (impRet != WH_ERROR_ACCESS) {
@@ -13422,6 +13489,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &lmsMagic, sizeof(lmsMagic));
+        fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
         addRet = wh_Client_NvmAddObject(ctx, addId, WH_NVM_ACCESS_ANY,
                                         WH_NVM_FLAGS_NONE, 0, NULL,
                                         (whNvmSize)sizeof(fakeBlob), fakeBlob,
@@ -13430,7 +13498,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("LMS blob NVM import not blocked: ret=%d rc=%d "
                            "(expected rc WH_ERROR_ACCESS)\n", addRet,
                            (int)addRc);
-            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED
+            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED;
         }
     }
 
@@ -13604,6 +13672,70 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Public-key import: provision a verify-only copy of this key's public
+     * half under a new keyId, verify the signature made above against it, and
+     * confirm signing with it is refused (no private state). */
+    if (ret == 0) {
+        XmssKey pubKey[1];
+        int     pubInited = 0;
+        word32  pubLen    = 0;
+        uint8_t pubRaw[128];
+        whKeyId pubKeyId  = WH_KEYID_ERASED;
+        int     vres      = 0;
+
+        ret = wc_XmssKey_GetPubLen(key, &pubLen);
+        if ((ret == 0) && (pubLen > sizeof(pubRaw))) {
+            ret = BUFFER_E;
+        }
+        if (ret == 0) {
+            ret = wc_XmssKey_ExportPubRaw(key, pubRaw, &pubLen);
+        }
+        if (ret == 0) {
+            ret = wc_XmssKey_Init(pubKey, NULL, devId);
+        }
+        if (ret == 0) {
+            pubInited = 1;
+            ret = wc_XmssKey_SetParamStr(pubKey, WH_TEST_XMSS_PARAM_STR);
+        }
+        if (ret == 0) {
+            ret = wc_XmssKey_ImportPubRaw(pubKey, pubRaw, pubLen);
+        }
+        /* EPHEMERAL keeps it cache-only for an easy cleanup; production would
+         * pin with WH_NVM_FLAGS_NONMODIFIABLE and commit. */
+        if (ret == 0) {
+            ret = wh_Client_XmssImportPubKey(ctx, pubKey, &pubKeyId,
+                                             WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS import pub failed: ret=%d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_XmssVerifyDma(ctx, whTest_XmssSigBuf, sigLen, msg,
+                                          msgSz, &vres, pubKey);
+            if ((ret == 0) && (vres != 1)) {
+                WH_ERROR_PRINT("XMSS verify with imported pub failed\n");
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        if (ret == 0) {
+            word32 tmpSigLen = (word32)sizeof(whTest_XmssSigBuf);
+            int    signRet =
+                wh_Client_XmssSignDma(ctx, msg, msgSz, whTest_XmssSigBuf,
+                                      &tmpSigLen, pubKey);
+            if (signRet == 0) {
+                WH_ERROR_PRINT("XMSS sign with verify-only key unexpectedly "
+                               "succeeded\n");
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        if (!WH_KEYID_ISERASED(pubKeyId)) {
+            (void)wh_Client_KeyEvict(ctx, pubKeyId);
+        }
+        if (pubInited) {
+            wc_XmssKey_Free(pubKey);
+        }
+    }
+
     /* The generic export API must refuse to return the private key state.
      * Keygen forces WH_NVM_FLAGS_NONEXPORTABLE, so export of the resident
      * key is denied with WH_ERROR_ACCESS. */
@@ -13631,6 +13763,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         int      impRet;
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &xmssMagic, sizeof(xmssMagic));
+        fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
         impRet = wh_Client_KeyCache(ctx, 0, NULL, 0, fakeBlob,
                                     (uint16_t)sizeof(fakeBlob), &impId);
         if (impRet != WH_ERROR_ACCESS) {
@@ -13652,6 +13785,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &xmssMagic, sizeof(xmssMagic));
+        fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
         addRet = wh_Client_NvmAddObject(ctx, addId, WH_NVM_ACCESS_ANY,
                                         WH_NVM_FLAGS_NONE, 0, NULL,
                                         (whNvmSize)sizeof(fakeBlob), fakeBlob,
@@ -13660,7 +13794,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("XMSS blob NVM import not blocked: ret=%d rc=%d "
                            "(expected rc WH_ERROR_ACCESS)\n", addRet,
                            (int)addRc);
-            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED
+            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED;
         }
     }
 

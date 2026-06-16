@@ -265,7 +265,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
                 /* Block direct NVM import of stateful (LMS/XMSS) private key
                  * state; only on-HSM keygen may create such objects. */
-                if (wh_Crypto_IsStatefulSigBlob(data, (uint16_t)req.len)) {
+                if (wh_Crypto_IsStatefulSigPrivBlob(data, (uint16_t)req.len)) {
                     rc = WH_ERROR_ACCESS;
                 }
 #endif
@@ -398,7 +398,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
             /* Block direct NVM import of stateful (LMS/XMSS) private key state;
              * only on-HSM keygen may create such objects. */
-            if (wh_Crypto_IsStatefulSigBlob((const uint8_t*)data,
+            if (wh_Crypto_IsStatefulSigPrivBlob((const uint8_t*)data,
                                             (uint16_t)req.data_len)) {
                 resp.rc = WH_ERROR_ACCESS;
             }
