@@ -517,6 +517,22 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 #define WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS  0x4C4D5301u /* 'LMS\1' */
 #define WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS 0x584D5301u /* 'XMS\1' */
 
+int wh_Crypto_IsStatefulSigBlob(const uint8_t* buffer, uint16_t size)
+{
+    uint32_t magic;
+
+    if ((buffer == NULL) || (size < sizeof(magic))) {
+        return 0;
+    }
+    /* Magic is stored native-order at offset 0; match what deserialize
+     * requires before it would accept the blob. */
+    memcpy(&magic, buffer, sizeof(magic));
+    return ((magic == WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS) ||
+            (magic == WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS))
+               ? 1
+               : 0;
+}
+
 static int _StatefulSigEncodeHeader(uint8_t* buffer, uint32_t magic,
                                     uint16_t pubLen, uint16_t privLen,
                                     uint16_t paramLen)

@@ -712,6 +712,13 @@ static int _KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
         return WH_ERROR_BADARGS;
     }
 
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+    /* Checked calls must refuse access to the LMX/XMSS private key */
+    if (checked && wh_Crypto_IsStatefulSigBlob(in, (uint16_t)meta->len)) {
+        return WH_ERROR_ACCESS;
+    }
+#endif
+
     if (checked) {
         ret = wh_Server_KeystoreGetCacheSlotChecked(server, meta->id, meta->len,
                                                     &slotBuf, &slotMeta);
@@ -1750,6 +1757,14 @@ static int _HandleKeyUnwrapAndCacheRequest(
 
     /* Store the assigned key ID in the response, preserving client flags */
     resp->keyId = wh_KeyId_TranslateToClient(metadata.id);
+
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+    /* Stateful (LMS/XMSS) private key state must never enter the keystore via
+     * unwrap; that would permit a signature-index roll-back. */
+    if (wh_Crypto_IsStatefulSigBlob(key, (uint16_t)metadata.len)) {
+        return WH_ERROR_ACCESS;
+    }
+#endif
 
     /* Cache the key */
     return wh_Server_KeystoreCacheKey(server, &metadata, key);
@@ -2815,6 +2830,13 @@ int _KeystoreCacheKeyDma(whServerContext* server, whNvmMetadata* meta,
     /* Copy key data using DMA */
     ret = whServerDma_CopyFromClient(server, buffer, keyAddr, meta->len,
                                      (whServerDmaFlags){0});
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+    /* Checked calls must refuse access to the LMX/XMSS private key */
+    if ((ret == 0) && checked &&
+        wh_Crypto_IsStatefulSigBlob(buffer, (uint16_t)meta->len)) {
+        ret = WH_ERROR_ACCESS;
+    }
+#endif
     if (ret != 0) {
         /* Clear the slot on error */
         memset(buffer, 0, meta->len);

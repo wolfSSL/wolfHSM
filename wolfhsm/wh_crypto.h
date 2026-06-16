@@ -135,6 +135,12 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
  * server bridge can locate the variable-length sections that follow it. The
  * full blob layout is documented in wh_crypto.c. */
 #define WH_CRYPTO_STATEFUL_SIG_HEADER_SZ 12
+
+/* Returns 1 if buffer begins with an LMS/XMSS stateful-sig slot-blob magic,
+ * else 0. Used to reject client attempts to import (and thereby roll back)
+ * stateful private key state through the generic keystore/NVM paths. Only the
+ * on-HSM keygen may produce these blobs. */
+int wh_Crypto_IsStatefulSigBlob(const uint8_t* buffer, uint16_t size);
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS

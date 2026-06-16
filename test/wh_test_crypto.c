@@ -13368,6 +13368,47 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Attempt to import an LMS key which must be rejected */
+    if (ret == 0) {
+        uint8_t  fakeBlob[64];
+        uint32_t lmsMagic = 0x4C4D5301u; /* 'LMS\1', see wh_crypto.c */
+        whKeyId  impId    = WH_KEYID_ERASED;
+        int      impRet;
+        memset(fakeBlob, 0, sizeof(fakeBlob));
+        memcpy(fakeBlob, &lmsMagic, sizeof(lmsMagic));
+        impRet = wh_Client_KeyCache(ctx, 0, NULL, 0, fakeBlob,
+                                    (uint16_t)sizeof(fakeBlob), &impId);
+        if (impRet != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("LMS blob import not blocked: ret=%d "
+                           "(expected WH_ERROR_ACCESS)\n", impRet);
+            if ((impRet == 0) && !WH_KEYID_ISERASED(impId)) {
+                (void)wh_Client_KeyEvict(ctx, impId);
+            }
+            ret = (impRet == 0) ? WH_ERROR_ABORTED : impRet;
+        }
+    }
+
+    /* Also ensure direct NVM import is blocked */
+    if (ret == 0) {
+        uint8_t  fakeBlob[64];
+        uint32_t lmsMagic = 0x4C4D5301u; /* 'LMS\1', see wh_crypto.c */
+        int32_t  addRc    = 0;
+        int      addRet;
+        whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
+        memset(fakeBlob, 0, sizeof(fakeBlob));
+        memcpy(fakeBlob, &lmsMagic, sizeof(lmsMagic));
+        addRet = wh_Client_NvmAddObject(ctx, addId, WH_NVM_ACCESS_ANY,
+                                        WH_NVM_FLAGS_NONE, 0, NULL,
+                                        (whNvmSize)sizeof(fakeBlob), fakeBlob,
+                                        &addRc);
+        if ((addRet != WH_ERROR_OK) || (addRc != WH_ERROR_ACCESS)) {
+            WH_ERROR_PRINT("LMS blob NVM import not blocked: ret=%d rc=%d "
+                           "(expected rc WH_ERROR_ACCESS)\n", addRet,
+                           (int)addRc);
+            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED
+        }
+    }
+
     if (keyInited) {
         whKeyId evictId = WH_KEYID_ERASED;
         if ((wh_Client_LmsGetKeyId(key, &evictId) == 0) &&
@@ -13529,6 +13570,47 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
                                "(expected WH_ERROR_ACCESS)\n", expRet);
                 ret = (expRet == 0) ? WH_ERROR_ABORTED : expRet;
             }
+        }
+    }
+
+    /* Attempt to import an XMSS key which must be rejected */
+    if (ret == 0) {
+        uint8_t  fakeBlob[64];
+        uint32_t xmssMagic = 0x584D5301u; /* 'XMS\1', see wh_crypto.c */
+        whKeyId  impId     = WH_KEYID_ERASED;
+        int      impRet;
+        memset(fakeBlob, 0, sizeof(fakeBlob));
+        memcpy(fakeBlob, &xmssMagic, sizeof(xmssMagic));
+        impRet = wh_Client_KeyCache(ctx, 0, NULL, 0, fakeBlob,
+                                    (uint16_t)sizeof(fakeBlob), &impId);
+        if (impRet != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("XMSS blob import not blocked: ret=%d "
+                           "(expected WH_ERROR_ACCESS)\n", impRet);
+            if ((impRet == 0) && !WH_KEYID_ISERASED(impId)) {
+                (void)wh_Client_KeyEvict(ctx, impId);
+            }
+            ret = (impRet == 0) ? WH_ERROR_ABORTED : impRet;
+        }
+    }
+
+    /* Also ensure direct NVM import is blocked */
+    if (ret == 0) {
+        uint8_t  fakeBlob[64];
+        uint32_t xmssMagic = 0x584D5301u; /* 'XMS\1', see wh_crypto.c */
+        int32_t  addRc    = 0;
+        int      addRet;
+        whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
+        memset(fakeBlob, 0, sizeof(fakeBlob));
+        memcpy(fakeBlob, &xmssMagic, sizeof(xmssMagic));
+        addRet = wh_Client_NvmAddObject(ctx, addId, WH_NVM_ACCESS_ANY,
+                                        WH_NVM_FLAGS_NONE, 0, NULL,
+                                        (whNvmSize)sizeof(fakeBlob), fakeBlob,
+                                        &addRc);
+        if ((addRet != WH_ERROR_OK) || (addRc != WH_ERROR_ACCESS)) {
+            WH_ERROR_PRINT("XMSS blob NVM import not blocked: ret=%d rc=%d "
+                           "(expected rc WH_ERROR_ACCESS)\n", addRet,
+                           (int)addRc);
+            ret = (addRc != 0) ? addRc : WH_ERROR_ABORTED
         }
     }
 
