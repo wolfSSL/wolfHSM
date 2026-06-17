@@ -10728,8 +10728,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
     return ret;
 }
 
-int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
-                             word32* sigsLeft)
+int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
 {
     int                                                ret = WH_ERROR_OK;
     uint8_t*                                           dataPtr;
@@ -10737,7 +10736,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
     whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* res;
     whKeyId                                            key_id;
 
-    if ((ctx == NULL) || (key == NULL) || (sigsLeft == NULL)) {
+    if ((ctx == NULL) || (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -10778,8 +10777,9 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                *sigsLeft = res->sigsLeft;
-                ret = WH_ERROR_OK;
+                /* The server mirrors wc_LmsKey_SigsLeft(), which is a
+                 * boolean. Normalize so the only nonzero return is 1. */
+                ret = (res->sigsLeft != 0) ? 1 : 0;
             }
         }
     }
@@ -11156,8 +11156,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
     return ret;
 }
 
-int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
-                              word32* sigsLeft)
+int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
 {
     int                                                ret = WH_ERROR_OK;
     uint8_t*                                           dataPtr;
@@ -11165,7 +11164,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
     whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* res;
     whKeyId                                            key_id;
 
-    if ((ctx == NULL) || (key == NULL) || (sigsLeft == NULL)) {
+    if ((ctx == NULL) || (key == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -11206,8 +11205,9 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                *sigsLeft = res->sigsLeft;
-                ret = WH_ERROR_OK;
+                /* The server mirrors wc_XmssKey_SigsLeft(), which is a
+                 * boolean. Normalize so the only nonzero return is 1. */
+                ret = (res->sigsLeft != 0) ? 1 : 0;
             }
         }
     }

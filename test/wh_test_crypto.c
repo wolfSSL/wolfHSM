@@ -13294,8 +13294,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
      * not defer it. Evict the volatile cache copy (as a power loss before the
      * first sign would) and confirm the key is still resident in NVM. */
     if (ret == 0) {
-        whKeyId durId   = WH_KEYID_ERASED;
-        word32  durLeft = 0;
+        whKeyId durId = WH_KEYID_ERASED;
         if ((wh_Client_LmsGetKeyId(key, &durId) == 0) &&
             !WH_KEYID_ISERASED(durId)) {
             ret = wh_Client_KeyEvict(ctx, durId);
@@ -13303,10 +13302,15 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
                 WH_ERROR_PRINT("LMS durability evict failed: ret=%d\n", ret);
             }
             else {
-                ret = wh_Client_LmsSigsLeftDma(ctx, key, &durLeft);
-                if (ret != 0) {
+                /* SigsLeft reloads the key from NVM; a negative return means
+                 * keygen failed to commit it. A fresh key reports 1. */
+                ret = wh_Client_LmsSigsLeftDma(ctx, key);
+                if (ret < 0) {
                     WH_ERROR_PRINT("LMS key not durable after keygen: ret=%d\n",
                                    ret);
+                }
+                else {
+                    ret = 0;
                 }
             }
         }
@@ -13630,8 +13634,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
      * Evict the volatile cache copy (as a power loss before the first sign
      * would) and confirm the key is still resident in NVM. */
     if (ret == 0) {
-        whKeyId durId   = WH_KEYID_ERASED;
-        word32  durLeft = 0;
+        whKeyId durId = WH_KEYID_ERASED;
         if ((wh_Client_XmssGetKeyId(key, &durId) == 0) &&
             !WH_KEYID_ISERASED(durId)) {
             ret = wh_Client_KeyEvict(ctx, durId);
@@ -13639,10 +13642,15 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
                 WH_ERROR_PRINT("XMSS durability evict failed: ret=%d\n", ret);
             }
             else {
-                ret = wh_Client_XmssSigsLeftDma(ctx, key, &durLeft);
-                if (ret != 0) {
+                /* SigsLeft reloads the key from NVM; a negative return means
+                 * keygen failed to commit it. A fresh key reports 1. */
+                ret = wh_Client_XmssSigsLeftDma(ctx, key);
+                if (ret < 0) {
                     WH_ERROR_PRINT("XMSS key not durable after keygen: "
                                    "ret=%d\n", ret);
+                }
+                else {
+                    ret = 0;
                 }
             }
         }

@@ -1079,10 +1079,14 @@ static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
         case WC_PQC_STATEFUL_SIG_TYPE_LMS:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
+                /* ret is the error code if negative, otherwise a boolean */
                 ret = wh_Client_LmsSigsLeftDma(
-                    ctx,
-                    (LmsKey*)info->pk.pqc_stateful_sig_sigs_left.key,
-                    info->pk.pqc_stateful_sig_sigs_left.sigsLeft);
+                    ctx, (LmsKey*)info->pk.pqc_stateful_sig_sigs_left.key);
+                if (ret >= 0) {
+                    *(info->pk.pqc_stateful_sig_sigs_left.sigsLeft) =
+                        (word32)ret;
+                    ret = WH_ERROR_OK;
+                }
             }
             else
 #endif /* WOLFHSM_CFG_DMA */
@@ -1095,10 +1099,14 @@ static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
         case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
+                /* ret is the error code if negative, otherwise a boolean */
                 ret = wh_Client_XmssSigsLeftDma(
-                    ctx,
-                    (XmssKey*)info->pk.pqc_stateful_sig_sigs_left.key,
-                    info->pk.pqc_stateful_sig_sigs_left.sigsLeft);
+                    ctx, (XmssKey*)info->pk.pqc_stateful_sig_sigs_left.key);
+                if (ret >= 0) {
+                    *(info->pk.pqc_stateful_sig_sigs_left.sigsLeft) =
+                        (word32)ret;
+                    ret = WH_ERROR_OK;
+                }
             }
             else
 #endif /* WOLFHSM_CFG_DMA */

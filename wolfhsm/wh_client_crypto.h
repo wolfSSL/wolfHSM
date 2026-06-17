@@ -3310,15 +3310,16 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
                            LmsKey* key);
 
 /**
- * @brief Query the remaining signatures on an HSM-resident LMS key.
+ * @brief Report whether an HSM-resident LMS key can still produce signatures.
  *
- * @param[in]  ctx      Pointer to the client context.
- * @param[in]  key      LmsKey whose devCtx carries the keyId.
- * @param[out] sigsLeft Receives the count of remaining signatures.
- * @return int Returns 0 on success or a negative error code on failure.
+ * Mirrors wc_LmsKey_SigsLeft(): the result is a boolean, not a count.
+ *
+ * @param[in]  ctx Pointer to the client context.
+ * @param[in]  key LmsKey whose devCtx carries the keyId.
+ * @return int Returns 1 if signatures remain, 0 if the key is exhausted, or a
+ *             negative error code on failure.
  */
-int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key,
-                             word32* sigsLeft);
+int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key);
 
 /**
  * @brief Import a verify-only LMS public key into the keystore.
@@ -3441,15 +3442,16 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
                             int* res, XmssKey* key);
 
 /**
- * @brief Query the remaining signatures on an HSM-resident XMSS key.
+ * @brief Report whether an HSM-resident XMSS key can still produce signatures.
  *
- * @param[in]  ctx      Pointer to the client context.
- * @param[in]  key      XmssKey whose devCtx carries the keyId.
- * @param[out] sigsLeft Receives the count of remaining signatures.
- * @return int Returns 0 on success or a negative error code on failure.
+ * Mirrors wc_XmssKey_SigsLeft(): the result is a boolean, not a count.
+ *
+ * @param[in]  ctx Pointer to the client context.
+ * @param[in]  key XmssKey whose devCtx carries the keyId.
+ * @return int Returns 1 if signatures remain, 0 if the key is exhausted, or a
+ *             negative error code on failure.
  */
-int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key,
-                              word32* sigsLeft);
+int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key);
 
 /**
  * @brief Import a verify-only XMSS / XMSS^MT public key into the keystore.
