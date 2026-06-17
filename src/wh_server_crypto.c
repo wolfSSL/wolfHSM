@@ -7008,6 +7008,11 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
+    /* Reject EPHEMERAL keys since keygen itself is stateful */
+    if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
     ret = wc_LmsKey_Init(key, NULL, devId);
     if (ret != 0) {
         return ret;
@@ -7062,9 +7067,8 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
                                           (uint16_t)req.labelSize, req.label);
     }
 
-    /* For non-ephemeral keys, commit to NVM so the key survives a server
-     * restart. Ephemeral keys are cache-only. */
-    if ((ret == 0) && ((req.flags & WH_NVM_FLAGS_EPHEMERAL) == 0)) {
+    /* Write-through before responding */
+    if (ret == 0) {
         ret = wh_Server_KeystoreCommitKey(ctx, keyId);
     }
 
@@ -7448,6 +7452,11 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
+    /* Reject EPHEMERAL keys since keygen itself is stateful */
+    if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* xmssParamStr arrives via the request struct (populated by the client in
      * wh_Client_XmssMakeKeyDma). Defensively enforce NUL-termination before
      * passing it to wolfCrypt, since it originates from the client. */
@@ -7521,7 +7530,8 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
                                            req.label);
     }
 
-    if ((ret == 0) && ((req.flags & WH_NVM_FLAGS_EPHEMERAL) == 0)) {
+    /* Write-through before responding */
+    if (ret == 0) {
         ret = wh_Server_KeystoreCommitKey(ctx, keyId);
     }
 

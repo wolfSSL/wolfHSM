@@ -3242,17 +3242,18 @@ int wh_Client_LmsGetKeyId(LmsKey* key, whKeyId* outId);
  *
  * The key's parameter set (levels/height/winternitz) must be bound on the
  * in-memory key before this call (e.g. via wc_LmsKey_SetParameters). On
- * success the key's devCtx carries the server-side keyId. If flags include
- * WH_NVM_FLAGS_EPHEMERAL, the server returns the public key via DMA and the
- * caller can sign with it while it remains cached on the server; otherwise the
- * key is committed to the keystore.
+ * success the key's devCtx carries the server-side keyId and the public key is
+ * returned via DMA. The key is always committed to the keystore before the
+ * public key is returned: WH_NVM_FLAGS_EPHEMERAL is rejected with
+ * WH_ERROR_BADARGS for stateful keys, since releasing the public key of a
+ * non-durable private key would orphan it on power loss.
  *
  * @param[in]     ctx          Pointer to the client context.
  * @param[in,out] key          LmsKey with its parameter set bound; on success
  *                             its devCtx carries the keyId.
  * @param[in,out] inout_key_id On entry an optional requested keyId; on success
  *                             the assigned keyId. May be NULL.
- * @param[in]     flags        NVM flags for the new key.
+ * @param[in]     flags        NVM flags; WH_NVM_FLAGS_EPHEMERAL is rejected.
  * @param[in]     label_len    Length of label in bytes (0 if none).
  * @param[in]     label        Optional label, or NULL.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3262,10 +3263,11 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
                             uint16_t label_len, uint8_t* label);
 
 /**
- * @brief Convenience wrapper for an ephemeral keygen returning the public key.
+ * @brief Convenience wrapper for keygen that returns the public key via DMA.
  *
- * Equivalent to wh_Client_LmsMakeKeyDma with WH_NVM_FLAGS_EPHEMERAL; the public
- * key is returned via DMA into the in-memory key.
+ * Equivalent to wh_Client_LmsMakeKeyDma with a server-assigned keyId. As with
+ * that call the key is committed to the keystore before its public key is
+ * returned.
  *
  * @param[in]     ctx Pointer to the client context.
  * @param[in,out] key LmsKey with its parameter set bound.
@@ -3371,17 +3373,18 @@ int wh_Client_XmssGetKeyId(XmssKey* key, whKeyId* outId);
  *
  * The parameter string must be bound on the in-memory key (via
  * wc_XmssKey_SetParamStr) before this call. On success the key's devCtx
- * carries the server-side keyId. If flags include WH_NVM_FLAGS_EPHEMERAL, the
- * server returns the public key via DMA and the caller can sign with it while
- * it remains cached on the server; otherwise the key is committed to the
- * keystore.
+ * carries the server-side keyId and the public key is returned via DMA. The
+ * key is always committed to the keystore before the public key is returned:
+ * WH_NVM_FLAGS_EPHEMERAL is rejected with WH_ERROR_BADARGS for stateful keys,
+ * since releasing the public key of a non-durable private key would orphan it
+ * on power loss.
  *
  * @param[in]     ctx          Pointer to the client context.
  * @param[in,out] key          XmssKey with its parameter string bound; on
  *                             success its devCtx carries the keyId.
  * @param[in,out] inout_key_id On entry an optional requested keyId; on success
  *                             the assigned keyId. May be NULL.
- * @param[in]     flags        NVM flags for the new key.
+ * @param[in]     flags        NVM flags; WH_NVM_FLAGS_EPHEMERAL is rejected.
  * @param[in]     label_len    Length of label in bytes (0 if none).
  * @param[in]     label        Optional label, or NULL.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3391,10 +3394,11 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
                              uint16_t label_len, uint8_t* label);
 
 /**
- * @brief Convenience wrapper for an ephemeral keygen returning the public key.
+ * @brief Convenience wrapper for keygen that returns the public key via DMA.
  *
- * Equivalent to wh_Client_XmssMakeKeyDma with WH_NVM_FLAGS_EPHEMERAL; the
- * public key is returned via DMA into the in-memory key.
+ * Equivalent to wh_Client_XmssMakeKeyDma with a server-assigned keyId. As with
+ * that call the key is committed to the keystore before its public key is
+ * returned.
  *
  * @param[in]     ctx Pointer to the client context.
  * @param[in,out] key XmssKey with its parameter string bound.

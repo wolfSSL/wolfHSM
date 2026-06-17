@@ -13272,8 +13272,8 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
-    /* MakeKey via cryptocb: server caches private key (ephemeral) and
-     * returns the public key over DMA. */
+    /* MakeKey via cryptocb: the server commits the key to NVM before
+     * returning the public key over DMA. */
     if (ret == 0) {
         ret = wc_LmsKey_MakeKey(key, rng);
         if (ret != 0) {
@@ -13287,6 +13287,40 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         if (wc_LmsKey_SigsLeft(key) == 0) {
             WH_ERROR_PRINT("LMS reported exhausted on fresh key\n");
             ret = -1;
+        }
+    }
+
+    /* Durability: keygen must commit the key to NVM before returning the pub,
+     * not defer it. Evict the volatile cache copy (as a power loss before the
+     * first sign would) and confirm the key is still resident in NVM. */
+    if (ret == 0) {
+        whKeyId durId   = WH_KEYID_ERASED;
+        word32  durLeft = 0;
+        if ((wh_Client_LmsGetKeyId(key, &durId) == 0) &&
+            !WH_KEYID_ISERASED(durId)) {
+            ret = wh_Client_KeyEvict(ctx, durId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS durability evict failed: ret=%d\n", ret);
+            }
+            else {
+                ret = wh_Client_LmsSigsLeftDma(ctx, key, &durLeft);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("LMS key not durable after keygen: ret=%d\n",
+                                   ret);
+                }
+            }
+        }
+    }
+
+    /* EPHEMERAL is invalid for a stateful private keygen and must be rejected
+     * locally with WH_ERROR_BADARGS (no server round-trip). */
+    if (ret == 0) {
+        int badRet = wh_Client_LmsMakeKeyDma(ctx, key, NULL,
+                                             WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+        if (badRet != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("LMS ephemeral keygen not rejected: ret=%d "
+                           "(expected WH_ERROR_BADARGS)\n", badRet);
+            ret = WH_ERROR_ABORTED;
         }
     }
 
@@ -13574,8 +13608,8 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
-    /* MakeKey via cryptocb: server caches private key (ephemeral) and
-     * returns the public key over DMA. */
+    /* MakeKey via cryptocb: the server commits the key to NVM before
+     * returning the public key over DMA. */
     if (ret == 0) {
         ret = wc_XmssKey_MakeKey(key, rng);
         if (ret != 0) {
@@ -13589,6 +13623,40 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         if (wc_XmssKey_SigsLeft(key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted on fresh key\n");
             ret = -1;
+        }
+    }
+
+    /* Durability: keygen must commit the key to NVM before returning the pub.
+     * Evict the volatile cache copy (as a power loss before the first sign
+     * would) and confirm the key is still resident in NVM. */
+    if (ret == 0) {
+        whKeyId durId   = WH_KEYID_ERASED;
+        word32  durLeft = 0;
+        if ((wh_Client_XmssGetKeyId(key, &durId) == 0) &&
+            !WH_KEYID_ISERASED(durId)) {
+            ret = wh_Client_KeyEvict(ctx, durId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS durability evict failed: ret=%d\n", ret);
+            }
+            else {
+                ret = wh_Client_XmssSigsLeftDma(ctx, key, &durLeft);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("XMSS key not durable after keygen: "
+                                   "ret=%d\n", ret);
+                }
+            }
+        }
+    }
+
+    /* EPHEMERAL is invalid for a stateful private keygen and must be rejected
+     * locally with WH_ERROR_BADARGS. */
+    if (ret == 0) {
+        int badRet = wh_Client_XmssMakeKeyDma(ctx, key, NULL,
+                                              WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+        if (badRet != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("XMSS ephemeral keygen not rejected: ret=%d "
+                           "(expected WH_ERROR_BADARGS)\n", badRet);
+            ret = WH_ERROR_ABORTED;
         }
     }
 
