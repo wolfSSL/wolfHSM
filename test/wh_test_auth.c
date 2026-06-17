@@ -1409,9 +1409,13 @@ int whTest_AuthSetCredentials(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(test_user_id == user_id);
 
-    /* Cleanup */
+    /* Cleanup: remove the test user (logged in as admin so the delete
+     * is authorized). */
     _whTest_Auth_LogoutOp(client, test_user_id, &server_rc);
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(
+        client, WH_AUTH_METHOD_PIN, "admin", "1234", 4, &server_rc, &admin_id));
     _whTest_Auth_DeleteUserByName(client, "testuser4");
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
 
     return WH_TEST_SUCCESS;
 }
@@ -1540,7 +1544,7 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     memset(&perms, 0, sizeof(perms));
     WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
                                WH_MESSAGE_AUTH_ACTION_USER_ADD);
-    /* Free slot: noauthuser no longer needed (WH_AUTH_BASE_MAX_USERS=5) */
+    /* Free a slot so the adds below stay within WH_AUTH_BASE_MAX_USERS (5) */
     _whTest_Auth_DeleteUserByName(client, "noauthuser");
     WH_TEST_RETURN_ON_FAIL(
         _whTest_Auth_UserAddOp(client, "alloweduser", perms, WH_AUTH_METHOD_PIN,
@@ -1560,7 +1564,9 @@ int whTest_AuthRequestAuthorization(whClientContext* client)
     temp_id3  = WH_USER_ID_INVALID;
     _whTest_Auth_UserAddOp(client, "testuser8", perms, WH_AUTH_METHOD_PIN,
                            "test", 4, &server_rc, &temp_id3);
-    WH_TEST_ASSERT_RETURN(server_rc != WH_ERROR_OK);
+    /* alloweduser holds the USER_ADD action, so the add is authorized */
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(temp_id3 != WH_USER_ID_INVALID);
 
     /* Test 5: Logged in as different user and not allowed */
     WH_TEST_PRINT("  Test: Logged in as different user and not allowed\n");
@@ -1763,6 +1769,9 @@ int whTest_AuthMEM(void)
     WH_TEST_PRINT(
         "Verifying authorization override callbacks were called...\n");
     WH_TEST_ASSERT_RETURN(test_checkRequestAuthorizationCalled > 0);
+
+    /* Note that CheckKeyAuthorization is not implemented yet, so 
+     * test_checkKeyAuthorizationCalled is not checked here. */
 
     WH_TEST_RETURN_ON_FAIL(_whTest_Auth_CleanupMemory());
 

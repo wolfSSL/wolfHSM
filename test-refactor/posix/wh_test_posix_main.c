@@ -171,6 +171,12 @@ static void* _serverThread(void* arg)
         }
     }
 
+    /* Confirm the request-auth callback actually fired. */
+    rc = whTestPosix_Server_VerifyAuthCallbacks();
+    if (rc != 0 && rc != WH_TEST_SKIPPED && _serverRc == 0) {
+        _serverRc = rc;
+    }
+
     (void)whTestPosix_Server_Cleanup(&_server);
     return NULL;
 }

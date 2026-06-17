@@ -37,12 +37,18 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_server.h"
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#include "wolfhsm/wh_auth.h"
+#include "wolfhsm/wh_auth_base.h"
+#endif
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/random.h"
 #endif
 
 #include "wh_test_common.h"
+#include "wh_test_list.h"
 #include "wh_test_posix_server.h"
 
 #define POSIX_FLASH_SIZE       (1024 * 1024)
@@ -68,6 +74,45 @@ static whNvmContext      _nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 static whServerCryptoContext _crypto;
+#endif
+
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+#ifndef TEST_ADMIN_USERNAME
+#define TEST_ADMIN_USERNAME "admin"
+#endif
+#ifndef TEST_ADMIN_PIN
+#define TEST_ADMIN_PIN "1234"
+#endif
+
+/* Counter for checking CheckRequestAuthorization callback */
+static int _checkReqAuthCount = 0;
+
+static int _countCheckRequestAuth(void* context, int err, uint16_t user_id,
+                                  uint16_t group, uint16_t action)
+{
+    (void)context;
+    (void)user_id;
+    (void)group;
+    (void)action;
+    _checkReqAuthCount++;
+    return err;
+}
+
+/* Hook into CheckRequestAuthorization callback to ensure it fires.
+ * Note that CheckKeyAuthorization is not implemented, so it is not checked. */
+static whAuthCb _authCb = {
+    .Init                      = wh_Auth_BaseInit,
+    .Cleanup                   = wh_Auth_BaseCleanup,
+    .Login                     = wh_Auth_BaseLogin,
+    .Logout                    = wh_Auth_BaseLogout,
+    .CheckRequestAuthorization = _countCheckRequestAuth,
+    .UserAdd                   = wh_Auth_BaseUserAdd,
+    .UserDelete                = wh_Auth_BaseUserDelete,
+    .UserSetPermissions        = wh_Auth_BaseUserSetPermissions,
+    .UserGet                   = wh_Auth_BaseUserGet,
+    .UserSetCredentials        = wh_Auth_BaseUserSetCredentials,
+};
+static whAuthContext _auth;
 #endif
 
 /* Mem transport -- buffers and server-side state.
@@ -139,6 +184,30 @@ int whTestPosix_Server_Init(whServerContext* server)
     sCfg.devId      = INVALID_DEVID;
 #endif
 
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    {
+        whAuthConfig      authCfg = {0};
+        whAuthPermissions perms;
+        whUserId          adminId = WH_USER_ID_INVALID;
+        int               i;
+
+        authCfg.cb = &_authCb;
+        WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&_auth, &authCfg));
+
+        /* Admin user: full permissions, no key-id restrictions. */
+        memset(&perms, 0xFF, sizeof(perms));
+        perms.keyIdCount = 0;
+        for (i = 0; i < WH_AUTH_MAX_KEY_IDS; i++) {
+            perms.keyIds[i] = 0;
+        }
+        WH_TEST_RETURN_ON_FAIL(wh_Auth_BaseUserAdd(
+            &_auth, TEST_ADMIN_USERNAME, &adminId, perms, WH_AUTH_METHOD_PIN,
+            TEST_ADMIN_PIN, (uint16_t)strlen(TEST_ADMIN_PIN)));
+
+        sCfg.auth = &_auth;
+    }
+#endif
+
     return wh_Server_Init(server, &sCfg);
 }
 
@@ -150,6 +219,9 @@ int whTestPosix_Server_Cleanup(whServerContext* server)
     }
 
     wh_Server_Cleanup(server);
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    wh_Auth_Cleanup(&_auth);
+#endif
     wh_Nvm_Cleanup(&_nvm);
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -164,4 +236,19 @@ int whTestPosix_Server_Cleanup(whServerContext* server)
 whTransportMemConfig* whTestPosix_Server_GetTransportConfig(void)
 {
     return &_tmCfg;
+}
+
+
+int whTestPosix_Server_VerifyAuthCallbacks(void)
+{
+#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
+    /* The request-auth hook fires on every gated request, so expect non-0.
+     * Note that the key-auth hook is an unwired placeholder, and is not
+     * checked. */
+    WH_TEST_ASSERT_RETURN(_checkReqAuthCount > 0);
+    return WH_TEST_SUCCESS;
+#else
+    /* Nothing to verify without authentication compiled in. */
+    return WH_TEST_SKIPPED;
+#endif
 }

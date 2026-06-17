@@ -89,6 +89,7 @@ Translated tests:
 | `wh_test_nvm_flash.c::whTest_NvmFlash` | `posix/wh_test_nvm_flash.c::whTest_NvmAddOverwriteDestroy` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
 | `wh_test_posix_threadsafe_stress.c::whTest_ThreadSafeStress` | called directly from `posix/wh_test_posix_main.c` | POSIX port-specific (direct call) | |
 | `wh_test_check_struct_padding.c` | `misc/wh_test_check_struct_padding.c` | Build-time (compile-only) | Wire-format `-Wpadded` audit; the POSIX Makefile compiles it with `-Wpadded -DWH_PADDING_CHECK`. Not a runtime test, so not registered in `wh_test_list.c` |
+| `wh_test_auth.c` (`whTest_AuthMEM` / `whTest_AuthTest` sub-tests) | `client-server/wh_test_auth.c::{whTest_AuthBadArgs, whTest_AuthLogin, whTest_AuthLogout, whTest_AuthAddUser, whTest_AuthDeleteUser, whTest_AuthSetPermissions, whTest_AuthSetCredentials, whTest_AuthRequestAuthorization}` | Client | Under `WOLFHSM_CFG_ENABLE_AUTHENTICATION` the POSIX server installs an auth context + admin user and the client logs in as admin at connect, so the ordinary client tests run authorized; each auth test brackets its own session (logout to start clean, restore admin on exit). Uses the blocking client API; the legacy own-server setup and single-thread manual-pump are dropped. Build with `make AUTH=1`. The TCP/client-only variant (`whTest_AuthTCP`) is not ported |
 
 Not yet migrated (still live in `wolfHSM/test/`):
 
@@ -105,7 +106,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_log.c::whTest_Log`, `whTest_LogBackend_RunAll` | `whTest_LogBackend_RunAll` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_she.c::whTest_She` | |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |
-| `wh_test_auth.c::whTest_AuthMEM`, `whTest_AuthTCP` | |
 | `wh_test_server_img_mgr.c::whTest_ServerImgMgr` | |
 | `wh_test_nvmflags.c::whTest_NvmFlags` | |
 | `wh_test_flash_fault_inject.c` | |

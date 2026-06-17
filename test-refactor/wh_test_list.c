@@ -58,6 +58,14 @@ WH_TEST_DECL(whTest_Crypto_Sha);
 WH_TEST_DECL(whTest_Echo);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
+WH_TEST_DECL(whTest_AuthBadArgs);
+WH_TEST_DECL(whTest_AuthLogin);
+WH_TEST_DECL(whTest_AuthLogout);
+WH_TEST_DECL(whTest_AuthAddUser);
+WH_TEST_DECL(whTest_AuthDeleteUser);
+WH_TEST_DECL(whTest_AuthSetPermissions);
+WH_TEST_DECL(whTest_AuthSetCredentials);
+WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
 const whTestCase whTestsMisc[] = {
     {"whTest_ClientDevId", whTest_ClientDevId},
@@ -90,5 +98,13 @@ const whTestCase whTestsClient[] = {
     { "whTest_Echo", whTest_Echo },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
+    { "whTest_AuthBadArgs", whTest_AuthBadArgs },
+    { "whTest_AuthLogin", whTest_AuthLogin },
+    { "whTest_AuthLogout", whTest_AuthLogout },
+    { "whTest_AuthAddUser", whTest_AuthAddUser },
+    { "whTest_AuthDeleteUser", whTest_AuthDeleteUser },
+    { "whTest_AuthSetPermissions", whTest_AuthSetPermissions },
+    { "whTest_AuthSetCredentials", whTest_AuthSetCredentials },
+    { "whTest_AuthRequestAuthorization", whTest_AuthRequestAuthorization },
 };
 const size_t whTestsClientCount = sizeof(whTestsClient) / sizeof(whTestsClient[0]);
