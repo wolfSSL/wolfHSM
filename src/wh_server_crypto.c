@@ -893,8 +893,7 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
  * for the software path. We wire write_private_key directly to atomic NVM
  * commit (wh_Nvm_AddObjectWithReclaim): wolfCrypt's contract is to advance
  * the index, call write_cb, and only emit the signature if write_cb returned
- * success. That gives us pre-commit-then-emit ordering for free — see
- * doc/LMS_XMSS_CryptoCb.md and the plan for the crash-safety analysis.
+ * success. That gives us pre-commit-then-emit ordering for free.
  *
  * The bridge keeps a pointer into the server's cache slot blob (laid out by
  * wh_Crypto_{Lms,Xmss}SerializeKey). Each write_cb invocation overwrites the
