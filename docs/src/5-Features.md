@@ -33,7 +33,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Communication Layer](#communication-layer)
     - [Transport Backends](#transport-backends)
 - [DMA Support](#dma-support)
-    - [The DMA Crypto Device (`WH_DEV_ID_DMA`)](#the-dma-crypto-device-wh_dev_id_dma)
+    - [DMA Dispatch Mode (`wh_Client_SetDmaMode`)](#dma-dispatch-mode-wh_client_setdmamode)
     - [Pre-Access and Post-Access Callbacks](#pre-access-and-post-access-callbacks)
     - [Address Allowlisting](#address-allowlisting)
     - [32-bit vs. 64-bit Address Handling](#32-bit-vs-64-bit-address-handling)
@@ -82,7 +82,16 @@ wolfHSM uses wolfCrypt as its cryptographic provider on both sides of the client
 
 Clients can use the wolfCrypt API directly because of wolfCrypt's [crypto callback (cryptoCb)](https://www.wolfssl.com/documentation/manuals/wolfssl/chapter06.html#crypto-callbacks-cryptocb) framework. Crypto callbacks let you override selected algorithms at runtime by registering a callback against a device identifier (`devId`). Most wolfCrypt functions take a `devId`, and when it matches a registered device the call is dispatched through that callback instead of running locally.
 
-The wolfHSM client library registers a crypto callback that turns each supported wolfCrypt call into a request/response exchange with the server. The same wolfCrypt source can be retargeted to the HSM by changing only the `devId` — nothing else in the application changes. wolfHSM defines `WH_DEV_ID` for the server crypto device, and `WH_DEV_ID_DMA` when DMA support is compiled in; passing either to a wolfCrypt function routes the operation to the server.
+The wolfHSM client library registers a crypto callback that turns each supported wolfCrypt call into a request/response exchange with the server. The same wolfCrypt source can be retargeted to the HSM by changing only the `devId` — nothing else in the application changes. Each client context registers a device ID chosen by the application in the `.devId` field of `whClientConfig`; leaving the field `0` selects the default `WH_DEV_ID`. `wh_Client_Init()` registers the ID and binds it to that context, and `wh_Client_Cleanup()` unregisters it. At a wolfCrypt call site the application can either read the ID back from the context with the `WH_CLIENT_DEVID(client)` macro, or simply pass the same constant it placed in the config — convenient where the client context is not in scope. Because each client can own a distinct `devId`, a single process can run multiple client connections (to one server or several) and each wolfCrypt call is serviced by exactly the client whose `devId` it was initialized with; a multi-client process must configure a distinct, nonzero `devId` for every client.
+
+In addition to the configured per-client ID, every `wh_Client_Init()` registers the two process-global device IDs:
+
+- `WH_DEV_ID` is registered with the same unified callback as a configured `devId`, so it behaves identically — including honoring the [DMA dispatch mode](#dma-dispatch-mode-wh_client_setdmamode). It is also the ID a client is bound to when its config leaves `.devId` 0.
+- `WH_DEV_ID_DMA` (present only with `WOLFHSM_CFG_DMA`) is registered with the DMA-only callback: operations always use the DMA request forms, and algorithms without a DMA variant fail rather than falling back to the standard path. It is reserved for this purpose and is not valid as a configured `.devId`.
+
+The global IDs preserve the behavior of earlier wolfHSM releases: an application with a **single client per process** needs no devId configuration at all and can keep passing `WH_DEV_ID` (or `WH_DEV_ID_DMA`) straight to wolfCrypt functions, exactly as before — they are always registered and available after `wh_Client_Init()`. Because these registrations are process-global and keyed on the integer value, each `wh_Client_Init()` rebinds them to the most recently initialized client, and **any** client's `wh_Client_Cleanup()` unregisters them. In a multi-client process they are therefore unreliable and should not be passed to wolfCrypt; use the per-client configured IDs instead. Both values are overridable at compile time (see [Configuration](9-Configuration.md#cryptography-features)).
+
+Registered device IDs occupy slots in wolfCrypt's fixed-size crypto-callback table (`MAX_CRYPTO_DEVID_CALLBACKS`, default 8): the global IDs occupy one slot each, shared by all clients in the process (every init rebinds the same table entries), and each distinct configured `devId` adds one more. `wh_Client_Cleanup()` releases the client's slots. Applications that run many simultaneous clients in one process may need to raise the wolfCrypt limit.
 
 In effect the callback layer is a transparent RPC framework for wolfCrypt: clients write ordinary wolfCrypt code, and wolfHSM handles request marshaling, transport, dispatch, and response delivery underneath. It also makes prototyping easy — develop against a local wolfCrypt instance, then switch to the HSM by toggling one parameter once the server is available.
 
@@ -97,20 +106,21 @@ The wolfHSM server exposes the full set of wolfCrypt software algorithms, and th
 - **Random number generation**: DRBG/RNG backed by the server's entropy source
 - **Post-quantum cryptography**: ML-DSA (FIPS 204) and ML-KEM (FIPS 203)
 
-For the authoritative list of algorithms, parameter ranges, and options, see the [wolfCrypt API reference](https://www.wolfssl.com/documentation/manuals/wolfssl/index.html). An algorithm not yet wired through the crypto callback can still be used locally against the client's own wolfCrypt instance — only operations dispatched to `WH_DEV_ID` are offloaded.
+For the authoritative list of algorithms, parameter ranges, and options, see the [wolfCrypt API reference](https://www.wolfssl.com/documentation/manuals/wolfssl/index.html). An algorithm not yet wired through the crypto callback can still be used locally against the client's own wolfCrypt instance — only operations dispatched to the client's `devId` are offloaded.
 
 ### Referencing Keys by ID
 
 When a client offloads an operation, it usually does *not* send the key with the request. The key lives in the server [keystore](#keystore) under a numeric **key ID**, and the client refers to it by that ID alone. The bytes never cross the client/server boundary — the client holds only the ID, and the server looks up the material when it runs the operation. This is what lets an HSM guard a private key while still letting a client sign or decrypt with it.
 
-A wolfCrypt key object is tied to a server-side key ID with a per-algorithm `SetKeyId` call. Every offloaded algorithm has one — `wh_Client_RsaSetKeyId`, `wh_Client_EccSetKeyId`, `wh_Client_AesSetKeyId`, `wh_Client_Ed25519SetKeyId`, `wh_Client_Curve25519SetKeyId`, `wh_Client_CmacSetKeyId`, `wh_Client_MlDsaSetKeyId`, and so on (each with a matching `GetKeyId`). You initialize an ordinary wolfCrypt key struct with `WH_DEV_ID`, associate it with a key ID instead of loading key bytes, and call wolfCrypt as usual:
+A wolfCrypt key object is tied to a server-side key ID with a per-algorithm `SetKeyId` call. Every offloaded algorithm has one — `wh_Client_RsaSetKeyId`, `wh_Client_EccSetKeyId`, `wh_Client_AesSetKeyId`, `wh_Client_Ed25519SetKeyId`, `wh_Client_Curve25519SetKeyId`, `wh_Client_CmacSetKeyId`, `wh_Client_MlDsaSetKeyId`, and so on (each with a matching `GetKeyId`). You initialize an ordinary wolfCrypt key struct with the client's devId, associate it with a key ID instead of loading key bytes, and call wolfCrypt as usual:
 
 ```c
 RsaKey  rsa;
 whKeyId keyId = 4; /* keyId 4 must be resident on the server */
 
-/* Initialize the RSA key context to use wolfHSM offload via WH_DEV_ID */
-wc_InitRsaKey_ex(&rsa, NULL, WH_DEV_ID);
+/* Initialize the RSA key context to use wolfHSM offload via the
+ * devId of an initialized client context */
+wc_InitRsaKey_ex(&rsa, NULL, WH_CLIENT_DEVID(client));
 
 /* Bind the key object to the server-side key */
 wh_Client_RsaSetKeyId(&rsa, keyId);
@@ -520,9 +530,11 @@ The motivating use cases all involve payloads that are either too large or too i
 - **Certificate chain verification** (see [DMA Variants](#dma-variants)) where the chain itself may be several kilobytes and the application already holds it in its own memory.
 - **In-place image verification** by the [image manager](#image-manager), which is the canonical case: the image being authenticated is already mapped in flash or RAM, and copying it through the comm buffer would defeat the purpose.
 
-### The DMA Crypto Device (`WH_DEV_ID_DMA`)
+### DMA Dispatch Mode (`wh_Client_SetDmaMode`)
 
-For wolfCrypt-mediated operations, opt-in to DMA is a single change at the call site: instead of passing `WH_DEV_ID` as the device identifier, the client passes `WH_DEV_ID_DMA`. Both device IDs route to the wolfHSM client crypto callback, but the DMA device tells the callback to construct a DMA-flavored request whose payload carries pointers and lengths into the client's address space rather than inline data. The server-side dispatcher recognizes the DMA request kind and, for each referenced buffer, hands the pointer to the server's DMA address-processing path (described below) before invoking the underlying wolfCrypt primitive. The set of algorithms that have a DMA path mirrors the most performance-sensitive subset of the supported algorithms; algorithms without a DMA path return an unsupported error if invoked with `WH_DEV_ID_DMA`, and the application can fall back to the standard `WH_DEV_ID` for those.
+For wolfCrypt-mediated operations, opt-in to DMA is a per-client dispatch mode rather than a separate device ID: the application calls `wh_Client_SetDmaMode(client, 1)` (or sets `.preferDma` in the client's `whClientDmaConfig` at init), and subsequent wolfCrypt calls made with `WH_CLIENT_DEVID(client)` construct DMA-flavored requests whose payloads carry pointers and lengths into the client's address space rather than inline data. The server-side dispatcher recognizes the DMA request kind and, for each referenced buffer, hands the pointer to the server's DMA address-processing path (described below) before invoking the underlying wolfCrypt primitive. The set of algorithms that have a DMA path mirrors the most performance-sensitive subset of the supported algorithms; with DMA mode preferred, an algorithm without a DMA path automatically falls back to the standard (non-DMA) request, so no call-site changes are needed. The mode can be toggled at any time — `wh_Client_SetDmaMode(client, 0)` returns the client to standard dispatch, and `wh_Client_GetDmaMode()` reads the current setting.
+
+The global `WH_DEV_ID_DMA` device ID is also always registered when `WOLFHSM_CFG_DMA` is enabled and always produces DMA-flavored requests for the most recently initialized client; unlike the DMA dispatch mode, it does not fall back to the standard path for algorithms without a DMA variant. See [Transparent Offload via Crypto Callbacks](#transparent-offload-via-crypto-callbacks) for the global device IDs' single-client-per-process scope.
 
 For the non-crypto subsystems (NVM, certificate manager, image manager, key cache/export, and the data-wrap API) the DMA-aware request kinds are exposed as `*Dma` variants of the corresponding client API functions — `wh_Client_NvmAddObjectDma`, `wh_Client_KeyCacheDma`, `wh_Client_KeyExportDma`, `wh_Client_CertVerifyDma`, and so on. See the [client API reference](10-API-docs-client.md) for the full set.
 

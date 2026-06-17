@@ -160,6 +160,9 @@ typedef struct {
     void* transport_context;
     const void* transport_config;
     whCommSetConnectedCb connect_cb;
+    /* Unique client identifier, 1..WH_CLIENT_ID_MAX (wh_keyid.h). Identifies
+     * this client to the server; must remain constant for the life of the
+     * client context. */
     uint8_t client_id;
     uint8_t WH_PAD[7];
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT

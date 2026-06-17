@@ -76,6 +76,8 @@ These macros enable or tune optional cryptographic subsystems built on top of wo
 | `WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE` | `2000` | Maximum size, in bytes, of a key that can be wrapped or unwrapped in a single operation. Only consulted when `WOLFHSM_CFG_KEYWRAP` is defined. |
 | `WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE` | `2000` | Maximum size, in bytes, of the plaintext or wrapped payload carried by a single key-wrap request. Only consulted when `WOLFHSM_CFG_KEYWRAP` is defined. |
 | `WOLFHSM_CFG_GLOBAL_KEYS` | Undefined | If defined, enable the global-keys feature, allowing keys to be cached so that they are visible to every client rather than scoped to the caching client. See [Global Keys](5-Features.md#global-keys) for a full discussion of the API and security implications. |
+| `WH_DEV_ID` | `0x5748534D` (`"WHSM"`) | Value of the process-global crypto device ID registered by every `wh_Client_Init()` with the unified client crypto callback. Also the device ID bound to a client whose `whClientConfig.devId` is left `0`. Override it if the default collides with another crypto-callback device ID in the application. See [Transparent Offload via Crypto Callbacks](5-Features.md#transparent-offload-via-crypto-callbacks) for registration lifetime, multi-client rules, and wolfCrypt callback-table sizing (`MAX_CRYPTO_DEVID_CALLBACKS`, default 8). |
+| `WH_DEV_ID_DMA` | `0x57444D41` (`"WDMA"`) | Value of the process-global DMA-only crypto device ID, registered by every `wh_Client_Init()` when `WOLFHSM_CFG_DMA` is defined. Reserved: not valid as a `whClientConfig.devId`. Override it if the default collides with another crypto-callback device ID in the application. |
 
 ## Keystore and Key Cache
 
@@ -124,7 +126,7 @@ These macros gate and tune DMA-mode crypto and large-buffer operations.
 
 | Macro | Default | Description |
 |---|---|---|
-| `WOLFHSM_CFG_DMA` | Undefined | If defined, compile the DMA-capable code paths: the `WH_DEV_ID_DMA` crypto device, DMA message types, pre/post access callbacks, and the address allowlist machinery. Without this macro, DMA APIs are stubbed out. |
+| `WOLFHSM_CFG_DMA` | Undefined | If defined, compile the DMA-capable code paths: the per-client DMA dispatch mode (`wh_Client_SetDmaMode()`), DMA message types, pre/post access callbacks, the address allowlist machinery, and the `WH_DEV_ID_DMA` crypto device. Without this macro, DMA APIs are stubbed out. |
 | `WOLFHSM_CFG_DMAADDR_COUNT` | `10` | Number of entries in the DMA address allowlist used by the server to validate client-supplied DMA buffers. |
 | `WOLFHSM_CFG_DMA_PTR_SIZE` | Compiler-detected (`__SIZEOF_POINTER__`) | Override the assumed DMA pointer size, in bytes (must be `4` or `8`). Auto-detection works for GCC/Clang and IAR; define this explicitly for any toolchain that does not provide `__SIZEOF_POINTER__`. |
 | `WOLFHSM_CFG_DMA_ALT_PTR_SIZE` | Undefined | If defined, allows the DMA pointer size to differ from the native CPU pointer size (e.g. a 32-bit-pointer server reachable from a 64-bit-pointer client). When undefined, wh_settings.h refuses to build with a mismatched `WOLFHSM_CFG_DMA_PTR_SIZE`. |

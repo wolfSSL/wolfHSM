@@ -52,11 +52,13 @@ const char file_to_measure[] = "/bin/sh";
 static int _showNvm(whClientContext* clientContext);
 
 static int _provisionMakeCommitKey(whClientContext* clientContext);
-static int _sha256File(const char* file_to_measure, uint8_t* hash);
-static int _signHash(const uint8_t* hash, size_t hash_len, uint8_t* sig,
-                     uint16_t* sig_len);
-static int _verifyHash(const uint8_t* hash, size_t hash_len, const uint8_t* sig,
-                       uint16_t sig_len, int32_t* rc);
+static int _sha256File(whClientContext* clientContext,
+                       const char* file_to_measure, uint8_t* hash);
+static int _signHash(whClientContext* clientContext, const uint8_t* hash,
+                     size_t hash_len, uint8_t* sig, uint16_t* sig_len);
+static int _verifyHash(whClientContext* clientContext, const uint8_t* hash,
+                       size_t hash_len, const uint8_t* sig, uint16_t sig_len,
+                       int32_t* rc);
 
 static int _showNvm(whClientContext* clientContext)
 {
@@ -116,7 +118,8 @@ static int _provisionMakeCommitKey(whClientContext* clientContext)
     return ret;
 }
 
-static int _sha256File(const char* file_to_measure, uint8_t* hash)
+static int _sha256File(whClientContext* clientContext,
+                       const char* file_to_measure, uint8_t* hash)
 {
     int ret = 0;
     int fd = open(file_to_measure, O_RDONLY);
@@ -131,7 +134,8 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
             WOLFHSM_CFG_PRINTF("Generating SHA256 of %s over %u bytes at %p\n",
                    file_to_measure, (unsigned int)size, ptr);
             wc_Sha256 sha256[1];
-            ret = wc_InitSha256_ex(sha256, NULL, WH_DEV_ID);
+            ret =
+                wc_InitSha256_ex(sha256, NULL, WH_CLIENT_DEVID(clientContext));
             if (ret == 0) {
                 ret = wc_Sha256Update(sha256, ptr, (word32)size);
                 if (ret == 0) {
@@ -153,11 +157,11 @@ static int _sha256File(const char* file_to_measure, uint8_t* hash)
     return ret;
 }
 
-static int _signHash(const uint8_t* hash, size_t hash_len, uint8_t* sig,
-                     uint16_t* sig_len)
+static int _signHash(whClientContext* clientContext, const uint8_t* hash,
+                     size_t hash_len, uint8_t* sig, uint16_t* sig_len)
 {
     ecc_key key[1];
-    int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
+    int     ret = wc_ecc_init_ex(key, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret == 0) {
         ret = wh_Client_EccSetKeyId(key, prov_keyId);
         if (ret == 0) {
@@ -173,11 +177,12 @@ static int _signHash(const uint8_t* hash, size_t hash_len, uint8_t* sig,
     return ret;
 }
 
-static int _verifyHash(const uint8_t* hash, size_t hash_len, const uint8_t* sig,
-                       uint16_t sig_len, int32_t* rc)
+static int _verifyHash(whClientContext* clientContext, const uint8_t* hash,
+                       size_t hash_len, const uint8_t* sig, uint16_t sig_len,
+                       int32_t* rc)
 {
     ecc_key key[1];
-    int ret = wc_ecc_init_ex(key, NULL, WH_DEV_ID);
+    int     ret = wc_ecc_init_ex(key, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret == 0) {
         ret = wh_Client_EccSetKeyId(key, prov_keyId);
         if (ret == 0) {
@@ -215,13 +220,14 @@ int wh_DemoClient_SecBoot_Provision(whClientContext* clientContext)
             uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
 
             WOLFHSM_CFG_PRINTF("Measuring image %s...\n", file_to_measure);
-            ret = _sha256File(file_to_measure, hash);
+            ret = _sha256File(clientContext, file_to_measure, hash);
             if (ret == WH_ERROR_OK) {
                 uint8_t sig[ECC_MAX_SIG_SIZE] = {0};
                 uint16_t siglen = sizeof(sig);
 
                 WOLFHSM_CFG_PRINTF("Signing hash...\n");
-                ret = _signHash(hash, sizeof(hash), sig, &siglen);
+                ret =
+                    _signHash(clientContext, hash, sizeof(hash), sig, &siglen);
                 if (ret == WH_ERROR_OK) {
                     int32_t rc = 0;
                     uint8_t sigLabel[WH_NVM_LABEL_LEN] = {0};
@@ -286,11 +292,12 @@ int wh_DemoClient_SecBoot_Boot(whClientContext* clientContext)
 
         uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
         WOLFHSM_CFG_PRINTF("Measuring image %s...\n", file_to_measure);
-        ret = _sha256File(file_to_measure, hash);
+        ret = _sha256File(clientContext, file_to_measure, hash);
         if (ret == WH_ERROR_OK) {
 
             WOLFHSM_CFG_PRINTF("SecBoot Client Verifying signature using keyId %u\n", prov_keyId);
-            ret = _verifyHash(hash, sizeof(hash), sig, siglen, &rc);
+            ret = _verifyHash(clientContext, hash, sizeof(hash), sig, siglen,
+                              &rc);
             WOLFHSM_CFG_PRINTF("ecc_verify:%d rc:%d\n", ret, rc);
 
             if ((ret == 0) && (rc == 1)) {

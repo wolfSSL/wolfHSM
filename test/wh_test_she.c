@@ -201,7 +201,7 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
 
     /* generate a new cmac key */
-    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client))) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
     }
@@ -581,7 +581,7 @@ static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
 
     bootloaderSz = maxBoundaryUpdateChunk;
 
-    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client))) != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         goto exit_boundary;
     }
@@ -722,7 +722,7 @@ static int whTest_SheWriteProtect(whClientConfig* config)
         wh_Client_CommInit(client, &outClientId, &outServerId));
 
     /* generate boot MAC key and fake bootloader */
-    if ((ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID)) != 0) {
+    if ((ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client))) != 0) {
         WH_ERROR_PRINT(
             "Failed to wc_InitRng_ex %d\n", ret);
         goto exit_wp;

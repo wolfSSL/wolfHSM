@@ -25,8 +25,12 @@
  * WolfHSM Server.  All communications and state are internally managed by
  * registering a crypto callback function to be invoked synchronously when
  * wolfCrypt functions are called.  In order to specify to use the WolfHSM
- * Server for cryptographic operations, the device id WH_DEV_ID should be
- * passed into any of the wolfCrypt init functions.
+ * Server for cryptographic operations, pass the client's devId into any of
+ * the wolfCrypt init functions. Set the devId in whClientConfig.devId (0 picks
+ * the default WH_DEV_ID) and read it back with WH_CLIENT_DEVID(c). With a
+ * single client you can just pass the global WH_DEV_ID (or WH_DEV_ID_DMA for
+ * DMA only). With more than one client, give each its own devId. See
+ * WH_CLIENT_DEVID and WH_DEV_ID below.
  *
  * In addition to the offload of cryptographic functions, the WolfHSM Client
  * also exposes WolfHSM Server key management, non-volatile memory, and protocol
@@ -65,25 +69,57 @@ typedef struct whClientContext_t whClientContext;
 /* WolfCrypt types and defines */
 #include "wolfssl/wolfcrypt/types.h"
 
-/* Device Id to be registered and passed to wolfCrypt functions */
-enum WH_CLIENT_DEVID_ENUM {
-    WH_DEV_ID = 0x5748534D, /* "WHSM" */
-#ifdef WOLFHSM_CFG_DMA
-    WH_DEV_ID_DMA = 0x57444D41, /* "WDMA" */
-    WH_NUM_DEVIDS = 2
-#else
-    WH_NUM_DEVIDS = 1
+/* Default devId for wolfHSM offload; you can override the value. Every
+ * wh_Client_Init() registers it, so it works like any per-client devId
+ * (including DMA mode, see wh_Client_SetDmaMode). It is also the devId used
+ * when a client config leaves devId 0. Calls on it always go to the most
+ * recently initialized client, and any client's wh_Client_Cleanup()
+ * unregisters it, so only pass it to wolfCrypt directly when there is one
+ * client; with more, give each its own devId. New code should not use this
+ * directly; it is kept only for backwards compatibility. */
+#ifndef WH_DEV_ID
+#define WH_DEV_ID 0x5748534D /* "WHSM" */
 #endif
-};
-extern const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS];
-#else
+
+#if WH_DEV_ID <= 0
+#error "WH_DEV_ID must be a positive, nonzero value"
+#endif
+
+#ifdef WOLFHSM_CFG_DMA
+
+/* Default devId for DMA-only wolfHSM offload; you can override the value. It
+ * is reserved, so it is not valid as whClientConfig.devId. Like WH_DEV_ID it
+ * goes to the most recently initialized client and any wh_Client_Cleanup()
+ * unregisters it, so it is for single-client use only. New code should not use
+ * this directly; it is kept only for backwards compatibility. */
+#ifndef WH_DEV_ID_DMA
+#define WH_DEV_ID_DMA 0x57444D41 /* "WDMA" */
+#endif /* WH_DEV_ID_DMA */
+
+#if WH_DEV_ID_DMA <= 0
+#error "WH_DEV_ID_DMA must be a positive, nonzero value"
+#endif
+#if WH_DEV_ID == WH_DEV_ID_DMA
+#error "WH_DEV_ID and WH_DEV_ID_DMA must be distinct"
+#endif
+
+#endif /* WOLFHSM_CFG_DMA */
+
+#else /* WOLFHSM_CFG_NO_CRYPTO */
+
 /*  for compile purpose */
 #define WH_DEV_ID -2 /* invalid ID */
 /* cipher types */
 enum wc_CipherType {
     WC_CIPHER_NONE = 0,
 };
-#endif
+
+#endif /* !WOLFHSM_CFG_NO_CRYPTO*/
+
+/* Get the devId for a client context (c is a whClientContext*). This is the
+ * devId set at wh_Client_Init(): whClientConfig.devId, or WH_DEV_ID if that
+ * was 0. Only valid after a successful init. */
+#define WH_CLIENT_DEVID(c) ((c)->devId)
 
 /** Client DMA address translation and validation */
 #ifdef WOLFHSM_CFG_DMA
@@ -96,6 +132,8 @@ typedef int (*whClientDmaClientMemCb)(struct whClientContext_t* client,
 typedef struct {
     whClientDmaClientMemCb    cb;
     const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
+    /* nonzero to prefer the DMA path */
+    uint32_t preferDma;
 } whClientDmaConfig;
 
 /* Per-operation async DMA context: stores translated input DMA address
@@ -183,6 +221,8 @@ typedef struct {
     const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
     void* heap; /* heap hint for using static memory (or other allocator) */
     whClientDmaAsyncCtx asyncCtx;
+    /* nonzero to prefer the DMA path */
+    uint32_t preferDma;
 } whClientDmaContext;
 #endif /* WOLFHSM_CFG_DMA */
 
@@ -191,6 +231,13 @@ struct whClientContext_t {
     uint16_t     last_req_id;
     uint16_t     last_req_kind;
     uint32_t     cryptoAffinity;
+    /* devId registered at init (see WH_CLIENT_DEVID). Nonzero only after a
+     * successful init. */
+    int devId;
+    /* Nonzero once this context has called wolfCrypt_Init(), so
+     * wh_Client_Cleanup() calls wolfCrypt_Cleanup() once to match and not when
+     * init failed before wolfCrypt_Init() ran (e.g. comm init failed). */
+    int cryptoInitialized;
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaContext dma;
 #endif /* WOLFHSM_CFG_DMA */
@@ -199,6 +246,10 @@ struct whClientContext_t {
 
 struct whClientConfig_t {
     whCommClientConfig* comm;
+    /* devId to register for this client. 0 picks the default WH_DEV_ID.
+     * Otherwise it must be positive, and (with WOLFHSM_CFG_DMA) not
+     * WH_DEV_ID_DMA, which is reserved. Ignored when WOLFHSM_CFG_NO_CRYPTO. */
+    int devId;
 #ifdef WOLFHSM_CFG_DMA
     whClientDmaConfig* dmaConfig;
 #endif /* WOLFHSM_CFG_DMA */
@@ -453,6 +504,33 @@ int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
  * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
  */
 int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
+
+/**
+ * @brief Turns the DMA path on or off for this client.
+ *
+ * When on, operations that support DMA use it and the rest fall back to the
+ * normal path. You can change this at any time; it is stored locally and does
+ * not contact the server.
+ *
+ * Always available: without WOLFHSM_CFG_DMA it does nothing and returns
+ * success, so you need not guard the call with #ifdef.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] useDma Nonzero to use DMA where supported, zero for the normal
+ *                   path.
+ * @return int 0 on success, or WH_ERROR_BADARGS on invalid input.
+ */
+int wh_Client_SetDmaMode(whClientContext* c, int useDma);
+
+/**
+ * @brief Gets the current DMA mode for this client.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] out_useDma Set to the current mode (0 or 1; always 0 without
+ *                        WOLFHSM_CFG_DMA).
+ * @return int 0 on success, or WH_ERROR_BADARGS on invalid input.
+ */
+int wh_Client_GetDmaMode(whClientContext* c, int* out_useDma);
 
 /**
  * @brief Sends a communication close request to the server.

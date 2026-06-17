@@ -166,7 +166,7 @@ int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
      * used at any time, including across server restarts */
 
     /* Initialize AES context to use wolfHSM offload */
-    ret = wc_AesInit(&aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to initialize AES: %d\n", ret);
         return ret;
@@ -229,7 +229,7 @@ int wh_DemoClient_KeystoreAes(whClientContext* clientContext)
     /* Though the key is evicted, we can still use it for crypto operations,
      * usage will just require the server to load the key from NVM. The key will
      * be restored in the cache after using it */
-    ret = wc_AesInit(&aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(clientContext));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to initialize AES: %d\n", ret);
         return ret;

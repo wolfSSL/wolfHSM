@@ -331,7 +331,7 @@ unsigned char rsa4096KeyDer[] = {
 
 
 int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
-                   const uint8_t* key, size_t keyLen, int operation, int devId)
+                   const uint8_t* key, size_t keyLen, int operation, int useDma)
 {
     int         ret   = 0;
     whKeyId     keyId = WH_KEYID_ERASED;
@@ -348,13 +348,15 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
     int initialized_rsa = 0;
     int needEvict       = 0;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     if (operation != RSA_PUBLIC_ENCRYPT && operation != RSA_PRIVATE_DECRYPT) {
         WH_BENCH_PRINTF("Unsupported RSA crypto operation %d\n", operation);
         return -1;
     }
 
     /* Initialize RNG for RSA operations */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -371,7 +373,7 @@ int _benchRsaCrypt(whClientContext* client, whBenchOpContext* ctx, int id,
     needEvict = 1;
 
     /* Initialize the RSA key structure */
-    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -465,7 +467,7 @@ exit:
 }
 
 int _benchRsaVerify(whClientContext* client, whBenchOpContext* ctx, int id,
-                    const uint8_t* key, size_t keyLen, int devId)
+                    const uint8_t* key, size_t keyLen, int useDma)
 {
     int     ret   = 0;
     whKeyId keyId = WH_KEYID_ERASED;
@@ -481,13 +483,15 @@ int _benchRsaVerify(whClientContext* client, whBenchOpContext* ctx, int id,
     int initialized_rsa = 0;
     int needEvict       = 0;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Fill message buffer with some pattern */
     for (i = 0; i < (int)sizeof(message); i++) {
         message[i] = (byte)i;
     }
 
     /* Initialize RNG for RSA operations */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -504,7 +508,7 @@ int _benchRsaVerify(whClientContext* client, whBenchOpContext* ctx, int id,
     needEvict = 1;
 
     /* Initialize the RSA key structure */
-    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -588,7 +592,7 @@ exit:
 }
 
 int _benchRsaSign(whClientContext* client, whBenchOpContext* ctx, int id,
-                  const uint8_t* key, size_t keyLen, int devId)
+                  const uint8_t* key, size_t keyLen, int useDma)
 {
     int     ret   = 0;
     whKeyId keyId = WH_KEYID_ERASED;
@@ -603,13 +607,15 @@ int _benchRsaSign(whClientContext* client, whBenchOpContext* ctx, int id,
     int initialized_rsa = 0;
     int needEvict       = 0;
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Fill message buffer with some pattern */
     for (i = 0; i < (int)sizeof(message); i++) {
         message[i] = (byte)i;
     }
 
     /* Initialize RNG for RSA operations */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto exit;
@@ -626,7 +632,7 @@ int _benchRsaSign(whClientContext* client, whBenchOpContext* ctx, int id,
     needEvict = 1;
 
     /* Initialize the RSA key structure */
-    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRsaKey_ex %d\n", ret);
         goto exit;
@@ -696,10 +702,8 @@ exit:
 }
 
 int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
-                    int keySize, int devId)
+                    int keySize, int useDma)
 {
-    (void)client;
-
     int    ret = 0;
     RsaKey rsa[1];
     WC_RNG rng[1];
@@ -708,8 +712,10 @@ int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
     int    initialized_rsa = 0;
     long   exponent = WC_RSA_EXPONENT; /* Standard RSA exponent (65537) */
 
+    (void)wh_Client_SetDmaMode(client, useDma);
+
     /* Initialize RNG for RSA operations */
-    ret = wc_InitRng_ex(rng, NULL, devId);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -721,7 +727,7 @@ int _benchRsaKeyGen(whClientContext* client, whBenchOpContext* ctx, int id,
         int benchStopRet;
         int opRet;
 
-        ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(client));
         if (ret != 0) {
             WH_BENCH_PRINTF("Failed to wc_InitRsaKey_ex in iteration %d: %d\n",
                             i, ret);
@@ -772,7 +778,7 @@ int wh_Bench_Mod_Rsa2048PubEncrypt(whClientContext*  client,
 #if (RSA_MAX_SIZE >= 2048)
     (void)params;
     return _benchRsaCrypt(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
-                          RSA_PUBLIC_ENCRYPT, WH_DEV_ID);
+                          RSA_PUBLIC_ENCRYPT, 0);
 #else
     (void)client;
     (void)ctx;
@@ -807,7 +813,7 @@ int wh_Bench_Mod_Rsa2048PrvDecrypt(whClientContext*  client,
 #if (RSA_MAX_SIZE >= 2048)
     (void)params;
     return _benchRsaCrypt(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
-                          RSA_PRIVATE_DECRYPT, WH_DEV_ID);
+                          RSA_PRIVATE_DECRYPT, 0);
 #else
     (void)client;
     (void)ctx;
@@ -843,7 +849,7 @@ int wh_Bench_Mod_Rsa2048Sign(whClientContext* client, whBenchOpContext* ctx,
 #if (RSA_MAX_SIZE >= 2048)
     (void)params;
     return _benchRsaSign(client, ctx, id, rsa2048KeyDer, sizeof(rsa2048KeyDer),
-                         WH_DEV_ID);
+                         0);
 #else
     (void)client;
     (void)ctx;
@@ -878,7 +884,7 @@ int wh_Bench_Mod_Rsa2048Verify(whClientContext* client, whBenchOpContext* ctx,
 #if (RSA_MAX_SIZE >= 2048)
     (void)params;
     return _benchRsaVerify(client, ctx, id, rsa2048KeyDer,
-                           sizeof(rsa2048KeyDer), WH_DEV_ID);
+                           sizeof(rsa2048KeyDer), 0);
 #else
     (void)client;
     (void)ctx;
@@ -911,7 +917,7 @@ int wh_Bench_Mod_Rsa2048KeyGen(whClientContext* client, whBenchOpContext* ctx,
 {
 #if (RSA_MAX_SIZE >= 2048)
     (void)params;
-    return _benchRsaKeyGen(client, ctx, id, 2048, WH_DEV_ID);
+    return _benchRsaKeyGen(client, ctx, id, 2048, 0);
 #else
     (void)client;
     (void)ctx;
@@ -946,7 +952,7 @@ int wh_Bench_Mod_Rsa4096PubEncrypt(whClientContext*  client,
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
-                          RSA_PUBLIC_ENCRYPT, WH_DEV_ID);
+                          RSA_PUBLIC_ENCRYPT, 0);
 #else
     (void)client;
     (void)ctx;
@@ -982,7 +988,7 @@ int wh_Bench_Mod_Rsa4096PrvDecrypt(whClientContext*  client,
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchRsaCrypt(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
-                          RSA_PRIVATE_DECRYPT, WH_DEV_ID);
+                          RSA_PRIVATE_DECRYPT, 0);
 #else
     (void)client;
     (void)ctx;
@@ -1018,7 +1024,7 @@ int wh_Bench_Mod_Rsa4096Sign(whClientContext* client, whBenchOpContext* ctx,
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchRsaSign(client, ctx, id, rsa4096KeyDer, sizeof(rsa4096KeyDer),
-                         WH_DEV_ID);
+                         0);
 #else
     (void)client;
     (void)ctx;
@@ -1053,7 +1059,7 @@ int wh_Bench_Mod_Rsa4096Verify(whClientContext* client, whBenchOpContext* ctx,
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
     return _benchRsaVerify(client, ctx, id, rsa4096KeyDer,
-                           sizeof(rsa4096KeyDer), WH_DEV_ID);
+                           sizeof(rsa4096KeyDer), 0);
 #else
     (void)client;
     (void)ctx;
@@ -1087,7 +1093,7 @@ int wh_Bench_Mod_Rsa4096KeyGen(whClientContext* client, whBenchOpContext* ctx,
 #if (RSA_MAX_SIZE >= 4096) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY)
     (void)params;
-    return _benchRsaKeyGen(client, ctx, id, 4096, WH_DEV_ID);
+    return _benchRsaKeyGen(client, ctx, id, 4096, 0);
 #else
     (void)client;
     (void)ctx;

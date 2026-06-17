@@ -493,7 +493,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         /* Using client export key */
         memset(cipherText, 0, sizeof(cipherText));
         memset(finalText, 0, sizeof(finalText));
-        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(ctx));
         if (ret!= 0) {
             WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
         } else {
@@ -535,7 +535,7 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to make cached key %d\n", ret);
         } else {
-            ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+            ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
             } else {
@@ -644,7 +644,8 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
                         ret = encLen;
                     }
                     else {
-                        ret = wc_InitRsaKey_ex(rsaFull, NULL, WH_DEV_ID);
+                        ret = wc_InitRsaKey_ex(rsaFull, NULL,
+                                               WH_CLIENT_DEVID(ctx));
                         if (ret == 0) {
                             ret = wh_Client_RsaSetKeyId(rsaFull, pubOnlyId);
                         }
@@ -987,7 +988,7 @@ static int whTest_CryptoRsaAsync(whClientContext* ctx, WC_RNG* rng)
     /* 9) RsaMakeExportKey async: server generates ephemeral key, returns DER.
      */
     if (ret == WH_ERROR_OK) {
-        ret = wc_InitRsaKey_ex(rsa, NULL, WH_DEV_ID);
+        ret = wc_InitRsaKey_ex(rsa, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("wc_InitRsaKey_ex failed: %d\n", ret);
         }
@@ -1156,12 +1157,12 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
         memset(shared_ba, 0, sizeof(shared_ba));
         memset(sig, 0, sizeof(sig));
 
-        ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n", ret);
         }
         else {
-            ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_init_ex for export key %d\n",
                                ret);
@@ -1263,7 +1264,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
         }
         if (ret == 0) {
             /* Init the cached key struct and associate with server key ID */
-            ret = wc_ecc_init_ex(bobKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(bobKey, NULL, WH_CLIENT_DEVID(ctx));
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_ecc_init_ex for cache key %d\n",
                                ret);
@@ -1298,7 +1299,7 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 /* Create ephemeral peer key for ECDH test */
                 if (ret == 0) {
-                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_DEV_ID);
+                    ret = wc_ecc_init_ex(aliceKey, NULL, WH_CLIENT_DEVID(ctx));
                     if (ret != 0) {
                         WH_ERROR_PRINT(
                             "Failed to wc_ecc_init_ex for peer key %d\n", ret);
@@ -1524,7 +1525,7 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
     /* Sign on HSM with the cached private key (non-DMA cryptoCb). */
     if (ret == 0) {
         ecc_key hsmKey[1];
-        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret == 0) {
             ret = wh_Client_EccSetKeyId(hsmKey, keyId);
         }
@@ -1675,7 +1676,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
     pubYLen = keySize;
 
     /* Test 1: HSM sign + Software verify */
-    ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
     }
@@ -1792,7 +1793,7 @@ static int whTest_CryptoEccCrossVerify_OneCurve(whClientContext* ctx,
     }
     if (ret == 0) {
         /* Import public key into HSM key for verification */
-        ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret != 0) {
             WH_ERROR_PRINT("%s: Failed to init HSM key: %d\n", name, ret);
         }
@@ -1924,7 +1925,7 @@ static int whTest_CryptoEccSignVerifyAsync_OneCurve(whClientContext* ctx,
     pubXLen = keySize;
     pubYLen = keySize;
 
-    ret = wc_ecc_init_ex(hsmKey, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
     if (ret == 0) {
         hsmKeyInit = 1;
         ret        = wc_ecc_make_key(rng, keySize, hsmKey);
@@ -2204,7 +2205,7 @@ static int whTest_CryptoEccSharedSecretAsync_OneCurve(whClientContext* ctx,
 
     /* Generate two local ECC keys, then import each to the server cache so
      * that both private keys have valid keyIds usable by the async API. */
-    ret = wc_ecc_init_ex(keyA, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(keyA, NULL, WH_CLIENT_DEVID(ctx));
     if (ret == 0) {
         keyAInit = 1;
         ret      = wc_ecc_make_key(rng, keySize, keyA);
@@ -2217,7 +2218,7 @@ static int whTest_CryptoEccSharedSecretAsync_OneCurve(whClientContext* ctx,
                                                       sizeof(privLabelA), privLabelA);
     }
     if (ret == 0) {
-        ret = wc_ecc_init_ex(keyB, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(keyB, NULL, WH_CLIENT_DEVID(ctx));
     }
     if (ret == 0) {
         keyBInit = 1;
@@ -2508,7 +2509,7 @@ static int whTest_CryptoEccSharedSecretCacheKey_OneCurve(whClientContext* ctx,
     pubBxLen = pubByLen = keySize;
 
     /* Generate two keys A and B, then import both private and public halves */
-    ret = wc_ecc_init_ex(keyA, NULL, WH_DEV_ID);
+    ret = wc_ecc_init_ex(keyA, NULL, WH_CLIENT_DEVID(ctx));
     if (ret == 0) {
         keyAInit = 1;
         ret      = wc_ecc_make_key(rng, keySize, keyA);
@@ -2520,7 +2521,7 @@ static int whTest_CryptoEccSharedSecretCacheKey_OneCurve(whClientContext* ctx,
             ctx, keyA, &privAId, WH_NVM_FLAGS_USAGE_DERIVE, sizeof(lbl), lbl);
     }
     if (ret == 0) {
-        ret = wc_ecc_init_ex(keyB, NULL, WH_DEV_ID);
+        ret = wc_ecc_init_ex(keyB, NULL, WH_CLIENT_DEVID(ctx));
     }
     if (ret == 0) {
         keyBInit = 1;
@@ -3455,7 +3456,7 @@ static int whTest_CryptoEd25519ExportPublic(whClientContext* ctx, int devId,
 
     /* Sign on HSM */
     if (ret == 0) {
-        ret = wc_ed25519_init_ex(hsmKey, NULL, WH_DEV_ID);
+        ret = wc_ed25519_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
         if (ret == 0) {
             ret = wh_Client_Ed25519SetKeyId(hsmKey, keyId);
         }
@@ -12129,14 +12130,10 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("Failed to import ML-DSA public key: %d\n", ret);
         }
     }
-    /* Import the key into wolfHSM via the wolfCrypt structure */
+    /* Import the key into wolfHSM via the wolfCrypt structure. This is the
+     * DMA-only verify test, so always import via the DMA path. */
     if (ret == 0) {
-        if (devId == WH_DEV_ID_DMA) {
-            ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, 0, 0, NULL);
-        }
-        else {
-            ret = wh_Client_MlDsaImportKey(ctx, key, &keyId, 0, 0, NULL);
-        }
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, 0, 0, NULL);
         if (ret == WH_ERROR_OK) {
             evictKey = 1;
         }
@@ -13255,7 +13252,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    key, keyLen, &keyId);
         if (ret == 0) {
             /* Initialize AES with HSM device ID */
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 /* Set the cached keyId (not raw key material) */
                 ret = wh_Client_AesSetKeyId(aes, keyId);
@@ -13301,7 +13298,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"aes-enc-only",
                                    strlen("aes-enc-only"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13327,7 +13324,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                   &keyId);
             if (ret == 0) {
                 /* Initialize AES with HSM device ID */
-                ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+                ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
                 if (ret == 0) {
                     /* Set the cached keyId */
                     ret = wh_Client_AesSetKeyId(aes, keyId);
@@ -13376,7 +13373,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"ctr-no-enc", strlen("ctr-no-enc"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13416,7 +13413,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"ctr-no-dec", strlen("ctr-no-dec"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13457,7 +13454,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"ecb-no-enc", strlen("ecb-no-enc"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13493,7 +13490,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"ecb-no-dec", strlen("ecb-no-dec"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13533,7 +13530,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"gcm-no-enc", strlen("gcm-no-enc"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13573,7 +13570,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"gcm-no-dec", strlen("gcm-no-dec"),
                                    key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13615,7 +13612,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dctr-no-enc",
                                    strlen("dctr-no-enc"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13655,7 +13652,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dctr-no-dec",
                                    strlen("dctr-no-dec"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13696,7 +13693,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"decb-no-enc",
                                    strlen("decb-no-enc"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13732,7 +13729,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"decb-no-dec",
                                    strlen("decb-no-dec"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13771,7 +13768,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dcbc-no-enc",
                                    strlen("dcbc-no-enc"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13811,7 +13808,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dcbc-no-dec",
                                    strlen("dcbc-no-dec"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13854,7 +13851,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dgcm-no-enc",
                                    strlen("dgcm-no-enc"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13895,7 +13892,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                                    (uint8_t*)"dgcm-no-dec",
                                    strlen("dgcm-no-dec"), key, keyLen, &keyId);
         if (ret == 0) {
-            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wh_Client_AesSetKeyId(aes, keyId);
                 if (ret == 0) {
@@ -13945,7 +13942,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
               strlen("ecc-no-sign"), (uint8_t*)"ecc-no-sign");
         if (ret == 0) {
             /* Initialize ecc_key with HSM device ID and set curve */
-            ret = wc_ecc_init_ex(eccKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(eccKey, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wc_ecc_set_curve(eccKey, 32, ECC_SECP256R1);
                 if (ret == 0) {
@@ -13997,7 +13994,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
               strlen("ecc-no-derive"), (uint8_t*)"ecc-no-derive");
         if (ret == 0) {
             /* Initialize private key with HSM device ID and set curve */
-            ret = wc_ecc_init_ex(privKey, NULL, WH_DEV_ID);
+            ret = wc_ecc_init_ex(privKey, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 ret = wc_ecc_set_curve(privKey, 32, ECC_SECP256R1);
                 if (ret == 0) {
@@ -14120,7 +14117,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         if (ret == 0) {
             /* Initialize CMAC with HSM device ID */
             ret = wc_InitCmac_ex(&cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
-                                 WH_DEV_ID);
+                                 WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 /* Associate cached key */
                 ret = wh_Client_CmacSetKeyId(&cmac, keyId);
@@ -14128,7 +14125,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     /* Try to generate CMAC - should fail */
                     ret = wc_AesCmacGenerate_ex(&cmac, tag, &tagLen, message,
                                                 sizeof(message), NULL, 0, NULL,
-                                                WH_DEV_ID);
+                                                WH_CLIENT_DEVID(client));
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied CMAC generate\n");
                         ret = 0; /* Test passed */
@@ -14173,7 +14170,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         if (ret == 0) {
             /* Initialize CMAC with HSM device ID */
             ret = wc_InitCmac_ex(&cmac, NULL, 0, WC_CMAC_AES, NULL, NULL,
-                                 WH_DEV_ID);
+                                 WH_CLIENT_DEVID(client));
             if (ret == 0) {
                 /* Associate cached key */
                 ret = wh_Client_CmacSetKeyId(&cmac, keyId);
@@ -14181,7 +14178,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     /* Try to verify CMAC - should fail */
                     ret = wc_AesCmacVerify_ex(&cmac, tag, tagLen, message,
                                               sizeof(message), NULL, 0, NULL,
-                                              WH_DEV_ID);
+                                              WH_CLIENT_DEVID(client));
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied CMAC verify\n");
                         ret = 0; /* Test passed */
@@ -14259,7 +14256,8 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 
 #if !defined(NO_AES) && defined(HAVE_AES_CBC) && \
     defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
-int _testRevocationTryAESEncrypt(whKeyId keyId, WC_RNG* rng, int* encryptRes)
+int _testRevocationTryAESEncrypt(whClientContext* client, whKeyId keyId,
+                                 WC_RNG* rng, int* encryptRes)
 {
     int     ret;
     Aes     aes[1];
@@ -14277,7 +14275,7 @@ int _testRevocationTryAESEncrypt(whKeyId keyId, WC_RNG* rng, int* encryptRes)
         return ret;
     }
     /* try to encrypt with the given keyId */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to init AES for revoked key test: %d\n", ret);
         return ret;
@@ -14334,7 +14332,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
         }
 
         /* encrypt should work */
-        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        ret = _testRevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to encrypt with unrevoked AES key: %d\n",
                            ret);
@@ -14356,7 +14354,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
         }
 
         /* now encrypt should fail */
-        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        ret = _testRevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
         if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
             WH_ERROR_PRINT(
                 "Encrypt with revoked AES key should fail (%d), got %d\n",
@@ -14372,7 +14370,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
         }
 
         /* keep failing */
-        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        ret = _testRevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
         if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
             WH_ERROR_PRINT(
                 "Encrypt with revoked AES key should fail (%d), got %d\n",
@@ -14403,7 +14401,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
             return ret;
         }
         /* try encrypt first */
-        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        ret = _testRevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
         if (ret != 0 || encryptRes != 0) {
             WH_ERROR_PRINT("Failed to encrypt with unrevoked AES key (2nd "
                            "time): %d\n",
@@ -14424,7 +14422,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
             return ret;
         }
         /* this should still fail */
-        ret = _testRevocationTryAESEncrypt(keyId, rng, &encryptRes);
+        ret = _testRevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
         if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
             WH_ERROR_PRINT(
                 "Encrypt with revoked AES key should fail (%d), got %d\n",
@@ -14441,6 +14439,9 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
 }
 #endif /* !NO_AES && HAVE_AES_CBC && \
           WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS */
+
+/* WH_TEST_DMA_MODE_CNT (number of cryptoCb dispatch modes to exercise) is
+ * provided by wh_test_common.h */
 
 int whTest_CryptoClientConfig(whClientConfig* config)
 {
@@ -14479,11 +14480,26 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* WOLFHSM_CFG_DEBUG_VERBOSE */
 
-    /* First crypto test should be of RNG so we can iterate over and test all
-     * devIds before choosing one to run the rest of the tests on */
+    /* Run RNG first, exercising each DMA dispatch mode (std and, when compiled,
+     * DMA-preferred) on the single per-client devId before the remaining tests
+     * settle on a default mode. */
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoRng(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        int dmaMode = -1;
+        /* Exercise RNG through both dispatch modes (std and, if compiled,
+         * DMA-preferred) on the single per-client devId. */
+        (void)wh_Client_SetDmaMode(client, i);
+        /* Round-trip the dispatch mode through the getter (reports 0 in
+         * non-DMA builds, where this loop only runs mode 0) */
+        ret = wh_Client_GetDmaMode(client, &dmaMode);
+        if ((ret == WH_ERROR_OK) && (dmaMode != i)) {
+            WH_ERROR_PRINT("GetDmaMode returned %d after SetDmaMode(%d)\n",
+                           dmaMode, i);
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = whTest_CryptoRng(client, WH_CLIENT_DEVID(client), rng);
+        }
         if (ret == WH_ERROR_OK) {
             wc_FreeRng(rng);
             i++;
@@ -14491,7 +14507,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 
     /* Direct exercise of the async RNG primitives (does not go through the
-     * wolfCrypt callback path, so devId is not relevant). */
+     * wolfCrypt callback path, so DMA mode is not relevant). */
     if (ret == WH_ERROR_OK) {
         ret = whTest_CryptoRngAsync(client);
     }
@@ -14501,11 +14517,12 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif /* WOLFHSM_CFG_DMA */
 
-    /* Now that we have tested all RNG devIds, reinitialize the default RNG
-     * devId (non-DMA) that will be used by the remainder of the tests for
-     * random input generation */
+    /* The remaining once-run tests below historically used the non-DMA devId;
+     * select the std (non-DMA) dispatch mode for them. Reinitialize the default
+     * RNG used by the rest of the tests for random input generation. */
     if (ret == 0) {
-        ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+        (void)wh_Client_SetDmaMode(client, 0);
+        ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to reinitialize RNG %d\n", ret);
         }
@@ -14516,12 +14533,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
     if (ret == 0) {
         /* Test Key Cache functions */
-        ret = whTest_KeyCache(client, WH_DEV_ID, rng);
+        ret = whTest_KeyCache(client, WH_CLIENT_DEVID(client), rng);
     }
 
     if (ret == 0) {
         /* Test Non-Exportable Flag enforcement on keystore */
-        ret = whTest_NonExportableKeystore(client, WH_DEV_ID, rng);
+        ret =
+            whTest_NonExportableKeystore(client, WH_CLIENT_DEVID(client), rng);
     }
 
     if (ret == 0) {
@@ -14540,49 +14558,57 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifndef NO_AES
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTestCrypto_Aes(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTestCrypto_Aes(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoAesAsync(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoAesAsync(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoAesAsyncKat(client, WH_DEV_IDS_ARRAY[i]);
+            ret = whTest_CryptoAesAsyncKat(client, WH_CLIENT_DEVID(client));
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    /* Dedicated async DMA tests drive the wh_Client_*Dma APIs directly; prefer
+     * DMA so any wolfCrypt-routed operations also take the DMA path. */
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoAesDmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoAesDmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoAesDmaAsyncKat(client, WH_DEV_ID_DMA);
+        ret = whTest_CryptoAesDmaAsyncKat(client, WH_CLIENT_DEVID(client));
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !NO_AES */
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTestCrypto_Cmac(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTestCrypto_Cmac(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret = whTestCrypto_CmacAsync(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTestCrypto_CmacAsync(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTestCrypto_CmacDmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTestCrypto_CmacDmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
 #ifndef NO_RSA
+    /* Once-run public-key tests use the std (non-DMA) dispatch mode. */
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
-        ret = whTest_CryptoRsa(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoRsa(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == 0) {
         ret = whTest_CryptoRsaAsync(client, rng);
@@ -14590,8 +14616,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* NO_RSA */
 
 #ifdef HAVE_ECC
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
-        ret = whTest_CryptoEcc(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoEcc(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == 0) {
         ret = whTest_CryptoEccCacheDuplicate(client);
@@ -14606,8 +14633,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     }
 #endif
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == 0) {
-        ret = whTest_CryptoEccExportPublicDma(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoEccExportPublicDma(client, WH_CLIENT_DEVID(client),
+                                              rng);
         if (ret != 0) {
             WH_ERROR_PRINT(
                 "ECC export-public DMA test failed: %d\n", ret);
@@ -14621,27 +14650,31 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         WH_ERROR_PRINT("Pre-Ed25519 tests ret=%d\n", ret);
         return ret;
     }
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
-        ret = whTest_CryptoEd25519Inline(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoEd25519Inline(client, WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Ed25519 inline test failed: %d\n", ret);
         }
     }
     if (ret == 0) {
-        ret = whTest_CryptoEd25519ServerKey(client, WH_DEV_ID, rng);
+        ret =
+            whTest_CryptoEd25519ServerKey(client, WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Ed25519 server key test failed: %d\n", ret);
         }
     }
     if (ret == 0) {
-        ret = whTest_CryptoEd25519ExportPublic(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoEd25519ExportPublic(client, WH_CLIENT_DEVID(client),
+                                               rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Ed25519 export-public test failed: %d\n", ret);
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == 0) {
-        ret = whTest_CryptoEd25519Dma(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoEd25519Dma(client, WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Ed25519 DMA test failed: %d\n", ret);
         }
@@ -14650,20 +14683,22 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
-    /* test curve25519 */
+    /* test curve25519 (std/non-DMA dispatch mode) */
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
-        ret = whTest_CryptoCurve25519(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoCurve25519(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == 0) {
-        ret =
-            whTest_CryptoCurve25519SharedSecretCacheKey(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoCurve25519SharedSecretCacheKey(
+            client, WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT(
                 "Curve25519 shared-secret cache-key test failed: %d\n", ret);
         }
     }
     if (ret == 0) {
-        ret = whTest_CryptoCurve25519ExportPublic(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoCurve25519ExportPublic(client,
+                                                  WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Curve25519 export-public test failed: %d\n", ret);
         }
@@ -14672,101 +14707,115 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #ifndef NO_SHA256
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoSha256(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTest_CryptoSha256(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret =
-                whTest_CryptoSha256LargeInput(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoSha256LargeInput(client, WH_CLIENT_DEVID(client),
+                                                rng);
         }
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoSha256Async(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret =
+                whTest_CryptoSha256Async(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoSha256DmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoSha256DmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !NO_SHA256 */
 
 #ifdef WOLFSSL_SHA224
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoSha224(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTest_CryptoSha224(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret =
-                whTest_CryptoSha224LargeInput(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoSha224LargeInput(client, WH_CLIENT_DEVID(client),
+                                                rng);
         }
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoSha224Async(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret =
+                whTest_CryptoSha224Async(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoSha224DmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoSha224DmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA224 */
 
 #ifdef WOLFSSL_SHA384
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoSha384(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTest_CryptoSha384(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret =
-                whTest_CryptoSha384LargeInput(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoSha384LargeInput(client, WH_CLIENT_DEVID(client),
+                                                rng);
         }
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoSha384Async(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret =
+                whTest_CryptoSha384Async(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoSha384DmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoSha384DmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA384 */
 
 #ifdef WOLFSSL_SHA512
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoSha512(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTest_CryptoSha512(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret =
-                whTest_CryptoSha512LargeInput(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoSha512LargeInput(client, WH_CLIENT_DEVID(client),
+                                                rng);
         }
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoSha512Async(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret =
+                whTest_CryptoSha512Async(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoSha512DmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoSha512DmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA512 */
 
 #ifdef HAVE_HKDF
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoHkdf(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoHkdf(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* HAVE_HKDF */
 
 #ifdef HAVE_CMAC_KDF
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoCmacKdf(client, WH_DEV_ID, rng);
+        ret = whTest_CryptoCmacKdf(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* HAVE_CMAC_KDF */
 
@@ -14798,24 +14847,29 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         for (li = 0; (ret == 0) && (li < mldsaLevelCnt); li++) {
             int level = mldsaLevels[li];
 
-            for (i = 0; (ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS); i++) {
+            for (i = 0; (ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT);
+                 i++) {
 #ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
-                if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
+                /* Large-data DMA-only: exercise the DMA-preferred mode only */
+                if (i != 1) {
                     continue;
                 }
 #endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
-                ret = whTestCrypto_MlDsaWolfCrypt(client, WH_DEV_IDS_ARRAY[i],
-                                                  rng, level);
+                (void)wh_Client_SetDmaMode(client, i);
+                ret = whTestCrypto_MlDsaWolfCrypt(
+                    client, WH_CLIENT_DEVID(client), rng, level);
             }
 
+            (void)wh_Client_SetDmaMode(client, 0);
             if (ret == 0) {
-                ret = whTestCrypto_MlDsaClient(client, WH_DEV_ID, rng, level);
+                ret = whTestCrypto_MlDsaClient(client, WH_CLIENT_DEVID(client),
+                                               rng, level);
             }
 
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
             if (ret == 0) {
-                ret = whTestCrypto_MlDsaExportPublic(client, WH_DEV_ID, rng,
-                                                     level);
+                ret = whTestCrypto_MlDsaExportPublic(
+                    client, WH_CLIENT_DEVID(client), rng, level);
                 if (ret != 0) {
                     WH_ERROR_PRINT(
                         "ML-DSA export-public test failed (level %d): %d\n",
@@ -14825,14 +14879,15 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
+            (void)wh_Client_SetDmaMode(client, 1);
             if (ret == 0) {
-                ret = whTestCrypto_MlDsaDmaClient(client, WH_DEV_ID_DMA, rng,
-                                                  level);
+                ret = whTestCrypto_MlDsaDmaClient(
+                    client, WH_CLIENT_DEVID(client), rng, level);
             }
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
             if (ret == 0) {
-                ret = whTestCrypto_MlDsaExportPublicDma(client, WH_DEV_ID_DMA,
-                                                        rng, level);
+                ret = whTestCrypto_MlDsaExportPublicDma(
+                    client, WH_CLIENT_DEVID(client), rng, level);
                 if (ret != 0) {
                     WH_ERROR_PRINT(
                         "ML-DSA export-public DMA test failed (level %d): "
@@ -14852,8 +14907,10 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #if !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
     !defined(WOLFSSL_NO_ML_DSA_44) && \
     defined(WOLFHSM_CFG_DMA)
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == 0) {
-        ret = whTestCrypto_MlDsaVerifyOnlyDma(client, WH_DEV_ID_DMA, rng);
+        ret = whTestCrypto_MlDsaVerifyOnlyDma(client, WH_CLIENT_DEVID(client),
+                                              rng);
     }
 #endif /* !defined(WOLFSSL_MLDSA_NO_VERIFY) && \
           !defined(WOLFSSL_NO_ML_DSA_44) && \
@@ -14866,36 +14923,42 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     !defined(WOLFSSL_MLKEM_NO_ENCAPSULATE) && \
     !defined(WOLFSSL_MLKEM_NO_DECAPSULATE)
     i = 0;
-    while (ret == WH_ERROR_OK && i < WH_NUM_DEVIDS) {
+    while (ret == WH_ERROR_OK && i < WH_TEST_DMA_MODE_CNT) {
 #ifdef WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY
-        if (WH_DEV_IDS_ARRAY[i] != WH_DEV_ID_DMA) {
+        /* Large-data DMA-only: exercise the DMA-preferred mode only */
+        if (i != 1) {
             i++;
             continue;
         }
 #endif /* WOLFHSM_CFG_TEST_CLIENT_LARGE_DATA_DMA_ONLY */
-        ret = whTestCrypto_MlKemWolfCrypt(client, WH_DEV_IDS_ARRAY[i], rng);
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTestCrypto_MlKemWolfCrypt(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 
+    (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
-        ret = whTestCrypto_MlKemClient(client, WH_DEV_ID, rng);
+        ret = whTestCrypto_MlKemClient(client, WH_CLIENT_DEVID(client), rng);
     }
 
     if (ret == 0) {
-        ret = whTestCrypto_MlKemExportPublic(client, WH_DEV_ID, rng);
+        ret = whTestCrypto_MlKemExportPublic(client, WH_CLIENT_DEVID(client),
+                                             rng);
         if (ret != 0) {
             WH_ERROR_PRINT("ML-KEM export-public test failed: %d\n", ret);
         }
     }
 
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == 0) {
-        ret = whTestCrypto_MlKemDmaClient(client, WH_DEV_ID_DMA, rng);
+        ret = whTestCrypto_MlKemDmaClient(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == 0) {
-        ret = whTestCrypto_MlKemExportPublicDma(client, WH_DEV_ID_DMA, rng);
+        ret = whTestCrypto_MlKemExportPublicDma(client, WH_CLIENT_DEVID(client),
+                                                rng);
         if (ret != 0) {
             WH_ERROR_PRINT("ML-KEM export-public DMA test failed: %d\n", ret);
         }
@@ -14916,6 +14979,9 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
     /* keep last, leaves artifact in the NVM layer */
     if (ret == 0) {
+        /* The DMA-only groups above don't restore the dispatch mode; reset to
+         * the std path so this test runs the same way in every config. */
+        (void)wh_Client_SetDmaMode(client, 0);
         /* Test key revocation */
         ret = whTest_CryptoKeyRevocationAesCbc(client, rng);
     }
@@ -15073,12 +15139,15 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     }};
 
 #ifdef WOLFHSM_CFG_DMA
-    /* Run every crypto/cert *Dma op through the bounce-pool callback so a
-     * missing translation is rejected (see test/wh_test_dma.c). Catches missing
-     * translation; the use-after-free class is covered by the single-thread
-     * harness. */
+    /* In-process (shared address space) test: prefer DMA by default so the DMA
+     * dispatch paths are exercised. The orchestrator toggles this per-group via
+     * wh_Client_SetDmaMode() to exercise both the standard and DMA paths. Every
+     * crypto/cert *Dma op is also routed through the bounce-pool callback so a
+     * missing translation is rejected (see test/wh_test_dma.c); the
+     * use-after-free class is covered by the single-thread harness. */
     whClientDmaConfig clientDmaConfig = {
-        .cb = whTestDma_BounceClientCb,
+        .cb        = whTestDma_BounceClientCb,
+        .preferDma = 1,
     };
 #endif
     whClientConfig c_conf[1] = {{

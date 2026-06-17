@@ -181,7 +181,7 @@ static int whTest_TimeoutAesCbc(void)
         uint8_t plain[AES_BLOCK_SIZE]  = {0xAA};
         uint8_t cipher[AES_BLOCK_SIZE] = {0};
 
-        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, WH_DEV_ID));
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client)));
         WH_TEST_RETURN_ON_FAIL(
             wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
 
@@ -341,7 +341,7 @@ static int whTest_TimeoutAesCbcOverride(void)
         uint8_t plain[AES_BLOCK_SIZE]  = {0xAA};
         uint8_t cipher[AES_BLOCK_SIZE] = {0};
 
-        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, WH_DEV_ID));
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client)));
         WH_TEST_RETURN_ON_FAIL(
             wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
 

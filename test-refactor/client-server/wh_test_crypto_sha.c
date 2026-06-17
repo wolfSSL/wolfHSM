@@ -19,7 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_sha.c
  *
- * SHA-224 / 256 / 384 / 512 routed through the server via WH_DEV_ID.
+ * SHA-224 / 256 / 384 / 512 routed through the server via the per-client
+ * devId (WH_CLIENT_DEVID).
  * Each hash size has four variants:
  *   whTest_CryptoSha<N>           sync wolfCrypt API single+multi block
  *   whTest_CryptoSha<N>LargeInput sync test with input larger than the
@@ -571,7 +572,7 @@ static int _whTest_CryptoSha256(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -586,7 +587,7 @@ static int _whTest_CryptoSha256LargeInput(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -598,7 +599,7 @@ static int _whTest_CryptoSha256LargeInput(whClientContext* ctx, int devId)
 
 static int _whTest_CryptoSha256Async(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
@@ -615,17 +616,23 @@ static int _whTest_CryptoSha256Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha256DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID_DMA;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
+    /* Prefer DMA dispatch so wolfCrypt-routed ops take the DMA path alongside
+     * the wh_Client_*Dma request API driven by the Impl. */
+    (void)wh_Client_SetDmaMode(ctx, 1);
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        (void)wh_Client_SetDmaMode(ctx, 0);
         return ret;
     }
     ret = whTest_CryptoSha256DmaAsyncImpl(ctx, devId, rng);
     (void)wc_FreeRng(rng);
+    /* Restore the standard (non-DMA) dispatch mode */
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
@@ -1152,7 +1159,7 @@ static int _whTest_CryptoSha224(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1167,7 +1174,7 @@ static int _whTest_CryptoSha224LargeInput(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1179,7 +1186,7 @@ static int _whTest_CryptoSha224LargeInput(whClientContext* ctx, int devId)
 
 static int _whTest_CryptoSha224Async(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
@@ -1196,17 +1203,23 @@ static int _whTest_CryptoSha224Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha224DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID_DMA;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
+    /* Prefer DMA dispatch so wolfCrypt-routed ops take the DMA path alongside
+     * the wh_Client_*Dma request API driven by the Impl. */
+    (void)wh_Client_SetDmaMode(ctx, 1);
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        (void)wh_Client_SetDmaMode(ctx, 0);
         return ret;
     }
     ret = whTest_CryptoSha224DmaAsyncImpl(ctx, devId, rng);
     (void)wc_FreeRng(rng);
+    /* Restore the standard (non-DMA) dispatch mode */
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
@@ -1738,7 +1751,7 @@ static int _whTest_CryptoSha384(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1753,7 +1766,7 @@ static int _whTest_CryptoSha384LargeInput(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -1765,7 +1778,7 @@ static int _whTest_CryptoSha384LargeInput(whClientContext* ctx, int devId)
 
 static int _whTest_CryptoSha384Async(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
@@ -1782,17 +1795,23 @@ static int _whTest_CryptoSha384Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha384DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID_DMA;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
+    /* Prefer DMA dispatch so wolfCrypt-routed ops take the DMA path alongside
+     * the wh_Client_*Dma request API driven by the Impl. */
+    (void)wh_Client_SetDmaMode(ctx, 1);
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        (void)wh_Client_SetDmaMode(ctx, 0);
         return ret;
     }
     ret = whTest_CryptoSha384DmaAsyncImpl(ctx, devId, rng);
     (void)wc_FreeRng(rng);
+    /* Restore the standard (non-DMA) dispatch mode */
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
@@ -2328,7 +2347,7 @@ static int _whTest_CryptoSha512(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -2343,7 +2362,7 @@ static int _whTest_CryptoSha512LargeInput(whClientContext* ctx, int devId)
     int    ret;
     WC_RNG rng[1];
 
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
         return ret;
@@ -2355,7 +2374,7 @@ static int _whTest_CryptoSha512LargeInput(whClientContext* ctx, int devId)
 
 static int _whTest_CryptoSha512Async(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
@@ -2372,62 +2391,94 @@ static int _whTest_CryptoSha512Async(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
 static int _whTest_CryptoSha512DmaAsync(whClientContext* ctx)
 {
-    int    devId = WH_DEV_ID_DMA;
+    int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     WC_RNG rng[1];
 
+    /* Prefer DMA dispatch so wolfCrypt-routed ops take the DMA path alongside
+     * the wh_Client_*Dma request API driven by the Impl. */
+    (void)wh_Client_SetDmaMode(ctx, 1);
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        (void)wh_Client_SetDmaMode(ctx, 0);
         return ret;
     }
     ret = whTest_CryptoSha512DmaAsyncImpl(ctx, devId, rng);
     (void)wc_FreeRng(rng);
+    /* Restore the standard (non-DMA) dispatch mode */
+    (void)wh_Client_SetDmaMode(ctx, 0);
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_SHA512 */
 
+/* Run the synchronous (devId-routed) hash tests for every compiled SHA
+ * algorithm against the given devId. */
+static int _whTest_CryptoShaImpl(whClientContext* ctx, int devId)
+{
+#ifdef WOLFSSL_SHA224
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224(ctx, devId));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224LargeInput(ctx, devId));
+#endif
+#ifndef NO_SHA256
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256(ctx, devId));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256LargeInput(ctx, devId));
+#endif
+#ifdef WOLFSSL_SHA384
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384(ctx, devId));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384LargeInput(ctx, devId));
+#endif
+#ifdef WOLFSSL_SHA512
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512(ctx, devId));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512LargeInput(ctx, devId));
+#endif
+    (void)ctx;
+    (void)devId;
+    return 0;
+}
+
 int whTest_Crypto_Sha(whClientContext* ctx)
 {
+    int i;
+
     /* Synchronous hashing (plain + large input) dispatches through the
-     * cryptocb, so run it on every devId to cover the normal and DMA server
-     * transports. The explicit request/response suites are transport-specific
-     * (comm-buffer Async vs DmaAsync), not devId-routed -- run each once. */
+     * cryptocb, so run it once per dispatch mode on the per-client devId to
+     * cover the normal and DMA server paths. The explicit request/response
+     * suites are transport-specific (comm-buffer Async vs DmaAsync), not
+     * devId-routed -- run each once. */
+    for (i = 0; i < WH_TEST_DMA_MODE_CNT; i++) {
+        (void)wh_Client_SetDmaMode(ctx, i);
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_CryptoShaImpl(ctx, WH_CLIENT_DEVID(ctx)));
+    }
+    (void)wh_Client_SetDmaMode(ctx, 0);
+
 #ifdef WOLFSSL_SHA224
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha224(ctx, devId));
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha224LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha224DmaAsync(ctx));
 #endif
 #endif
 #ifndef NO_SHA256
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha256(ctx, devId));
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha256LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256DmaAsync(ctx));
 #endif
 #endif
 #ifdef WOLFSSL_SHA384
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha384(ctx, devId));
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha384LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384DmaAsync(ctx));
 #endif
 #endif
 #ifdef WOLFSSL_SHA512
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha512(ctx, devId));
-    WH_TEST_FOREACH_DEVID(_whTest_CryptoSha512LargeInput(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512Async(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha512DmaAsync(ctx));
 #endif
 #endif
-    (void)ctx;
     return 0;
 }
 

@@ -118,7 +118,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     /* Generating and wrapping a key */
 
     /* Initialize the RNG so we can generate an AES GCM key to wrap */
-    ret = wc_InitRng_ex(rng, NULL, WH_DEV_ID);
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_InitRng_ex %d\n", ret);
         goto cleanup_kek;
@@ -159,7 +159,7 @@ int wh_DemoClient_AesGcmKeyWrap(whClientContext* client)
     }
 
     /* Initialize AES context */
-    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_AesInit %d\n", ret);
         goto cleanup_cached_key;

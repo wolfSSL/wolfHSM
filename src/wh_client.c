@@ -59,23 +59,48 @@
 #include "wolfhsm/wh_message_counter.h"
 #include "wolfhsm/wh_client.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-const int WH_DEV_IDS_ARRAY[WH_NUM_DEVIDS] = {
-        WH_DEV_ID,
-#ifdef WOLFHSM_CFG_DMA
-        WH_DEV_ID_DMA,
-#endif /* WOLFHSM_CFG_DMA */
-};
-#endif /* WOLFHSM_CFG_NO_CRYPTO */
-
 int wh_Client_Init(whClientContext* c, const whClientConfig* config)
 {
     int rc = 0;
-    if((c == NULL) || (config == NULL)) {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* Which cryptoCb registrations this Init made, so the failure path can
+     * undo just those and leave other clients' entries alone. */
+    int clientCbRegistered = 0;
+    int globalCbRegistered = 0;
+#ifdef WOLFHSM_CFG_DMA
+    int dmaCbRegistered = 0;
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+    /* Client id must be 1..WH_CLIENT_ID_MAX (the server checks it at connect).
+     */
+    if ((c == NULL) || (config == NULL) || (config->comm == NULL) ||
+        (config->comm->client_id == 0) ||
+        (config->comm->client_id > WH_CLIENT_ID_MAX)) {
         return WH_ERROR_BADARGS;
     }
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* devId 0 means "use the default WH_DEV_ID"; any other value must be
+     * positive. */
+    if (config->devId < 0) {
+        return WH_ERROR_BADARGS;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    /* WH_DEV_ID_DMA is reserved for the DMA-only callback, so reject it. */
+    if (config->devId == WH_DEV_ID_DMA) {
+        return WH_ERROR_BADARGS;
+    }
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
     memset(c, 0, sizeof(*c));
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    /* Store the devId for this context. A nonzero devId also means "init
+     * succeeded"; the failure path below sets it back to 0 so Cleanup knows. */
+    c->devId = (config->devId == 0) ? WH_DEV_ID : config->devId;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
     rc = wh_CommClient_Init(c->comm, config->comm);
 
@@ -85,35 +110,90 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
         if (rc != 0) {
             rc = WH_ERROR_ABORTED;
         }
+        else {
+            /* Mark that we called wolfCrypt_Init() so Cleanup calls
+             * wolfCrypt_Cleanup() once to match. Set now so a later failure
+             * still undoes it. */
+            c->cryptoInitialized = 1;
+        }
 
-        if (rc == 0) {
-            rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID,
-                    wh_Client_CryptoCb, c);
+        /* Register this client's own devId. Done first so that if it fails
+         * (e.g. the callback table is full) we stop before touching the
+         * globals below. Skipped when devId == WH_DEV_ID, since the global
+         * registration below covers that. */
+        if ((rc == 0) && (c->devId != WH_DEV_ID)) {
+            rc = wc_CryptoCb_RegisterDevice(c->devId, wh_Client_CryptoCb, c);
             if (rc != 0) {
                 rc = WH_ERROR_ABORTED;
             }
+            else {
+                clientCbRegistered = 1;
+            }
+        }
+
+        /* Point the global WH_DEV_ID at this context. Calls on WH_DEV_ID
+         * always go to the most recently initialized client, so passing it to
+         * wolfCrypt only works when there is one client; with more, each must
+         * use its own devId. Unregister first in case wolfCrypt won't
+         * re-register the same devId. */
+        if (rc == 0) {
+            wc_CryptoCb_UnRegisterDevice(WH_DEV_ID);
+            rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID, wh_Client_CryptoCb, c);
+            if (rc != 0) {
+                rc = WH_ERROR_ABORTED;
+            }
+            else {
+                globalCbRegistered = 1;
+            }
+        }
 
 #ifdef WOLFHSM_CFG_DMA
-            if (rc == 0) {
-                /* Initialize DMA configuration and callbacks, if provided */
-                if (NULL != config->dmaConfig) {
-                    c->dma.dmaAddrAllowList =
-                        config->dmaConfig->dmaAddrAllowList;
-                    c->dma.cb = config->dmaConfig->cb;
-                }
-
-                rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
-                                                wh_Client_CryptoCbDma, c);
-                if (rc != 0) {
-                    rc = WH_ERROR_ABORTED;
-                }
+        /* Initialize DMA configuration and callbacks, if provided. */
+        if (rc == 0) {
+            if (NULL != config->dmaConfig) {
+                c->dma.dmaAddrAllowList = config->dmaConfig->dmaAddrAllowList;
+                c->dma.cb               = config->dmaConfig->cb;
+                c->dma.preferDma        = config->dmaConfig->preferDma;
             }
-#endif /* WOLFHSM_CFG_DMA */
         }
+
+        /* Point the global WH_DEV_ID_DMA at this context (DMA path only).
+         * Single-client only, like WH_DEV_ID above. */
+        if (rc == 0) {
+            wc_CryptoCb_UnRegisterDevice(WH_DEV_ID_DMA);
+            rc = wc_CryptoCb_RegisterDevice(WH_DEV_ID_DMA,
+                                            wh_Client_CryptoCbDma, c);
+            if (rc != 0) {
+                rc = WH_ERROR_ABORTED;
+            }
+            else {
+                dmaCbRegistered = 1;
+            }
+        }
+#endif /* WOLFHSM_CFG_DMA */
     }
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     if (rc != 0) {
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        /* Undo only the registrations we made above, then set devId to 0 so
+         * the Cleanup below leaves all cryptoCb entries alone (it can't tell
+         * which were ours otherwise). In a multi-client process this can leave
+         * the global devIds unregistered, but those are single-client only
+         * anyway. */
+        if (clientCbRegistered != 0) {
+            wc_CryptoCb_UnRegisterDevice(c->devId);
+        }
+        if (globalCbRegistered != 0) {
+            wc_CryptoCb_UnRegisterDevice(WH_DEV_ID);
+        }
+#ifdef WOLFHSM_CFG_DMA
+        if (dmaCbRegistered != 0) {
+            wc_CryptoCb_UnRegisterDevice(WH_DEV_ID_DMA);
+        }
+#endif /* WOLFHSM_CFG_DMA */
+        c->devId = 0;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
         wh_Client_Cleanup(c);
     }
     return rc;
@@ -126,7 +206,25 @@ int wh_Client_Cleanup(whClientContext* c)
     }
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-    (void)wolfCrypt_Cleanup();
+    /* Remove this context's cryptoCb entries first. wolfCrypt only clears its
+     * callback table on the last wolfCrypt_Cleanup() in the process, so if we
+     * left them another live client would keep calling into this freed
+     * context. devId is nonzero only after a successful init, so we only
+     * remove entries when this context actually owns them. */
+    if (c->devId != 0) {
+        (void)wc_CryptoCb_UnRegisterDevice(c->devId);
+        (void)wc_CryptoCb_UnRegisterDevice(WH_DEV_ID);
+#ifdef WOLFHSM_CFG_DMA
+        (void)wc_CryptoCb_UnRegisterDevice(WH_DEV_ID_DMA);
+#endif /* WOLFHSM_CFG_DMA */
+    }
+    /* Only call wolfCrypt_Cleanup() if this context called wolfCrypt_Init().
+     * Init can reach its failure path before calling wolfCrypt_Init() (e.g.
+     * comm init failed); cleaning up anyway would tell wolfCrypt it has one
+     * fewer user than it does and could shut it down on other live clients. */
+    if (c->cryptoInitialized != 0) {
+        (void)wolfCrypt_Cleanup();
+    }
 #endif  /* !WOLFHSM_CFG_NO_CRYPTO */
 
     (void)wh_CommClient_Cleanup(c->comm);
@@ -433,6 +531,32 @@ int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity)
         return WH_ERROR_BADARGS;
     }
     *out_affinity = c->cryptoAffinity;
+    return WH_ERROR_OK;
+}
+
+int wh_Client_SetDmaMode(whClientContext* c, int useDma)
+{
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    c->dma.preferDma = (uint32_t)(useDma ? 1 : 0);
+#else
+    (void)useDma;
+#endif /* WOLFHSM_CFG_DMA */
+    return WH_ERROR_OK;
+}
+
+int wh_Client_GetDmaMode(whClientContext* c, int* out_useDma)
+{
+    if (c == NULL || out_useDma == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    *out_useDma = (c->dma.preferDma != 0) ? 1 : 0;
+#else
+    *out_useDma = 0;
+#endif /* WOLFHSM_CFG_DMA */
     return WH_ERROR_OK;
 }
 
