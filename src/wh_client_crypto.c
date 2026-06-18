@@ -10437,6 +10437,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
                             uint16_t label_len, uint8_t* label)
 {
     int                                              ret = WH_ERROR_OK;
+    int                                              postRet = WH_ERROR_OK;
     whKeyId                                          key_id = WH_KEYID_ERASED;
     uint8_t*                                         dataPtr;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest*  req;
@@ -10517,7 +10518,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
             } while (ret == WH_ERROR_NOTREADY);
         }
 
-        (void)wh_Client_DmaProcessClientAddress(
+        postRet = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)key->pub, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
@@ -10533,6 +10534,11 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
                 wh_Client_LmsSetKeyId(key, key_id);
             }
         }
+
+        /* Prioritize server errors over POST errors */
+        if (ret == WH_ERROR_OK) {
+            ret = postRet;
+        }
     }
 
     return ret;
@@ -10547,6 +10553,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                          byte* sig, word32* sigSz, LmsKey* key)
 {
     int                                            ret = WH_ERROR_OK;
+    int                                            postRet = WH_ERROR_OK;
     uint8_t*                                       dataPtr;
     whMessageCrypto_PqcStatefulSigSignDmaRequest*  req;
     whMessageCrypto_PqcStatefulSigSignDmaResponse* res;
@@ -10616,7 +10623,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)msg, (void**)&msgAddr, msgSz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-        (void)wh_Client_DmaProcessClientAddress(
+        postRet = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sig, (void**)&sigAddr, sigCap,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
@@ -10632,6 +10639,11 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                     ret = WH_ERROR_OK;
                 }
             }
+        }
+
+        /* Prioritize server errors over POST errors */
+        if (ret == WH_ERROR_OK) {
+            ret = postRet;
         }
     }
 
@@ -10854,6 +10866,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
                              uint16_t label_len, uint8_t* label)
 {
     int                                              ret = WH_ERROR_OK;
+    int                                              postRet = WH_ERROR_OK;
     whKeyId                                          key_id = WH_KEYID_ERASED;
     uint8_t*                                         dataPtr;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest*  req;
@@ -10944,7 +10957,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
             } while (ret == WH_ERROR_NOTREADY);
         }
 
-        (void)wh_Client_DmaProcessClientAddress(
+        postRet = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)key->pk, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
@@ -10960,6 +10973,11 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
                 wh_Client_XmssSetKeyId(key, key_id);
             }
         }
+
+        /* Prioritize server errors over POST errors */
+        if (ret == WH_ERROR_OK) {
+            ret = postRet;
+        }
     }
 
     return ret;
@@ -10974,6 +10992,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                           byte* sig, word32* sigSz, XmssKey* key)
 {
     int                                            ret = WH_ERROR_OK;
+    int                                            postRet = WH_ERROR_OK;
     uint8_t*                                       dataPtr;
     whMessageCrypto_PqcStatefulSigSignDmaRequest*  req;
     whMessageCrypto_PqcStatefulSigSignDmaResponse* res;
@@ -11043,7 +11062,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         (void)wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)msg, (void**)&msgAddr, msgSz,
             WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-        (void)wh_Client_DmaProcessClientAddress(
+        postRet = wh_Client_DmaProcessClientAddress(
             ctx, (uintptr_t)sig, (void**)&sigAddr, sigCap,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
@@ -11059,6 +11078,11 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
                     ret = WH_ERROR_OK;
                 }
             }
+        }
+
+        /* Prioritize server errors over POST errors */
+        if (ret == WH_ERROR_OK) {
+            ret = postRet;
         }
     }
 
