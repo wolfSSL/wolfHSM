@@ -6959,17 +6959,50 @@ static int _StatefulBridgeFromSlot(whServerStatefulSigBridge* b,
     b->slotCapacity = slotCapacity;
     return WH_ERROR_OK;
 }
+
+/* Keygen persistence bridge. The sign bridge rewrites the priv region of an
+ * existing slot; keygen instead builds a brand-new slot. Its write cb
+ * serializes the full key and commits it to NVM while the private key is
+ * still live, honoring wolfCrypt's "persist before returning success"
+ * contract. The cb can only return wolfCrypt's coarse pass/fail code, so
+ * status carries the WH_ERROR_* detail back to the handler. */
+typedef struct whServerStatefulSigKeygenBridge {
+    whServerContext* server;
+    void*            key;       /* LmsKey* or XmssKey*, alg-specific */
+    const char*      paramStr;  /* XMSS param string; NULL for LMS */
+    uint8_t*         label;
+    whKeyId          keyId;
+    whNvmFlags       flags;
+    uint16_t         labelSize;
+    int              status;    /* WH_ERROR_* from import/commit */
+} whServerStatefulSigKeygenBridge;
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
-/* Dummy cbs used during keygen. wc_LmsKey_MakeKey requires both cbs to be
- * set; we don't actually persist via cb during keygen because the slot blob
- * (including pub) is assembled after MakeKey populates key->pub and
- * key->priv_raw. See _HandleLmsKeyGenDma for the full sequence. */
-static int _LmsDummyWriteCb(const byte* priv, word32 privSz, void* context)
+/* Keygen write cb: wc_*_MakeKey calls this with the context we set up.
+ * Ignore the private key passed in, and fetch fields from the context.
+ * Write pub and priv keys together into the keystore. And capture any error
+ * codes into the context for later use by the caller of wc_*_MakeKey() */
+static int _LmsKeygenWriteCb(const byte* priv, word32 privSz, void* context)
 {
-    (void)priv; (void)privSz; (void)context;
-    return WC_LMS_RC_SAVED_TO_NV_MEMORY;
+    whServerStatefulSigKeygenBridge* b =
+        (whServerStatefulSigKeygenBridge*)context;
+    int rc;
+
+    (void)priv;
+    (void)privSz;
+    if ((b == NULL) || (b->key == NULL)) {
+        return WC_LMS_RC_BAD_ARG;
+    }
+
+    rc = wh_Server_LmsKeyCacheImport(b->server, (LmsKey*)b->key, b->keyId,
+                                     b->flags, b->labelSize, b->label);
+    if (rc == WH_ERROR_OK) {
+        rc = wh_Server_KeystoreCommitKey(b->server, b->keyId);
+    }
+    b->status = rc;
+    return (rc == WH_ERROR_OK) ? WC_LMS_RC_SAVED_TO_NV_MEMORY
+                               : WC_LMS_RC_WRITE_FAIL;
 }
 static int _LmsDummyReadCb(byte* priv, word32 privSz, void* context)
 {
@@ -6991,10 +7024,12 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
     void*                                            clientPubAddr = NULL;
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
+    whServerStatefulSigKeygenBridge                  bridge;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
 
     memset(&res, 0, sizeof(res));
+    memset(&bridge, 0, sizeof(bridge));
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -7019,25 +7054,8 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
 
     ret = wc_LmsKey_SetParameters(key, (int)req.lmsLevels, (int)req.lmsHeight,
                                   (int)req.lmsWinternitz);
-    if (ret == 0) {
-        ret = wc_LmsKey_SetWriteCb(key, _LmsDummyWriteCb);
-    }
-    if (ret == 0) {
-        ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
-    }
-    if (ret == 0) {
-        ret = wc_LmsKey_SetContext(key, NULL);
-    }
-    if (ret == 0) {
-        ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
-    }
 
-    /* Resolve the public key length and validate the client-supplied DMA
-     * buffer (size and address) BEFORE importing/committing the key. If these
-     * checks run afterward, an undersized buffer or bad address fails only
-     * after the key is already persisted in NVM; the keyId is then never
-     * returned to the client, orphaning an unreachable key and letting
-     * repeated failed keygens exhaust NVM. */
+    /* Validate the buffer size and resolve the keyId before keygen. */
     if (ret == 0) {
         ret = wc_LmsKey_GetPubLen(key, &pubLen32);
     }
@@ -7052,7 +7070,6 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
-
     if (ret == 0) {
         keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                              ctx->comm->client_id, req.keyId);
@@ -7061,19 +7078,34 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
+    /* Setup context for the write callback */
     if (ret == 0) {
-        ret = wh_Server_LmsKeyCacheImport(ctx, key, keyId, req.flags,
-                                          (uint16_t)req.labelSize, req.label);
+        bridge.server    = ctx;
+        bridge.key       = key;
+        bridge.keyId     = keyId;
+        bridge.flags     = req.flags;
+        bridge.label     = req.label;
+        bridge.labelSize = (uint16_t)req.labelSize;
+        bridge.status    = WH_ERROR_OK;
+        ret = wc_LmsKey_SetWriteCb(key, _LmsKeygenWriteCb);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_SetContext(key, &bridge);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
+        /* MakeKey fails if the cb could not persist; surface the specific
+         * import/commit error the bridge captured. */
+        if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
+            ret = bridge.status;
+        }
     }
 
-    /* Write-through before responding */
-    if (ret == 0) {
-        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
-    }
-
-    /* Stream the public key out via the already-validated DMA buffer. The copy
-     * cannot fail, so once the key is committed the client is guaranteed to
-     * receive its keyId. */
+    /* Key is committed. Stream the public key out via the pre-validated DMA
+     * buffer; the copy cannot fail, so the client always receives its keyId. */
     if (ret == 0) {
         memcpy(clientPubAddr, key->pub, pubLen32);
         res.keyId   = wh_KeyId_TranslateToClient(keyId);
@@ -7383,26 +7415,32 @@ static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
-/* wolfCrypt's wc_XmssKey_MakeKey calls write_private_key with the freshly
- * generated sk and then ForceZero's key->sk (see wc_xmss.c). To get a usable
- * sk back into key->sk for the subsequent serialize step, we capture it here
- * via a context-pointed buffer. */
-typedef struct {
-    byte*  buf;
-    word32 cap;
-    word32 len;
-} _XmssSkCapture;
-
+/* Keygen write cb: wc_*_MakeKey calls this with the context we set up.
+ * Ignore the private key passed in, and fetch fields from the context.
+ * Write pub and priv keys together into the keystore. And capture any error
+ * codes into the context for later use by the caller of wc_*_MakeKey() */
 static enum wc_XmssRc _XmssKeygenWriteCb(const byte* priv, word32 privSz,
                                          void* context)
 {
-    _XmssSkCapture* cap = (_XmssSkCapture*)context;
-    if ((cap == NULL) || (priv == NULL) || (privSz > cap->cap)) {
-        return WC_XMSS_RC_WRITE_FAIL;
+    whServerStatefulSigKeygenBridge* b =
+        (whServerStatefulSigKeygenBridge*)context;
+    int rc;
+
+    (void)priv;
+    (void)privSz;
+    if ((b == NULL) || (b->key == NULL)) {
+        return WC_XMSS_RC_BAD_ARG;
     }
-    memcpy(cap->buf, priv, privSz);
-    cap->len = privSz;
-    return WC_XMSS_RC_SAVED_TO_NV_MEMORY;
+
+    rc = wh_Server_XmssKeyCacheImport(b->server, (XmssKey*)b->key, b->paramStr,
+                                      b->keyId, b->flags, b->labelSize,
+                                      b->label);
+    if (rc == WH_ERROR_OK) {
+        rc = wh_Server_KeystoreCommitKey(b->server, b->keyId);
+    }
+    b->status = rc;
+    return (rc == WH_ERROR_OK) ? WC_XMSS_RC_SAVED_TO_NV_MEMORY
+                               : WC_XMSS_RC_WRITE_FAIL;
 }
 static enum wc_XmssRc _XmssDummyReadCb(byte* priv, word32 privSz,
                                        void* context)
@@ -7425,21 +7463,13 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     XmssKey                                          key[1];
     void*                                            clientPubAddr = NULL;
     word32                                           pubLen32 = 0;
-    word32                                           privLen32 = 0;
     whKeyId                                          keyId;
+    whServerStatefulSigKeygenBridge                  bridge;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
-    _XmssSkCapture                                   sk_cap;
-    /* WC_XMSS_MAX_SK comes from the params table; sized for the largest
-     * supported XMSS variant. The variants enabled in user_settings.h all
-     * fit in 4 KiB, but use the wolfCrypt-reported priv length to be
-     * exact. */
-    byte                                             sk_buf[4096];
 
     memset(&res, 0, sizeof(res));
-    memset(&sk_cap, 0, sizeof(sk_cap));
-    sk_cap.buf = sk_buf;
-    sk_cap.cap = (word32)sizeof(sk_buf);
+    memset(&bridge, 0, sizeof(bridge));
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -7467,39 +7497,8 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     }
 
     ret = wc_XmssKey_SetParamStr(key, req.xmssParamStr);
-    if (ret == 0) {
-        /* Use a real capture cb: wolfCrypt ForceZero's key->sk after MakeKey
-         * (see wc_xmss.c), so we copy sk into sk_buf via the cb and restore
-         * it on key->sk before serializing into the cache slot. */
-        ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
-    }
-    if (ret == 0) {
-        ret = wc_XmssKey_SetReadCb(key, _XmssDummyReadCb);
-    }
-    if (ret == 0) {
-        ret = wc_XmssKey_SetContext(key, &sk_cap);
-    }
-    if (ret == 0) {
-        ret = wc_XmssKey_MakeKey(key, ctx->crypto->rng);
-    }
 
-    if (ret == 0) {
-        /* Sanity-check the captured sk size against what wolfCrypt expects. */
-        ret = wc_XmssKey_GetPrivLen(key, &privLen32);
-        if ((ret == 0) && (sk_cap.len != privLen32)) {
-            ret = WH_ERROR_ABORTED;
-        }
-    }
-    if (ret == 0) {
-        /* Restore sk so SerializeKey captures real bytes, not the
-         * MakeKey-zeroed buffer. */
-        memcpy(key->sk, sk_cap.buf, sk_cap.len);
-    }
-
-    /* Resolve the public key length and validate the client-supplied DMA
-     * buffer (size and address) BEFORE importing/committing the key, so an
-     * undersized buffer or bad address cannot leave an orphaned, unreachable
-     * key persisted in NVM (see _HandleLmsKeyGenDma for the full rationale). */
+    /* Validate the buffer size and resolve the keyId before keygen. */
     if (ret == 0) {
         ret = wc_XmssKey_GetPubLen(key, &pubLen32);
     }
@@ -7514,7 +7513,6 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
-
     if (ret == 0) {
         keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                              ctx->comm->client_id, req.keyId);
@@ -7523,19 +7521,34 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
         }
     }
 
+    /* Setup context for the write callback */
     if (ret == 0) {
-        ret = wh_Server_XmssKeyCacheImport(ctx, key, req.xmssParamStr, keyId,
-                                           req.flags, (uint16_t)req.labelSize,
-                                           req.label);
+        bridge.server    = ctx;
+        bridge.key       = key;
+        bridge.paramStr  = req.xmssParamStr;
+        bridge.keyId     = keyId;
+        bridge.flags     = req.flags;
+        bridge.label     = req.label;
+        bridge.labelSize = (uint16_t)req.labelSize;
+        bridge.status    = WH_ERROR_OK;
+        ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_SetReadCb(key, _XmssDummyReadCb);
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_SetContext(key, &bridge);
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_MakeKey(key, ctx->crypto->rng);
+        /* When wolfcrypt reports a failure, prioritize the callback status */
+        if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
+            ret = bridge.status;
+        }
     }
 
-    /* Write-through before responding */
-    if (ret == 0) {
-        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
-    }
-
-    /* Stream the public key out via the already-validated DMA buffer; the copy
-     * cannot fail, so a committed key always returns its keyId to the client. */
+    /* Key is committed. Stream the public key out via the pre-validated DMA
+     * buffer; the copy cannot fail, so the client always receives its keyId. */
     if (ret == 0) {
         memcpy(clientPubAddr, key->pk, pubLen32);
         res.keyId   = wh_KeyId_TranslateToClient(keyId);
@@ -7553,9 +7566,6 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
         magic, &res,
         (whMessageCrypto_PqcStatefulSigKeyGenDmaResponse*)cryptoDataOut);
     *outSize = sizeof(res);
-
-    wh_Utils_ForceZero(sk_buf, sizeof(sk_buf));
-    wh_Utils_ForceZero(&sk_cap, sizeof(sk_cap));
     return ret;
 #endif /* WOLFSSL_XMSS_VERIFY_ONLY */
 }
