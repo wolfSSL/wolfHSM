@@ -7213,7 +7213,7 @@ static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     if (ret == WH_ERROR_OK) {
-        /* wolfCrypt's flow (verified against wc_lms.c:1439-1474 post-patch):
+        /* wolfCrypt's flow:
          *   1. wc_hss_sign computes the signature into sig and advances
          *      key->priv_raw in memory.
          *   2. write_private_key (our bridge) is called with the new
