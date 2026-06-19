@@ -903,8 +903,8 @@ typedef struct whServerStatefulSigBridge {
     whKeyId          keyId;
     whNvmMetadata*   meta;        /* points at the cache slot's metadata */
     uint8_t*         slotBuf;     /* points at the cache slot's data buffer */
-    uint16_t         hdrSz;       /* offset to priv region inside slotBuf */
-    uint16_t         pubLen;      /* offset of priv = hdrSz + paramLen + pubLen */
+    uint16_t         hdrSz;       /* fixed header size (offset to params) */
+    uint16_t         pubLen;      /* priv begins at hdrSz + paramLen + pubLen */
     uint16_t         paramLen;
     uint16_t         slotCapacity;
 } whServerStatefulSigBridge;
@@ -915,11 +915,11 @@ static uint16_t _StatefulBridgePrivOffset(const whServerStatefulSigBridge* b)
     return (uint16_t)(b->hdrSz + b->paramLen + b->pubLen);
 }
 
-/* Update the slot blob's privLen field (header + 6 -> priv length). */
+/* Update the slot blob's privLen header field in place. */
 static void _StatefulBridgeWritePrivLen(uint8_t* slotBuf, uint16_t privLen)
 {
-    /* See wh_crypto.c for layout: privLen is at offset +6. */
-    memcpy(slotBuf + 6, &privLen, sizeof(privLen));
+    uint8_t* p = slotBuf + offsetof(whCryptoStatefulSigHeader, privLen);
+    memcpy(p, &privLen, sizeof(privLen));
 }
 
 #if defined(WOLFSSL_HAVE_LMS) && defined(WOLFHSM_CFG_DMA)
@@ -6932,30 +6932,27 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
-/* Decode the slot blob's header lengths into the bridge struct. The blob
- * format (see wh_crypto.c) places pubLen at +4, privLen at +6, paramLen at
- * +8. */
+/* Decode the slot blob's header lengths into the bridge struct. */
 static int _StatefulBridgeFromSlot(whServerStatefulSigBridge* b,
                                    whServerContext*           server,
                                    whKeyId                    keyId,
                                    uint8_t* slotBuf, whNvmMetadata* meta,
                                    uint16_t slotCapacity)
 {
-    uint16_t pubLen, paramLen;
+    whCryptoStatefulSigHeader hdr;
 
     if ((b == NULL) || (server == NULL) || (slotBuf == NULL) || (meta == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    memcpy(&pubLen,   slotBuf + 4, sizeof(pubLen));
-    memcpy(&paramLen, slotBuf + 8, sizeof(paramLen));
+    memcpy(&hdr, slotBuf, sizeof(hdr));
 
     b->server       = server;
     b->keyId        = keyId;
     b->meta         = meta;
     b->slotBuf      = slotBuf;
     b->hdrSz        = WH_CRYPTO_STATEFUL_SIG_HEADER_SZ;
-    b->paramLen     = paramLen;
-    b->pubLen       = pubLen;
+    b->paramLen     = hdr.paramLen;
+    b->pubLen       = hdr.pubLen;
     b->slotCapacity = slotCapacity;
     return WH_ERROR_OK;
 }

@@ -130,11 +130,20 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 #endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
-/* Size of the fixed header at the start of a stateful-sig (LMS/XMSS) slot blob:
- * magic(4) + pubLen(2) + privLen(2) + paramLen(2) + reserved(2). Shared so the
- * server bridge can locate the variable-length sections that follow it. The
- * full blob layout is documented in wh_crypto.c. */
+/* Fixed header of a stateful-sig (LMS/XMSS) slot blob.
+ * The full blob layout is documented in wh_crypto.c. */
+typedef struct {
+    uint32_t magic;
+    uint16_t pubLen;
+    uint16_t privLen;
+    uint16_t paramLen;
+    uint16_t reserved;    /* must be 0 */
+} whCryptoStatefulSigHeader;
+
+/* Ensure the header stays a fixed size for ABI compatibility. */
 #define WH_CRYPTO_STATEFUL_SIG_HEADER_SZ 12
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whCryptoStatefulSigHeader) == WH_CRYPTO_STATEFUL_SIG_HEADER_SZ, "");
 
 /* Returns 1 if buffer is an LMS/XMSS stateful-sig slot-blob that carries
  * private key state (privLen > 0), else 0. Used to reject client attempts to

@@ -498,14 +498,10 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 /* Stateful hash-based signature key serialization helpers (LMS / XMSS).
  *
  * Slot blob layout:
- *   uint32_t magic;
- *   uint16_t pubLen;
- *   uint16_t privLen;
- *   uint16_t paramLen;
- *   uint16_t reserved;        (must be 0)
- *   uint8_t  paramDescriptor[paramLen];
- *   uint8_t  pub[pubLen];
- *   uint8_t  priv[privLen];
+ *   whCryptoStatefulSigHeader header;   (fixed fields, see wh_crypto.h)
+ *   uint8_t  paramDescriptor[header.paramLen];
+ *   uint8_t  pub[header.pubLen];
+ *   uint8_t  priv[header.privLen];
  *
  * paramDescriptor encodes the parameter set:
  *   LMS  : 3 bytes (levels, height, winternitz) - paramLen == 3
@@ -519,37 +515,37 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 
 int wh_Crypto_IsStatefulSigPrivBlob(const uint8_t* buffer, uint16_t size)
 {
-    uint32_t magic;
-    uint16_t privLen;
+    whCryptoStatefulSigHeader hdr;
 
-    /* Need the full fixed header to read privLen at offset 6. */
-    if ((buffer == NULL) || (size < WH_CRYPTO_STATEFUL_SIG_HEADER_SZ)) {
+    /* Need the full fixed header to inspect magic and privLen. */
+    if ((buffer == NULL) || (size < sizeof(hdr))) {
         return 0;
     }
-    /* Magic is stored native-order at offset 0; match what deserialize
-     * requires before it would accept the blob. */
-    memcpy(&magic, buffer, sizeof(magic));
-    if ((magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS) &&
-        (magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS)) {
+    memcpy(&hdr, buffer, sizeof(hdr));
+    /* Match what deserialize requires before it would accept the blob. */
+    if ((hdr.magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_LMS) &&
+        (hdr.magic != WH_CRYPTO_STATEFUL_SIG_BLOB_MAGIC_XMSS)) {
         return 0;
     }
     /* Only blobs carrying private key state are import-forbidden; a
      * public-only blob (privLen == 0) is a verify key and is allowed. The
      * deserialize path reads this same field to decide priv vs pub. */
-    memcpy(&privLen, buffer + 6, sizeof(privLen));
-    return (privLen > 0) ? 1 : 0;
+    return (hdr.privLen > 0) ? 1 : 0;
 }
 
 static int _StatefulSigEncodeHeader(uint8_t* buffer, uint32_t magic,
                                     uint16_t pubLen, uint16_t privLen,
                                     uint16_t paramLen)
 {
-    uint16_t reserved = 0;
-    memcpy(buffer + 0, &magic, sizeof(magic));
-    memcpy(buffer + 4, &pubLen, sizeof(pubLen));
-    memcpy(buffer + 6, &privLen, sizeof(privLen));
-    memcpy(buffer + 8, &paramLen, sizeof(paramLen));
-    memcpy(buffer + 10, &reserved, sizeof(reserved));
+    whCryptoStatefulSigHeader hdr;
+    hdr.magic    = magic;
+    hdr.pubLen   = pubLen;
+    hdr.privLen  = privLen;
+    hdr.paramLen = paramLen;
+    hdr.reserved = 0;
+    /* Copy via a local struct so the on-blob bytes are not assumed to be
+     * struct-aligned. */
+    memcpy(buffer, &hdr, sizeof(hdr));
     return WH_ERROR_OK;
 }
 
@@ -557,22 +553,22 @@ static int _StatefulSigDecodeHeader(const uint8_t* buffer, uint16_t size,
                                     uint32_t expectMagic, uint16_t* pubLen,
                                     uint16_t* privLen, uint16_t* paramLen)
 {
-    uint32_t magic;
+    whCryptoStatefulSigHeader hdr;
 
-    if (size < WH_CRYPTO_STATEFUL_SIG_HEADER_SZ) {
+    if (size < sizeof(hdr)) {
         return WH_ERROR_BADARGS;
     }
-    memcpy(&magic, buffer + 0, sizeof(magic));
-    if (magic != expectMagic) {
+    memcpy(&hdr, buffer, sizeof(hdr));
+    /* Magic and the zeroed reserved field together validate the header. */
+    if ((hdr.magic != expectMagic) || (hdr.reserved != 0)) {
         return WH_ERROR_BADARGS;
     }
-    memcpy(pubLen,   buffer + 4, sizeof(*pubLen));
-    memcpy(privLen,  buffer + 6, sizeof(*privLen));
-    memcpy(paramLen, buffer + 8, sizeof(*paramLen));
-    if ((uint32_t)WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + *paramLen + *pubLen +
-        *privLen > size) {
+    if ((uint32_t)sizeof(hdr) + hdr.paramLen + hdr.pubLen + hdr.privLen > size) {
         return WH_ERROR_BADARGS;
     }
+    *pubLen   = hdr.pubLen;
+    *privLen  = hdr.privLen;
+    *paramLen = hdr.paramLen;
     return WH_ERROR_OK;
 }
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
