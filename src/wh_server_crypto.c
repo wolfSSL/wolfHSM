@@ -7021,6 +7021,7 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
     void*                                            clientPubAddr = NULL;
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
+    int                                              locked = 0;
     whServerStatefulSigKeygenBridge                  bridge;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
@@ -7067,6 +7068,11 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
+    /* Lock from keyID allocation until NVM commit (inside _LmsKeygenWriteCb) */
+    if (ret == 0) {
+        ret    = WH_SERVER_NVM_LOCK(ctx);
+        locked = (ret == WH_ERROR_OK);
+    }
     if (ret == 0) {
         keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                              ctx->comm->client_id, req.keyId);
@@ -7099,6 +7105,11 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
             ret = bridge.status;
         }
+    }
+
+    if (locked) {
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+        locked = 0;
     }
 
     /* Key is committed. Stream the public key out via the pre-validated DMA
@@ -7294,7 +7305,12 @@ static int _HandleLmsVerifyDma(whServerContext* ctx, uint16_t magic, int devId,
     ret = wc_LmsKey_Init(key, NULL, devId);
     if (ret == 0) {
         keyInited = 1;
-        ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
     }
     if (ret == WH_ERROR_OK) {
         /* Deserialize leaves the key in PARMSET; wc_LmsKey_Verify needs
@@ -7354,6 +7370,9 @@ static int _HandleLmsVerifyDma(whServerContext* ctx, uint16_t magic, int devId,
     return ret;
 }
 
+/* wc_LmsKey_SigsLeft reads key->priv_raw directly - no key state machine and no
+ * read callback - so deserializing the cached blob into the key is enough; no
+ * Reload is needed. Contrast the heavier _HandleXmssSigsLeftDma. */
 static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
                                  int devId, const void* cryptoDataIn,
                                  uint16_t inSize, void* cryptoDataOut,
@@ -7392,7 +7411,12 @@ static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
     ret = wc_LmsKey_Init(key, NULL, devId);
     if (ret == 0) {
         keyInited = 1;
-        ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
     }
     if (ret == WH_ERROR_OK) {
         res.sigsLeft = (uint32_t)wc_LmsKey_SigsLeft(key);
@@ -7461,6 +7485,7 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     void*                                            clientPubAddr = NULL;
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
+    int                                              locked = 0;
     whServerStatefulSigKeygenBridge                  bridge;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
@@ -7510,6 +7535,11 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
+    /* Lock from keyID allocation until NVM commit (inside _LmsKeygenWriteCb) */
+    if (ret == 0) {
+        ret    = WH_SERVER_NVM_LOCK(ctx);
+        locked = (ret == WH_ERROR_OK);
+    }
     if (ret == 0) {
         keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                              ctx->comm->client_id, req.keyId);
@@ -7542,6 +7572,10 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
         if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
             ret = bridge.status;
         }
+    }
+    if (locked) {
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+        locked = 0;
     }
 
     /* Key is committed. Stream the public key out via the pre-validated DMA
@@ -7724,7 +7758,12 @@ static int _HandleXmssVerifyDma(whServerContext* ctx, uint16_t magic,
     ret = wc_XmssKey_Init(key, NULL, devId);
     if (ret == 0) {
         keyInited = 1;
-        ret = wh_Server_XmssKeyCacheExport(ctx, keyId, key);
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_XmssKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
     }
     if (ret == WH_ERROR_OK) {
         /* Deserialize leaves the key in PARMSET; wc_XmssKey_Verify needs
@@ -7822,6 +7861,12 @@ static int _HandleXmssSigsLeftDma(whServerContext* ctx, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
+    /* Lock during load+reload in case of concurrent sign op */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
     ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
         ret = wc_XmssKey_Init(key, NULL, devId);
@@ -7853,6 +7898,8 @@ static int _HandleXmssSigsLeftDma(whServerContext* ctx, uint16_t magic,
     if (keyInited) {
         wc_XmssKey_Free(key);
     }
+
+    (void)WH_SERVER_NVM_UNLOCK(ctx);
 
     (void)wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
         magic, &res,
