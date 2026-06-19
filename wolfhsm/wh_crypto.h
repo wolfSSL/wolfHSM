@@ -154,6 +154,12 @@ int wh_Crypto_IsStatefulSigPrivBlob(const uint8_t* buffer, uint16_t size);
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
+/* WOLFSSL_WC_LMS_SERIALIZE_STATE makes the key size much larger and is 
+ * not supported by wolfHSM */
+#ifdef WOLFSSL_WC_LMS_SERIALIZE_STATE
+#error "wolfHSM LMS key storage does not support WOLFSSL_WC_LMS_SERIALIZE_STATE"
+#endif
+
 /* Store an LmsKey (parameter set + public key + priv_raw) into a byte
  * sequence.
  *
