@@ -10773,6 +10773,10 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
+        if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+            return WH_ERROR_BADARGS;
+        }
+
         memset(req, 0, sizeof(*req));
         req->keyId = key_id;
 
@@ -11212,6 +11216,10 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+        if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+            return WH_ERROR_BADARGS;
+        }
 
         memset(req, 0, sizeof(*req));
         req->keyId = key_id;
