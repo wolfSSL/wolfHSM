@@ -672,6 +672,8 @@ int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
     memcpy(key->pub, p, pubLen);
     if (privLen > 0) {
         p += pubLen;
+        /* SigsLeft path does not reload, so copy priv_raw into the key.
+         * For the Sign path in software, this is a duplicate read. */
         memcpy(key->priv_raw, p, privLen);
     }
 
