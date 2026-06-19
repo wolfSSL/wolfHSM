@@ -593,6 +593,9 @@ int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
     if (ret != 0) {
         return WH_ERROR_BADARGS;
     }
+    if (pubLen32 > UINT16_MAX) {
+        return WH_ERROR_BADARGS;
+    }
     pubLen  = (uint16_t)pubLen32;
     privLen = (uint16_t)HSS_PRIVATE_KEY_LEN(key->params->hash_len);
 
@@ -698,6 +701,9 @@ int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
     if (ret != 0) {
         return WH_ERROR_BADARGS;
     }
+    if (pubLen32 > UINT16_MAX) {
+        return WH_ERROR_BADARGS;
+    }
     pubLen = (uint16_t)pubLen32;
 
     totalLen = (uint32_t)WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen + pubLen;
@@ -723,21 +729,24 @@ int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
-int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
-                               uint16_t max_size, uint8_t* buffer,
-                               uint16_t* out_size)
+/* Serialize an XMSS slot blob: header, parameter string, and public key, plus
+ * the private key when priv is non-NULL. The keygen path passes priv == NULL
+ * because its write callback stores the private key into the buffer separately
+ * (wolfCrypt zeroizes key->sk right after that callback). */
+static int _XmssSerializeSlot(XmssKey* key, const char* paramStr,
+                              const uint8_t* priv, uint16_t privLen,
+                              uint16_t max_size, uint8_t* buffer,
+                              uint16_t* out_size)
 {
     word32   pubLen32 = 0;
-    word32   privLen32 = 0;
     uint16_t pubLen;
-    uint16_t privLen;
     uint16_t paramLen;
     uint32_t totalLen;
     size_t   strLen;
     int      ret;
 
     if ((key == NULL) || (paramStr == NULL) || (buffer == NULL) ||
-        (out_size == NULL) || (key->params == NULL) || (key->sk == NULL)) {
+        (out_size == NULL) || (key->params == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -745,15 +754,13 @@ int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
     if (ret != 0) {
         return WH_ERROR_BADARGS;
     }
-    ret = wc_XmssKey_GetPrivLen(key, &privLen32);
-    if (ret != 0) {
+    if (pubLen32 > UINT16_MAX) {
         return WH_ERROR_BADARGS;
     }
-    pubLen  = (uint16_t)pubLen32;
-    privLen = (uint16_t)privLen32;
+    pubLen = (uint16_t)pubLen32;
 
     strLen = strlen(paramStr);
-    if (strLen >= 0xFFFFu) {
+    if (strLen >= UINT16_MAX) {
         return WH_ERROR_BADARGS;
     }
     paramLen = (uint16_t)(strLen + 1);  /* include NUL */
@@ -771,11 +778,42 @@ int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
     memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ, paramStr, paramLen);
     memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen,
            key->pk, pubLen);
-    memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen + pubLen,
-           key->sk, privLen);
+    if (priv != NULL) {
+        memcpy(buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen + pubLen,
+               priv, privLen);
+    }
 
     *out_size = (uint16_t)totalLen;
     return WH_ERROR_OK;
+}
+
+int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
+                               uint16_t max_size, uint8_t* buffer,
+                               uint16_t* out_size)
+{
+    word32 privLen32 = 0;
+    int    ret;
+
+    if ((key == NULL) || (key->sk == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wc_XmssKey_GetPrivLen(key, &privLen32);
+    if (ret != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    if (privLen32 > UINT16_MAX) {
+        return WH_ERROR_BADARGS;
+    }
+    return _XmssSerializeSlot(key, paramStr, key->sk, (uint16_t)privLen32,
+                              max_size, buffer, out_size);
+}
+
+int wh_Crypto_XmssSerializeKeyNoPriv(XmssKey* key, const char* paramStr,
+                                     uint16_t privLen, uint16_t max_size,
+                                     uint8_t* buffer, uint16_t* out_size)
+{
+    return _XmssSerializeSlot(key, paramStr, NULL, privLen, max_size, buffer,
+                              out_size);
 }
 
 int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
@@ -858,6 +896,9 @@ int wh_Crypto_XmssSerializePubKey(XmssKey* key, const char* paramStr,
 
     ret = wc_XmssKey_GetPubLen(key, &pubLen32);
     if (ret != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    if (pubLen32 > UINT16_MAX) {
         return WH_ERROR_BADARGS;
     }
     pubLen = (uint16_t)pubLen32;

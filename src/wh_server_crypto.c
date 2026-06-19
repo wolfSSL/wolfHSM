@@ -6957,49 +6957,32 @@ static int _StatefulSigFromSlot(whServerStatefulSigCtx* b,
     return WH_ERROR_OK;
 }
 
-/* Keygen persistence context. The sign context rewrites the priv region of an
- * existing slot; keygen instead builds a brand-new slot. Its write cb
- * serializes the full key and commits it to NVM while the private key is
- * still live, honoring wolfCrypt's "persist before returning success"
- * contract. The cb can only return wolfCrypt's coarse pass/fail code, so
- * status carries the WH_ERROR_* detail back to the handler. */
+/* Keygen persistence context for XMSS. wolfCrypt zeroizes key->sk right after
+ * the keygen write callback returns, so the callback is the only point where
+ * the private key is live. The callback copies the private key it is handed
+ * into the private-key region of the handler-owned cache buffer; the handler
+ * then fills in the public portion and commits to NVM. The cb can only return
+ * wolfCrypt's coarse pass/fail code, so status carries the WH_ERROR_* detail
+ * back to the handler. LMS does not use this: its private state survives
+ * MakeKey, so its handler serializes directly. */
 typedef struct whServerStatefulSigKeygenCtx {
-    whServerContext* server;
-    void*            key;       /* LmsKey* or XmssKey*, alg-specific */
-    const char*      paramStr;  /* XMSS param string; NULL for LMS */
-    uint8_t*         label;
-    whKeyId          keyId;
-    whNvmFlags       flags;
-    uint16_t         labelSize;
-    int              status;    /* WH_ERROR_* from import/commit */
+    uint8_t* slotBuf;       /* handler-owned cache slot buffer */
+    uint16_t slotCapacity;
+    uint16_t privOff;       /* offset of the private-key region in slotBuf */
+    uint16_t privLen;       /* out: private key length the cb received */
+    int      status;        /* WH_ERROR_* from the cb */
 } whServerStatefulSigKeygenCtx;
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
-/* Keygen write cb: wc_*_MakeKey calls this with the context we set up.
- * Ignore the private key passed in, and fetch fields from the context.
- * Write pub and priv keys together into the keystore. And capture any error
- * codes into the context for later use by the caller of wc_*_MakeKey() */
-static int _LmsKeygenWriteCb(const byte* priv, word32 privSz, void* context)
+/* Keygen callbacks: wc_LmsKey_MakeKey requires a write cb to be set and to
+ * report success, but for keygen the generated private state stays live in
+ * key->priv_raw. We serialize and commit the full slot after MakeKey returns,
+ * so these callbacks are no-ops that only satisfy wolfCrypt's contract. */
+static int _LmsDummyWriteCb(const byte* priv, word32 privSz, void* context)
 {
-    whServerStatefulSigKeygenCtx* b =
-        (whServerStatefulSigKeygenCtx*)context;
-    int rc;
-
-    (void)priv;
-    (void)privSz;
-    if ((b == NULL) || (b->key == NULL)) {
-        return WC_LMS_RC_BAD_ARG;
-    }
-
-    rc = wh_Server_LmsKeyCacheImport(b->server, (LmsKey*)b->key, b->keyId,
-                                     b->flags, b->labelSize, b->label);
-    if (rc == WH_ERROR_OK) {
-        rc = wh_Server_KeystoreCommitKey(b->server, b->keyId);
-    }
-    b->status = rc;
-    return (rc == WH_ERROR_OK) ? WC_LMS_RC_SAVED_TO_NV_MEMORY
-                               : WC_LMS_RC_WRITE_FAIL;
+    (void)priv; (void)privSz; (void)context;
+    return WC_LMS_RC_SAVED_TO_NV_MEMORY;
 }
 static int _LmsDummyReadCb(byte* priv, word32 privSz, void* context)
 {
@@ -7022,12 +7005,14 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
     int                                              locked = 0;
-    whServerStatefulSigKeygenCtx                     sigCtx;
+    uint8_t*                                         cacheBuf;
+    whNvmMetadata*                                   cacheMeta;
+    uint16_t   slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t   blobSize;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
 
     memset(&res, 0, sizeof(res));
-    memset(&sigCtx, 0, sizeof(sigCtx));
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -7068,7 +7053,11 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
-    /* Lock from keyID allocation until NVM commit (inside _LmsKeygenWriteCb) */
+    /* Reject labels that won't fit the slot metadata. */
+    if (ret == 0 && req.labelSize > sizeof(cacheMeta->label)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    /* Lock from keyID allocation until the slot is committed to NVM. */
     if (ret == 0) {
         ret    = WH_SERVER_NVM_LOCK(ctx);
         locked = (ret == WH_ERROR_OK);
@@ -7081,30 +7070,38 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* Setup context for the write callback */
+    /* MakeKey requires write/read callbacks, but for keygen the private state
+     * stays live in key->priv_raw; the callbacks are no-ops and we serialize
+     * the full slot ourselves once MakeKey returns. */
     if (ret == 0) {
-        sigCtx.server    = ctx;
-        sigCtx.key       = key;
-        sigCtx.keyId     = keyId;
-        sigCtx.flags     = req.flags;
-        sigCtx.label     = req.label;
-        sigCtx.labelSize = (uint16_t)req.labelSize;
-        sigCtx.status    = WH_ERROR_OK;
-        ret = wc_LmsKey_SetWriteCb(key, _LmsKeygenWriteCb);
+        ret = wc_LmsKey_SetWriteCb(key, _LmsDummyWriteCb);
     }
     if (ret == 0) {
         ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
     }
     if (ret == 0) {
-        ret = wc_LmsKey_SetContext(key, &sigCtx);
+        ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
+    }
+
+    /* Build the slot blob in RAM from the generated key, then commit it. */
+    if (ret == 0) {
+        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                    &cacheBuf, &cacheMeta);
     }
     if (ret == 0) {
-        ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
-        /* MakeKey fails if the cb could not persist; surface the specific
-         * import/commit error the context captured. */
-        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
-            ret = sigCtx.status;
+        ret = wh_Crypto_LmsSerializeKey(key, slotCapacity, cacheBuf, &blobSize);
+    }
+    if (ret == 0) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if (req.labelSize > 0) {
+            memcpy(cacheMeta->label, req.label, req.labelSize);
         }
+        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
     }
 
     if (locked) {
@@ -7445,23 +7442,21 @@ static enum wc_XmssRc _XmssKeygenWriteCb(const byte* priv, word32 privSz,
 {
     whServerStatefulSigKeygenCtx* b =
         (whServerStatefulSigKeygenCtx*)context;
-    int rc;
 
-    (void)priv;
-    (void)privSz;
-    if ((b == NULL) || (b->key == NULL)) {
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
         return WC_XMSS_RC_BAD_ARG;
     }
 
-    rc = wh_Server_XmssKeyCacheImport(b->server, (XmssKey*)b->key, b->paramStr,
-                                      b->keyId, b->flags, b->labelSize,
-                                      b->label);
-    if (rc == WH_ERROR_OK) {
-        rc = wh_Server_KeystoreCommitKey(b->server, b->keyId);
+    /* Copy the private key wolfCrypt handed us into the slot's priv region;
+     * the key object is zeroized once this returns, so use priv/privSz here. */
+    if ((uint32_t)b->privOff + privSz > b->slotCapacity) {
+        b->status = WH_ERROR_BUFFER_SIZE;
+        return WC_XMSS_RC_WRITE_FAIL;
     }
-    b->status = rc;
-    return (rc == WH_ERROR_OK) ? WC_XMSS_RC_SAVED_TO_NV_MEMORY
-                               : WC_XMSS_RC_WRITE_FAIL;
+    memcpy(b->slotBuf + b->privOff, priv, privSz);
+    b->privLen = (uint16_t)privSz;
+    b->status  = WH_ERROR_OK;
+    return WC_XMSS_RC_SAVED_TO_NV_MEMORY;
 }
 static enum wc_XmssRc _XmssDummyReadCb(byte* priv, word32 privSz,
                                        void* context)
@@ -7486,6 +7481,10 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
     int                                              locked = 0;
+    uint8_t*                                         cacheBuf;
+    whNvmMetadata*                                   cacheMeta;
+    uint16_t   slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t   blobSize;
     whServerStatefulSigKeygenCtx                     sigCtx;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
@@ -7535,7 +7534,11 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
             res.dmaAddrStatus.badAddr = req.pub;
         }
     }
-    /* Lock from keyID allocation until NVM commit (inside _LmsKeygenWriteCb) */
+    /* Reject labels that won't fit the slot metadata. */
+    if (ret == 0 && req.labelSize > sizeof(cacheMeta->label)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    /* Lock from keyID allocation until the slot is committed to NVM. */
     if (ret == 0) {
         ret    = WH_SERVER_NVM_LOCK(ctx);
         locked = (ret == WH_ERROR_OK);
@@ -7547,18 +7550,28 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
             ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
         }
     }
-
-    /* Setup context for the write callback */
+    /* Grab the cache slot up front; the write cb writes priv into it. */
     if (ret == 0) {
-        sigCtx.server    = ctx;
-        sigCtx.key       = key;
-        sigCtx.paramStr  = req.xmssParamStr;
-        sigCtx.keyId     = keyId;
-        sigCtx.flags     = req.flags;
-        sigCtx.label     = req.label;
-        sigCtx.labelSize = (uint16_t)req.labelSize;
-        sigCtx.status    = WH_ERROR_OK;
-        ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
+        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                    &cacheBuf, &cacheMeta);
+    }
+
+    /* The write cb copies the private key into the slot's priv region (key->sk
+     * is valid only during that callback). Tell it where that region begins:
+     * after the header, parameter string, and public key. */
+    if (ret == 0) {
+        size_t pStrLen = strlen(req.xmssParamStr);
+        if (pStrLen >= 0xFFFFu) {
+            ret = WH_ERROR_BADARGS;
+        }
+        else {
+            sigCtx.slotBuf      = cacheBuf;
+            sigCtx.slotCapacity = slotCapacity;
+            sigCtx.privOff      = (uint16_t)(WH_CRYPTO_STATEFUL_SIG_HEADER_SZ +
+                                             (pStrLen + 1) + pubLen32);
+            sigCtx.status       = WH_ERROR_OK;
+            ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
+        }
     }
     if (ret == 0) {
         ret = wc_XmssKey_SetReadCb(key, _XmssDummyReadCb);
@@ -7568,11 +7581,31 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     }
     if (ret == 0) {
         ret = wc_XmssKey_MakeKey(key, ctx->crypto->rng);
-        /* When wolfcrypt reports a failure, prioritize the callback status */
+        /* MakeKey fails if the cb could not store priv; surface that error. */
         if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
             ret = sigCtx.status;
         }
     }
+
+    /* Priv is in the slot; fill in the header and public key, then commit. */
+    if (ret == 0) {
+        ret = wh_Crypto_XmssSerializeKeyNoPriv(key, req.xmssParamStr,
+                                               sigCtx.privLen, slotCapacity,
+                                               cacheBuf, &blobSize);
+    }
+    if (ret == 0) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if (req.labelSize > 0) {
+            memcpy(cacheMeta->label, req.label, req.labelSize);
+        }
+        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
+    }
+
     if (locked) {
         (void)WH_SERVER_NVM_UNLOCK(ctx);
         locked = 0;

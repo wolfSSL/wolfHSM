@@ -195,6 +195,16 @@ int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
                                uint16_t max_size, uint8_t* buffer,
                                uint16_t* out_size);
 
+/* Write the header, parameter string, and public key of an XmssKey slot blob,
+ * leaving the trailing privLen-byte private-key region untouched. Used by the
+ * keygen path: wolfCrypt hands the private key to a write callback and then
+ * zeroizes key->sk, so the secret state is written by that callback and only
+ * the public portion is filled in here. out_size returns the full blob length
+ * including the private-key region. */
+int wh_Crypto_XmssSerializeKeyNoPriv(XmssKey* key, const char* paramStr,
+                                     uint16_t privLen, uint16_t max_size,
+                                     uint8_t* buffer, uint16_t* out_size);
+
 /* Restore an XmssKey from a byte sequence */
 int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
                                  XmssKey* key);
