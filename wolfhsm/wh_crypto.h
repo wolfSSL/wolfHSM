@@ -169,8 +169,10 @@ int wh_Crypto_IsStatefulSigPrivBlob(const uint8_t* buffer, uint16_t size);
  * @param [in,out]  out_size  On success, total blob size.
  * @return WH_ERROR_OK on success, WH_ERROR_BUFFER_SIZE if max_size is too
  *         small, WH_ERROR_BADARGS otherwise. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
 int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
                               uint16_t* out_size);
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
 /* Restore an LmsKey from a byte sequence.
  *
@@ -189,6 +191,8 @@ int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
+/* The private-key serializers are unavailable in verify-only builds. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
 /* Store an XmssKey (param string + public key + secret state) into a byte
  * sequence. */
 int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
@@ -204,6 +208,7 @@ int wh_Crypto_XmssSerializeKey(XmssKey* key, const char* paramStr,
 int wh_Crypto_XmssSerializeKeyNoPriv(XmssKey* key, const char* paramStr,
                                      uint16_t privLen, uint16_t max_size,
                                      uint8_t* buffer, uint16_t* out_size);
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
 /* Restore an XmssKey from a byte sequence */
 int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,

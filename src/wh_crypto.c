@@ -574,6 +574,9 @@ static int _StatefulSigDecodeHeader(const uint8_t* buffer, uint16_t size,
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
+/* Serializing the private key is meaningless without it; gate out verify-only,
+ * where wolfCrypt omits LmsKey.priv_raw. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
 int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
                               uint16_t* out_size)
 {
@@ -622,6 +625,7 @@ int wh_Crypto_LmsSerializeKey(LmsKey* key, uint16_t max_size, uint8_t* buffer,
     *out_size = (uint16_t)totalLen;
     return WH_ERROR_OK;
 }
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
 int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
                                 LmsKey* key)
@@ -666,19 +670,28 @@ int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
         return WH_ERROR_BADARGS;
     }
     /* privLen == 0 denotes a public-only (verify) key: load pub, no priv. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
     if ((privLen != 0) &&
         (privLen != (uint16_t)HSS_PRIVATE_KEY_LEN(key->params->hash_len))) {
         return WH_ERROR_BADARGS;
     }
+#else
+    /* Verify-only builds have no private key storage. */
+    if (privLen != 0) {
+        return WH_ERROR_BADARGS;
+    }
+#endif
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pub, p, pubLen);
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
     if (privLen > 0) {
         p += pubLen;
         /* SigsLeft path does not reload, so copy priv_raw into the key.
          * For the Sign path in software, this is a duplicate read. */
         memcpy(key->priv_raw, p, privLen);
     }
+#endif
 
     return WH_ERROR_OK;
 }
@@ -729,6 +742,9 @@ int wh_Crypto_LmsSerializePubKey(LmsKey* key, uint16_t max_size,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
+/* The private-key serializers are unavailable in verify-only, where wolfCrypt
+ * omits XmssKey.sk and wc_XmssKey_GetPrivLen. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
 /* Serialize an XMSS slot blob: header, parameter string, and public key, plus
  * the private key when priv is non-NULL. The keygen path passes priv == NULL
  * because its write callback stores the private key into the buffer separately
@@ -815,6 +831,7 @@ int wh_Crypto_XmssSerializeKeyNoPriv(XmssKey* key, const char* paramStr,
     return _XmssSerializeSlot(key, paramStr, NULL, privLen, max_size, buffer,
                               out_size);
 }
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
 int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
                                  XmssKey* key)
@@ -823,7 +840,9 @@ int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
     uint16_t privLen;
     uint16_t paramLen;
     word32   expectPubLen = 0;
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
     word32   expectPrivLen = 0;
+#endif
     int      ret;
     const char* paramStr;
     const uint8_t* p;
@@ -861,12 +880,19 @@ int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
         return WH_ERROR_BADARGS;
     }
     /* privLen == 0 denotes a public-only (verify) key. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
     if (privLen != 0) {
         ret = wc_XmssKey_GetPrivLen(key, &expectPrivLen);
         if ((ret != 0) || (expectPrivLen != privLen)) {
             return WH_ERROR_BADARGS;
         }
     }
+#else
+    /* Verify-only builds have no private key storage. */
+    if (privLen != 0) {
+        return WH_ERROR_BADARGS;
+    }
+#endif
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pk, p, pubLen);

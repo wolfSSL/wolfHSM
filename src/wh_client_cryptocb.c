@@ -869,8 +869,11 @@ static int _handlePqcStatefulSigKeyGen(whClientContext* ctx,
     int ret = CRYPTOCB_UNAVAILABLE;
     int type = info->pk.pqc_stateful_sig_kg.type;
 
-#ifndef WOLFHSM_CFG_DMA
+    /* Unused when all enabled algorithms are verify-only (no keygen path). */
     (void)ctx;
+    (void)useDma;
+
+#ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         return WC_HW_E;
     }
@@ -929,8 +932,11 @@ static int _handlePqcStatefulSigSign(whClientContext* ctx, wc_CryptoInfo* info,
     int ret  = CRYPTOCB_UNAVAILABLE;
     int type = info->pk.pqc_stateful_sig_sign.type;
 
-#ifndef WOLFHSM_CFG_DMA
+    /* Unused when all enabled algorithms are verify-only (no sign path). */
     (void)ctx;
+    (void)useDma;
+
+#ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         return WC_HW_E;
     }
@@ -1067,8 +1073,11 @@ static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
     int ret  = CRYPTOCB_UNAVAILABLE;
     int type = info->pk.pqc_stateful_sig_sigs_left.type;
 
-#ifndef WOLFHSM_CFG_DMA
+    /* Unused when all enabled algorithms are verify-only (no sigsLeft path). */
     (void)ctx;
+    (void)useDma;
+
+#ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         return WC_HW_E;
     }

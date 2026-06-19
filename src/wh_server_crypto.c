@@ -885,7 +885,10 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
-#if (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)) && \
+/* The sign path (and its slot callbacks) is unavailable in verify-only builds;
+ * gate on at least one non-verify-only stateful algorithm being enabled. */
+#if ((defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)) ||     \
+     (defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY))) &&  \
     defined(WOLFHSM_CFG_DMA)
 /* Stateful-key persistence context.
  *
@@ -922,7 +925,8 @@ static void _StatefulSigWritePrivLen(uint8_t* slotBuf, uint16_t privLen)
     memcpy(p, &privLen, sizeof(privLen));
 }
 
-#if defined(WOLFSSL_HAVE_LMS) && defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFSSL_HAVE_LMS) && defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFSSL_LMS_VERIFY_ONLY)
 static int _LmsSlotWriteCb(const byte* priv, word32 privSz, void* context)
 {
     whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
@@ -971,9 +975,10 @@ static int _LmsSlotReadCb(byte* priv, word32 privSz, void* context)
     memcpy(priv, b->slotBuf + privOff, privSz);
     return WC_LMS_RC_READ_TO_MEMORY;
 }
-#endif /* WOLFSSL_HAVE_LMS && WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_LMS && WOLFHSM_CFG_DMA && !WOLFSSL_LMS_VERIFY_ONLY */
 
-#if defined(WOLFSSL_HAVE_XMSS) && defined(WOLFHSM_CFG_DMA)
+#if defined(WOLFSSL_HAVE_XMSS) && defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFSSL_XMSS_VERIFY_ONLY)
 static enum wc_XmssRc _XmssSlotWriteCb(const byte* priv, word32 privSz,
                                          void* context)
 {
@@ -1021,10 +1026,12 @@ static enum wc_XmssRc _XmssSlotReadCb(byte* priv, word32 privSz,
     memcpy(priv, b->slotBuf + privOff, privSz);
     return WC_XMSS_RC_READ_TO_MEMORY;
 }
-#endif /* WOLFSSL_HAVE_XMSS && WOLFHSM_CFG_DMA */
-#endif /* (WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS) && WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_XMSS && WOLFHSM_CFG_DMA && !WOLFSSL_XMSS_VERIFY_ONLY */
+#endif /* stateful sign path enabled && WOLFHSM_CFG_DMA */
 
 #ifdef WOLFSSL_HAVE_LMS
+/* Import serializes the private key, so it is unavailable in verify-only. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
 int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
                                 whKeyId keyId, whNvmFlags flags,
                                 uint16_t label_len, uint8_t* label)
@@ -1058,6 +1065,7 @@ int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
     }
     return ret;
 }
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
 int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                 LmsKey* key)
@@ -1080,6 +1088,8 @@ int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
+/* Import serializes the private key, so it is unavailable in verify-only. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
 int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
                                  const char* paramStr, whKeyId keyId,
                                  whNvmFlags flags, uint16_t label_len,
@@ -1116,6 +1126,7 @@ int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
     }
     return ret;
 }
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
 int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                  XmssKey* key)
@@ -6932,7 +6943,10 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
-/* Decode the slot blob's header lengths into the context struct. */
+/* Decode the slot blob's header lengths into the context struct. Sign-path
+ * only, so it is gated out of verify-only builds. */
+#if (defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)) ||      \
+    (defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY))
 static int _StatefulSigFromSlot(whServerStatefulSigCtx* b,
                                    whServerContext*           server,
                                    whKeyId                    keyId,
@@ -6956,6 +6970,7 @@ static int _StatefulSigFromSlot(whServerStatefulSigCtx* b,
     b->slotCapacity = slotCapacity;
     return WH_ERROR_OK;
 }
+#endif /* stateful sign path enabled */
 
 /* Keygen persistence context for XMSS. wolfCrypt zeroizes key->sk right after
  * the keygen write callback returns, so the callback is the only point where
@@ -6975,6 +6990,7 @@ typedef struct whServerStatefulSigKeygenCtx {
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
 /* Keygen callbacks: wc_LmsKey_MakeKey requires a write cb to be set and to
  * report success, but for keygen the generated private state stays live in
  * key->priv_raw. We serialize and commit the full slot after MakeKey returns,
@@ -6989,6 +7005,7 @@ static int _LmsDummyReadCb(byte* priv, word32 privSz, void* context)
     (void)priv; (void)privSz; (void)context;
     return WC_LMS_RC_READ_TO_MEMORY;
 }
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
 static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
                                const void* cryptoDataIn, uint16_t inSize,
@@ -7433,10 +7450,10 @@ static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_HAVE_LMS */
 
 #ifdef WOLFSSL_HAVE_XMSS
-/* Keygen write cb: wc_*_MakeKey calls this with the context we set up.
- * Ignore the private key passed in, and fetch fields from the context.
- * Write pub and priv keys together into the keystore. And capture any error
- * codes into the context for later use by the caller of wc_*_MakeKey() */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
+/* Keygen write cb: wc_XmssKey_MakeKey hands us the private key, which it
+ * zeroizes immediately after. Copy it into the slot's priv region and capture
+ * any error into the context for the caller of MakeKey to surface. */
 static enum wc_XmssRc _XmssKeygenWriteCb(const byte* priv, word32 privSz,
                                          void* context)
 {
@@ -7464,6 +7481,7 @@ static enum wc_XmssRc _XmssDummyReadCb(byte* priv, word32 privSz,
     (void)priv; (void)privSz; (void)context;
     return WC_XMSS_RC_READ_TO_MEMORY;
 }
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
 static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
                                 int devId, const void* cryptoDataIn,
