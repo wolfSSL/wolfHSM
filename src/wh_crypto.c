@@ -833,7 +833,7 @@ int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pk, p, pubLen);
     /* The private key (if any) is left in the slot blob; downstream paths
-     * read it via the bridge ReadCb against the cached slot (sk is allocated
+     * read it via the slot ReadCb against the cached slot (sk is allocated
      * by Reload, not by deserialize). */
     (void)privLen;
 

@@ -887,7 +887,7 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
 #if (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)) && \
     defined(WOLFHSM_CFG_DMA)
-/* Stateful-key persistence bridge.
+/* Stateful-key persistence context.
  *
  * wolfCrypt's wc_LmsKey_Sign and wc_XmssKey_Sign require write/read callbacks
  * for the software path. We wire write_private_key directly to atomic NVM
@@ -895,10 +895,10 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
  * the index, call write_cb, and only emit the signature if write_cb returned
  * success. That gives us pre-commit-then-emit ordering for free.
  *
- * The bridge keeps a pointer into the server's cache slot blob (laid out by
+ * This context keeps a pointer into the server's cache slot blob (laid out by
  * wh_Crypto_{Lms,Xmss}SerializeKey). Each write_cb invocation overwrites the
  * priv region of the slot in place and re-commits the entire slot. */
-typedef struct whServerStatefulSigBridge {
+typedef struct whServerStatefulSigCtx {
     whServerContext* server;
     whKeyId          keyId;
     whNvmMetadata*   meta;        /* points at the cache slot's metadata */
@@ -907,25 +907,25 @@ typedef struct whServerStatefulSigBridge {
     uint16_t         pubLen;      /* priv begins at hdrSz + paramLen + pubLen */
     uint16_t         paramLen;
     uint16_t         slotCapacity;
-} whServerStatefulSigBridge;
+} whServerStatefulSigCtx;
 
-/* Compute the priv-region offset inside the slot blob from a bridge. */
-static uint16_t _StatefulBridgePrivOffset(const whServerStatefulSigBridge* b)
+/* Compute the priv-region offset inside the slot blob from the context. */
+static uint16_t _StatefulSigPrivOffset(const whServerStatefulSigCtx* b)
 {
     return (uint16_t)(b->hdrSz + b->paramLen + b->pubLen);
 }
 
 /* Update the slot blob's privLen header field in place. */
-static void _StatefulBridgeWritePrivLen(uint8_t* slotBuf, uint16_t privLen)
+static void _StatefulSigWritePrivLen(uint8_t* slotBuf, uint16_t privLen)
 {
     uint8_t* p = slotBuf + offsetof(whCryptoStatefulSigHeader, privLen);
     memcpy(p, &privLen, sizeof(privLen));
 }
 
 #if defined(WOLFSSL_HAVE_LMS) && defined(WOLFHSM_CFG_DMA)
-static int _LmsBridgeWriteCb(const byte* priv, word32 privSz, void* context)
+static int _LmsSlotWriteCb(const byte* priv, word32 privSz, void* context)
 {
-    whServerStatefulSigBridge* b = (whServerStatefulSigBridge*)context;
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
     uint16_t                   privOff;
     uint32_t                   newLen;
     int                        rc;
@@ -935,14 +935,14 @@ static int _LmsBridgeWriteCb(const byte* priv, word32 privSz, void* context)
         return WC_LMS_RC_BAD_ARG;
     }
 
-    privOff = _StatefulBridgePrivOffset(b);
+    privOff = _StatefulSigPrivOffset(b);
     newLen  = (uint32_t)privOff + privSz;
     if (newLen > b->slotCapacity) {
         return WC_LMS_RC_WRITE_FAIL;
     }
 
     memcpy(b->slotBuf + privOff, priv, privSz);
-    _StatefulBridgeWritePrivLen(b->slotBuf, (uint16_t)privSz);
+    _StatefulSigWritePrivLen(b->slotBuf, (uint16_t)privSz);
     b->meta->len = (whNvmSize)newLen;
 
     /* Atomic dual-partition commit. Wolfcrypt aborts the sign if this
@@ -954,16 +954,16 @@ static int _LmsBridgeWriteCb(const byte* priv, word32 privSz, void* context)
                                : WC_LMS_RC_WRITE_FAIL;
 }
 
-static int _LmsBridgeReadCb(byte* priv, word32 privSz, void* context)
+static int _LmsSlotReadCb(byte* priv, word32 privSz, void* context)
 {
-    whServerStatefulSigBridge* b = (whServerStatefulSigBridge*)context;
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
     uint16_t                   privOff;
 
     if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
         return WC_LMS_RC_BAD_ARG;
     }
 
-    privOff = _StatefulBridgePrivOffset(b);
+    privOff = _StatefulSigPrivOffset(b);
     if ((uint32_t)privOff + privSz > b->meta->len) {
         return WC_LMS_RC_READ_FAIL;
     }
@@ -974,10 +974,10 @@ static int _LmsBridgeReadCb(byte* priv, word32 privSz, void* context)
 #endif /* WOLFSSL_HAVE_LMS && WOLFHSM_CFG_DMA */
 
 #if defined(WOLFSSL_HAVE_XMSS) && defined(WOLFHSM_CFG_DMA)
-static enum wc_XmssRc _XmssBridgeWriteCb(const byte* priv, word32 privSz,
+static enum wc_XmssRc _XmssSlotWriteCb(const byte* priv, word32 privSz,
                                          void* context)
 {
-    whServerStatefulSigBridge* b = (whServerStatefulSigBridge*)context;
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
     uint16_t                   privOff;
     uint32_t                   newLen;
     int                        rc;
@@ -987,14 +987,14 @@ static enum wc_XmssRc _XmssBridgeWriteCb(const byte* priv, word32 privSz,
         return WC_XMSS_RC_BAD_ARG;
     }
 
-    privOff = _StatefulBridgePrivOffset(b);
+    privOff = _StatefulSigPrivOffset(b);
     newLen  = (uint32_t)privOff + privSz;
     if (newLen > b->slotCapacity) {
         return WC_XMSS_RC_WRITE_FAIL;
     }
 
     memcpy(b->slotBuf + privOff, priv, privSz);
-    _StatefulBridgeWritePrivLen(b->slotBuf, (uint16_t)privSz);
+    _StatefulSigWritePrivLen(b->slotBuf, (uint16_t)privSz);
     b->meta->len = (whNvmSize)newLen;
 
     rc = wh_Nvm_AddObjectWithReclaim(b->server->nvm, b->meta, b->meta->len,
@@ -1003,17 +1003,17 @@ static enum wc_XmssRc _XmssBridgeWriteCb(const byte* priv, word32 privSz,
                                : WC_XMSS_RC_WRITE_FAIL;
 }
 
-static enum wc_XmssRc _XmssBridgeReadCb(byte* priv, word32 privSz,
+static enum wc_XmssRc _XmssSlotReadCb(byte* priv, word32 privSz,
                                         void* context)
 {
-    whServerStatefulSigBridge* b = (whServerStatefulSigBridge*)context;
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
     uint16_t                   privOff;
 
     if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
         return WC_XMSS_RC_BAD_ARG;
     }
 
-    privOff = _StatefulBridgePrivOffset(b);
+    privOff = _StatefulSigPrivOffset(b);
     if ((uint32_t)privOff + privSz > b->meta->len) {
         return WC_XMSS_RC_READ_FAIL;
     }
@@ -6932,8 +6932,8 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFSSL_HAVE_MLKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
-/* Decode the slot blob's header lengths into the bridge struct. */
-static int _StatefulBridgeFromSlot(whServerStatefulSigBridge* b,
+/* Decode the slot blob's header lengths into the context struct. */
+static int _StatefulSigFromSlot(whServerStatefulSigCtx* b,
                                    whServerContext*           server,
                                    whKeyId                    keyId,
                                    uint8_t* slotBuf, whNvmMetadata* meta,
@@ -6957,13 +6957,13 @@ static int _StatefulBridgeFromSlot(whServerStatefulSigBridge* b,
     return WH_ERROR_OK;
 }
 
-/* Keygen persistence bridge. The sign bridge rewrites the priv region of an
+/* Keygen persistence context. The sign context rewrites the priv region of an
  * existing slot; keygen instead builds a brand-new slot. Its write cb
  * serializes the full key and commits it to NVM while the private key is
  * still live, honoring wolfCrypt's "persist before returning success"
  * contract. The cb can only return wolfCrypt's coarse pass/fail code, so
  * status carries the WH_ERROR_* detail back to the handler. */
-typedef struct whServerStatefulSigKeygenBridge {
+typedef struct whServerStatefulSigKeygenCtx {
     whServerContext* server;
     void*            key;       /* LmsKey* or XmssKey*, alg-specific */
     const char*      paramStr;  /* XMSS param string; NULL for LMS */
@@ -6972,7 +6972,7 @@ typedef struct whServerStatefulSigKeygenBridge {
     whNvmFlags       flags;
     uint16_t         labelSize;
     int              status;    /* WH_ERROR_* from import/commit */
-} whServerStatefulSigKeygenBridge;
+} whServerStatefulSigKeygenCtx;
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 #ifdef WOLFSSL_HAVE_LMS
@@ -6982,8 +6982,8 @@ typedef struct whServerStatefulSigKeygenBridge {
  * codes into the context for later use by the caller of wc_*_MakeKey() */
 static int _LmsKeygenWriteCb(const byte* priv, word32 privSz, void* context)
 {
-    whServerStatefulSigKeygenBridge* b =
-        (whServerStatefulSigKeygenBridge*)context;
+    whServerStatefulSigKeygenCtx* b =
+        (whServerStatefulSigKeygenCtx*)context;
     int rc;
 
     (void)priv;
@@ -7022,12 +7022,12 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
     int                                              locked = 0;
-    whServerStatefulSigKeygenBridge                  bridge;
+    whServerStatefulSigKeygenCtx                     sigCtx;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
 
     memset(&res, 0, sizeof(res));
-    memset(&bridge, 0, sizeof(bridge));
+    memset(&sigCtx, 0, sizeof(sigCtx));
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -7083,27 +7083,27 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Setup context for the write callback */
     if (ret == 0) {
-        bridge.server    = ctx;
-        bridge.key       = key;
-        bridge.keyId     = keyId;
-        bridge.flags     = req.flags;
-        bridge.label     = req.label;
-        bridge.labelSize = (uint16_t)req.labelSize;
-        bridge.status    = WH_ERROR_OK;
+        sigCtx.server    = ctx;
+        sigCtx.key       = key;
+        sigCtx.keyId     = keyId;
+        sigCtx.flags     = req.flags;
+        sigCtx.label     = req.label;
+        sigCtx.labelSize = (uint16_t)req.labelSize;
+        sigCtx.status    = WH_ERROR_OK;
         ret = wc_LmsKey_SetWriteCb(key, _LmsKeygenWriteCb);
     }
     if (ret == 0) {
         ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
     }
     if (ret == 0) {
-        ret = wc_LmsKey_SetContext(key, &bridge);
+        ret = wc_LmsKey_SetContext(key, &sigCtx);
     }
     if (ret == 0) {
         ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
         /* MakeKey fails if the cb could not persist; surface the specific
-         * import/commit error the bridge captured. */
-        if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
-            ret = bridge.status;
+         * import/commit error the context captured. */
+        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
+            ret = sigCtx.status;
         }
     }
 
@@ -7153,7 +7153,7 @@ static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
     whKeyId                                        keyId;
     uint8_t*                                       cacheBuf;
     whNvmMetadata*                                 cacheMeta;
-    whServerStatefulSigBridge                      bridge;
+    whServerStatefulSigCtx                         sigCtx;
     whMessageCrypto_PqcStatefulSigSignDmaRequest   req;
     whMessageCrypto_PqcStatefulSigSignDmaResponse  res;
 
@@ -7197,14 +7197,14 @@ static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
                                           key);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _StatefulBridgeFromSlot(
-            &bridge, ctx, keyId, cacheBuf, cacheMeta,
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
             WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
     }
     if (ret == WH_ERROR_OK) {
-        (void)wc_LmsKey_SetWriteCb(key, _LmsBridgeWriteCb);
-        (void)wc_LmsKey_SetReadCb(key, _LmsBridgeReadCb);
-        (void)wc_LmsKey_SetContext(key, &bridge);
+        (void)wc_LmsKey_SetWriteCb(key, _LmsSlotWriteCb);
+        (void)wc_LmsKey_SetReadCb(key, _LmsSlotReadCb);
+        (void)wc_LmsKey_SetContext(key, &sigCtx);
         ret = wc_LmsKey_Reload(key);
     }
     if (ret == WH_ERROR_OK) {
@@ -7227,9 +7227,9 @@ static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
         /* wolfCrypt's flow:
          *   1. wc_hss_sign computes the signature into sig and advances
          *      key->priv_raw in memory.
-         *   2. write_private_key (our bridge) is called with the new
+         *   2. write_private_key (our slot write cb) is called with the new
          *      priv_raw and atomically commits it to NVM.
-         *   3. If the bridge returns anything other than
+         *   3. If the cb returns anything other than
          *      WC_LMS_RC_SAVED_TO_NV_MEMORY, wolfCrypt does ForceZero(sig)
          *      and returns IO_FAILED_E.
          * Net effect: a signature is exposed to the caller only if the NVM
@@ -7443,8 +7443,8 @@ static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
 static enum wc_XmssRc _XmssKeygenWriteCb(const byte* priv, word32 privSz,
                                          void* context)
 {
-    whServerStatefulSigKeygenBridge* b =
-        (whServerStatefulSigKeygenBridge*)context;
+    whServerStatefulSigKeygenCtx* b =
+        (whServerStatefulSigKeygenCtx*)context;
     int rc;
 
     (void)priv;
@@ -7486,12 +7486,12 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
     word32                                           pubLen32 = 0;
     whKeyId                                          keyId;
     int                                              locked = 0;
-    whServerStatefulSigKeygenBridge                  bridge;
+    whServerStatefulSigKeygenCtx                     sigCtx;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
 
     memset(&res, 0, sizeof(res));
-    memset(&bridge, 0, sizeof(bridge));
+    memset(&sigCtx, 0, sizeof(sigCtx));
 
     if (inSize < sizeof(req)) {
         return WH_ERROR_BADARGS;
@@ -7550,27 +7550,27 @@ static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
 
     /* Setup context for the write callback */
     if (ret == 0) {
-        bridge.server    = ctx;
-        bridge.key       = key;
-        bridge.paramStr  = req.xmssParamStr;
-        bridge.keyId     = keyId;
-        bridge.flags     = req.flags;
-        bridge.label     = req.label;
-        bridge.labelSize = (uint16_t)req.labelSize;
-        bridge.status    = WH_ERROR_OK;
+        sigCtx.server    = ctx;
+        sigCtx.key       = key;
+        sigCtx.paramStr  = req.xmssParamStr;
+        sigCtx.keyId     = keyId;
+        sigCtx.flags     = req.flags;
+        sigCtx.label     = req.label;
+        sigCtx.labelSize = (uint16_t)req.labelSize;
+        sigCtx.status    = WH_ERROR_OK;
         ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
     }
     if (ret == 0) {
         ret = wc_XmssKey_SetReadCb(key, _XmssDummyReadCb);
     }
     if (ret == 0) {
-        ret = wc_XmssKey_SetContext(key, &bridge);
+        ret = wc_XmssKey_SetContext(key, &sigCtx);
     }
     if (ret == 0) {
         ret = wc_XmssKey_MakeKey(key, ctx->crypto->rng);
         /* When wolfcrypt reports a failure, prioritize the callback status */
-        if ((ret != 0) && (bridge.status != WH_ERROR_OK)) {
-            ret = bridge.status;
+        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
+            ret = sigCtx.status;
         }
     }
     if (locked) {
@@ -7619,7 +7619,7 @@ static int _HandleXmssSignDma(whServerContext* ctx, uint16_t magic, int devId,
     whKeyId                                        keyId;
     uint8_t*                                       cacheBuf;
     whNvmMetadata*                                 cacheMeta;
-    whServerStatefulSigBridge                      bridge;
+    whServerStatefulSigCtx                         sigCtx;
     whMessageCrypto_PqcStatefulSigSignDmaRequest   req;
     whMessageCrypto_PqcStatefulSigSignDmaResponse  res;
 
@@ -7661,14 +7661,14 @@ static int _HandleXmssSignDma(whServerContext* ctx, uint16_t magic, int devId,
                                            key);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _StatefulBridgeFromSlot(
-            &bridge, ctx, keyId, cacheBuf, cacheMeta,
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
             WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
     }
     if (ret == WH_ERROR_OK) {
-        (void)wc_XmssKey_SetWriteCb(key, _XmssBridgeWriteCb);
-        (void)wc_XmssKey_SetReadCb(key, _XmssBridgeReadCb);
-        (void)wc_XmssKey_SetContext(key, &bridge);
+        (void)wc_XmssKey_SetWriteCb(key, _XmssSlotWriteCb);
+        (void)wc_XmssKey_SetReadCb(key, _XmssSlotReadCb);
+        (void)wc_XmssKey_SetContext(key, &sigCtx);
         ret = wc_XmssKey_Reload(key);
     }
     if (ret == WH_ERROR_OK) {
@@ -7839,7 +7839,7 @@ static int _HandleXmssSigsLeftDma(whServerContext* ctx, uint16_t magic,
     whKeyId                                            keyId;
     uint8_t*                                           cacheBuf;
     whNvmMetadata*                                     cacheMeta;
-    whServerStatefulSigBridge                          bridge;
+    whServerStatefulSigCtx                             sigCtx;
     whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest   req;
     whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse  res;
 
@@ -7879,16 +7879,16 @@ static int _HandleXmssSigsLeftDma(whServerContext* ctx, uint16_t magic,
                                            key);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _StatefulBridgeFromSlot(
-            &bridge, ctx, keyId, cacheBuf, cacheMeta,
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
             WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
     }
     if (ret == WH_ERROR_OK) {
-        /* Reload uses the bridge ReadCb to populate sk from the cached blob,
+        /* Reload uses the slot ReadCb to populate sk from the cached blob,
          * then transitions state to OK so SigsLeft can run. */
-        (void)wc_XmssKey_SetWriteCb(key, _XmssBridgeWriteCb);
-        (void)wc_XmssKey_SetReadCb(key, _XmssBridgeReadCb);
-        (void)wc_XmssKey_SetContext(key, &bridge);
+        (void)wc_XmssKey_SetWriteCb(key, _XmssSlotWriteCb);
+        (void)wc_XmssKey_SetReadCb(key, _XmssSlotReadCb);
+        (void)wc_XmssKey_SetContext(key, &sigCtx);
         ret = wc_XmssKey_Reload(key);
     }
     if (ret == WH_ERROR_OK) {
