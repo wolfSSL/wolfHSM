@@ -45,6 +45,14 @@ jobs:
     - name: Build and test DMA ASAN
       run: cd test && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test with LMS and XMSS both in verify-only mode
+    - name: Build and test DMA ASAN LMS/XMSS verify-only
+      run: cd test && make clean && make -j DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
+
+    # Build and test mixed: LMS verify-only, XMSS full (exercises shared gating)
+    - name: Build and test DMA ASAN LMS verify-only XMSS full
+      run: cd test && make clean && make -j DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test ASAN TESTWOLFCRYPT
       run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl && make run
