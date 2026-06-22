@@ -155,6 +155,42 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Direct DMA keygen with a label and a caller-visible keyId. The cryptocb
+     * keygen above passes neither, so this drives the label-copy and keyId
+     * write-back paths on both client and server. */
+    if (ret == 0) {
+        XmssKey lblKey[1];
+        int     lblInited = 0;
+        whKeyId lblId     = WH_KEYID_ERASED;
+        byte    label[]   = "wolfHSM XMSS key";
+
+        ret = wc_XmssKey_Init(lblKey, NULL, devId);
+        if (ret == 0) {
+            lblInited = 1;
+            ret = wc_XmssKey_SetParamStr(lblKey, WH_TEST_XMSS_PARAM_STR);
+        }
+        if (ret == 0) {
+            ret = wh_Client_XmssMakeKeyDma(ctx, lblKey, &lblId,
+                                           WH_NVM_FLAGS_NONE,
+                                           (uint16_t)(sizeof(label) - 1), label);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS labeled keygen failed: ret=%d\n", ret);
+            }
+        }
+        if ((ret == 0) && WH_KEYID_ISERASED(lblId)) {
+            WH_ERROR_PRINT("XMSS labeled keygen returned no keyId\n");
+            ret = WH_ERROR_ABORTED;
+        }
+        /* Keygen is write-through, so erase (cache + NVM) to avoid leaking a
+         * committed key. */
+        if (!WH_KEYID_ISERASED(lblId)) {
+            (void)wh_Client_KeyErase(ctx, lblId);
+        }
+        if (lblInited) {
+            wc_XmssKey_Free(lblKey);
+        }
+    }
+
     if (ret == 0) {
         sigLen = sigCap;
         ret = wc_XmssKey_Sign(key, whTest_XmssSigBuf, &sigLen, msg, (int)msgSz);

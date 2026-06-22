@@ -159,6 +159,44 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Direct DMA keygen with a label and a caller-visible keyId. The cryptocb
+     * keygen above passes neither, so this drives the label-copy and keyId
+     * write-back paths on both client and server. */
+    if (ret == 0) {
+        LmsKey  lblKey[1];
+        int     lblInited = 0;
+        whKeyId lblId     = WH_KEYID_ERASED;
+        byte    label[]   = "wolfHSM LMS key";
+
+        ret = wc_LmsKey_Init(lblKey, NULL, devId);
+        if (ret == 0) {
+            lblInited = 1;
+            ret = wc_LmsKey_SetParameters(lblKey, WH_TEST_LMS_LEVELS,
+                                          WH_TEST_LMS_HEIGHT,
+                                          WH_TEST_LMS_WINTERNITZ);
+        }
+        if (ret == 0) {
+            ret = wh_Client_LmsMakeKeyDma(ctx, lblKey, &lblId,
+                                          WH_NVM_FLAGS_NONE,
+                                          (uint16_t)(sizeof(label) - 1), label);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS labeled keygen failed: ret=%d\n", ret);
+            }
+        }
+        if ((ret == 0) && WH_KEYID_ISERASED(lblId)) {
+            WH_ERROR_PRINT("LMS labeled keygen returned no keyId\n");
+            ret = WH_ERROR_ABORTED;
+        }
+        /* Keygen is write-through, so erase (cache + NVM) to avoid leaking a
+         * committed key. */
+        if (!WH_KEYID_ISERASED(lblId)) {
+            (void)wh_Client_KeyErase(ctx, lblId);
+        }
+        if (lblInited) {
+            wc_LmsKey_Free(lblKey);
+        }
+    }
+
     /* Sign via cryptocb. */
     if (ret == 0) {
         sigLen = sigCap;
