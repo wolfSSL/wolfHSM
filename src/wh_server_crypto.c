@@ -6991,13 +6991,26 @@ typedef struct whServerStatefulSigKeygenCtx {
 
 #ifdef WOLFSSL_HAVE_LMS
 #ifndef WOLFSSL_LMS_VERIFY_ONLY
-/* Keygen callbacks: wc_LmsKey_MakeKey requires a write cb to be set and to
- * report success, but for keygen the generated private state stays live in
- * key->priv_raw. We serialize and commit the full slot after MakeKey returns,
- * so these callbacks are no-ops that only satisfy wolfCrypt's contract. */
-static int _LmsDummyWriteCb(const byte* priv, word32 privSz, void* context)
+/* Capture the private key from wc_LmsKey_MakeKey to mirror the XMSS path.
+ * For LMS, additional private state resides in key->priv_raw, so that is
+ * serialized after the call to wc_LmsKey_MakeKey. */
+static int _LmsKeygenWriteCb(const byte* priv, word32 privSz, void* context)
 {
-    (void)priv; (void)privSz; (void)context;
+    whServerStatefulSigKeygenCtx* b =
+        (whServerStatefulSigKeygenCtx*)context;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
+        return WC_LMS_RC_BAD_ARG;
+    }
+
+    /* Copy the private key wolfCrypt handed us into the slot's priv region. */
+    if ((uint32_t)b->privOff + privSz > b->slotCapacity) {
+        b->status = WH_ERROR_BUFFER_SIZE;
+        return WC_LMS_RC_WRITE_FAIL;
+    }
+    memcpy(b->slotBuf + b->privOff, priv, privSz);
+    b->privLen = (uint16_t)privSz;
+    b->status  = WH_ERROR_OK;
     return WC_LMS_RC_SAVED_TO_NV_MEMORY;
 }
 static int _LmsDummyReadCb(byte* priv, word32 privSz, void* context)
@@ -7026,6 +7039,7 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
     whNvmMetadata*                                   cacheMeta;
     uint16_t   slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
     uint16_t   blobSize;
+    whServerStatefulSigKeygenCtx                     sigCtx;
     whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
 
@@ -7087,24 +7101,37 @@ static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* MakeKey requires write/read callbacks, but for keygen the private state
-     * stays live in key->priv_raw; the callbacks are no-ops and we serialize
-     * the full slot ourselves once MakeKey returns. */
+    /* Grab the cache slot up front; the keygen write cb captures priv into it. */
     if (ret == 0) {
-        ret = wc_LmsKey_SetWriteCb(key, _LmsDummyWriteCb);
+        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                    &cacheBuf, &cacheMeta);
+    }
+
+    /* The write cb copies the private key into the slot's priv region: after
+     * the header, the 3-byte parameter descriptor, and the public key. */
+    if (ret == 0) {
+        sigCtx.slotBuf      = cacheBuf;
+        sigCtx.slotCapacity = slotCapacity;
+        sigCtx.privOff      = (uint16_t)(WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + 3 +
+                                         pubLen32);
+        sigCtx.status       = WH_ERROR_OK;
+        ret = wc_LmsKey_SetWriteCb(key, _LmsKeygenWriteCb);
     }
     if (ret == 0) {
         ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
     }
     if (ret == 0) {
+        ret = wc_LmsKey_SetContext(key, &sigCtx);
+    }
+    if (ret == 0) {
         ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
+        /* MakeKey fails if the cb could not store priv; surface that error. */
+        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
+            ret = sigCtx.status;
+        }
     }
 
-    /* Build the slot blob in RAM from the generated key, then commit it. */
-    if (ret == 0) {
-        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
-                                                    &cacheBuf, &cacheMeta);
-    }
+    /* Priv state survives in key->priv_raw, so serialize the full slot. */
     if (ret == 0) {
         ret = wh_Crypto_LmsSerializeKey(key, slotCapacity, cacheBuf, &blobSize);
     }
