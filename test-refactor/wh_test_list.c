@@ -44,7 +44,11 @@ WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_KeystoreReqSize);
+<<<<<<< HEAD
 WH_TEST_DECL(whTest_MultiClient);
+=======
+WH_TEST_DECL(whTest_Log);
+>>>>>>> 8b3eb9b (Add refactored log tests, coverage identical)
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
@@ -86,11 +90,12 @@ WH_TEST_DECL(whTest_AuthSetCredentials);
 WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
 const whTestCase whTestsMisc[] = {
-    { "whTest_ClientDevId",      whTest_ClientDevId },
-    { "whTest_Comm",             whTest_Comm },
-    { "whTest_Dma",              whTest_Dma },
-    { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
-    { "whTest_MultiClient",      whTest_MultiClient },
+    { "whTest_ClientDevId", whTest_ClientDevId},
+    { "whTest_Comm", whTest_Comm},
+    { "whTest_Dma", whTest_Dma},
+    { "whTest_KeystoreReqSize", whTest_KeystoreReqSize},
+    { "whTest_MultiClient", whTest_MultiClient },
+    { "whTest_Log", whTest_Log},
 };
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
