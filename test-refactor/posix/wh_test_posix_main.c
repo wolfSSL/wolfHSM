@@ -76,6 +76,16 @@ int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
 int whTest_NvmRecovery(void* ctx);
 
+/* POSIX-specific logging tests. The portable log suite (frontend,
+ * macros, ring buffer, mock/ringbuf harness) runs in the Misc group;
+ * these exercise the POSIX file backend, concurrent writers, and a
+ * client/server log smoke test that need pthreads and the host file
+ * system, so they run from the port directly. */
+int whTest_LogPosixFile_Generic(void* ctx);
+int whTest_LogPosixFile(void* ctx);
+int whTest_LogPosixFileConcurrent(void* ctx);
+int whTest_LogClientServerMemTransport(void* ctx);
+
 /*
  * Port-owned contexts. The thread functions fill these in and
  * hand them to the group functions, paralleling the firmware
@@ -281,6 +291,29 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmRecovery",
             whTest_NvmRecovery, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        /* POSIX-specific log backend tests. Self-contained (each owns
+         * its own contexts and threads), so run inline before the port
+         * spins up its own server thread. */
+        rc = whTestGroup_RunOne("whTest_LogPosixFile_Generic",
+            whTest_LogPosixFile_Generic, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_LogPosixFile",
+            whTest_LogPosixFile, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_LogPosixFileConcurrent",
+            whTest_LogPosixFileConcurrent, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_LogClientServerMemTransport",
+            whTest_LogClientServerMemTransport, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

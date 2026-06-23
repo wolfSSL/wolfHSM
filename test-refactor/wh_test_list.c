@@ -48,6 +48,7 @@ WH_TEST_DECL(whTest_HwKeystore);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_Lock);
+WH_TEST_DECL(whTest_Log);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_CertNvmPolicy);
 WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
@@ -107,6 +108,7 @@ const whTestCase whTestsMisc[] = {
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
     { "whTest_Lock",             whTest_Lock },
+    { "whTest_Log",              whTest_Log },
     { "whTest_SheKeywrapInterop", whTest_SheKeywrapInterop },
     { "whTest_SheNoNvm",         whTest_SheNoNvm },
 };
