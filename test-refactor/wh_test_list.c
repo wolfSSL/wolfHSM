@@ -42,6 +42,7 @@
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
+WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MultiClient);
@@ -86,11 +87,18 @@ WH_TEST_DECL(whTest_AuthSetCredentials);
 WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
 const whTestCase whTestsMisc[] = {
-    { "whTest_ClientDevId",      whTest_ClientDevId },
-    { "whTest_Comm",             whTest_Comm },
-    { "whTest_Dma",              whTest_Dma },
-    { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
-    { "whTest_MultiClient",      whTest_MultiClient },
+    { "whTest_ClientDevId", whTest_ClientDevId },
+    { "whTest_Comm", whTest_Comm },
+    { "whTest_Dma", whTest_Dma },
+    { "whTest_KeystoreReqSize", whTest_KeystoreReqSize },
+    { "whTest_MultiClient", whTest_MultiClient },
+    { "whTest_ClientDevId", whTest_ClientDevId },
+    { "whTest_Comm", whTest_Comm },
+    { "whTest_Dma", whTest_Dma },
+    { "whTest_CryptoAffinity", whTest_CryptoAffinity },
+    { "whTest_KeystoreReqSize", whTest_KeystoreReqSize },
+    { "whTest_MultiClient", whTest_MultiClient },
+    {"whTest_KeystoreReqSize", whTest_KeystoreReqSize},
 };
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
