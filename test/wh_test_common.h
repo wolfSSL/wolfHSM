@@ -71,15 +71,16 @@
  * Helper macro for test error propagation
  * Evaluates the "call" argument, and if not equal to zero, displays the
  * stringified call argument along with caller source file info and
- * causes the calling function to return the value of "call"
+ * causes the calling function to return the value of "call".
+ * Use a specific variable name to not overlap with local vars (rc or ret).
  */
-#define WH_TEST_RETURN_ON_FAIL(call)                         \
-    do {                                                     \
-        int ret = (call);                                    \
-        if (ret != WH_TEST_SUCCESS && ret != WH_TEST_SKIP) { \
-            WH_ERROR_PRINT(#call ": ret=%d\n", ret);         \
-            return ret;                                      \
-        }                                                    \
+#define WH_TEST_RETURN_ON_FAIL(call)                                       \
+    do {                                                                   \
+        int _whTestRet = (call);                                           \
+        if (_whTestRet != WH_TEST_SUCCESS && _whTestRet != WH_TEST_SKIP) { \
+            WH_ERROR_PRINT(#call ": ret=%d\n", _whTestRet);                \
+            return _whTestRet;                                             \
+        }                                                                  \
     } while (0)
 
 /* Number of cryptoCb dispatch modes the test suites exercise on the client
