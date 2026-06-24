@@ -755,7 +755,7 @@ int wh_Bench_ClientCtx(whClientContext* client, int transport)
                                 -1); /* -1 means run all modules */
 }
 
-
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
 {
     whServerContext server[1]    = {0};
@@ -800,6 +800,7 @@ int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
 
     return ret;
 }
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 typedef struct {
