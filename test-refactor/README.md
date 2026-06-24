@@ -83,6 +83,7 @@ Translated tests:
 | `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
 | `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto_{aes,cmac,curve25519,ecc,ed25519,kdf,keypolicy,mldsa,rng,rsa,sha}.c::whTest_Crypto_*` | Client | Split into per-algorithm suites; key revocation is gated by `WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS`. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
 | `wh_test_crypto.c::whTest_CryptoKeyUsagePolicies` (AES CTR/ECB/GCM subset) | `client-server/wh_test_crypto_aes.c::whTest_CryptoAesKeyUsagePolicies` | Client | AES-CTR/ECB/GCM key usage enforcement (non-DMA and DMA variants) |
+| `wh_test_crypto.c::{whTest_KeyCache, whTest_NonExportableKeystore}` | `client-server/wh_test_crypto_keystore.c::whTest_Crypto_Keystore` | Client | Key-cache lifecycle (cache/export, evict, commit/erase, cross-cache eviction/replacement, NVM-backed eviction) and non-exportable-flag enforcement; std and DMA export paths. The `WOLFHSM_CFG_IS_TEST_SERVER` multi-client user-exclusion path is dropped (needs two client contexts) |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
@@ -101,7 +102,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
 | `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining client-side coverage (NVM ops, etc.) still needs to be split out as new tests. The sequential test is dropped |
 | `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out: the AES async family (comm-buffer `whTest_CryptoAesAsync`/`AesAsyncKat` + DMA `whTest_CryptoAesDmaAsync`/`AesDmaAsyncKat`, round-trip & KAT). ECC DMA export-public and the ML-DSA wolfCrypt-API path are now migrated. |
-| `wh_test_crypto.c::whTest_KeyCache`, `whTest_NonExportableKeystore` | Keystore tests (key-cache lifecycle and non-exportable-flag enforcement) dispatched from the legacy `whTest_Crypto`. The per-algorithm suites use `wh_Client_KeyCache`, but these dedicated keystore tests are not yet split out. |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
 | `wh_test_multiclient.c::whTest_MultiClient` | |
