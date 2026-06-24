@@ -67,6 +67,7 @@ WH_TEST_DECL(whTest_CryptoSha256);
 WH_TEST_DECL(whTest_She);
 WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
 WH_TEST_DECL(whTest_SheReqSizeChecking);
+WH_TEST_DECL(whTest_Counter);
 WH_TEST_DECL(whTest_Echo);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
@@ -118,6 +119,7 @@ const whTestCase whTestsClient[] = {
     { "whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall },
     { "whTest_CryptoSha256", whTest_CryptoSha256 },
     { "whTest_She", whTest_She },
+    { "whTest_Counter", whTest_Counter },
     { "whTest_Echo", whTest_Echo },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
