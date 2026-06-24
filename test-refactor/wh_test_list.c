@@ -48,6 +48,7 @@ WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_HwKeystoreServer);
+WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_Counter);
@@ -101,6 +102,7 @@ const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
 const whTestCase whTestsServer[] = {
     { "whTest_CertVerify", whTest_CertVerify },
+    { "whTest_ServerImgMgr", whTest_ServerImgMgr },
     { "whTest_NvmOptional", whTest_NvmOptional },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
     { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
