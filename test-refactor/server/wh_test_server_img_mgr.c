@@ -628,8 +628,165 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
 #endif /* !NO_RSA */
 
+/*
+ * Argument-validation and dispatch guards. No signing needed, so this is
+ * cheap coverage of the error/reject paths the positive subtests never
+ * reach (bad args, unknown image type, missing key/signature, and the
+ * per-method NULL/size guards).
+ */
+static int _whTest_ServerImgMgrBadArgs(whServerContext* server)
+{
+    whServerImgMgrConfig       cfg     = {0};
+    whServerImgMgrContext      imgMgr  = {0};
+    whServerImgMgrContext      nullCtx = {0}; /* context with no server */
+    whServerImgMgrImg          img     = {0};
+    whServerImgMgrImg          images[1];
+    whServerImgMgrVerifyResult result;
+    whServerImgMgrVerifyResult results[1];
+    size_t                     errIdx     = 0;
+    const whNvmId              dummyKeyId = 5;
+    uint8_t                    dummyKey[AES_128_KEY_SIZE] = {0};
+    uint8_t                    dummySig[WC_AES_BLOCK_SIZE] = {0};
+    whNvmMetadata              keyMeta = {0};
+
+    (void)dummySig;
+
+    /* Init: NULL args, NULL server, and over-count */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(NULL, &cfg));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(&imgMgr, NULL));
+    cfg.server = NULL;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(&imgMgr, &cfg));
+    cfg.server     = server;
+    cfg.imageCount = WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT + 1;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(&imgMgr, &cfg));
+
+    /* A valid single-image context to drive the Verify* guards */
+    memset(images, 0, sizeof(images));
+    cfg.images     = images;
+    cfg.imageCount = 1;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &cfg));
+
+    /* VerifyImg: NULL args */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrVerifyImg(NULL, &img, &result));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrVerifyImg(&imgMgr, NULL, &result));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrVerifyImg(&imgMgr, &img, NULL));
+
+    /* VerifyImg: context with no server */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrVerifyImg(&nullCtx, &img, &result));
+
+    /* VerifyImg: unknown image type -> default reject */
+    img.imgType = (whServerImgMgrImgType)0x7F;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrVerifyImg(&imgMgr, &img, &result));
+
+    /* VerifyImg: cert-chain type skips key/sig loads, so NULL method and
+     * action surface as NOHANDLER without any NVM setup */
+    memset(&img, 0, sizeof(img));
+    img.imgType = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_ImgMgrVerifyImg(&imgMgr, &img, &result));
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_NOHANDLER);
+    WH_TEST_ASSERT_RETURN(result.verifyActionResult == WH_ERROR_NOHANDLER);
+
+    /* VerifyImgIdx: index past the end */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyImgIdx(&imgMgr, 99, &result));
+
+    /* VerifyAll: NULL results and undersized count */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyAll(&imgMgr, NULL, 1, NULL));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyAll(&imgMgr, results, 0, NULL));
+
+    /* VerifyAll: an image whose key is missing makes the sub-verify return
+     * non-OK, exercising the error-index reporting path */
+    memset(images, 0, sizeof(images));
+    images[0].imgType = WH_IMG_MGR_IMG_TYPE_RAW;
+    images[0].keyId   = 0xBEEF; /* not in keystore */
+    cfg.images        = images;
+    cfg.imageCount    = 1;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &cfg));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK !=
+        wh_Server_ImgMgrVerifyAll(&imgMgr, results, 1, &errIdx));
+    WH_TEST_ASSERT_RETURN(errIdx == 0);
+
+    /* RAW path: key present but signature object missing. Cache a dummy
+     * key (no crypto -- just bytes) and point at a non-existent sig id. */
+    keyMeta.id     = dummyKeyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = sizeof(dummyKey);
+    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "BadArgsKey");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_KeystoreCacheKey(server, &keyMeta, dummyKey));
+    memset(&img, 0, sizeof(img));
+    img.imgType  = WH_IMG_MGR_IMG_TYPE_RAW;
+    img.keyId    = dummyKeyId;
+    img.sigNvmId = 0xBEEF; /* not in NVM */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK !=
+                          wh_Server_ImgMgrVerifyImg(&imgMgr, &img, &result));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEvictKey(server, dummyKeyId));
+
+    /* Per-method NULL/size guards, called directly */
+#ifdef HAVE_ECC
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS == wh_Server_ImgMgrVerifyMethodEccWithSha256(
+                                &imgMgr, &img, NULL, 0, NULL, 0));
+#endif
+#ifdef WOLFSSL_CMAC
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS == wh_Server_ImgMgrVerifyMethodAesCmac(
+                                &imgMgr, &img, NULL, 0, NULL, 0));
+    /* wrong key size, then wrong signature size */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS == wh_Server_ImgMgrVerifyMethodAesCmac(
+                                &imgMgr, &img, dummyKey, 1, dummySig,
+                                sizeof(dummySig)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS == wh_Server_ImgMgrVerifyMethodAesCmac(
+                                &imgMgr, &img, dummyKey, sizeof(dummyKey),
+                                dummySig, 1));
+#endif
+#ifndef NO_RSA
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS == wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
+                                &imgMgr, &img, NULL, 0, NULL, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
+            &imgMgr, &img, NULL, 0, NULL, 0));
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
+    /* NULL image, then a context with no server */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
+            &imgMgr, NULL, NULL, 0, NULL, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
+            &nullCtx, &img, NULL, 0, NULL, 0));
+#endif
+#endif
+
+    WH_TEST_PRINT("IMG_MGR BadArgs Test completed successfully!\n");
+    return WH_TEST_SUCCESS;
+}
+
 int whTest_ServerImgMgr(whServerContext* server)
 {
+    WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrBadArgs(server));
 #ifdef HAVE_ECC
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrEcc256(server));
 #endif
