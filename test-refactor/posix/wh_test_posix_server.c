@@ -41,6 +41,9 @@
 #include "wolfhsm/wh_auth.h"
 #include "wolfhsm/wh_auth_base.h"
 #endif
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+#include "wolfhsm/wh_server_she.h"
+#endif
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
@@ -113,6 +116,10 @@ static whAuthCb _authCb = {
     .UserSetCredentials        = wh_Auth_BaseUserSetCredentials,
 };
 static whAuthContext _auth;
+#endif
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+/* SHE keystore/crypto state for the shared server (uidSet, sbState) */
+static whServerSheContext _she;
 #endif
 
 /* Mem transport -- buffers and server-side state.
@@ -206,6 +213,10 @@ int whTestPosix_Server_Init(whServerContext* server)
 
         sCfg.auth = &_auth;
     }
+#endif
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+    memset(&_she, 0, sizeof(_she));
+    sCfg.she = &_she;
 #endif
 
     return wh_Server_Init(server, &sCfg);
