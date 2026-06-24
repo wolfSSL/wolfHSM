@@ -800,6 +800,12 @@ int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
 
     return ret;
 }
+#else
+int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
+{
+    (void)serverCfg;
+    return WH_ERROR_OK;
+}
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
