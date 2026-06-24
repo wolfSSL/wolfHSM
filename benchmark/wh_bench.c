@@ -800,15 +800,10 @@ int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
 
     return ret;
 }
-#else
-int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg)
-{
-    (void)serverCfg;
-    return WH_ERROR_OK;
-}
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
 typedef struct {
     whClientConfig* config;
     int             moduleIndex;
@@ -1196,7 +1191,7 @@ int wh_Bench_ClientServer_Posix(int transport, int moduleIndex)
     return WH_ERROR_OK;
 }
 
-
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
 #endif /* WOLFHSM_CFG_BENCH_ENABLE */

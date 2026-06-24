@@ -27,14 +27,6 @@
 #include "wolfhsm/wh_client.h"
 
 /*
- * Runs the client benchmarks against a server using POSIX threads
- * transport: The type of transport to use for communication
- * moduleIndex: The specific benchmark module to run (optional, -1 for all)
- * Returns 0 on success and a non-zero error code on failure
- */
-int wh_Bench_ClientServer_Posix(int transport, int moduleIndex);
-
-/*
  * Client-side benchmarking function. Takes in a client configuration,
  * initializes the client, runs benchmarks against the server, then cleans up
  * and closes the client.
@@ -47,8 +39,18 @@ int wh_Bench_ClientCfg(whClientConfig* clientCfg, int transport);
  */
 int wh_Bench_ClientCtx(whClientContext* client, int transport);
 
+#if defined(WOLFHSM_CFG_ENABLE_SERVER)
+/*
+ * Runs the client benchmarks against a server using POSIX threads
+ * transport: The type of transport to use for communication
+ * moduleIndex: The specific benchmark module to run (optional, -1 for all)
+ * Returns 0 on success and a non-zero error code on failure
+ */
+int wh_Bench_ClientServer_Posix(int transport, int moduleIndex);
+
 /* Server-side processing loop for benchmarking */
 int wh_Bench_ServerCfgLoop(whServerConfig* serverCfg);
+#endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 
 /* List all modules */
