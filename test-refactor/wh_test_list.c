@@ -57,10 +57,12 @@ WH_TEST_DECL(whTest_Crypto_Ecc);
 WH_TEST_DECL(whTest_Crypto_Ed25519);
 WH_TEST_DECL(whTest_Crypto_Kdf);
 WH_TEST_DECL(whTest_Crypto_KeyPolicy);
+WH_TEST_DECL(whTest_Crypto_Lms);
 WH_TEST_DECL(whTest_Crypto_MlDsa);
 WH_TEST_DECL(whTest_Crypto_Rng);
 WH_TEST_DECL(whTest_Crypto_Rsa);
 WH_TEST_DECL(whTest_Crypto_Sha);
+WH_TEST_DECL(whTest_Crypto_Xmss);
 WH_TEST_DECL(whTest_CryptoEcc256);
 WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
 WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
@@ -111,11 +113,12 @@ const whTestCase whTestsClient[] = {
     { "whTest_Crypto_Ed25519", whTest_Crypto_Ed25519 },
     { "whTest_Crypto_Kdf", whTest_Crypto_Kdf },
     { "whTest_Crypto_KeyPolicy", whTest_Crypto_KeyPolicy },
+    { "whTest_Crypto_Lms", whTest_Crypto_Lms },
     { "whTest_Crypto_MlDsa", whTest_Crypto_MlDsa },
     { "whTest_Crypto_Rng", whTest_Crypto_Rng },
     { "whTest_Crypto_Rsa", whTest_Crypto_Rsa },
     { "whTest_Crypto_Sha", whTest_Crypto_Sha },
-    { "whTest_Crypto_Aes", whTest_Crypto_Aes },
+    { "whTest_Crypto_Xmss", whTest_Crypto_Xmss },
     { "whTest_CryptoEcc256", whTest_CryptoEcc256 },
     { "whTest_CryptoEd25519BufferTooSmall",
          whTest_CryptoEd25519BufferTooSmall },

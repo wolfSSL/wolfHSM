@@ -43,6 +43,11 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
 
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
+    (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
+#include "wolfhsm/wh_crypto.h"
+#endif
+
 /* Handle NVM read, do access checking and clamping */
 static int _HandleNvmRead(whServerContext* server, uint8_t* out_data,
                           whNvmSize offset, whNvmSize len, whNvmSize* out_len,
@@ -255,13 +260,24 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 meta.len = req.len;
                 memcpy(meta.label, req.label, sizeof(meta.label));
 
-                rc = WH_SERVER_NVM_LOCK(server);
+                rc = WH_ERROR_OK;
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
+    (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
+                /* Block direct NVM import of stateful (LMS/XMSS) private key
+                 * state; only on-HSM keygen may create such objects. */
+                if (wh_Crypto_IsStatefulSigPrivBlob(data, (uint16_t)req.len)) {
+                    rc = WH_ERROR_ACCESS;
+                }
+#endif
                 if (rc == WH_ERROR_OK) {
-                    rc = wh_Nvm_AddObjectChecked(server->nvm, &meta, req.len,
-                                                 data);
+                    rc = WH_SERVER_NVM_LOCK(server);
+                    if (rc == WH_ERROR_OK) {
+                        rc = wh_Nvm_AddObjectChecked(server->nvm, &meta,
+                                                     req.len, data);
 
-                    (void)WH_SERVER_NVM_UNLOCK(server);
-                } /* WH_SERVER_NVM_LOCK() */
+                        (void)WH_SERVER_NVM_UNLOCK(server);
+                    } /* WH_SERVER_NVM_LOCK() */
+                }
                 resp.rc = rc;
             }
         }
@@ -378,16 +394,28 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             }
         }
         if (resp.rc == 0) {
-            rc = WH_SERVER_NVM_LOCK(server);
-            if (rc == WH_ERROR_OK) {
-                /* Process the AddObject action */
-                rc = wh_Nvm_AddObjectChecked(
-                    server->nvm, (whNvmMetadata*)metadata, req.data_len,
-                    (const uint8_t*)data);
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
+    (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
+            /* Block direct NVM import of stateful (LMS/XMSS) private key state;
+             * only on-HSM keygen may create such objects. */
+            if (wh_Crypto_IsStatefulSigPrivBlob((const uint8_t*)data,
+                                            (uint16_t)req.data_len)) {
+                resp.rc = WH_ERROR_ACCESS;
+            }
+            else
+#endif
+            {
+                rc = WH_SERVER_NVM_LOCK(server);
+                if (rc == WH_ERROR_OK) {
+                    /* Process the AddObject action */
+                    rc = wh_Nvm_AddObjectChecked(
+                        server->nvm, (whNvmMetadata*)metadata, req.data_len,
+                        (const uint8_t*)data);
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
-            resp.rc = rc;
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+                resp.rc = rc;
+            }
         }
         /* Always call POST for successful PREs, regardless of operation
          * result */

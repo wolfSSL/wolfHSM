@@ -121,6 +121,33 @@ int wh_Server_KeyCacheImportRaw(whServerContext* ctx, const uint8_t* keyData,
                                 uint32_t keySize, whKeyId keyId,
                                 whNvmFlags flags, uint16_t label_len,
                                 uint8_t* label);
+#ifdef WOLFSSL_HAVE_LMS
+/* Persist an LmsKey (param descriptor + pub + priv_raw) into the server key
+ * cache. Subsequent sign operations reload state from this slot via
+ * wh_Server_LmsKeyCacheExport. Unavailable in verify-only builds. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
+int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
+                                whKeyId keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
+/* Restore an LmsKey from a server key cache slot. The key is left in a state
+ * suitable for installing read/write callbacks before invoking
+ * wc_LmsKey_Reload. */
+int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                LmsKey* key);
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+/* Persist an XmssKey into the server key cache. Unavailable in verify-only. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
+int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
+                                 const char* paramStr, whKeyId keyId,
+                                 whNvmFlags flags, uint16_t label_len,
+                                 uint8_t* label);
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
+int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                 XmssKey* key);
+#endif /* WOLFSSL_HAVE_XMSS */
 
 #ifdef HAVE_HKDF
 /* Store HKDF output into a server key cache with optional metadata */

@@ -100,6 +100,16 @@ ifeq ($(DMA),1)
     DEF += -DWOLFHSM_CFG_DMA
 endif
 
+# Build LMS/XMSS in verify-only mode (omits private-key, sign, and keygen
+# paths). May be combined to exercise the mixed (one verify-only) case.
+ifeq ($(LMS_VERIFY_ONLY),1)
+    DEF += -DWOLFSSL_LMS_VERIFY_ONLY
+endif
+
+ifeq ($(XMSS_VERIFY_ONLY),1)
+    DEF += -DWOLFSSL_XMSS_VERIFY_ONLY
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION

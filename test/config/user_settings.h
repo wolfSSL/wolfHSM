@@ -140,6 +140,12 @@
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
+/* LMS / HSS Options (RFC 8554, NIST SP 800-208) */
+#define WOLFSSL_HAVE_LMS
+
+/* XMSS / XMSS^MT Options (RFC 8391, NIST SP 800-208) */
+#define WOLFSSL_HAVE_XMSS
+
 
 /* Ed25519 Options */
 #define HAVE_ED25519

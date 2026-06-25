@@ -248,6 +248,8 @@ wolfHSM ships with two reference flash drivers usable on host platforms and in t
 
 Vendor-supplied flash drivers ship with the platform ports under `port/<vendor>/`. New platforms are integrated into wolfHSM by implementing the `whFlashCb` callback set against the device's flash controller; nothing in the NVM library above this layer needs to change.
 
+**Write-through requirement (port maintainers).** wolfHSM's power-loss guarantees assume the port's `Program` and `Verify` callbacks are write-through to the physical medium: `Program` must make the data durable before it returns, and `Verify` must read back from the medium rather than from any volatile write cache. A backend that buffers writes in a cache that can be lost on power failure breaks this assumption — on the next boot a committed object can roll back to a prior value. For stateless key material this is only a durability concern, but for **stateful or monotonic objects it is a security issue**: a rolled-back LMS or XMSS private key reuses a one-time signature index, enabling forgery, and a rolled-back monotonic counter defeats anti-rollback and replay protection. wolfHSM cannot detect or enforce this property, so a port whose flash controller caches writes must either disable that caching or issue an explicit flush before `Program`/`Verify` return.
+
 ### Optional NVM Backing
 
 The NVM subsystem described above is **optional**. A server can be initialized with `whServerConfig.nvm == NULL`, in which case it runs with no persistent object store at all. This suits clients and cores that only need cached-key cryptography and have no flash available for an NVM partition — at the cost of a reduced feature set, since everything that depends on persistent storage becomes unavailable.

@@ -44,6 +44,12 @@
 #include "wolfssl/wolfcrypt/sha512.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
+#if defined(WOLFSSL_HAVE_LMS)
+#include "wolfssl/wolfcrypt/wc_lms.h"
+#endif
+#if defined(WOLFSSL_HAVE_XMSS)
+#include "wolfssl/wolfcrypt/wc_xmss.h"
+#endif
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/kdf.h"
@@ -878,6 +884,269 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+/* The sign path (and its slot callbacks) is unavailable in verify-only builds;
+ * gate on at least one non-verify-only stateful algorithm being enabled. */
+#if ((defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)) ||     \
+     (defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY))) &&  \
+    defined(WOLFHSM_CFG_DMA)
+/* Stateful-key persistence context.
+ *
+ * wolfCrypt's wc_LmsKey_Sign and wc_XmssKey_Sign require write/read callbacks
+ * for the software path. We wire write_private_key directly to atomic NVM
+ * commit (wh_Nvm_AddObjectWithReclaim): wolfCrypt's contract is to advance
+ * the index, call write_cb, and only emit the signature if write_cb returned
+ * success. That gives us pre-commit-then-emit ordering for free.
+ *
+ * This context keeps a pointer into the server's cache slot blob (laid out by
+ * wh_Crypto_{Lms,Xmss}SerializeKey). Each write_cb invocation overwrites the
+ * priv region of the slot in place and re-commits the entire slot. */
+typedef struct whServerStatefulSigCtx {
+    whServerContext* server;
+    whKeyId          keyId;
+    whNvmMetadata*   meta;        /* points at the cache slot's metadata */
+    uint8_t*         slotBuf;     /* points at the cache slot's data buffer */
+    uint16_t         hdrSz;       /* fixed header size (offset to params) */
+    uint16_t         pubLen;      /* priv begins at hdrSz + paramLen + pubLen */
+    uint16_t         paramLen;
+    uint16_t         slotCapacity;
+} whServerStatefulSigCtx;
+
+/* Compute the priv-region offset inside the slot blob from the context. */
+static uint16_t _StatefulSigPrivOffset(const whServerStatefulSigCtx* b)
+{
+    return (uint16_t)(b->hdrSz + b->paramLen + b->pubLen);
+}
+
+/* Update the slot blob's privLen header field in place. */
+static void _StatefulSigWritePrivLen(uint8_t* slotBuf, uint16_t privLen)
+{
+    uint8_t* p = slotBuf + offsetof(whCryptoStatefulSigHeader, privLen);
+    memcpy(p, &privLen, sizeof(privLen));
+}
+
+#if defined(WOLFSSL_HAVE_LMS) && defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFSSL_LMS_VERIFY_ONLY)
+static int _LmsSlotWriteCb(const byte* priv, word32 privSz, void* context)
+{
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
+    uint16_t                   privOff;
+    uint32_t                   newLen;
+    int                        rc;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL) ||
+        (b->meta == NULL)) {
+        return WC_LMS_RC_BAD_ARG;
+    }
+
+    privOff = _StatefulSigPrivOffset(b);
+    newLen  = (uint32_t)privOff + privSz;
+    if (newLen > b->slotCapacity) {
+        return WC_LMS_RC_WRITE_FAIL;
+    }
+
+    memcpy(b->slotBuf + privOff, priv, privSz);
+    _StatefulSigWritePrivLen(b->slotBuf, (uint16_t)privSz);
+    b->meta->len = (whNvmSize)newLen;
+
+    /* Atomic dual-partition commit. Wolfcrypt aborts the sign if this
+     * returns anything other than _SAVED_TO_NV_MEMORY, so the signature
+     * never escapes for an un-persisted index. */
+    rc = wh_Nvm_AddObjectWithReclaim(b->server->nvm, b->meta, b->meta->len,
+                                     b->slotBuf);
+    return (rc == WH_ERROR_OK) ? WC_LMS_RC_SAVED_TO_NV_MEMORY
+                               : WC_LMS_RC_WRITE_FAIL;
+}
+
+static int _LmsSlotReadCb(byte* priv, word32 privSz, void* context)
+{
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
+    uint16_t                   privOff;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
+        return WC_LMS_RC_BAD_ARG;
+    }
+
+    privOff = _StatefulSigPrivOffset(b);
+    if ((uint32_t)privOff + privSz > b->meta->len) {
+        return WC_LMS_RC_READ_FAIL;
+    }
+
+    memcpy(priv, b->slotBuf + privOff, privSz);
+    return WC_LMS_RC_READ_TO_MEMORY;
+}
+#endif /* WOLFSSL_HAVE_LMS && WOLFHSM_CFG_DMA && !WOLFSSL_LMS_VERIFY_ONLY */
+
+#if defined(WOLFSSL_HAVE_XMSS) && defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+static enum wc_XmssRc _XmssSlotWriteCb(const byte* priv, word32 privSz,
+                                         void* context)
+{
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
+    uint16_t                   privOff;
+    uint32_t                   newLen;
+    int                        rc;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL) ||
+        (b->meta == NULL)) {
+        return WC_XMSS_RC_BAD_ARG;
+    }
+
+    privOff = _StatefulSigPrivOffset(b);
+    newLen  = (uint32_t)privOff + privSz;
+    if (newLen > b->slotCapacity) {
+        return WC_XMSS_RC_WRITE_FAIL;
+    }
+
+    memcpy(b->slotBuf + privOff, priv, privSz);
+    _StatefulSigWritePrivLen(b->slotBuf, (uint16_t)privSz);
+    b->meta->len = (whNvmSize)newLen;
+
+    rc = wh_Nvm_AddObjectWithReclaim(b->server->nvm, b->meta, b->meta->len,
+                                     b->slotBuf);
+    return (rc == WH_ERROR_OK) ? WC_XMSS_RC_SAVED_TO_NV_MEMORY
+                               : WC_XMSS_RC_WRITE_FAIL;
+}
+
+static enum wc_XmssRc _XmssSlotReadCb(byte* priv, word32 privSz,
+                                        void* context)
+{
+    whServerStatefulSigCtx* b = (whServerStatefulSigCtx*)context;
+    uint16_t                   privOff;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
+        return WC_XMSS_RC_BAD_ARG;
+    }
+
+    privOff = _StatefulSigPrivOffset(b);
+    if ((uint32_t)privOff + privSz > b->meta->len) {
+        return WC_XMSS_RC_READ_FAIL;
+    }
+
+    memcpy(priv, b->slotBuf + privOff, privSz);
+    return WC_XMSS_RC_READ_TO_MEMORY;
+}
+#endif /* WOLFSSL_HAVE_XMSS && WOLFHSM_CFG_DMA && !WOLFSSL_XMSS_VERIFY_ONLY */
+#endif /* stateful sign path enabled && WOLFHSM_CFG_DMA */
+
+#ifdef WOLFSSL_HAVE_LMS
+/* Import serializes the private key, so it is unavailable in verify-only. */
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
+int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
+                                whKeyId keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t       blobSize;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_LmsSerializeKey(key, slotCapacity, cacheBuf, &blobSize);
+    }
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+    return ret;
+}
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
+
+int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                LmsKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_LmsDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
+                                          key);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+/* Import serializes the private key, so it is unavailable in verify-only. */
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
+int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
+                                 const char* paramStr, whKeyId keyId,
+                                 whNvmFlags flags, uint16_t label_len,
+                                 uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t       blobSize;
+
+    if ((ctx == NULL) || (key == NULL) || (paramStr == NULL) ||
+        (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_XmssSerializeKey(key, paramStr, slotCapacity, cacheBuf,
+                                         &blobSize);
+    }
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+    return ret;
+}
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
+
+int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                 XmssKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_XmssDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
+                                           key);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_XMSS */
 
 
 /** Request/Response Handling functions */
@@ -6673,6 +6942,1127 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+/* Decode the slot blob's header lengths into the context struct. Sign-path
+ * only, so it is gated out of verify-only builds. */
+#if (defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)) ||      \
+    (defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY))
+static int _StatefulSigFromSlot(whServerStatefulSigCtx* b,
+                                   whServerContext*           server,
+                                   whKeyId                    keyId,
+                                   uint8_t* slotBuf, whNvmMetadata* meta,
+                                   uint16_t slotCapacity)
+{
+    whCryptoStatefulSigHeader hdr;
+
+    if ((b == NULL) || (server == NULL) || (slotBuf == NULL) || (meta == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    memcpy(&hdr, slotBuf, sizeof(hdr));
+
+    b->server       = server;
+    b->keyId        = keyId;
+    b->meta         = meta;
+    b->slotBuf      = slotBuf;
+    b->hdrSz        = WH_CRYPTO_STATEFUL_SIG_HEADER_SZ;
+    b->paramLen     = hdr.paramLen;
+    b->pubLen       = hdr.pubLen;
+    b->slotCapacity = slotCapacity;
+    return WH_ERROR_OK;
+}
+#endif /* stateful sign path enabled */
+
+/* Keygen persistence context for XMSS. wolfCrypt zeroizes key->sk right after
+ * the keygen write callback returns, so the callback is the only point where
+ * the private key is live. The callback copies the private key it is handed
+ * into the private-key region of the handler-owned cache buffer; the handler
+ * then fills in the public portion and commits to NVM. The cb can only return
+ * wolfCrypt's coarse pass/fail code, so status carries the WH_ERROR_* detail
+ * back to the handler. LMS does not use this: its private state survives
+ * MakeKey, so its handler serializes directly. */
+typedef struct whServerStatefulSigKeygenCtx {
+    uint8_t* slotBuf;       /* handler-owned cache slot buffer */
+    uint16_t slotCapacity;
+    uint16_t privOff;       /* offset of the private-key region in slotBuf */
+    uint16_t privLen;       /* out: private key length the cb received */
+    int      status;        /* WH_ERROR_* from the cb */
+} whServerStatefulSigKeygenCtx;
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
+#ifdef WOLFSSL_HAVE_LMS
+#ifndef WOLFSSL_LMS_VERIFY_ONLY
+/* Capture the private key from wc_LmsKey_MakeKey to mirror the XMSS path.
+ * For LMS, additional private state resides in key->priv_raw, so that is
+ * serialized after the call to wc_LmsKey_MakeKey. */
+static int _LmsKeygenWriteCb(const byte* priv, word32 privSz, void* context)
+{
+    whServerStatefulSigKeygenCtx* b =
+        (whServerStatefulSigKeygenCtx*)context;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
+        return WC_LMS_RC_BAD_ARG;
+    }
+
+    /* Copy the private key wolfCrypt handed us into the slot's priv region. */
+    if ((uint32_t)b->privOff + privSz > b->slotCapacity) {
+        b->status = WH_ERROR_BUFFER_SIZE;
+        return WC_LMS_RC_WRITE_FAIL;
+    }
+    memcpy(b->slotBuf + b->privOff, priv, privSz);
+    b->privLen = (uint16_t)privSz;
+    b->status  = WH_ERROR_OK;
+    return WC_LMS_RC_SAVED_TO_NV_MEMORY;
+}
+static int _LmsDummyReadCb(byte* priv, word32 privSz, void* context)
+{
+    (void)priv; (void)privSz; (void)context;
+    return WC_LMS_RC_READ_TO_MEMORY;
+}
+#endif /* !WOLFSSL_LMS_VERIFY_ONLY */
+
+static int _HandleLmsKeyGenDma(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_LMS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                              ret;
+    LmsKey                                           key[1];
+    void*                                            clientPubAddr = NULL;
+    word32                                           pubLen32 = 0;
+    whKeyId                                          keyId;
+    int                                              locked = 0;
+    uint8_t*                                         cacheBuf;
+    whNvmMetadata*                                   cacheMeta;
+    uint16_t   slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t   blobSize;
+    whServerStatefulSigKeygenCtx                     sigCtx;
+    whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigKeyGenDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Reject EPHEMERAL keys since keygen itself is stateful */
+    if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_LmsKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wc_LmsKey_SetParameters(key, (int)req.lmsLevels, (int)req.lmsHeight,
+                                  (int)req.lmsWinternitz);
+
+    /* Validate the buffer size and resolve the keyId before keygen. */
+    if (ret == 0) {
+        ret = wc_LmsKey_GetPubLen(key, &pubLen32);
+    }
+    if (ret == 0 && req.pub.sz < pubLen32) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.pub.addr, &clientPubAddr, pubLen32,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != 0) {
+            res.dmaAddrStatus.badAddr = req.pub;
+        }
+    }
+    /* Reject labels that won't fit the slot metadata. */
+    if (ret == 0 && req.labelSize > sizeof(cacheMeta->label)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    /* Lock from keyID allocation until the slot is committed to NVM. */
+    if (ret == 0) {
+        ret    = WH_SERVER_NVM_LOCK(ctx);
+        locked = (ret == WH_ERROR_OK);
+    }
+    if (ret == 0) {
+        keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             ctx->comm->client_id, req.keyId);
+        if (WH_KEYID_ISERASED(keyId)) {
+            ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+        }
+    }
+
+    /* Grab the cache slot up front; the keygen write cb captures priv into it. */
+    if (ret == 0) {
+        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                    &cacheBuf, &cacheMeta);
+    }
+
+    /* The write cb copies the private key into the slot's priv region: after
+     * the header, the 3-byte parameter descriptor, and the public key. */
+    if (ret == 0) {
+        sigCtx.slotBuf      = cacheBuf;
+        sigCtx.slotCapacity = slotCapacity;
+        sigCtx.privOff      = (uint16_t)(WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + 3 +
+                                         pubLen32);
+        sigCtx.status       = WH_ERROR_OK;
+        ret = wc_LmsKey_SetWriteCb(key, _LmsKeygenWriteCb);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_SetReadCb(key, _LmsDummyReadCb);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_SetContext(key, &sigCtx);
+    }
+    if (ret == 0) {
+        ret = wc_LmsKey_MakeKey(key, ctx->crypto->rng);
+        /* MakeKey fails if the cb could not store priv; surface that error. */
+        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
+            ret = sigCtx.status;
+        }
+    }
+
+    /* Priv state survives in key->priv_raw, so serialize the full slot. */
+    if (ret == 0) {
+        ret = wh_Crypto_LmsSerializeKey(key, slotCapacity, cacheBuf, &blobSize);
+    }
+    if (ret == 0) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if (req.labelSize > 0) {
+            memcpy(cacheMeta->label, req.label, req.labelSize);
+        }
+        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
+    }
+
+    if (locked) {
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+        locked = 0;
+    }
+
+    /* Key is committed. Stream the public key out via the pre-validated DMA
+     * buffer; the copy cannot fail, so the client always receives its keyId. */
+    if (ret == 0) {
+        memcpy(clientPubAddr, key->pub, pubLen32);
+        res.keyId   = wh_KeyId_TranslateToClient(keyId);
+        res.pubSize = pubLen32;
+    }
+    if (clientPubAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.pub.addr, &clientPubAddr, pubLen32,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+
+    wc_LmsKey_Free(key);
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigKeyGenDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_LMS_VERIFY_ONLY */
+}
+
+static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_LMS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                            ret;
+    LmsKey                                         key[1];
+    int                                            keyInited = 0;
+    void*                                          msgAddr = NULL;
+    void*                                          sigAddr = NULL;
+    word32                                         sigLen;
+    whKeyId                                        keyId;
+    uint8_t*                                       cacheBuf;
+    whNvmMetadata*                                 cacheMeta;
+    whServerStatefulSigCtx                         sigCtx;
+    whMessageCrypto_PqcStatefulSigSignDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigSignDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigSignDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigSignDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    sigLen = (word32)req.sig.sz;
+
+    /* Hold the NVM lock for the entire load -> sign -> commit sequence so
+     * concurrent sign requests on the same keyId can't race past each other.
+     * Pattern from wh_server_counter.c. */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wc_LmsKey_Init(key, NULL, devId);
+        if (ret == 0) {
+            keyInited = 1;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_LmsDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
+                                          key);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
+            WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
+    }
+    if (ret == WH_ERROR_OK) {
+        (void)wc_LmsKey_SetWriteCb(key, _LmsSlotWriteCb);
+        (void)wc_LmsKey_SetReadCb(key, _LmsSlotReadCb);
+        (void)wc_LmsKey_SetContext(key, &sigCtx);
+        ret = wc_LmsKey_Reload(key);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.msg;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.sig;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        /* wolfCrypt's flow:
+         *   1. wc_hss_sign computes the signature into sig and advances
+         *      key->priv_raw in memory.
+         *   2. write_private_key (our slot write cb) is called with the new
+         *      priv_raw and atomically commits it to NVM.
+         *   3. If the cb returns anything other than
+         *      WC_LMS_RC_SAVED_TO_NV_MEMORY, wolfCrypt does ForceZero(sig)
+         *      and returns IO_FAILED_E.
+         * Net effect: a signature is exposed to the caller only if the NVM
+         * commit succeeded. A process crash anywhere in the sequence either
+         * (a) leaves the old state in NVM with no signature exposed, or
+         * (b) commits the new state with the signature lost in transit -
+         * one wasted index but never an index reused with a fresh sig. */
+        ret = wc_LmsKey_Sign(key, sigAddr, &sigLen, msgAddr, (int)req.msg.sz);
+        if (ret == 0) {
+            res.sigLen = sigLen;
+        }
+    }
+    if (sigAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+    if (msgAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (keyInited) {
+        wc_LmsKey_Free(key);
+    }
+
+    if ((req.options & WH_MESSAGE_CRYPTO_STATEFUL_SIG_OPTIONS_EVICT) != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+    }
+
+    (void)WH_SERVER_NVM_UNLOCK(ctx);
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigSignDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigSignDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_LMS_VERIFY_ONLY */
+}
+
+static int _HandleLmsVerifyDma(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                              ret;
+    LmsKey                                           key[1];
+    int                                              keyInited = 0;
+    void*                                            sigAddr = NULL;
+    void*                                            msgAddr = NULL;
+    whKeyId                                          keyId;
+    whMessageCrypto_PqcStatefulSigVerifyDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigVerifyDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigVerifyDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_LmsKey_Init(key, NULL, devId);
+    if (ret == 0) {
+        keyInited = 1;
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        /* Deserialize leaves the key in PARMSET; wc_LmsKey_Verify needs
+         * OK or VERIFYONLY. Pub is populated and that's all verify uses. */
+        key->state = WC_LMS_STATE_VERIFYONLY;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.sig;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.msg;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        int verifyRet = wc_LmsKey_Verify(key, sigAddr, (word32)req.sig.sz,
+                                         msgAddr, (int)req.msg.sz);
+        if (verifyRet == 0) {
+            res.res = 1;
+        }
+        else if (verifyRet == WC_NO_ERR_TRACE(SIG_VERIFY_E)) {
+            res.res = 0;
+        }
+        else {
+            ret = verifyRet;
+        }
+    }
+
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+
+    if (keyInited) {
+        wc_LmsKey_Free(key);
+    }
+
+    if ((req.options & WH_MESSAGE_CRYPTO_STATEFUL_SIG_OPTIONS_EVICT) != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+    }
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigVerifyDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+}
+
+/* wc_LmsKey_SigsLeft reads key->priv_raw directly - no key state machine and no
+ * read callback - so deserializing the cached blob into the key is enough; no
+ * Reload is needed. Contrast the heavier _HandleXmssSigsLeftDma. */
+static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_LMS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                                ret;
+    LmsKey                                             key[1];
+    int                                                keyInited = 0;
+    whKeyId                                            keyId;
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaRequest(
+        magic,
+        (whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_LmsKey_Init(key, NULL, devId);
+    if (ret == 0) {
+        keyInited = 1;
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        res.sigsLeft = (uint32_t)wc_LmsKey_SigsLeft(key);
+    }
+
+    if (keyInited) {
+        wc_LmsKey_Free(key);
+    }
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_LMS_VERIFY_ONLY */
+}
+#endif /* WOLFSSL_HAVE_LMS */
+
+#ifdef WOLFSSL_HAVE_XMSS
+#ifndef WOLFSSL_XMSS_VERIFY_ONLY
+/* Keygen write cb: wc_XmssKey_MakeKey hands us the private key, which it
+ * zeroizes immediately after. Copy it into the slot's priv region and capture
+ * any error into the context for the caller of MakeKey to surface. */
+static enum wc_XmssRc _XmssKeygenWriteCb(const byte* priv, word32 privSz,
+                                         void* context)
+{
+    whServerStatefulSigKeygenCtx* b =
+        (whServerStatefulSigKeygenCtx*)context;
+
+    if ((b == NULL) || (priv == NULL) || (b->slotBuf == NULL)) {
+        return WC_XMSS_RC_BAD_ARG;
+    }
+
+    /* Copy the private key wolfCrypt handed us into the slot's priv region;
+     * the key object is zeroized once this returns, so use priv/privSz here. */
+    if ((uint32_t)b->privOff + privSz > b->slotCapacity) {
+        b->status = WH_ERROR_BUFFER_SIZE;
+        return WC_XMSS_RC_WRITE_FAIL;
+    }
+    memcpy(b->slotBuf + b->privOff, priv, privSz);
+    b->privLen = (uint16_t)privSz;
+    b->status  = WH_ERROR_OK;
+    return WC_XMSS_RC_SAVED_TO_NV_MEMORY;
+}
+static enum wc_XmssRc _XmssDummyReadCb(byte* priv, word32 privSz,
+                                       void* context)
+{
+    (void)priv; (void)privSz; (void)context;
+    return WC_XMSS_RC_READ_TO_MEMORY;
+}
+#endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
+
+static int _HandleXmssKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                int devId, const void* cryptoDataIn,
+                                uint16_t inSize, void* cryptoDataOut,
+                                uint16_t* outSize)
+{
+#ifdef WOLFSSL_XMSS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                              ret;
+    XmssKey                                          key[1];
+    void*                                            clientPubAddr = NULL;
+    word32                                           pubLen32 = 0;
+    whKeyId                                          keyId;
+    int                                              locked = 0;
+    uint8_t*                                         cacheBuf;
+    whNvmMetadata*                                   cacheMeta;
+    uint16_t   slotCapacity = WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE;
+    uint16_t   blobSize;
+    whServerStatefulSigKeygenCtx                     sigCtx;
+    whMessageCrypto_PqcStatefulSigKeyGenDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigKeyGenDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+    memset(&sigCtx, 0, sizeof(sigCtx));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigKeyGenDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Reject EPHEMERAL keys since keygen itself is stateful */
+    if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* xmssParamStr arrives via the request struct (populated by the client in
+     * wh_Client_XmssMakeKeyDma). Defensively enforce NUL-termination before
+     * passing it to wolfCrypt, since it originates from the client. */
+    req.xmssParamStr[sizeof(req.xmssParamStr) - 1] = '\0';
+
+    ret = wc_XmssKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wc_XmssKey_SetParamStr(key, req.xmssParamStr);
+
+    /* Validate the buffer size and resolve the keyId before keygen. */
+    if (ret == 0) {
+        ret = wc_XmssKey_GetPubLen(key, &pubLen32);
+    }
+    if (ret == 0 && req.pub.sz < pubLen32) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.pub.addr, &clientPubAddr, pubLen32,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != 0) {
+            res.dmaAddrStatus.badAddr = req.pub;
+        }
+    }
+    /* Reject labels that won't fit the slot metadata. */
+    if (ret == 0 && req.labelSize > sizeof(cacheMeta->label)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    /* Lock from keyID allocation until the slot is committed to NVM. */
+    if (ret == 0) {
+        ret    = WH_SERVER_NVM_LOCK(ctx);
+        locked = (ret == WH_ERROR_OK);
+    }
+    if (ret == 0) {
+        keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                             ctx->comm->client_id, req.keyId);
+        if (WH_KEYID_ISERASED(keyId)) {
+            ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+        }
+    }
+    /* Grab the cache slot up front; the write cb writes priv into it. */
+    if (ret == 0) {
+        ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, slotCapacity,
+                                                    &cacheBuf, &cacheMeta);
+    }
+
+    /* The write cb copies the private key into the slot's priv region (key->sk
+     * is valid only during that callback). Tell it where that region begins:
+     * after the header, parameter string, and public key. */
+    if (ret == 0) {
+        size_t pStrLen = strlen(req.xmssParamStr);
+        if (pStrLen >= 0xFFFFu) {
+            ret = WH_ERROR_BADARGS;
+        }
+        else {
+            sigCtx.slotBuf      = cacheBuf;
+            sigCtx.slotCapacity = slotCapacity;
+            sigCtx.privOff      = (uint16_t)(WH_CRYPTO_STATEFUL_SIG_HEADER_SZ +
+                                             (pStrLen + 1) + pubLen32);
+            sigCtx.status       = WH_ERROR_OK;
+            ret = wc_XmssKey_SetWriteCb(key, _XmssKeygenWriteCb);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_SetReadCb(key, _XmssDummyReadCb);
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_SetContext(key, &sigCtx);
+    }
+    if (ret == 0) {
+        ret = wc_XmssKey_MakeKey(key, ctx->crypto->rng);
+        /* MakeKey fails if the cb could not store priv; surface that error. */
+        if ((ret != 0) && (sigCtx.status != WH_ERROR_OK)) {
+            ret = sigCtx.status;
+        }
+    }
+
+    /* Priv is in the slot; fill in the header and public key, then commit. */
+    if (ret == 0) {
+        ret = wh_Crypto_XmssSerializeKeyNoPriv(key, req.xmssParamStr,
+                                               sigCtx.privLen, slotCapacity,
+                                               cacheBuf, &blobSize);
+    }
+    if (ret == 0) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = blobSize;
+        /* Stateful private key state must never leave the HSM; reuse of a
+         * one-time signature index breaks the scheme. Force non-exportable. */
+        cacheMeta->flags  = req.flags | WH_NVM_FLAGS_NONEXPORTABLE;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if (req.labelSize > 0) {
+            memcpy(cacheMeta->label, req.label, req.labelSize);
+        }
+        ret = wh_Server_KeystoreCommitKey(ctx, keyId);
+    }
+
+    if (locked) {
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+        locked = 0;
+    }
+
+    /* Key is committed. Stream the public key out via the pre-validated DMA
+     * buffer; the copy cannot fail, so the client always receives its keyId. */
+    if (ret == 0) {
+        memcpy(clientPubAddr, key->pk, pubLen32);
+        res.keyId   = wh_KeyId_TranslateToClient(keyId);
+        res.pubSize = pubLen32;
+    }
+    if (clientPubAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.pub.addr, &clientPubAddr, pubLen32,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+
+    wc_XmssKey_Free(key);
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigKeyGenDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigKeyGenDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_XMSS_VERIFY_ONLY */
+}
+
+static int _HandleXmssSignDma(whServerContext* ctx, uint16_t magic, int devId,
+                              const void* cryptoDataIn, uint16_t inSize,
+                              void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_XMSS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                            ret;
+    XmssKey                                        key[1];
+    int                                            keyInited = 0;
+    void*                                          msgAddr = NULL;
+    void*                                          sigAddr = NULL;
+    word32                                         sigLen;
+    whKeyId                                        keyId;
+    uint8_t*                                       cacheBuf;
+    whNvmMetadata*                                 cacheMeta;
+    whServerStatefulSigCtx                         sigCtx;
+    whMessageCrypto_PqcStatefulSigSignDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigSignDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigSignDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigSignDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    sigLen = (word32)req.sig.sz;
+
+    /* See _HandleLmsSignDma for the NVM-lock rationale. */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wc_XmssKey_Init(key, NULL, devId);
+        if (ret == 0) {
+            keyInited = 1;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_XmssDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
+                                           key);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
+            WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
+    }
+    if (ret == WH_ERROR_OK) {
+        (void)wc_XmssKey_SetWriteCb(key, _XmssSlotWriteCb);
+        (void)wc_XmssKey_SetReadCb(key, _XmssSlotReadCb);
+        (void)wc_XmssKey_SetContext(key, &sigCtx);
+        ret = wc_XmssKey_Reload(key);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.msg;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.sig;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_XmssKey_Sign(key, sigAddr, &sigLen, msgAddr, (int)req.msg.sz);
+        if (ret == 0) {
+            res.sigLen = sigLen;
+        }
+    }
+
+    if (sigAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+    if (msgAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (keyInited) {
+        wc_XmssKey_Free(key);
+    }
+
+    if ((req.options & WH_MESSAGE_CRYPTO_STATEFUL_SIG_OPTIONS_EVICT) != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+    }
+
+    (void)WH_SERVER_NVM_UNLOCK(ctx);
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigSignDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigSignDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_XMSS_VERIFY_ONLY */
+}
+
+static int _HandleXmssVerifyDma(whServerContext* ctx, uint16_t magic,
+                                int devId, const void* cryptoDataIn,
+                                uint16_t inSize, void* cryptoDataOut,
+                                uint16_t* outSize)
+{
+    int                                              ret;
+    XmssKey                                          key[1];
+    int                                              keyInited = 0;
+    void*                                            sigAddr = NULL;
+    void*                                            msgAddr = NULL;
+    whKeyId                                          keyId;
+    whMessageCrypto_PqcStatefulSigVerifyDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigVerifyDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaRequest(
+        magic, (whMessageCrypto_PqcStatefulSigVerifyDmaRequest*)cryptoDataIn,
+        &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_XmssKey_Init(key, NULL, devId);
+    if (ret == 0) {
+        keyInited = 1;
+        /* Lock while reading the key in case of concurrent sign op */
+        ret = WH_SERVER_NVM_LOCK(ctx);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_XmssKeyCacheExport(ctx, keyId, key);
+            (void)WH_SERVER_NVM_UNLOCK(ctx);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        /* Deserialize leaves the key in PARMSET; wc_XmssKey_Verify needs
+         * OK or VERIFYONLY. Pub is populated and that's all verify uses. */
+        key->state = WC_XMSS_STATE_VERIFYONLY;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.sig;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.msg;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        int verifyRet = wc_XmssKey_Verify(key, sigAddr, (word32)req.sig.sz,
+                                          msgAddr, (int)req.msg.sz);
+        if (verifyRet == 0) {
+            res.res = 1;
+        }
+        else if (verifyRet == WC_NO_ERR_TRACE(SIG_VERIFY_E)) {
+            res.res = 0;
+        }
+        else {
+            ret = verifyRet;
+        }
+    }
+
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    (void)wh_Server_DmaProcessClientAddress(
+        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+
+    if (keyInited) {
+        wc_XmssKey_Free(key);
+    }
+
+    if ((req.options & WH_MESSAGE_CRYPTO_STATEFUL_SIG_OPTIONS_EVICT) != 0) {
+        (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+    }
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigVerifyDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigVerifyDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+}
+
+static int _HandleXmssSigsLeftDma(whServerContext* ctx, uint16_t magic,
+                                  int devId, const void* cryptoDataIn,
+                                  uint16_t inSize, void* cryptoDataOut,
+                                  uint16_t* outSize)
+{
+#ifdef WOLFSSL_XMSS_VERIFY_ONLY
+    (void)ctx; (void)magic; (void)devId; (void)cryptoDataIn; (void)inSize;
+    (void)cryptoDataOut; (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                                ret;
+    XmssKey                                            key[1];
+    int                                                keyInited = 0;
+    whKeyId                                            keyId;
+    uint8_t*                                           cacheBuf;
+    whNvmMetadata*                                     cacheMeta;
+    whServerStatefulSigCtx                             sigCtx;
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest   req;
+    whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse  res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(req)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaRequest(
+        magic,
+        (whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    keyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                         ctx->comm->client_id, req.keyId);
+    if (WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Lock during load+reload in case of concurrent sign op */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wc_XmssKey_Init(key, NULL, devId);
+        if (ret == 0) {
+            keyInited = 1;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_XmssDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
+                                           key);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _StatefulSigFromSlot(
+            &sigCtx, ctx, keyId, cacheBuf, cacheMeta,
+            WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE);
+    }
+    if (ret == WH_ERROR_OK) {
+        /* Reload uses the slot ReadCb to populate sk from the cached blob,
+         * then transitions state to OK so SigsLeft can run. */
+        (void)wc_XmssKey_SetWriteCb(key, _XmssSlotWriteCb);
+        (void)wc_XmssKey_SetReadCb(key, _XmssSlotReadCb);
+        (void)wc_XmssKey_SetContext(key, &sigCtx);
+        ret = wc_XmssKey_Reload(key);
+    }
+    if (ret == WH_ERROR_OK) {
+        res.sigsLeft = (uint32_t)wc_XmssKey_SigsLeft(key);
+    }
+
+    if (keyInited) {
+        wc_XmssKey_Free(key);
+    }
+
+    (void)WH_SERVER_NVM_UNLOCK(ctx);
+
+    (void)wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
+        magic, &res,
+        (whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif /* WOLFSSL_XMSS_VERIFY_ONLY */
+}
+#endif /* WOLFSSL_HAVE_XMSS */
+
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+static int _HandlePqcStatefulSigAlgorithmDma(
+    whServerContext* ctx, uint16_t magic, int devId, const void* cryptoDataIn,
+    uint16_t cryptoInSize, void* cryptoDataOut, uint16_t* cryptoOutSize,
+    uint32_t pkAlgoType, uint32_t pqAlgoType)
+{
+    int ret = WH_ERROR_NOHANDLER;
+
+    switch (pqAlgoType) {
+#ifdef WOLFSSL_HAVE_LMS
+        case WC_PQC_STATEFUL_SIG_TYPE_LMS:
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
+                    ret = _HandleLmsKeyGenDma(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:
+                    ret = _HandleLmsSignDma(ctx, magic, devId, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY:
+                    ret = _HandleLmsVerifyDma(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT:
+                    ret = _HandleLmsSigsLeftDma(ctx, magic, devId,
+                                                cryptoDataIn, cryptoInSize,
+                                                cryptoDataOut, cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_LMS */
+#ifdef WOLFSSL_HAVE_XMSS
+        case WC_PQC_STATEFUL_SIG_TYPE_XMSS:
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
+                    ret = _HandleXmssKeyGenDma(ctx, magic, devId, cryptoDataIn,
+                                               cryptoInSize, cryptoDataOut,
+                                               cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:
+                    ret = _HandleXmssSignDma(ctx, magic, devId, cryptoDataIn,
+                                             cryptoInSize, cryptoDataOut,
+                                             cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY:
+                    ret = _HandleXmssVerifyDma(ctx, magic, devId, cryptoDataIn,
+                                               cryptoInSize, cryptoDataOut,
+                                               cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT:
+                    ret = _HandleXmssSigsLeftDma(ctx, magic, devId,
+                                                 cryptoDataIn, cryptoInSize,
+                                                 cryptoDataOut, cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_XMSS */
+        default:
+            ret = WH_ERROR_NOHANDLER;
+            break;
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
                           uint16_t seq, const void* cryptoDataIn,
@@ -7078,6 +8468,17 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         rqstHeader.algoSubType);
                     break;
 #endif /* WOLFSSL_HAVE_MLKEM */
+#if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY:
+                case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT:
+                    ret = _HandlePqcStatefulSigAlgorithmDma(
+                        ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                        cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
+                        rqstHeader.algoSubType);
+                    break;
+#endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 #ifdef HAVE_ED25519
                 case WC_PK_TYPE_ED25519_SIGN:
                     ret = _HandleEd25519SignDma(ctx, magic, devId, cryptoDataIn,
