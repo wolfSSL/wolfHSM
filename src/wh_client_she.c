@@ -46,6 +46,7 @@
 #include "wolfhsm/wh_client.h"
 
 #include "wolfhsm/wh_client_she.h"
+#include "wolfhsm/wh_utils.h"
 
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz)
@@ -336,6 +337,7 @@ int wh_Client_SheLoadKey(whClientContext* c, uint8_t* messageOne,
 int wh_Client_SheLoadPlainKeyRequest(whClientContext* c, uint8_t* key,
                                      uint32_t keySz)
 {
+    int                               ret;
     whMessageShe_LoadPlainKeyRequest* req = NULL;
 
     if (c == NULL || key == NULL || keySz < WH_SHE_KEY_SZ) {
@@ -346,8 +348,10 @@ int wh_Client_SheLoadPlainKeyRequest(whClientContext* c, uint8_t* key,
 
     memcpy(req->key, key, WH_SHE_KEY_SZ);
 
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_LOAD_PLAIN_KEY,
-                                 sizeof(*req), (uint8_t*)req);
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_LOAD_PLAIN_KEY,
+                                sizeof(*req), (uint8_t*)req);
+    wh_Utils_ForceZero(req->key, WH_SHE_KEY_SZ);
+    return ret;
 }
 
 int wh_Client_SheLoadPlainKeyResponse(whClientContext* c)
