@@ -1240,6 +1240,89 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
     return 0;
 #undef WRAPPED_KEY_SIZE
 }
+
+/*
+ * Test: Unwrapped key cannot persist to NVM
+ * - Wrapped keys are cache-only; the unwrapped key must never reach NVM
+ * - This invariant prevents an unwrapped key from shadowing a protected NVM
+ *   entry, so commit and erase must reject a wrapped key id
+ */
+static int _testWrappedKey_UnwrapCache_NoNvmPersist(
+    whClientContext* client1, whServerContext* server1,
+    whClientContext* client2, whServerContext* server2)
+{
+    int      ret;
+    whKeyId  serverKeyId                 = DUMMY_KEYID_1; /* Local wrap key */
+    whKeyId  cachedKeyId                 = 0;
+    uint16_t client1Id                   = WH_TEST_DEFAULT_CLIENT_ID;
+    uint8_t  wrapKey[AES_256_KEY_SIZE]   = "NoNvmWrapKeyTest123456789aXX!";
+    uint8_t  plainKey[AES_256_KEY_SIZE]  = "NoNvmPlainKeyTest12345678aXX!";
+#define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
+    uint8_t       wrappedKey[WRAPPED_KEY_SIZE] = {0};
+    uint16_t      wrappedKeySz                 = sizeof(wrappedKey);
+    whNvmMetadata meta                         = {0};
+
+    WH_TEST_DEBUG_PRINT("Test: Unwrapped key cannot persist to NVM\n");
+
+    /* Client 1 caches a local wrapping key */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
+        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_NoNvm",
+        sizeof("WrapKey_NoNvm"), wrapKey, sizeof(wrapKey), serverKeyId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
+
+    /* Client 1 wraps a local key */
+    serverKeyId = DUMMY_KEYID_1;
+    meta.id     = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client1Id, DUMMY_KEYID_2);
+    meta.len    = sizeof(plainKey);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client1, WC_CIPHER_AES_GCM,
+                                                    serverKeyId, plainKey,
+                                                    sizeof(plainKey), &meta));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
+        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
+
+    /* Client 1 unwraps and caches the key */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCacheRequest(
+        client1, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
+        sizeof(wrappedKey)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCacheResponse(
+        client1, WC_CIPHER_AES_GCM, &cachedKeyId));
+
+    /* Commit must refuse to persist a wrapped key to NVM */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCommitRequest(
+        client1, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_KeyCommitResponse(client1);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
+
+    /* Erase must likewise refuse a wrapped key */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEraseRequest(
+        client1, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_KeyEraseResponse(client1);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
+
+    /* Cache-only eviction must still succeed */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(
+        client1, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+
+    /* Evict the wrapping key */
+    serverKeyId = DUMMY_KEYID_1;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(client1, serverKeyId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
+
+    WH_TEST_PRINT("  PASS: Unwrapped key cannot persist to NVM\n");
+
+    (void)client2;
+    (void)server2;
+    return 0;
+#undef WRAPPED_KEY_SIZE
+}
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
 /*
@@ -1412,6 +1495,9 @@ static int _runGlobalKeysTests(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(
         _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
             client1, server1, client2, server2));
+
+    WH_TEST_RETURN_ON_FAIL(_testWrappedKey_UnwrapCache_NoNvmPersist(
+        client1, server1, client2, server2));
 #endif
 
     WH_TEST_PRINT("All Global Keys Tests PASSED ===\n");
