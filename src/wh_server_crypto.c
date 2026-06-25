@@ -1802,8 +1802,10 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
      */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   sizeof(whMessageCrypto_HkdfResponse));
 
     /* Check if output size is valid */
     if (outSz > max_size) {
@@ -1963,8 +1965,10 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
 
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   sizeof(whMessageCrypto_CmacKdfResponse));
 
     if (outSz > max_size) {
         return WH_ERROR_BADARGS;
