@@ -253,8 +253,9 @@ static int _runNvmObjectTest(whClientContext* ctx,
             ctx, (whNvmId)(id_base + i)));
     }
 
-    /* Cleanup -> Init round-trip leaves NVM in a usable state
-     * with no leftovers. */
+    /* Cleanup -> Init round-trip wipes all objects and leaves NVM usable. As a
+     * full wipe also clears objects left by earlier tests, the available count
+     * is at least the starting baseline rather than exactly equal to it. */
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmCleanup(ctx, &server_rc));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
@@ -266,7 +267,7 @@ static int _runNvmObjectTest(whClientContext* ctx,
         ctx, &server_rc, &avail_size, &avail_objects,
         &reclaim_size, &reclaim_objects));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(avail_objects == baseline);
+    WH_TEST_ASSERT_RETURN(avail_objects >= baseline);
 
     return WH_ERROR_OK;
 }
