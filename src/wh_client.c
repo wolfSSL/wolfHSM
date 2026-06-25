@@ -34,6 +34,7 @@
 /* Common WolfHSM types and defines shared with the server */
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h" /* For wh_Utils_ForceZero */
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
@@ -811,6 +812,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     whMessageKeystore_CacheRequest* req = NULL;
     uint8_t*                        packIn;
     uint16_t                        capSz;
+    int                             rc;
 
     if (c == NULL || in == NULL || inSz == 0 ||
         sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -841,8 +843,16 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     memcpy(packIn, in, inSz);
 
     /* write request */
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
-                                 sizeof(*req) + inSz, (uint8_t*)req);
+    rc = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
+                               sizeof(*req) + inSz, (uint8_t*)req);
+
+    /* The imported key bytes have been serialized into the transport; do not
+     * leave a copy lingering in the long-lived client comm buffer. The shared
+     * request transport buffer is cleared server-side once the request has been
+     * consumed (see wh_TransportMem_RecvRequest). */
+    wh_Utils_ForceZero(packIn, inSz);
+
+    return rc;
 }
 
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
@@ -1020,6 +1030,10 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                     memcpy(label, resp->label, labelSz);
             }
         }
+        /* The response received into the shared comm buffer holds the exported
+         * key material; zeroize the whole received payload before returning on
+         * every path so it does not linger in the long-lived session buffer. */
+        wh_Utils_ForceZero(resp, size);
     }
     return ret;
 }

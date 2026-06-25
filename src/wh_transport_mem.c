@@ -214,6 +214,17 @@ int wh_TransportMem_SendResponse(void* c, uint16_t len, const void* data)
         wh_Utils_memcpy_flush(context->resp_data, data, len);
     }
 
+    /* The request contents were already copied out at RecvRequest time and the
+     * response is now ready, so the shared request data buffer is no longer
+     * needed. Clear it (with a cache flush, like all shared-buffer writes) so it
+     * does not retain a (possibly sensitive) request payload for another party
+     * mapping the shared region to read. This must happen BEFORE publishing the
+     * response CSR below: that publish releases the client to issue its next
+     * request into req_data, so clearing afterwards could race that write. */
+    if (req.s.len != 0) {
+        (void)wh_Utils_memset_flush(context->req_data, 0, req.s.len);
+    }
+
     resp.s.len = len;
     resp.s.notify = req.s.notify;
 

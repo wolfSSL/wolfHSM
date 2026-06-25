@@ -9,6 +9,7 @@
 #include <wolfhsm/wh_error.h>
 #include <wolfhsm/wh_message.h>
 #include <wolfhsm/wh_message_keystore.h>
+#include <wolfhsm/wh_utils.h> /* For wh_Utils_ForceZero */
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/types.h>
 
@@ -203,24 +204,30 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
         size < sizeof(*resp) ||
         size < sizeof(*resp) + sizeof(*metadataOut) + resp->keySz ||
         resp->cipherType != cipherType) {
-        return WH_ERROR_ABORTED;
+        ret = WH_ERROR_ABORTED;
     }
-
-    if (resp->rc != WH_ERROR_OK) {
-        return resp->rc;
+    else if (resp->rc != WH_ERROR_OK) {
+        ret = resp->rc;
     }
     else if (resp->keySz > *keyInOutSz) {
-        return WH_ERROR_BUFFER_SIZE;
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    else {
+        /* Copy the metadata and key from the response data into metadataOut and
+         * keyOut */
+        respData = (uint8_t*)(resp + 1);
+        memcpy(metadataOut, respData, sizeof(*metadataOut));
+        memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
+        *keyInOutSz = resp->keySz;
+        ret         = WH_ERROR_OK;
     }
 
-    /* Copy the metadata and key from the response data into metadataOut and
-     * keyOut */
-    respData = (uint8_t*)(resp + 1);
-    memcpy(metadataOut, respData, sizeof(*metadataOut));
-    memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
-    *keyInOutSz = resp->keySz;
+    /* The response received into the shared comm buffer holds the recovered
+     * plaintext key; zeroize the whole received payload before returning on
+     * every path so it does not linger in the long-lived session buffer. */
+    wh_Utils_ForceZero(resp, size);
 
-    return WH_ERROR_OK;
+    return ret;
 }
 
 int wh_Client_KeyUnwrapAndExport(whClientContext*   ctx,

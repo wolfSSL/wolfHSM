@@ -603,6 +603,9 @@ int posixTransportShm_ClientStaticMemDmaCallback(
     else if (oper == WH_DMA_OPER_CLIENT_READ_POST) {
         if (isInDma == 0) {
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            /* The bounce buffer holds a copy of client input (possibly key
+             * material); clear it before returning it to the shared DMA heap. */
+            wh_Utils_ForceZero(ptr, len);
             XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
         }
     }
@@ -611,6 +614,9 @@ int posixTransportShm_ClientStaticMemDmaCallback(
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
             memcpy((void*)clientAddr, ptr,
                    len); /* copy results of what server wrote */
+            /* The bounce buffer holds server output (possibly key material);
+             * clear it before returning it to the shared DMA heap. */
+            wh_Utils_ForceZero(ptr, len);
             XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
         }
     }
