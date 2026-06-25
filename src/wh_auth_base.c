@@ -479,6 +479,11 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
         return WH_ERROR_ACCESS;
     }
 
+    /* A positive new-credential length requires a valid buffer */
+    if (new_credentials == NULL && new_credentials_len > 0) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Validate method is supported */
     if (method != WH_AUTH_METHOD_PIN
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
@@ -543,7 +548,8 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
         }
     }
 
-    /* Set new credentials */
+    /* Set new credentials. The prior credential is zeroized only at the commit
+     * point so a failed update leaves the existing credential intact. */
     if (new_credentials_len > 0) {
         if (method == WH_AUTH_METHOD_PIN) {
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -555,6 +561,7 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
                 wh_Utils_ForceZero(hash, sizeof(hash));
                 return rc;
             }
+            wh_Utils_ForceZero(user->credentials, sizeof(user->credentials));
             memcpy(user->credentials, hash, WC_SHA256_DIGEST_SIZE);
             user->credentials_len = WC_SHA256_DIGEST_SIZE;
             wh_Utils_ForceZero(hash, sizeof(hash));
@@ -562,6 +569,7 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
             if (new_credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
                 return WH_ERROR_BUFFER_SIZE;
             }
+            wh_Utils_ForceZero(user->credentials, sizeof(user->credentials));
             memcpy(user->credentials, new_credentials, new_credentials_len);
             user->credentials_len = new_credentials_len;
 #endif /* WOLFHSM_CFG_NO_CRYPTO */
@@ -570,12 +578,14 @@ int wh_Auth_BaseUserSetCredentials(void* context, uint16_t current_user_id,
             if (new_credentials_len > WH_AUTH_BASE_MAX_CREDENTIALS_LEN) {
                 return WH_ERROR_BUFFER_SIZE;
             }
+            wh_Utils_ForceZero(user->credentials, sizeof(user->credentials));
             memcpy(user->credentials, new_credentials, new_credentials_len);
             user->credentials_len = new_credentials_len;
         }
     }
     else {
         /* Allow clearing credentials by setting length to 0 */
+        wh_Utils_ForceZero(user->credentials, sizeof(user->credentials));
         user->credentials_len = 0;
     }
     user->method = method;
