@@ -3638,9 +3638,10 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t tag_len     = req.authTagSz;
     whKeyId  key_id      = wh_KeyId_TranslateFromClient(
              WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len +
-                           key_len + iv_len + authin_len +
-                           ((enc == 0) ? tag_len : 0);
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesGcmRequest) +
+                           (uint64_t)len + (uint64_t)key_len +
+                           (uint64_t)iv_len + (uint64_t)authin_len +
+                           ((enc == 0) ? (uint64_t)tag_len : 0);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
