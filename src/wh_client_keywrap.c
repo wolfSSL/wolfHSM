@@ -228,6 +228,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
     *keyInOutSz = resp->keySz;
 
+    wh_Utils_ForceZero(respData + sizeof(*metadataOut), resp->keySz);
     return WH_ERROR_OK;
 }
 
