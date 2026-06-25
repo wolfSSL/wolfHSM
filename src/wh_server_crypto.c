@@ -3665,6 +3665,12 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
                        ((enc == 0) ? 0 : tag_len);
 
+    /* Ensure the response output and tag fit within the comm data buffer */
+    if (res_len > (WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader))) {
+        return WH_ERROR_BADARGS;
+    }
+
     WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
             "authtagsz:%d reqsz:%u ressz:%u\n",
             enc, key_len, iv_len, len, authin_len, tag_len, (uint32_t)needed_size,
