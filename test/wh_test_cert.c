@@ -1015,6 +1015,13 @@ int whTest_CertClient(whClientContext* client)
                                                 rootCertA_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
+    /* out_rc is mandatory; a NULL verdict pointer must be rejected so the
+     * verification result can never be silently discarded */
+    WH_TEST_ASSERT_RETURN(wh_Client_CertVerify(client, INTERMEDIATE_A_CERT,
+                                               INTERMEDIATE_A_CERT_len,
+                                               rootCertA_id,
+                                               NULL) == WH_ERROR_BADARGS);
+
     /* attempt to verify invalid cert (leaf w/o intermediate), should fail */
     WH_TEST_PRINT(
         "Attempting to verify invalid single certificate...using leaf cert "

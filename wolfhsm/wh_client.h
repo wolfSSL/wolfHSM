@@ -2714,8 +2714,13 @@ int wh_Client_CertVerifyRequest(whClientContext* c, const uint8_t* cert,
  * if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyResponse(whClientContext* c, int32_t* out_rc);
 
@@ -2731,8 +2736,28 @@ int wh_Client_CertVerifyResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
+ *
+ * Both results must be checked, e.g.:
+ * @code
+ *     int32_t verifyResult = 0;
+ *     int rc = wh_Client_CertVerify(c, cert, cert_len, rootId, &verifyResult);
+ *     if (rc != 0) {
+ *         // transport/protocol failure - verdict unknown
+ *     }
+ *     else if (verifyResult != WH_ERROR_OK) {
+ *         // round-trip ok, but the certificate did NOT verify
+ *     }
+ *     else {
+ *         // certificate is valid
+ *     }
+ * @endcode
  */
 int wh_Client_CertVerify(whClientContext* c, const uint8_t* cert,
                          uint32_t cert_len, whNvmId trustedRootNvmId,
@@ -2772,8 +2797,13 @@ int wh_Client_CertVerifyAndCacheLeafPubKeyRequest(
  * @param[in] c Pointer to the client context.
  * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
  * key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
                                                    whKeyId*         out_keyId,
@@ -2797,8 +2827,13 @@ int wh_Client_CertVerifyAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
  * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
  * output, contains the keyId of the cached leaf public key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAndCacheLeafPubKey(
     whClientContext* c, const uint8_t* cert, uint32_t cert_len,
@@ -2833,8 +2868,13 @@ int wh_Client_CertVerifyMultiRootRequest(whClientContext* c,
  * verification.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootResponse(whClientContext* c, int32_t* out_rc);
 
@@ -2847,8 +2887,13 @@ int wh_Client_CertVerifyMultiRootResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
  * @param[in] numRoots Number of entries in trustedRootNvmIds.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRoot(whClientContext* c, const uint8_t* cert,
                                   uint32_t       cert_len,
@@ -2881,8 +2926,13 @@ int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyRequest(
  * @param[in] c Pointer to the client context.
  * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
  * key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyResponse(whClientContext* c,
                                                             whKeyId* out_keyId,
@@ -2901,8 +2951,13 @@ int wh_Client_CertVerifyMultiRootAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
  * @param[in,out] inout_keyId Pointer to the desired key ID (in) / cached key
  * ID (out).
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootAndCacheLeafPubKey(
     whClientContext* c, const uint8_t* cert, uint32_t cert_len,
@@ -3116,8 +3171,13 @@ int wh_Client_CertVerifyDmaRequest(whClientContext* c, const void* cert,
  * response has not been received.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
 
@@ -3134,8 +3194,13 @@ int wh_Client_CertVerifyDmaResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyDma(whClientContext* c, const void* cert,
                             uint32_t cert_len, whNvmId trustedRootNvmId,
@@ -3179,8 +3244,13 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKeyRequest(
  * @param[in] c Pointer to the client context.
  * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
  * key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
                                                       whKeyId* out_keyId,
@@ -3205,8 +3275,13 @@ int wh_Client_CertVerifyDmaAndCacheLeafPubKeyResponse(whClientContext* c,
  * @param[in,out] inout_keyId Pointer to the desired key ID of the cached leaf
  * public key. If set to WH_KEYID_ERASED, the server will pick a keyId. On
  * output, contains the keyId of the cached leaf public key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyDmaAndCacheLeafPubKey(
     whClientContext* c, const void* cert, uint32_t cert_len,
@@ -3241,8 +3316,13 @@ int wh_Client_CertVerifyMultiRootDmaRequest(whClientContext* c,
  * certificate verification.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootDmaResponse(whClientContext* c,
                                              int32_t*         out_rc);
@@ -3256,8 +3336,13 @@ int wh_Client_CertVerifyMultiRootDmaResponse(whClientContext* c,
  * @param[in] cert_len Length of the certificate data.
  * @param[in] trustedRootNvmIds Array of NVM IDs of trusted root certificates.
  * @param[in] numRoots Number of entries in trustedRootNvmIds.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootDma(whClientContext* c, const void* cert,
                                      uint32_t       cert_len,
@@ -3290,8 +3375,13 @@ int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyRequest(
  * @param[in] c Pointer to the client context.
  * @param[out] out_keyId Pointer to store the key ID of the cached leaf public
  * key.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyResponse(
     whClientContext* c, whKeyId* out_keyId, int32_t* out_rc);
@@ -3309,8 +3399,13 @@ int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKeyResponse(
  * @param[in] cachedKeyFlags NVM usage flags for the cached leaf public key.
  * @param[in,out] inout_keyId Pointer to the desired key ID (in) / cached key
  * ID (out).
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyMultiRootDmaAndCacheLeafPubKey(
     whClientContext* c, const void* cert, uint32_t cert_len,
@@ -3348,8 +3443,13 @@ int wh_Client_CertVerifyAcertRequest(whClientContext* c, const void* cert,
  * if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc);
 
@@ -3366,8 +3466,13 @@ int wh_Client_CertVerifyAcertResponse(whClientContext* c, int32_t* out_rc);
  * @param[in] cert_len Length of the attribute certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAcert(whClientContext* c, const void* cert,
                               uint32_t cert_len, whNvmId trustedRootNvmId,
@@ -3401,8 +3506,13 @@ int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
  * WH_ERROR_NOTREADY if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc);
 
@@ -3520,8 +3630,13 @@ int wh_Client_DmaAsyncPost(struct whClientContext_t* client,
  * @param[in] cert_len Length of the attribute certificate data.
  * @param[in] trustedRootNvmId NVM ID of the trusted root certificate to verify
  * against.
- * @param[out] out_rc Pointer to store the response code from the server.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[out] out_rc Required (non-NULL); receives the verification verdict
+ * (WH_ERROR_OK if the certificate is valid). Passing NULL returns
+ * WH_ERROR_BADARGS.
+ * @return int Returns 0 when the request/response round-trip completes. This
+ * alone does NOT mean the certificate is valid: the caller MUST also check
+ * that *out_rc == WH_ERROR_OK. Returns a negative error code on transport
+ * failure.
  */
 int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
                                  uint32_t cert_len, whNvmId trustedRootNvmId,
