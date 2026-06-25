@@ -2191,8 +2191,10 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
      * Declared before the first goto so no jump skips an initialization. */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
 
     /* Check if we should use cached key as input */
     if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
@@ -2334,8 +2336,10 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
     /* Declared before the first goto so no jump skips an initialization */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
 
     if (saltSz == 0) {
         if (WH_KEYID_ISERASED(saltKeyId)) {
