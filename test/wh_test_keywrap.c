@@ -315,6 +315,56 @@ static int _AesGcm_TestKeyUnwrapUnderflow(whClientContext* client)
     return WH_ERROR_OK;
 }
 
+/* Wrapped keys are cache-only: they must never be persisted to or destroyed
+ * in NVM. This invariant is what keeps an unwrapped key from shadowing a
+ * protected NVM entry, so commit and erase must reject a wrapped key id. */
+static int _AesGcm_TestKeyWrapNoNvm(whClientContext* client)
+{
+    int           ret;
+    uint8_t       plainKey[WH_TEST_AES_KEYSIZE] = {0};
+    uint8_t       wrappedKey[WH_TEST_AES_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    whKeyId       wrappedKeyId = WH_KEYID_ERASED;
+    whNvmMetadata metadata     = {
+            .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
+                                                       WH_TEST_AESGCM_KEYID),
+            .label = "NoNvm Wrapped Key",
+            .len   = WH_TEST_AES_KEYSIZE,
+            .flags = WH_NVM_FLAGS_USAGE_ANY,
+    };
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(
+        client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, plainKey, sizeof(plainKey),
+        &metadata, wrappedKey, &wrappedKeySz));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCache(
+        client, WC_CIPHER_AES_GCM, WH_TEST_KEKID, wrappedKey, wrappedKeySz,
+        &wrappedKeyId));
+
+    /* The returned id carries the wrapped flag; commit must refuse it */
+    ret = wh_Client_KeyCommit(client, wrappedKeyId);
+    if (ret != WH_ERROR_ABORTED) {
+        WH_ERROR_PRINT("KeyCommit of wrapped key expected ABORTED, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, wrappedKeyId);
+        return WH_TEST_FAIL;
+    }
+
+    /* Erase must likewise refuse a wrapped key */
+    ret = wh_Client_KeyErase(client, wrappedKeyId);
+    if (ret != WH_ERROR_ABORTED) {
+        WH_ERROR_PRINT("KeyErase of wrapped key expected ABORTED, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, wrappedKeyId);
+        return WH_TEST_FAIL;
+    }
+
+    /* Cache-only eviction must still succeed */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, wrappedKeyId));
+
+    return WH_ERROR_OK;
+}
+
 static int _AesGcm_TestDataUnwrapUnderflow(whClientContext* client)
 {
     int      ret;
@@ -372,6 +422,13 @@ int whTest_Client_KeyWrap(whClientContext* client)
         if (ret != WH_ERROR_OK) {
             WH_ERROR_PRINT("Failed to _AesGcm_TestKeyUnwrapUnderflow %d\n",
                            ret);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _AesGcm_TestKeyWrapNoNvm(client);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to _AesGcm_TestKeyWrapNoNvm %d\n", ret);
         }
     }
 #endif
