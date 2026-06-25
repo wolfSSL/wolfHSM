@@ -47,6 +47,7 @@ WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
+WH_TEST_DECL(whTest_Counter);
 WH_TEST_DECL(whTest_Crypto_Aes);
 WH_TEST_DECL(whTest_CryptoAesKeyUsagePolicies);
 WH_TEST_DECL(whTest_Crypto_Cmac);
@@ -68,6 +69,8 @@ WH_TEST_DECL(whTest_She);
 WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
 WH_TEST_DECL(whTest_SheReqSizeChecking);
 WH_TEST_DECL(whTest_Echo);
+WH_TEST_DECL(whTest_NvmDma);
+WH_TEST_DECL(whTest_NvmOps);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
 WH_TEST_DECL(whTest_AuthBadArgs);
@@ -98,6 +101,7 @@ const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 
 const whTestCase whTestsClient[] = {
     { "whTest_ClientCerts", whTest_ClientCerts },
+    { "whTest_Counter", whTest_Counter },
     { "whTest_Crypto_Aes", whTest_Crypto_Aes },
     { "whTest_CryptoAesKeyUsagePolicies", whTest_CryptoAesKeyUsagePolicies },
     { "whTest_Crypto_Cmac", whTest_Crypto_Cmac },
@@ -119,6 +123,8 @@ const whTestCase whTestsClient[] = {
     { "whTest_CryptoSha256", whTest_CryptoSha256 },
     { "whTest_She", whTest_She },
     { "whTest_Echo", whTest_Echo },
+    { "whTest_NvmDma", whTest_NvmDma },
+    { "whTest_NvmOps", whTest_NvmOps },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
     { "whTest_AuthBadArgs", whTest_AuthBadArgs },
