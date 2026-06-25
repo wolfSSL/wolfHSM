@@ -208,8 +208,8 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
 
     /* Attempt to remove any existing object. */
     (void)shm_unlink(name);
-    /* Create shared memory object and set the size */
-    fd = shm_open(name, O_CREAT | O_RDWR, PTSHM_CREATEMODE);
+    /* O_EXCL fails the open if a racing process re-created the name */
+    fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, PTSHM_CREATEMODE);
     if (fd >= 0) {
         /* Set the size of the shared memory object.
          * Note this is the minimum size, as the OS may make it larger. */
