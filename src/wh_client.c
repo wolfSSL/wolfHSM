@@ -1005,6 +1005,10 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
         if (resp->rc != 0) {
             ret = resp->rc;
         }
+        else if (size < sizeof(*resp) || resp->len > (size - sizeof(*resp))) {
+            /* Response frame does not contain the claimed key length */
+            ret = WH_ERROR_ABORTED;
+        }
         else {
             if (out == NULL) {
                 *outSz = resp->len;
@@ -1023,6 +1027,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 else
                     memcpy(label, resp->label, labelSz);
             }
+            wh_Utils_ForceZero(packOut, resp->len);
         }
     }
     return ret;
