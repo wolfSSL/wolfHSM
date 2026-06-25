@@ -384,9 +384,16 @@ void parseConfigFile(const char* filePath)
 
         /* Parse the file path */
         token = strtok(NULL, " ");
-        if (!token || sscanf(token, "%s", filePath) != 1) {
+        if (!token) {
             fprintf(stderr,
                     "Error on line %d: Malformed entry - missing file path\n",
+                    lineNumber);
+            fclose(file);
+            exit(EXIT_FAILURE);
+        }
+        if (snprintf(filePath, sizeof(filePath), "%s", token) >=
+            (int)sizeof(filePath)) {
+            fprintf(stderr, "Error on line %d: File path too long\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
