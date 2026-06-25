@@ -80,6 +80,7 @@ Translated tests:
 | `wh_test_dma.c::whTest_Dma` | `misc/wh_test_dma.c::whTest_Dma` | Misc | |
 | `wh_test_comm.c::whTest_Comm` | `misc/wh_test_comm.c::whTest_Comm` | Misc | Sequential mem variant only; pthread mem/tcp/shmem variants remain in the legacy harness |
 | `wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | `misc/wh_test_keystore_reqsize.c::whTest_KeystoreReqSize` | Misc | |
+| `wh_test_multiclient.c::whTest_MultiClient` | `misc/wh_test_multiclient.c::whTest_MultiClient` | Misc | Sequential variant only (no legacy pthread variant exists); body is a no-op when `WOLFHSM_CFG_GLOBAL_KEYS` is off |
 | `wh_test_cert.c::whTest_CertRamSim` | `server/wh_test_cert.c::whTest_CertVerify` | Server | remove ramsim coupling and migrate to server group. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
 | `wh_test_crypto.c::whTest_Crypto` | `client-server/wh_test_crypto_{aes,cmac,curve25519,ecc,ed25519,kdf,keypolicy,mldsa,rng,rsa,sha}.c::whTest_Crypto_*` | Client | Split into per-algorithm suites; key revocation is gated by `WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS`. Legacy ran FLASH and FLASH_LOG backends; the port runs the plain flash backend only -- FLASH_LOG re-run pending (see Known coverage gaps) |
 | `wh_test_crypto.c::whTest_CryptoKeyUsagePolicies` (AES CTR/ECB/GCM subset) | `client-server/wh_test_crypto_aes.c::whTest_CryptoAesKeyUsagePolicies` | Client | AES-CTR/ECB/GCM key usage enforcement (non-DMA and DMA variants) |
@@ -107,7 +108,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_crypto.c::whTest_KeyCache`, `whTest_NonExportableKeystore` | Keystore tests (key-cache lifecycle and non-exportable-flag enforcement) dispatched from the legacy `whTest_Crypto`. The per-algorithm suites use `wh_Client_KeyCache`, but these dedicated keystore tests are not yet split out. |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
-| `wh_test_multiclient.c::whTest_MultiClient` | |
 | `wh_test_lock.c::whTest_LockConfig`, `whTest_LockPosix` | `whTest_LockConfig` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_log.c::whTest_Log`, `whTest_LogBackend_RunAll` | `whTest_LogBackend_RunAll` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |
