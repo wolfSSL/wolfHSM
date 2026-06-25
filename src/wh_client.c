@@ -1137,6 +1137,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 else
                     memcpy(label, resp->label, labelSz);
             }
+            wh_Utils_ForceZero(packOut, resp->len);
         }
     }
     return ret;
