@@ -73,6 +73,7 @@ WH_TEST_DECL(whTest_CryptoSha256);
 WH_TEST_DECL(whTest_She);
 WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
 WH_TEST_DECL(whTest_SheReqSizeChecking);
+WH_TEST_DECL(whTest_SheStateGate);
 WH_TEST_DECL(whTest_Echo);
 WH_TEST_DECL(whTest_NvmDma);
 WH_TEST_DECL(whTest_NvmOps);
@@ -98,11 +99,12 @@ const whTestCase whTestsMisc[] = {
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
 const whTestCase whTestsServer[] = {
-    { "whTest_CertVerify", whTest_CertVerify},
-    { "whTest_NvmOptional", whTest_NvmOptional},
+    { "whTest_CertVerify", whTest_CertVerify },
+    { "whTest_NvmOptional", whTest_NvmOptional },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
     { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
-    {"whTest_HwKeystoreServer", whTest_HwKeystoreServer},
+    { "whTest_HwKeystoreServer", whTest_HwKeystoreServer },
+    { "whTest_SheStateGate", whTest_SheStateGate },
 };
 const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 
