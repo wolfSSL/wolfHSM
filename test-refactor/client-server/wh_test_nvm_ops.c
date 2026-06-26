@@ -190,7 +190,10 @@ static int _runNvmObjectTest(whClientContext* ctx,
         ctx, &server_rc, &avail_size, &avail_objects,
         &reclaim_size, &reclaim_objects));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    baseline = avail_objects;
+    /* Starting point for the test is available + reclaimable.
+     * NVM activity may recycle stale entries from prior tests, so
+     * `avail_objects` alone is not sufficient. */
+    baseline = (whNvmId)(avail_objects + reclaim_objects);
 
     /* Add phase: fresh objects, no reclaim activity expected. */
     for (i = 0; i < NVM_TEST_OBJECT_COUNT; i++) {
@@ -266,7 +269,9 @@ static int _runNvmObjectTest(whClientContext* ctx,
         ctx, &server_rc, &avail_size, &avail_objects,
         &reclaim_size, &reclaim_objects));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(avail_objects == baseline);
+    /* Live-object count must match the baseline; see note above. */
+    WH_TEST_ASSERT_RETURN(
+        (whNvmId)(avail_objects + reclaim_objects) == baseline);
 
     return WH_ERROR_OK;
 }
