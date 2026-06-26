@@ -85,6 +85,25 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 
     memset(server, 0, sizeof(*server));
     server->nvm = config->nvm;
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+    server->crypto = config->crypto;
+    server->devId  = config->devId;
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+    server->she = config->she;
+#endif
+#endif
+
+#ifdef WOLFHSM_CFG_LOGGING
+    if (config->logConfig != NULL) {
+        rc = wh_Log_Init(&server->log, config->logConfig);
+        if (rc != WH_ERROR_OK) {
+            (void)wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+    }
+#endif /* WOLFHSM_CFG_LOGGING */
+
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     server->auth = config->auth;
     /* auth context is externally owned; clear any stale session left over from
@@ -104,6 +123,7 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         if (rc != WH_ERROR_OK) {
             WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
                    "Failed to clear auth session during server init");
+            (void)wh_Server_Cleanup(server);
             return rc;
         }
     }
@@ -111,24 +131,6 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 #ifdef WOLFHSM_CFG_HWKEYSTORE
     server->hwKeystore = config->hwKeystore;
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-    server->crypto = config->crypto;
-    server->devId  = config->devId;
-#ifdef WOLFHSM_CFG_SHE_EXTENSION
-    server->she = config->she;
-#endif
-#endif
-
-#ifdef WOLFHSM_CFG_LOGGING
-    if (config->logConfig != NULL) {
-        rc = wh_Log_Init(&server->log, config->logConfig);
-        if (rc != WH_ERROR_OK) {
-            (void)wh_Server_Cleanup(server);
-            return WH_ERROR_ABORTED;
-        }
-    }
-#endif /* WOLFHSM_CFG_LOGGING */
 
     rc = wh_CommServer_Init(server->comm, config->comm_config,
             wh_Server_SetConnectedCb, (void*)server);
@@ -204,7 +206,6 @@ int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
     /* Log out any active user on disconnect, including abrupt drops where
      * COMM_CLOSE never arrives. */
     if (connected == WH_COMM_DISCONNECTED &&
-        server->connected != WH_COMM_DISCONNECTED &&
         server->auth != NULL &&
         server->auth->user.user_id != WH_USER_ID_INVALID) {
         whUserId user_id = server->auth->user.user_id;
