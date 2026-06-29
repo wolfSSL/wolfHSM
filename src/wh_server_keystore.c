@@ -1495,7 +1495,7 @@ static int _AesGcmKeyUnwrapWithKek(whServerContext* server,
 
     /* Extract IV and authTag from wrappedKeyIn */
     memcpy(iv, wrappedKeyIn, sizeof(iv));
-    memcpy(authTag, wrappedKeyIn + sizeof(iv), sizeof(authTag));
+    memcpy(authTag, (const uint8_t*)wrappedKeyIn + sizeof(iv), sizeof(authTag));
 
     /* Decrypt the encrypted blob */
     ret = wc_AesGcmDecrypt(aes, plainBlob, encBlob, encBlobSz, iv, sizeof(iv),
@@ -1669,7 +1669,7 @@ static int _AesGcmDataUnwrapWithKek(whServerContext* server,
 
     /* Extract IV and authTag from wrappedDataIn */
     memcpy(iv, wrappedDataIn, sizeof(iv));
-    memcpy(authTag, wrappedDataIn + sizeof(iv), sizeof(authTag));
+    memcpy(authTag, (const uint8_t*)wrappedDataIn + sizeof(iv), sizeof(authTag));
 
     /* Decrypt the encrypted blob */
     ret = wc_AesGcmDecrypt(aes, dataOut, encBlob, encBlobSz, iv, sizeof(iv),

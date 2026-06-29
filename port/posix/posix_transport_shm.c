@@ -573,7 +573,7 @@ int posixTransportShm_ClientStaticMemDmaCallback(
 
     if ((dmaPtr != NULL) && (dmaSize > 0) && (len < dmaSize) &&
         (clientAddr >= (uintptr_t)dmaPtr) &&
-        (clientAddr < (uintptr_t)(dmaPtr + dmaSize - len))) {
+        (clientAddr < (uintptr_t)((uint8_t*)dmaPtr + dmaSize - len))) {
         dmaBuffer = clientAddr;
         isInDma   = 1;
     }

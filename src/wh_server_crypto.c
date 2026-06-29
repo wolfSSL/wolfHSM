@@ -428,8 +428,8 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     /* in and out are after the fixed size fields */
-    byte* in  = (uint8_t*)(cryptoDataIn + sizeof(whMessageCrypto_RsaRequest));
-    byte* out = (uint8_t*)(cryptoDataOut + sizeof(whMessageCrypto_RsaResponse));
+    const byte* in  = (const byte*)cryptoDataIn + sizeof(whMessageCrypto_RsaRequest);
+    byte*       out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_RsaResponse);
 
     WH_DEBUG_SERVER_VERBOSE("HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
             op_type, in_len, key_id, out_len);

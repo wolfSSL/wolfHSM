@@ -42,7 +42,7 @@ DEF += -DWOLFHSM_CFG_TEST_POSIX
 ARCHFLAGS ?=
 
 # Enable extra C compiler warnings
-CFLAGS_EXTRA = -Werror -Wall -Wextra
+CFLAGS_EXTRA = -Werror -Wall -Wextra -Wpointer-arith
 # Place functions / data into separate sections to allow unused code removal
 CFLAGS_EXTRA += -ffunction-sections -fdata-sections
 # Auto-generate header dependency files (.d) alongside object files
