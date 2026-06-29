@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_log.h"
 #include "wolfhsm/wh_log_ringbuf.h"
+#include "wolfhsm/wh_log_printf.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -1034,6 +1035,80 @@ static int whTest_LogRingbuf_Generic(void)
     return whTest_LogBackend_RunAll(&testCfg);
 }
 
+/* Printf backend tests. The printf backend is a write-only sink: it
+ * implements only Init and AddEntry, so the remaining frontend ops
+ * report NOTIMPL. Exercises both the "log always" and "drop unless
+ * debug" config paths and the bad-args/uninitialized rejections. */
+static int whTest_LogPrintf(void)
+{
+    whLogContext       logCtx;
+    whLogPrintfContext printfCtx;
+    whLogPrintfConfig  printfCfg;
+    whLogConfig        logConfig;
+    whLogCb            printfCb      = WH_LOG_PRINTF_CB;
+    whLogEntry         entry         = {0};
+    int                iterate_count = 0;
+
+    memset(&printfCtx, 0, sizeof(printfCtx));
+
+    /* Direct backend bad-args rejections */
+    WH_TEST_ASSERT_RETURN(whLogPrintf_Init(NULL, NULL) == WH_ERROR_BADARGS);
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(NULL, &entry) ==
+                          WH_ERROR_BADARGS);
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(&printfCtx, NULL) ==
+                          WH_ERROR_BADARGS);
+
+    /* Adding to an uninitialized backend is rejected */
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(&printfCtx, &entry) ==
+                          WH_ERROR_ABORTED);
+
+    /* Init with NULL config uses defaults (logIfNotDebug = 0) */
+    memset(&logCtx, 0, sizeof(logCtx));
+    memset(&printfCtx, 0, sizeof(printfCtx));
+    logConfig.cb      = &printfCb;
+    logConfig.context = &printfCtx;
+    logConfig.config  = NULL;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
+    WH_TEST_ASSERT_RETURN(printfCtx.initialized == 1);
+    WH_TEST_ASSERT_RETURN(printfCtx.logIfNotDebug == 0);
+
+    /* With logIfNotDebug = 0 and a non-debug build, entries are dropped */
+    WH_LOG(&logCtx, WH_LOG_LEVEL_INFO, "Dropped unless debug build");
+
+    /* Re-init with logIfNotDebug = 1 so entries are always printed */
+    memset(&logCtx, 0, sizeof(logCtx));
+    memset(&printfCtx, 0, sizeof(printfCtx));
+    printfCfg.logIfNotDebug = 1;
+    logConfig.config        = &printfCfg;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
+    WH_TEST_ASSERT_RETURN(printfCtx.logIfNotDebug == 1);
+
+    /* Exercise the print path for each known level */
+    WH_LOG(&logCtx, WH_LOG_LEVEL_INFO, "Printf info");
+    WH_LOG(&logCtx, WH_LOG_LEVEL_ERROR, "Printf error");
+    WH_LOG(&logCtx, WH_LOG_LEVEL_SECEVENT, "Printf secevent");
+
+    /* An out-of-range level exercises the level-to-string default */
+    entry.timestamp = 1;
+    entry.level     = (whLogLevel)999;
+    entry.file      = __FILE__;
+    entry.function  = __func__;
+    entry.line      = __LINE__;
+    entry.msg_len   = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_AddEntry(&logCtx, &entry));
+
+    /* The printf backend implements no store, so the remaining frontend
+     * operations report NOTIMPL */
+    WH_TEST_ASSERT_RETURN(wh_Log_Cleanup(&logCtx) == WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(wh_Log_Export(&logCtx, NULL) == WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(
+        wh_Log_Iterate(&logCtx, iterateCallbackCount, &iterate_count) ==
+        WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(wh_Log_Clear(&logCtx) == WH_ERROR_NOTIMPL);
+
+    return WH_ERROR_OK;
+}
+
 /* Portable log test entry point (Misc group) */
 int whTest_Log(void* ctx)
 {
@@ -1056,6 +1131,9 @@ int whTest_Log(void* ctx)
 
     WH_TEST_PRINT("Testing ring buffer backend...\n");
     WH_TEST_RETURN_ON_FAIL(whTest_LogRingbuf());
+
+    WH_TEST_PRINT("Testing printf backend...\n");
+    WH_TEST_RETURN_ON_FAIL(whTest_LogPrintf());
 
     return WH_ERROR_OK;
 }

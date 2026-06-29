@@ -44,11 +44,8 @@ WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_KeystoreReqSize);
-<<<<<<< HEAD
 WH_TEST_DECL(whTest_MultiClient);
-=======
 WH_TEST_DECL(whTest_Log);
->>>>>>> 8b3eb9b (Add refactored log tests, coverage identical)
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_ClientCerts);
