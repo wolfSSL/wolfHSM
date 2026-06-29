@@ -1356,6 +1356,47 @@ int wh_Client_DataWrap(whClientContext* ctx, enum wc_CipherType cipherType,
                        void* wrappedDataOut, uint32_t* wrappedDataInOutSz);
 
 /**
+ * @brief Sends a data wrap request to the server
+ *
+ * This function prepares and sends a data wrap request to the server. The
+ * request data contains the plaintext data for the server to wrap. This
+ * function does not block; it returns immediately after sending the request.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when wrapping the data.
+ * @param[in] serverKeyId Key ID to be used for wrapping the data.
+ * @param[in] dataIn Pointer to the plaintext data you want to wrap.
+ * @param[in] dataInSz The size in bytes of the plaintext data.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_DataWrapRequest(whClientContext*   ctx,
+                              enum wc_CipherType cipherType,
+                              uint16_t serverKeyId, void* dataIn,
+                              uint32_t dataInSz);
+
+/**
+ * @brief Receives a data wrap response from the server
+ *
+ * This function attempts to process a data wrap response message from the
+ * server. It will validate the response and extract the wrapped data from
+ * the response data. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when wrapping the data.
+ * @param[out] wrappedDataOut The pointer to the buffer that stores the
+ * resulting wrapped data.
+ * @param[in/out] wrappedDataSz IN: The size in bytes of wrappedDataOut
+ * buffer. OUT: The size of the wrapped data object returned from the server.
+ * OUT may be less than IN.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ * available, or a negative error code on failure.
+ */
+int wh_Client_DataWrapResponse(whClientContext*   ctx,
+                               enum wc_CipherType cipherType,
+                               void* wrappedDataOut, uint32_t* wrappedDataSz);
+
+/**
  * @brief Helper function to unwrap a wrapped data object using a specified key
  *
  * This helper function uses existing calls in wolfHSM and wolfCrypt to
@@ -1378,6 +1419,48 @@ int wh_Client_DataUnwrap(whClientContext* ctx, enum wc_CipherType cipherType,
                          uint16_t serverKeyId, void* wrappedDataIn,
                          uint32_t wrappedDataInSz, void* dataOut,
                          uint32_t* dataInOutSz);
+
+/**
+ * @brief Sends a data unwrap request to the server
+ *
+ * This function prepares and sends a data unwrap request to the server. The
+ * request data contains the wrapped data object for the server to unwrap.
+ * This function does not block; it returns immediately after sending the
+ * request.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when unwrapping the data.
+ * @param[in] serverKeyId Key ID to be used for unwrapping the data.
+ * @param[in] wrappedDataIn Pointer to the wrapped data object you want to
+ * unwrap.
+ * @param[in] wrappedDataInSz The size in bytes of the wrapped data object.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_DataUnwrapRequest(whClientContext*   ctx,
+                                enum wc_CipherType cipherType,
+                                uint16_t serverKeyId, void* wrappedDataIn,
+                                uint32_t wrappedDataInSz);
+
+/**
+ * @brief Receives a data unwrap response from the server
+ *
+ * This function attempts to process a data unwrap response message from the
+ * server. It will validate the response and extract the unwrapped data from
+ * the response data. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] cipherType Cipher used when unwrapping the data.
+ * @param[out] dataOut The pointer to the buffer that stores the resulting
+ * unwrapped data.
+ * @param[in/out] dataSz IN: The size in bytes of dataOut. OUT: The size of
+ * the unwrapped data object returned by the server. OUT may be less than IN.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ * available, or a negative error code on failure.
+ */
+int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
+                                 enum wc_CipherType cipherType, void* dataOut,
+                                 uint32_t* dataSz);
 
 /* Counter functions */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
@@ -3577,6 +3660,35 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  */
 #define WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL(_id) \
     ((_id) | WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
+
+/**
+ * @brief Mark a key ID as hardware-only
+ *
+ * Sets the hardware-only flag in a client keyId to indicate to the server
+ * that this key's material lives exclusively in a hardware keystore. The
+ * server will translate this to KEYTYPE=WH_KEYTYPE_HW and fetch the
+ * material from its hardware keystore backend on demand.
+ *
+ * Hardware-only keys never enter the server key cache or NVM and are never
+ * returned to a client. They are only usable as KEKs in the keywrap API
+ * (key/data wrap and unwrap); all other keystore and crypto operations
+ * reject them with WH_ERROR_ACCESS.
+ *
+ * @note Requires the server to be built with WOLFHSM_CFG_HWKEYSTORE. On a
+ *       server without hardware keystore support the hardware-only flag is
+ *       ignored and the request is treated as an ordinary key ID (looked up
+ *       in the normal cache/NVM keystore), which typically fails with a
+ *       key-not-found error.
+ *
+ * @param _id The key ID (0-255), as understood by the server's hardware
+ *            keystore backend
+ * @return keyId with hardware-only flag set
+ *
+ * Example:
+ *   whKeyId hwKek = WH_CLIENT_KEYID_MAKE_HW(2);
+ *   wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, hwKek, ...);
+ */
+#define WH_CLIENT_KEYID_MAKE_HW(_id) ((_id) | WH_KEYID_CLIENT_HW_FLAG)
 
 /**
  * @brief Construct wrapped key metadata ID with explicit ownership

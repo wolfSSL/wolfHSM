@@ -49,6 +49,7 @@
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #define WOLFHSM_CFG_KEYWRAP
+#define WOLFHSM_CFG_HWKEYSTORE
 #endif
 
 /* Test log-based NVM flash backend */

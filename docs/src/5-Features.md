@@ -21,6 +21,8 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)
     - [Global Keys](#global-keys)
     - [Wrapped Keys](#wrapped-keys)
+    - [Hardware-Only Keys](#hardware-only-keys)
+        - [Supported Components](#supported-components)
     - [Key Usage Policies](#key-usage-policies)
 - [Certificate Management](#certificate-management)
     - [Trusted Root Storage](#trusted-root-storage)
@@ -369,6 +371,30 @@ In all three operations the KEK is identified by its existing keyId in the keyst
 A parallel pair of APIs — `wh_Client_DataWrap` and `wh_Client_DataUnwrap` — applies the same construction to arbitrary application data rather than key material. These are useful when a client needs the same authenticated-encryption guarantee for non-key payloads using a key resident in the HSM.
 
 > **Note**: Wrapped key identifiers are signaled on the wire by setting `WH_KEYID_CLIENT_WRAPPED_FLAG` (bit 9) in the request keyId, which the server translates internally to `WH_KEYTYPE_WRAPPED`. Clients construct wrapped-key identifiers using `WH_CLIENT_KEYID_MAKE_WRAPPED()`, and the combined wrapped-and-global form using `WH_CLIENT_KEYID_MAKE_WRAPPED_GLOBAL()`; both are defined in `wolfhsm/wh_client.h`.
+
+### Hardware-Only Keys
+
+Some platforms provide key material that the HSM core can read but that never lives in the wolfHSM keystore at all — KEKs burned into OTP or fuses, keys held by an SoC key-management block, or other hardware-provisioned secrets. The optional **hardware keystore front-end** (`WOLFHSM_CFG_HWKEYSTORE`) lets clients reference such keys as KEKs in [wrapped-key](#wrapped-keys) operations while guaranteeing the material never enters the key cache, never touches NVM, and is never returned to a client.
+
+The front-end (`wolfhsm/wh_hwkeystore.h`) is a platform-agnostic, fully configurable abstraction over the hardware keystore, following the same backend-callback-table paradigm as the [lock abstraction](#the-lock-abstraction) and logging modules. A backend provides a `whHwKeystoreCb` callback table whose required `GetKey` callback copies a requested key's bytes into a caller-provided buffer on demand, plus optional `Init` and `Cleanup` callbacks for backend setup/teardown. The callback table, an opaque backend context and config (for backend-specific state), and a lock (serializing callback invocations when the backing hardware is shared across server threads under `WOLFHSM_CFG_THREADSAFE`) are described by a `whHwKeystoreConfig` and held in a `whHwKeystoreContext`. The server application initializes the context once with `wh_HwKeystore_Init()` — which binds the callback table and invokes the backend `Init` callback if present — and binds it to one or more server contexts through the optional `hwKeystore` member of `whServerConfig`, the same ownership pattern as the NVM context.
+
+Clients designate a hardware-only key by setting `WH_KEYID_CLIENT_HW_FLAG` (bit 10) in the request keyId, normally via the `WH_CLIENT_KEYID_MAKE_HW()` macro in `wolfhsm/wh_client.h`. The server translates the flag to the internal key type `WH_KEYTYPE_HW` and routes accordingly:
+
+- In the keywrap operations (key wrap, unwrap-and-export, unwrap-and-cache, and data wrap/unwrap), a hardware-only KEK id causes the server to fetch the KEK from the hardware keystore into a local stack buffer via `wh_HwKeystore_GetKey()`, perform the AES-GCM operation, and zeroize the buffer before returning. The KEK is never cached and never appears in any response. An unwrap-and-cache under a hardware KEK still caches the unwrapped payload — the payload is an ordinary key; only the KEK is hardware-resident.
+- Everywhere else — key cache, export (including the public-only and DMA variants), commit, evict, erase, revoke, and every wolfCrypt operation routed through the crypto callback — a hardware-only keyId is rejected with `WH_ERROR_ACCESS`.
+
+Because hardware-only keys carry no `whNvmMetadata`, the [usage-flag policy machinery](#key-usage-policies) does not apply to them. The largest key the keywrap path will fetch from the backend is bounded by `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE` (default 32 bytes, sized for an AES-256 KEK), which should be respected (or enforced), by the port layer.
+
+#### Supported Components
+
+Hardware-only keys can be consumed by exactly one wolfHSM component today — the **[keywrap](#wrapped-keys) API**, where a `WH_CLIENT_KEYID_MAKE_HW()` id names the KEK. The supported operations are:
+
+- **Key wrap** (`wh_Client_KeyWrap`) — wrap a client-supplied key under the hardware-resident KEK.
+- **Key unwrap-and-export** (`wh_Client_KeyUnwrapAndExport`) — unwrap a blob and return the recovered key to the client.
+- **Key unwrap-and-cache** (`wh_Client_KeyUnwrapAndCache`) — unwrap a blob into the key cache; only the KEK is hardware-resident, while the unwrapped payload becomes an ordinary cached key.
+- **Data wrap and unwrap** (`wh_Client_DataWrap`, `wh_Client_DataUnwrap`) — apply the same authenticated encryption to arbitrary application data.
+
+No other component can name a hardware-only key: a direct wolfCrypt operation through the crypto callback, or any keystore lifecycle operation (cache, export, commit, evict, erase, revoke), is rejected with `WH_ERROR_ACCESS`. **Support is limited to keywrap KEK usage for now** — broader use, such as referencing a hardware-only key directly in a crypto operation, may be added in a future release.
 
 ### Key Usage Policies
 

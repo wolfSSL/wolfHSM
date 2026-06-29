@@ -88,6 +88,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     server->auth = config->auth;
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
+#ifdef WOLFHSM_CFG_HWKEYSTORE
+    server->hwKeystore = config->hwKeystore;
+#endif /* WOLFHSM_CFG_HWKEYSTORE */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
