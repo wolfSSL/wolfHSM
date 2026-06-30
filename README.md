@@ -25,3 +25,28 @@ please refer to the following resources.
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
 - [wolfHSM API Reference](https://www.wolfssl.com/documentation/manuals/wolfhsm/appendix01.html)
 - [wolfHSM Examples](https://github.com/wolfSSL/wolfHSM/tree/main/examples)
+
+## SBOM / EU CRA Compliance
+
+wolfHSM generates a Software Bill of Materials (SBOM) in CycloneDX 1.6 and
+SPDX 2.3 formats to support compliance with the EU Cyber Resilience Act (CRA).
+
+wolfHSM uses a custom build system; invoke `gen-sbom` from the wolfssl source
+tree directly:
+
+```sh
+python3 $WOLFSSL_DIR/scripts/gen-sbom \
+    --name wolfhsm \
+    --version $(head -1 $WOLFHSM_DIR/ChangeLog.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') \
+    --supplier "wolfSSL Inc." \
+    --options-h $WOLFSSL_DIR/include/wolfssl/options.h \
+    --srcs $WOLFHSM_DIR/src/*.c
+```
+
+`WOLFSSL_DIR` must point to a wolfssl source tree containing `scripts/gen-sbom`
+(branch `feat/sbom-embedded`, or `master` once wolfSSL/wolfssl#10343 merges).
+`WOLFHSM_DIR` is the root of the wolfHSM source tree.
+
+Requires `python3` and `pyspdxtools` (`pip install spdx-tools`).
+
+For further CRA guidance see [wolfssl/doc/CRA.md](https://github.com/wolfSSL/wolfssl/blob/master/doc/CRA.md).
