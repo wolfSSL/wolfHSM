@@ -131,6 +131,40 @@ int wh_Server_KeystoreReadKeyChecked(whServerContext* server, whKeyId keyId,
                                      uint32_t* outSz);
 
 /**
+ * @brief Atomically read a key and enforce its usage policy
+ *
+ * Reads the key (as wh_Server_KeystoreReadKey) and checks the required usage
+ * flags against the same snapshot of the key, all under the NVM lock, so the
+ * policy checked can never belong to a different key generation than the key
+ * material returned. On a usage-policy failure the output buffer is cleared.
+ *
+ * Acquires WH_SERVER_NVM_LOCK internally under WOLFHSM_CFG_THREADSAFE. The
+ * lock is non-recursive: callers that already hold it (e.g. the SHE or cert
+ * request dispatch) must use wh_Server_KeystoreReadKey plus
+ * wh_Server_KeystoreEnforceKeyUsage directly instead.
+ *
+ * This copies the key out rather than handing back a pointer into the cache
+ * slot, which is what lets the caller use the key after the lock is dropped.
+ * The copy is bounded by the caller's buffer, so a key larger than *outSz is
+ * rejected with WH_ERROR_NOSPACE and nothing is written.
+ *
+ * @param[in]     server         Server context
+ * @param[in]     keyId          Key ID to read
+ * @param[in]     requiredUsage  Usage flags the key must have (may be
+ *                               WH_NVM_FLAGS_NONE for no usage requirement)
+ * @param[out]    outMeta        Key metadata (can be NULL)
+ * @param[out]    out            Buffer to store key data (can be NULL)
+ * @param[in,out] outSz          Input: size of out buffer; Output: key size
+ * @return WH_ERROR_OK on success, WH_ERROR_USAGE if the key lacks the
+ *         required usage flags, WH_ERROR_NOSPACE if the key does not fit in
+ *         out, other error codes on read failure
+ */
+int wh_Server_KeystoreReadKeyEnforce(whServerContext* server, whKeyId keyId,
+                                     whNvmFlags     requiredUsage,
+                                     whNvmMetadata* outMeta, uint8_t* out,
+                                     uint32_t* outSz);
+
+/**
  * @brief Remove a key from cache
  *
  * Marks the key as erased in the cache if present.
@@ -280,10 +314,24 @@ int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
 /**
  * Validates that a key has the required usage policy flags set
  *
+ * NOTE: this function may be deprecated soon. The policy check ends when it
+ * unlocks, so a caller that afterwards exports or uses the key does so in a
+ * separate lock scope and races an update to the key's usage flags. Prefer a
+ * primitive that enforces and reads under a single lock:
+ * wh_Server_KeystoreReadKeyEnforce for raw key bytes, or the typed
+ * wh_Server_*CacheExport*Enforce wrappers in wh_server_crypto.h. This function
+ * remains only for callers that genuinely need a standalone policy check and
+ * never touch the key material.
+ *
  * This function enforces key usage policies by checking that the specified
  * key has all the required usage flags set in its metadata. It retrieves
  * the key metadata from the cache or NVM storage and performs a bitwise
  * check against the required flags.
+ *
+ * Acquires WH_SERVER_NVM_LOCK internally under WOLFHSM_CFG_THREADSAFE. The
+ * lock is non-recursive: callers that already hold it (e.g. the SHE or cert
+ * request dispatch) must use wh_Server_KeystoreFreshenKey plus
+ * wh_Server_KeystoreEnforceKeyUsage directly instead.
  *
  * @param server Pointer to the server context
  * @param keyId The translated server keyId (after client keyId translation)

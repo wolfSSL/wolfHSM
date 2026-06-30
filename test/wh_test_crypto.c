@@ -13532,8 +13532,8 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
         }
     }
     /* Import the key into wolfHSM via the wolfCrypt structure. This is the
-     * DMA-only verify test, so always import via the DMA path. The key must
-     * carry the verify usage flag, which the DMA verify handler enforces. */
+     * DMA-only verify test, so always import via the DMA path. The verify
+     * usage flag is required: the DMA verify handler enforces it. */
     if (ret == 0) {
         ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId,
                                           WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL);

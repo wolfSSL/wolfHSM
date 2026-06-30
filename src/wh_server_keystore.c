@@ -1133,6 +1133,43 @@ int wh_Server_KeystoreReadKeyChecked(whServerContext* server, whKeyId keyId,
     return wh_Server_KeystoreReadKey(server, keyId, outMeta, out, outSz);
 }
 
+int wh_Server_KeystoreReadKeyEnforce(whServerContext* server, whKeyId keyId,
+                                     whNvmFlags     requiredUsage,
+                                     whNvmMetadata* outMeta, uint8_t* out,
+                                     uint32_t* outSz)
+{
+    int           ret;
+    whNvmMetadata meta[1];
+
+    if ((server == NULL) || (outSz == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Copy the key and check its usage flags under one hold of the NVM lock
+     * so the policy verdict and the key material come from the same snapshot:
+     * another server context cannot erase/re-cache the key between the check
+     * and the read. */
+    ret = WH_SERVER_NVM_LOCK(server);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreReadKey(server, keyId, meta, out, outSz);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
+            if (ret == WH_ERROR_OK) {
+                if (outMeta != NULL) {
+                    memcpy((uint8_t*)outMeta, (uint8_t*)meta,
+                           sizeof(whNvmMetadata));
+                }
+            }
+            else if (out != NULL) {
+                /* Don't hand back key material that failed the policy check */
+                memset(out, 0, *outSz);
+            }
+        }
+        (void)WH_SERVER_NVM_UNLOCK(server);
+    }
+    return ret;
+}
+
 int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId)
 {
     int                ret = 0;
@@ -3603,6 +3640,10 @@ int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
     return WH_ERROR_USAGE;
 }
 
+/* May be deprecated soon: see wh_server_keystore.h. Enforcing here and using
+ * the key in a later lock scope leaves a TOCTOU window; prefer
+ * wh_Server_KeystoreReadKeyEnforce or the typed wh_Server_*CacheExport*Enforce
+ * wrappers. */
 int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
                                           whKeyId          keyId,
                                           whNvmFlags       requiredUsage)
@@ -3615,14 +3656,20 @@ int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
         return WH_ERROR_BADARGS;
     }
 
-    /* Freshen the key to obtain the metadata */
-    ret = wh_Server_KeystoreFreshenKey(server, keyId, NULL, &meta);
-    if (ret != WH_ERROR_OK) {
-        return ret;
+    /* Freshen the key and read its metadata under the NVM lock so the shared
+     * cache slot cannot be evicted or overwritten by another server context
+     * while we inspect the usage flags. FreshenKey hands back a pointer into
+     * the shared slot, so the policy check must complete before we unlock. */
+    ret = WH_SERVER_NVM_LOCK(server);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreFreshenKey(server, keyId, NULL, &meta);
+        if (ret == WH_ERROR_OK) {
+            /* Enforce the usage policy with the obtained metadata */
+            ret = wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
+        }
+        (void)WH_SERVER_NVM_UNLOCK(server);
     }
-
-    /* Enforce the usage policy with the obtained metadata */
-    return wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
+    return ret;
 }
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

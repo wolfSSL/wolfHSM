@@ -64,6 +64,12 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
 /* Restore a RsaKey from a server key cache */
 int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
         RsaKey* key);
+
+/* As wh_Server_CacheExportRsaKey, but checks the required usage flags against
+ * the same locked snapshot of the key. Acquires the NVM lock internally; must
+ * not be called with it held (the lock is non-recursive). */
+int wh_Server_CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
+                                       whNvmFlags requiredUsage, RsaKey* key);
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
@@ -72,6 +78,12 @@ int wh_Server_EccKeyCacheImport(whServerContext* ctx, ecc_key* key,
 
 int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
         ecc_key* key);
+
+/* As wh_Server_EccKeyCacheExport, but checks the required usage flags against
+ * the same locked snapshot of the key. Acquires the NVM lock internally; must
+ * not be called with it held (the lock is non-recursive). */
+int wh_Server_EccKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                       whNvmFlags requiredUsage, ecc_key* key);
 #endif
 
 #ifdef HAVE_ED25519
@@ -81,6 +93,13 @@ int wh_Server_CacheImportEd25519Key(whServerContext* ctx, ed25519_key* key,
 
 int wh_Server_CacheExportEd25519Key(whServerContext* ctx, whKeyId keyId,
                                     ed25519_key* key);
+
+/* As wh_Server_CacheExportEd25519Key, but checks the required usage flags
+ * against the same locked snapshot of the key. Acquires the NVM lock
+ * internally; must not be called with it held (the lock is non-recursive). */
+int wh_Server_CacheExportEd25519KeyEnforce(whServerContext* ctx, whKeyId keyId,
+                                           whNvmFlags   requiredUsage,
+                                           ed25519_key* key);
 #endif /* HAVE_ED25519 */
 
 #ifdef HAVE_CURVE25519
@@ -92,6 +111,14 @@ int wh_Server_CacheImportCurve25519Key(whServerContext* server,
 /* Restore a curve25519_key from a server key cache */
 int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
         curve25519_key* key);
+
+/* As wh_Server_CacheExportCurve25519Key, but checks the required usage flags
+ * against the same locked snapshot of the key. Acquires the NVM lock
+ * internally; must not be called with it held (the lock is non-recursive). */
+int wh_Server_CacheExportCurve25519KeyEnforce(whServerContext* server,
+                                              whKeyId          keyId,
+                                              whNvmFlags       requiredUsage,
+                                              curve25519_key*  key);
 #endif /* HAVE_CURVE25519 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
@@ -102,6 +129,13 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
 /* Restore a wc_MlDsaKey from a server key cache */
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   wc_MlDsaKey* key);
+
+/* As wh_Server_MlDsaKeyCacheExport, but checks the required usage flags
+ * against the same locked snapshot of the key. Acquires the NVM lock
+ * internally; must not be called with it held (the lock is non-recursive). */
+int wh_Server_MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                         whNvmFlags   requiredUsage,
+                                         wc_MlDsaKey* key);
 #endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
@@ -112,6 +146,13 @@ int wh_Server_MlKemKeyCacheImport(whServerContext* ctx, MlKemKey* key,
 /* Restore a MlKemKey from a server key cache */
 int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlKemKey* key);
+
+/* As wh_Server_MlKemKeyCacheExport, but checks the required usage flags
+ * against the same locked snapshot of the key. Acquires the NVM lock
+ * internally; must not be called with it held (the lock is non-recursive). */
+int wh_Server_MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                         whNvmFlags requiredUsage,
+                                         MlKemKey*  key);
 #endif /* WOLFSSL_HAVE_MLKEM */
 
 /* Store raw key bytes into a server key cache slot with optional metadata.

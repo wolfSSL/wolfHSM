@@ -481,11 +481,19 @@ static int _verifyChainAgainstCmStore(
             }
             /* This is the leaf cert, so if requested, cache the public key */
             else if (flags & WH_CERT_FLAGS_CACHE_LEAF_PUBKEY) {
+                /* The whole id allocation + cache import chain below is already
+                 * atomic: every caller of this function reaches it through the
+                 * cert request dispatch, which holds WH_SERVER_NVM_LOCK across
+                 * the entire verify call. The NVM lock is non-recursive, so we
+                 * must NOT re-acquire it here -- use the unlocked GetUniqueId +
+                 * GetCacheSlotChecked building blocks under the caller's lock.
+                 */
                 /* If the keyId is erased, get a unique key id for the public
                  * key. Otherwise cache the key using the provided keyId */
                 if (WH_KEYID_ISERASED(*inout_keyId)) {
                     rc = wh_Server_KeystoreGetUniqueId(server, inout_keyId);
                     if (rc != WH_ERROR_OK) {
+                        wc_FreeDecodedCert(&dc);
                         return rc;
                     }
                 }
