@@ -34,12 +34,9 @@ jobs:
           path: wolfHSM
 
       - name: Checkout wolfBoot master
-        # Switch `ref` to `master` once wolfBoot PR #769 lands; until
-        # then the STM32H5 demo only exists on that PR.
         uses: actions/checkout@v4
         with:
           repository: wolfSSL/wolfBoot
-          ref: refs/pull/769/head
           path: wolfBoot
           # Skip lib/wolfHSM submodule init - we replace it with this
           # checkout. Other submodules still need to come down.
