@@ -2,6 +2,8 @@
 
 The crypto affinity feature allows a client to control whether the server uses **software** or **hardware** cryptographic implementations on a per-request basis.
 
+> **Compile-time guard:** The feature is gated behind `WOLFHSM_CFG_CRYPTO_AFFINITY` (default off). When the macro is not defined, `wh_Client_SetCryptoAffinity`/`wh_Client_GetCryptoAffinity` are not compiled, so the client cannot change affinity, and the server ignores the request header affinity field and always uses its configured `devId`. The affinity field is still present in the client context and carried in every crypto request header for wire-format compatibility; without the setter it simply retains its default value.
+
 Affinity is stored as **client-local state** and is transmitted to the server in every crypto request message header. There is no dedicated round-trip required to change affinity -- setting it is instantaneous and takes effect on the next crypto operation. Affinity persists for all subsequent requests once changed.
 
 ## Affinity Values

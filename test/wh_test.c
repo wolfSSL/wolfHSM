@@ -114,7 +114,7 @@ int whTest_Unit(void)
     /* Crypto Tests */
     WH_TEST_ASSERT(0 == whTest_Crypto());
 
-#ifdef WOLF_CRYPTO_CB
+#if defined(WOLF_CRYPTO_CB) && defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
     WH_TEST_ASSERT(0 == whTest_CryptoAffinity());
 #endif
 
