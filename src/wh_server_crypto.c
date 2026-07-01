@@ -6022,7 +6022,6 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, int devId,
     sha512->loLen    = req.resumeState.loLen;
     sha512->hiLen    = req.resumeState.hiLen;
     sha512->buffLen  = 0;
-    sha512->hashType = hashType;
 
     if (ret == 0 && req.inSz > 0) {
         ret = wc_Sha512Update(sha512, inlineData, req.inSz);
