@@ -2031,19 +2031,8 @@ static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
 
     switch (phase) {
         case PHASE_COUNTER_CONCURRENT_INCREMENT: {
-            /* Validate counter value matches expected increments
-             * Expected: number of successful increments
-             * Count ROLE_OP_A threads (all 4 in this phase) */
-            uint32_t counter  = 0;
-            int      opACount = 0;
-            int      i;
-
-            /* Count how many threads were doing increments (ROLE_OP_A) */
-            for (i = 0; i < NUM_CLIENTS; i++) {
-                if (ctx->clientRoles[i] == ROLE_OP_A) {
-                    opACount++;
-                }
-            }
+            /* Validate counter value matches expected increments */
+            uint32_t counter = 0;
 
             /* Read final counter value using client 0 */
             rc = doCounterRead(&ctx->pairs[0].client, HOT_COUNTER_ID, &counter);
