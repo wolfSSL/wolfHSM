@@ -45,7 +45,8 @@
 #include "wh_test_auth.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
-#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP)
+#if defined(WOLFHSM_CFG_TEST_CLIENT_ONLY_TCP) && \
+    defined(WOLFHSM_CFG_TEST_POSIX)
 #include "port/posix/posix_transport_tcp.h"
 #endif
 
