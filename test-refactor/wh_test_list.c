@@ -78,6 +78,7 @@ WH_TEST_DECL(whTest_NvmDma);
 WH_TEST_DECL(whTest_NvmOps);
 WH_TEST_DECL(whTest_ServerInfo);
 WH_TEST_DECL(whTest_WolfCryptTest);
+WH_TEST_DECL(whTest_KeyWrap);
 WH_TEST_DECL(whTest_AuthBadArgs);
 WH_TEST_DECL(whTest_AuthLogin);
 WH_TEST_DECL(whTest_AuthLogout);
@@ -135,6 +136,7 @@ const whTestCase whTestsClient[] = {
     { "whTest_NvmOps", whTest_NvmOps },
     { "whTest_ServerInfo", whTest_ServerInfo },
     { "whTest_WolfCryptTest", whTest_WolfCryptTest },
+    { "whTest_KeyWrap", whTest_KeyWrap },
     { "whTest_AuthBadArgs", whTest_AuthBadArgs },
     { "whTest_AuthLogin", whTest_AuthLogin },
     { "whTest_AuthLogout", whTest_AuthLogout },
