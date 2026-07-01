@@ -91,6 +91,9 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
     /* Build the request directly in the comm buffer to avoid a second copy
      * of the credential material */
     msg = (whMessageAuth_LoginRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     msg_auth_data = (uint8_t*)msg + sizeof(*msg);
 
     strncpy(msg->username, username, sizeof(msg->username) - 1);
@@ -288,6 +291,9 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
     /* Build the request directly in the comm buffer to avoid a second copy
      * of the credential material */
     msg = (whMessageAuth_UserAddRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     msg_credentials = (uint8_t*)msg + sizeof(*msg);
 
     strncpy(msg->username, username, sizeof(msg->username) - 1);
@@ -650,6 +656,9 @@ int wh_Client_AuthUserSetCredentialsRequest(
      * of the credential material */
     msg = (whMessageAuth_UserSetCredentialsRequest*)wh_CommClient_GetDataPtr(
         c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
     msg_current_creds = (uint8_t*)msg + sizeof(*msg);
     msg_new_creds     = msg_current_creds + current_credentials_len;
 
