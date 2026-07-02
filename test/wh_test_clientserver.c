@@ -1859,6 +1859,7 @@ static void _whClientServerThreadTest(whClientConfig* c_conf,
 
 static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
 {
+    int     ret              = WH_ERROR_OK;
     uint8_t req[BUFFER_SIZE] = {0};
     uint8_t resp[BUFFER_SIZE] = {0};
 
@@ -1877,8 +1878,18 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_config  = (void*)tmcf,
                  .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
+#ifdef WOLFHSM_CFG_DMA
+    /* Route every *Dma op (NVM + cert) through the bounce-pool callback so a
+     * missing translation is rejected (see test/wh_test_dma.c). */
+    whClientDmaConfig clientDmaConfig = {
+        .cb = whTestDma_BounceClientCb,
+    };
+#endif
     whClientConfig c_conf[1] = {{
        .comm = cc_conf,
+#ifdef WOLFHSM_CFG_DMA
+       .dmaConfig = &clientDmaConfig,
+#endif
     }};
     /* Server configuration/contexts */
     whTransportServerCb         tscb[1]   = {WH_TRANSPORT_MEM_SERVER_CB};
@@ -1889,6 +1900,12 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
                  .transport_config  = (void*)tmcf,
                  .server_id         = 124,
     }};
+#ifdef WOLFHSM_CFG_DMA
+    /* Server rejects any untranslated client pointer (out of the pool). */
+    whServerDmaConfig serverDmaConfig = {
+        .cb = whTestDma_BounceServerCb,
+    };
+#endif
 
     /* RamSim Flash state and configuration */
     uint8_t memory[FLASH_RAM_SIZE] = {0};
@@ -1922,15 +1939,38 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .crypto = crypto,
         .devId  = INVALID_DEVID,
 #endif
+#ifdef WOLFHSM_CFG_DMA
+        .dmaConfig = &serverDmaConfig,
+#endif
     }};
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+
+#ifdef WOLFHSM_CFG_DMA
+    whTestDma_BounceReset();
+#endif
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
+
+#ifdef WOLFHSM_CFG_DMA
+    /* No mapping may be outstanding and no POST may have hit a stale slot. */
+    if (whTestDma_BounceOutstanding() != 0) {
+        WH_ERROR_PRINT("wh_test bounce: %d DMA mapping(s) leaked across the "
+                       "clientserver suite\n",
+                       whTestDma_BounceOutstanding());
+        ret = WH_ERROR_ABORTED;
+    }
+    if (whTestDma_BounceStrayPosts() != 0) {
+        WH_ERROR_PRINT("wh_test bounce: %d stray/double DMA POST(s) across the "
+                       "clientserver suite\n",
+                       whTestDma_BounceStrayPosts());
+        ret = WH_ERROR_ABORTED;
+    }
+#endif
 
     wh_Nvm_Cleanup(nvm);
 
@@ -1939,12 +1979,13 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     wolfCrypt_Cleanup();
 #endif
 
-    return WH_ERROR_OK;
+    return ret;
 }
 
 
 static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 {
+    int                     ret     = WH_ERROR_OK;
     posixTransportShmConfig tmcf[1] = {{
         .name       = "/wh_test_clientserver_shm",
         .req_size   = BUFFER_SIZE,
@@ -1960,8 +2001,18 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
                     .transport_config  = (void*)tmcf,
                     .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
     }};
+#ifdef WOLFHSM_CFG_DMA
+    /* Route every *Dma op (NVM + cert) through the bounce-pool callback so a
+     * missing translation is rejected (see test/wh_test_dma.c). */
+    whClientDmaConfig clientDmaConfig = {
+        .cb = whTestDma_BounceClientCb,
+    };
+#endif
     whClientConfig                 c_conf[1]  = {{
                          .comm = cc_conf,
+#ifdef WOLFHSM_CFG_DMA
+                         .dmaConfig = &clientDmaConfig,
+#endif
     }};
     /* Server configuration/contexts */
     whTransportServerCb            tscb[1]    = {POSIX_TRANSPORT_SHM_SERVER_CB};
@@ -1972,6 +2023,12 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
                     .transport_config  = (void*)tmcf,
                     .server_id         = 124,
     }};
+#ifdef WOLFHSM_CFG_DMA
+    /* Server rejects any untranslated client pointer (out of the pool). */
+    whServerDmaConfig serverDmaConfig = {
+        .cb = whTestDma_BounceServerCb,
+    };
+#endif
 
     /* RamSim Flash state and configuration */
     uint8_t memory[FLASH_RAM_SIZE] = {0};
@@ -2003,6 +2060,9 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto = crypto,
 #endif
+#ifdef WOLFHSM_CFG_DMA
+        .dmaConfig = &serverDmaConfig,
+#endif
     }};
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     s_conf->auth = NULL; /* For non authenticated tests set auth context to NULL
@@ -2011,11 +2071,31 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
 
+#ifdef WOLFHSM_CFG_DMA
+    whTestDma_BounceReset();
+#endif
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, INVALID_DEVID));
 #endif
     _whClientServerThreadTest(c_conf, s_conf);
+
+#ifdef WOLFHSM_CFG_DMA
+    /* No mapping may be outstanding and no POST may have hit a stale slot. */
+    if (whTestDma_BounceOutstanding() != 0) {
+        WH_ERROR_PRINT("wh_test bounce: %d DMA mapping(s) leaked across the "
+                       "clientserver suite\n",
+                       whTestDma_BounceOutstanding());
+        ret = WH_ERROR_ABORTED;
+    }
+    if (whTestDma_BounceStrayPosts() != 0) {
+        WH_ERROR_PRINT("wh_test bounce: %d stray/double DMA POST(s) across the "
+                       "clientserver suite\n",
+                       whTestDma_BounceStrayPosts());
+        ret = WH_ERROR_ABORTED;
+    }
+#endif
 
     wh_Nvm_Cleanup(nvm);
 
@@ -2024,7 +2104,7 @@ static int wh_ClientServer_PosixMemMapThreadTest(whTestNvmBackendType nvmType)
     wolfCrypt_Cleanup();
 #endif
 
-    return WH_ERROR_OK;
+    return ret;
 }
 #endif /* WOLFHSM_CFG_TEST_POSIX && WOLFHSM_CFG_ENABLE_CLIENT && \
           WOLFHSM_CFG_ENABLE_SERVER */

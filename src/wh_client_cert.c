@@ -811,27 +811,42 @@ int wh_Client_CertAddTrustedDmaRequest(whClientContext* c, whNvmId id,
                                        uint8_t* label, whNvmSize label_len,
                                        const void* cert, uint32_t cert_len)
 {
-    whMessageCert_AddTrustedDmaRequest req = {0};
+    whMessageCert_AddTrustedDmaRequest req      = {0};
+    uintptr_t                          certAddr = 0;
+    int                                rc       = WH_ERROR_OK;
 
     if (c == NULL || cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
         return WH_ERROR_BADARGS;
     }
-
-    /* Prepare and send request */
-    memset(&req, 0, sizeof(req));
-    req.id        = id;
-    req.access    = access;
-    req.flags     = flags;
-    req.cert_addr = (uint64_t)(uintptr_t)cert;
-    req.cert_len  = cert_len;
-    if (label != NULL && label_len > 0) {
-        whNvmSize copy_len =
-            (label_len > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : label_len;
-        memcpy(req.label, label, copy_len);
+    /* Fail fast if busy (a rejected send would leak the mapping). */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
     }
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA,
-                                 sizeof(req), &req);
+
+    /* Translate the cert buffer (server reads it). */
+    rc = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)cert,
+                               cert_len, WH_DMA_OPER_CLIENT_READ_PRE, &certAddr);
+    if (rc == WH_ERROR_OK) {
+        req.id        = id;
+        req.access    = access;
+        req.flags     = flags;
+        req.cert_addr = (uint64_t)certAddr;
+        req.cert_len  = cert_len;
+        if (label != NULL && label_len > 0) {
+            whNvmSize copy_len =
+                (label_len > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : label_len;
+            memcpy(req.label, label, copy_len);
+        }
+        rc = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                   WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA,
+                                   sizeof(req), &req);
+    }
+
+    /* PRE or send failed: release the mapping (no-op if unset). */
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return rc;
 }
 
 int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -848,6 +863,10 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
 
     /* Receive and validate response */
     rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    /* Not ready yet: keep the mapping; POST runs when the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_ADDTRUSTED_DMA) ||
@@ -861,6 +880,9 @@ int wh_Client_CertAddTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
         }
     }
 
+    /* Release the mapping; the server already read the cert, so a POST (free)
+     * failure can't invalidate the result -- discard it (as other READ *Dma). */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     return rc;
 }
 
@@ -893,19 +915,36 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
 int wh_Client_CertReadTrustedDmaRequest(whClientContext* c, whNvmId id,
                                         void* cert, uint32_t cert_len)
 {
-    whMessageCert_ReadTrustedDmaRequest req = {0};
+    whMessageCert_ReadTrustedDmaRequest req      = {0};
+    uintptr_t                           certAddr = 0;
+    int                                 rc       = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy (a rejected send would leak the mapping). */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    /* Prepare and send request */
-    req.id        = id;
-    req.cert_addr = (uint64_t)(uintptr_t)cert;
-    req.cert_len  = cert_len;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA,
-                                 sizeof(req), &req);
+    /* Translate the output buffer (server writes the cert into it). */
+    rc = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)cert,
+                               cert_len, WH_DMA_OPER_CLIENT_WRITE_PRE,
+                               &certAddr);
+    if (rc == WH_ERROR_OK) {
+        req.id        = id;
+        req.cert_addr = (uint64_t)certAddr;
+        req.cert_len  = cert_len;
+        rc = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                   WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA,
+                                   sizeof(req), &req);
+    }
+
+    /* PRE or send failed: release the mapping (no-op if unset). */
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return rc;
 }
 
 int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -922,6 +961,10 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
 
     /* Receive and validate response */
     rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    /* Not ready yet: keep the mapping; POST runs when the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_READTRUSTED_DMA) ||
@@ -935,6 +978,15 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc)
         }
     }
 
+    /* WRITE-back: copy the cert into the caller's buffer and release the
+     * mapping. As with the other output *Dma APIs, on a failed read the buffer
+     * is left undefined. Surface a POST failure over an OK result. */
+    {
+        int postRc = wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+        if (rc == WH_ERROR_OK) {
+            rc = postRc;
+        }
+    }
     return rc;
 }
 
@@ -965,22 +1017,38 @@ static int _certVerifyDmaRequest(whClientContext* c, const void* cert,
                                  uint16_t flags, whNvmFlags cachedKeyFlags,
                                  whKeyId keyId)
 {
-    whMessageCert_VerifyDmaRequest req = {0};
+    whMessageCert_VerifyDmaRequest req      = {0};
+    uintptr_t                      certAddr = 0;
+    int                            rc       = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy (a rejected send would leak the mapping). */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    /* Prepare and send request */
-    req.cert_addr        = (uint64_t)(uintptr_t)cert;
-    req.cert_len         = cert_len;
-    req.trustedRootNvmId = trustedRootNvmId;
-    req.flags            = flags;
-    req.cachedKeyFlags   = cachedKeyFlags;
-    req.keyId            = keyId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_VERIFY_DMA, sizeof(req),
-                                 &req);
+    /* Translate the cert buffer (server reads it). */
+    rc = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)cert,
+                               cert_len, WH_DMA_OPER_CLIENT_READ_PRE, &certAddr);
+    if (rc == WH_ERROR_OK) {
+        req.cert_addr        = (uint64_t)certAddr;
+        req.cert_len         = cert_len;
+        req.trustedRootNvmId = trustedRootNvmId;
+        req.flags            = flags;
+        req.cachedKeyFlags   = cachedKeyFlags;
+        req.keyId            = keyId;
+        rc = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                   WH_MESSAGE_CERT_ACTION_VERIFY_DMA,
+                                   sizeof(req), &req);
+    }
+
+    /* PRE or send failed: release the mapping (no-op if unset). */
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return rc;
 }
 
 static int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
@@ -998,6 +1066,10 @@ static int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
 
     /* Receive and validate response */
     rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    /* Not ready yet: keep the mapping; POST runs when the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_DMA) ||
@@ -1014,6 +1086,9 @@ static int _certVerifyDmaResponse(whClientContext* c, whKeyId* out_keyId,
         }
     }
 
+    /* Release the mapping; the server already read the cert, so a POST (free)
+     * failure can't invalidate the result -- discard it (as other READ *Dma). */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     return rc;
 }
 
@@ -1104,27 +1179,45 @@ static int _certVerifyMultiRootDmaRequest(
     const whNvmId* trustedRootNvmIds, uint16_t numRoots, uint16_t verifyFlags,
     whNvmFlags cachedKeyFlags, whKeyId keyId)
 {
-    whMessageCert_VerifyMultiRootDmaRequest req = {0};
+    whMessageCert_VerifyMultiRootDmaRequest req      = {0};
+    uintptr_t                               certAddr = 0;
+    int                                     rc       = WH_ERROR_OK;
 
     if ((c == NULL) || (trustedRootNvmIds == NULL) || (numRoots == 0) ||
         (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy (a rejected send would leak the mapping). */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    req.cert_addr      = (uint64_t)(uintptr_t)cert;
-    req.cert_len       = cert_len;
-    req.numRoots       = numRoots;
-    req.flags          = verifyFlags;
-    req.cachedKeyFlags = cachedKeyFlags;
-    req.keyId          = keyId;
-    /* Only the first numRoots entries are meaningful; remaining slots stay
-     * zeroed by the initializer above. */
-    memcpy(req.trustedRootNvmIds, trustedRootNvmIds,
-           (size_t)numRoots * sizeof(whNvmId));
+    /* Translate the candidate cert buffer (server reads it; roots are NVM
+     * IDs, not DMA). */
+    rc = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)cert,
+                               cert_len, WH_DMA_OPER_CLIENT_READ_PRE, &certAddr);
+    if (rc == WH_ERROR_OK) {
+        req.cert_addr      = (uint64_t)certAddr;
+        req.cert_len       = cert_len;
+        req.numRoots       = numRoots;
+        req.flags          = verifyFlags;
+        req.cachedKeyFlags = cachedKeyFlags;
+        req.keyId          = keyId;
+        /* Only the first numRoots entries are meaningful; remaining slots stay
+         * zeroed by the initializer above. */
+        memcpy(req.trustedRootNvmIds, trustedRootNvmIds,
+               (size_t)numRoots * sizeof(whNvmId));
 
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA,
-                                 sizeof(req), &req);
+        rc = wh_Client_SendRequest(
+            c, WH_MESSAGE_GROUP_CERT,
+            WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA, sizeof(req), &req);
+    }
+
+    /* PRE or send failed: release the mapping (no-op if unset). */
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return rc;
 }
 
 /* Helper: receive a multi-root DMA verify response */
@@ -1142,6 +1235,10 @@ static int _certVerifyMultiRootDmaResponse(whClientContext* c,
     }
 
     rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    /* Not ready yet: keep the mapping; POST runs when the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_MULTI_ROOT_DMA) ||
@@ -1158,6 +1255,9 @@ static int _certVerifyMultiRootDmaResponse(whClientContext* c,
         }
     }
 
+    /* Release the mapping; the server already read the cert, so a POST (free)
+     * failure can't invalidate the result -- discard it (as other READ *Dma). */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     return rc;
 }
 
@@ -1334,18 +1434,35 @@ int wh_Client_CertVerifyAcertDmaRequest(whClientContext* c, const void* cert,
                                         uint32_t cert_len,
                                         whNvmId  trustedRootNvmId)
 {
-    whMessageCert_VerifyDmaRequest req = {0};
+    whMessageCert_VerifyDmaRequest req      = {0};
+    uintptr_t                      certAddr = 0;
+    int                            rc       = WH_ERROR_OK;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
+    /* Fail fast if busy (a rejected send would leak the mapping). */
+    if (wh_CommClient_IsRequestPending(c->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
 
-    req.cert_addr        = (uint64_t)(intptr_t)cert;
-    req.cert_len         = cert_len;
-    req.trustedRootNvmId = trustedRootNvmId;
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
-                                 WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA,
-                                 sizeof(req), &req);
+    /* Translate the acert buffer (server reads it). */
+    rc = wh_Client_DmaAsyncPre(c, &c->dma.asyncCtx.buf, (uintptr_t)cert,
+                               cert_len, WH_DMA_OPER_CLIENT_READ_PRE, &certAddr);
+    if (rc == WH_ERROR_OK) {
+        req.cert_addr        = (uint64_t)certAddr;
+        req.cert_len         = cert_len;
+        req.trustedRootNvmId = trustedRootNvmId;
+        rc = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_CERT,
+                                   WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA,
+                                   sizeof(req), &req);
+    }
+
+    /* PRE or send failed: release the mapping (no-op if unset). */
+    if (rc != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
+    }
+    return rc;
 }
 
 int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
@@ -1361,6 +1478,10 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &group, &action, &size, &resp);
+    /* Not ready yet: keep the mapping; POST runs when the response arrives. */
+    if (rc == WH_ERROR_NOTREADY) {
+        return rc;
+    }
     if (rc == 0) {
         if ((group != WH_MESSAGE_GROUP_CERT) ||
             (action != WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA) ||
@@ -1374,6 +1495,9 @@ int wh_Client_CertVerifyAcertDmaResponse(whClientContext* c, int32_t* out_rc)
         }
     }
 
+    /* Release the mapping; the server already read the cert, so a POST (free)
+     * failure can't invalidate the result -- discard it (as other READ *Dma). */
+    (void)wh_Client_DmaAsyncPost(c, &c->dma.asyncCtx.buf);
     return rc;
 }
 
