@@ -60,6 +60,12 @@ static int wh_Nvm_CheckPolicy(whNvmContext* context, whNvmOp op, whNvmId id,
         *existing_meta = meta;
     }
 
+    /* A server-only key (e.g. a trusted KEK, WH_NVM_FLAGS_KEK) must be
+     * immutable through the client NVM API regardless of its other flags. */
+    if (meta.flags & WH_NVM_FLAGS_KEK) {
+        return WH_ERROR_ACCESS;
+    }
+
     switch (op) {
         case WH_NVM_OP_ADD:
             if (meta.flags & WH_NVM_FLAGS_NONMODIFIABLE) {
@@ -263,17 +269,24 @@ int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
     return context->cb->AddObject(context->context, meta, data_len, data);
 }
 
-int wh_Nvm_AddObjectChecked(whNvmContext* context, whNvmMetadata* meta,
+int wh_Nvm_AddObjectChecked(whNvmContext* context, const whNvmMetadata* meta,
                             whNvmSize data_len, const uint8_t* data)
 {
-    int ret;
+    int           ret;
+    whNvmMetadata sanitized;
 
     ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_ADD, meta->id, NULL);
     if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
         return ret;
     }
 
-    return wh_Nvm_AddObject(context, meta, data_len, data);
+    /* Copy before sanitizing: meta may point at a read-only client DMA mapping,
+     * so we must not write through it. Strip server-only flags a client may
+     * never set. */
+    sanitized = *meta;
+    sanitized.flags &= ~WH_NVM_FLAGS_SERVER_ONLY;
+
+    return wh_Nvm_AddObject(context, &sanitized, data_len, data);
 }
 
 int wh_Nvm_List(whNvmContext* context,

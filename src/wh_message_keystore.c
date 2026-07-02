@@ -354,6 +354,35 @@ int wh_MessageKeystore_TranslateKeyWrapResponse(
     return 0;
 }
 
+/* Wrap-and-export (by id) Request translation */
+int wh_MessageKeystore_TranslateKeyWrapExportRequest(
+    uint16_t magic, const whMessageKeystore_KeyWrapExportRequest* src,
+    whMessageKeystore_KeyWrapExportRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, keyId);
+    WH_T16(magic, dest, src, keyType);
+    WH_T16(magic, dest, src, serverKeyId);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
+/* Wrap-and-export (by id) Response translation */
+int wh_MessageKeystore_TranslateKeyWrapExportResponse(
+    uint16_t magic, const whMessageKeystore_KeyWrapExportResponse* src,
+    whMessageKeystore_KeyWrapExportResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, wrappedKeySz);
+    WH_T16(magic, dest, src, cipherType);
+    return 0;
+}
+
 /* Key Unwrap Request translation */
 int wh_MessageKeystore_TranslateKeyUnwrapAndExportRequest(
     uint16_t magic, const whMessageKeystore_KeyUnwrapAndExportRequest* src,

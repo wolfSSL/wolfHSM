@@ -40,6 +40,11 @@ int wh_Server_CertInit(whServerContext* server);
 
 /**
  * @brief Add a trusted certificate to NVM storage
+ *
+ * Server-only flags are stripped from the request. Returns WH_ERROR_ACCESS
+ * if an existing object at this ID may not be modified (e.g. a trusted KEK
+ * or anything marked NONMODIFIABLE).
+ *
  * @param server The server context
  * @param id The NVM ID to store the certificate under
  * @param cert The certificate data buffer
@@ -54,6 +59,10 @@ int wh_Server_CertAddTrusted(whServerContext* server, whNvmId id,
 
 /**
  * @brief Delete a trusted certificate from NVM storage
+ *
+ * Returns WH_ERROR_ACCESS if the object at this ID may not be destroyed
+ * (e.g. a trusted KEK or anything marked NONDESTROYABLE).
+ *
  * @param server The server context
  * @param id The NVM ID of the certificate to delete
  * @return WH_ERROR_OK on success, error code on failure

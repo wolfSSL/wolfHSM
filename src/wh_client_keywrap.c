@@ -127,6 +127,112 @@ int wh_Client_KeyWrap(whClientContext* ctx, enum wc_CipherType cipherType,
     return ret;
 }
 
+int wh_Client_KeyWrapExportRequest(whClientContext*   ctx,
+                                   enum wc_CipherType cipherType,
+                                   uint16_t keyId, uint16_t keyType,
+                                   uint16_t serverKeyId)
+{
+    uint16_t                                group  = WH_MESSAGE_GROUP_KEY;
+    uint16_t                                action = WH_KEY_KEYWRAPEXPORT;
+    whMessageKeystore_KeyWrapExportRequest* req    = NULL;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Set the request pointer to the shared comm data memory region */
+    req = (whMessageKeystore_KeyWrapExportRequest*)wh_CommClient_GetDataPtr(
+        ctx->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Initialize the request. There is no trailing payload: the server already
+     * holds the key identified by keyId. */
+    req->keyId       = keyId;
+    req->keyType     = keyType;
+    req->serverKeyId = serverKeyId;
+    req->cipherType  = cipherType;
+
+    return wh_Client_SendRequest(ctx, group, action, sizeof(*req),
+                                 (uint8_t*)req);
+}
+
+int wh_Client_KeyWrapExportResponse(whClientContext*   ctx,
+                                    enum wc_CipherType cipherType,
+                                    void*              wrappedKeyOut,
+                                    uint16_t*          wrappedKeyInOutSz)
+{
+    int                                      ret;
+    uint16_t                                 group;
+    uint16_t                                 action;
+    uint16_t                                 size;
+    whMessageKeystore_KeyWrapExportResponse* resp = NULL;
+    uint8_t*                                 respData;
+
+    if (ctx == NULL || wrappedKeyOut == NULL || wrappedKeyInOutSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Set the response pointer to the shared comm data memory region */
+    resp = (whMessageKeystore_KeyWrapExportResponse*)wh_CommClient_GetDataPtr(
+        ctx->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Receive the response */
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (group != WH_MESSAGE_GROUP_KEY || action != WH_KEY_KEYWRAPEXPORT ||
+        size < sizeof(*resp) || size < sizeof(*resp) + resp->wrappedKeySz ||
+        resp->cipherType != cipherType) {
+        return WH_ERROR_ABORTED;
+    }
+
+    if (resp->rc != 0) {
+        return resp->rc;
+    }
+    else if (resp->wrappedKeySz > *wrappedKeyInOutSz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    /* Copy the wrapped key from the response data into wrappedKeyOut */
+    respData = (uint8_t*)(resp + 1);
+    memcpy(wrappedKeyOut, respData, resp->wrappedKeySz);
+    *wrappedKeyInOutSz = resp->wrappedKeySz;
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_KeyWrapExport(whClientContext* ctx, enum wc_CipherType cipherType,
+                            uint16_t keyId, uint16_t keyType,
+                            uint16_t serverKeyId, void* wrappedKeyOut,
+                            uint16_t* wrappedKeyInOutSz)
+{
+    int ret = WH_ERROR_OK;
+
+    if (ctx == NULL || wrappedKeyOut == NULL || wrappedKeyInOutSz == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyWrapExportRequest(ctx, cipherType, keyId, keyType,
+                                         serverKeyId);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    do {
+        ret = wh_Client_KeyWrapExportResponse(ctx, cipherType, wrappedKeyOut,
+                                              wrappedKeyInOutSz);
+    } while (ret == WH_ERROR_NOTREADY);
+
+    return ret;
+}
+
 int wh_Client_KeyUnwrapAndExportRequest(whClientContext*   ctx,
                                         enum wc_CipherType cipherType,
                                         uint16_t           serverKeyId,

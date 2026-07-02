@@ -81,6 +81,15 @@ These macros enable or tune optional cryptographic subsystems built on top of wo
 | `WH_DEV_ID` | `0x5748534D` (`"WHSM"`) | Value of the process-global crypto device ID registered by every `wh_Client_Init()` with the unified client crypto callback. Also the device ID bound to a client whose `whClientConfig.devId` is left `0`. Override it if the default collides with another crypto-callback device ID in the application. See [Transparent Offload via Crypto Callbacks](5-Features.md#transparent-offload-via-crypto-callbacks) for registration lifetime, multi-client rules, and wolfCrypt callback-table sizing (`MAX_CRYPTO_DEVID_CALLBACKS`, default 8). |
 | `WH_DEV_ID_DMA` | `0x57444D41` (`"WDMA"`) | Value of the process-global DMA-only crypto device ID, registered by every `wh_Client_Init()` when `WOLFHSM_CFG_DMA` is defined. Reserved: not valid as a `whClientConfig.devId`. Override it if the default collides with another crypto-callback device ID in the application. |
 
+### Provisioning a Trusted Software KEK
+
+The wrap-export and unwrap-and-cache operations require a [trusted KEK](5-Features.md#trusted-keks) — a key the client can neither read nor set. On a system without a hardware keystore, that KEK is a software key carrying the server-only `WH_NVM_FLAGS_KEK` flag (bit 12 of `whNvmFlags`). The server strips this flag from every client-supplied metadata path, so it can be set only by trusted provisioning that bypasses the request handlers:
+
+- **NVM-backed systems**: provision the KEK in an offline NVM image with `whnvmtool` (see the tool's README). The recommended flag value is `WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_USAGE_WRAP`, i.e. `0x1000 | 0x0004 | 0x0001 | 0x0200 = 0x1205`. (`WH_NVM_FLAGS_KEK` already makes the key unreadable, immutable, and KEK-only through the client API; setting the other bits as well keeps the intent explicit.)
+- **NVM-less systems**: there is no secure persistent source for the KEK bytes, so use a hardware KEK (`WOLFHSM_CFG_HWKEYSTORE`) instead. Server-internal boot code *can* cache a `WH_NVM_FLAGS_KEK` key directly, but it would still have to obtain the plaintext from the firmware image, which is not a confidential store.
+
+Because the flag is a provenance bit rather than a request a client can make, this also closes the empty-slot hole on shared key ids: even with `WOLFHSM_CFG_GLOBAL_KEYS` enabled — where a client can reach the global (`USER=0`) namespace — a client that caches a key at the KEK's id does not get the flag, so that key is not KEK-eligible and wrap-export/unwrap-and-cache reject it.
+
 ## Keystore and Key Cache
 
 These macros size the server-side key cache. The cache is split into "regular" slots (sized for common symmetric and EC keys) and "big" slots (sized for RSA-class keys); both are statically allocated.

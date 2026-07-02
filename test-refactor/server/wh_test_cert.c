@@ -115,4 +115,70 @@ int whTest_CertVerify(whServerContext* ctx)
     return 0;
 }
 
+/*
+ * Cert add/erase are client-driven, so they must respect NVM
+ * flag policy: server-only flags are stripped on add, a
+ * server-only (KEK) object can be neither overwritten nor
+ * destroyed, and a NONDESTROYABLE cert survives erase.
+ */
+int whTest_CertNvmPolicy(whServerContext* ctx)
+{
+    whServerContext* server  = (whServerContext*)ctx;
+    whNvmMetadata    meta    = {0};
+    whNvmMetadata    check   = {0};
+    const uint8_t    kek[16] = {0xA5};
+    const whNvmId    stripId = 0x55;
+    const whNvmId    certId  = 0x58;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    /* Server-only flags must be stripped from a client add. */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_CertAddTrusted(server, stripId, WH_NVM_ACCESS_ANY,
+                                 WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_USAGE_WRAP,
+                                 NULL, 0, ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(server->nvm, stripId, &check));
+    WH_TEST_ASSERT_RETURN((check.flags & WH_NVM_FLAGS_KEK) == 0);
+    WH_TEST_ASSERT_RETURN((check.flags & WH_NVM_FLAGS_USAGE_WRAP) != 0);
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, stripId));
+
+    /* Provision a KEK-flagged key directly, as trusted
+     * provisioning would. */
+    meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, 0, 0x57);
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_KEK | WH_NVM_FLAGS_NONEXPORTABLE;
+    meta.len    = sizeof(kek);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(kek), kek));
+
+    /* Cert erase must not destroy it. */
+    WH_TEST_ASSERT_RETURN(wh_Server_CertEraseTrusted(server, meta.id) ==
+                          WH_ERROR_ACCESS);
+
+    /* Cert add must not overwrite it. */
+    WH_TEST_ASSERT_RETURN(
+        wh_Server_CertAddTrusted(server, meta.id, WH_NVM_ACCESS_ANY,
+                                 WH_NVM_FLAGS_NONE, NULL, 0, ROOT_A_CERT,
+                                 ROOT_A_CERT_len) == WH_ERROR_ACCESS);
+
+    /* The KEK must be untouched. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_GetMetadata(server->nvm, meta.id, &check));
+    WH_TEST_ASSERT_RETURN((check.flags & WH_NVM_FLAGS_KEK) != 0);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(kek));
+
+    /* Server-internal unchecked destroy still works; clean up. */
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    /* A NONDESTROYABLE cert must also survive cert erase. */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, certId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONDESTROYABLE, NULL, 0,
+        ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_ASSERT_RETURN(wh_Server_CertEraseTrusted(server, certId) ==
+                          WH_ERROR_ACCESS);
+    meta.id = certId;
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &meta.id));
+
+    return 0;
+}
+
 #endif

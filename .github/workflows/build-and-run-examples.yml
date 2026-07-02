@@ -43,9 +43,9 @@ jobs:
     - name: Build POSIX server
       run: |
         if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 DEMO_KEK=1 make -j WOLFSSL_DIR=../../../wolfssl
         else
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
+          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} DEMO_KEK=1 make -j WOLFSSL_DIR=../../../wolfssl
         fi
 
     - name: Build POSIX client
