@@ -16291,18 +16291,20 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 
 #if defined(WOLFSSL_SHA3)
     i = 0;
-    while ((ret == WH_ERROR_OK) && (i < WH_NUM_DEVIDS)) {
-        ret = whTest_CryptoSha3(client, WH_DEV_IDS_ARRAY[i], rng);
+    while ((ret == WH_ERROR_OK) && (i < WH_TEST_DMA_MODE_CNT)) {
+        (void)wh_Client_SetDmaMode(client, i);
+        ret = whTest_CryptoSha3(client, WH_CLIENT_DEVID(client), rng);
         if (ret == WH_ERROR_OK) {
-            ret = whTest_CryptoSha3Async(client, WH_DEV_IDS_ARRAY[i], rng);
+            ret = whTest_CryptoSha3Async(client, WH_CLIENT_DEVID(client), rng);
         }
         if (ret == WH_ERROR_OK) {
             i++;
         }
     }
 #ifdef WOLFHSM_CFG_DMA
+    (void)wh_Client_SetDmaMode(client, 1);
     if (ret == WH_ERROR_OK) {
-        ret = whTest_CryptoSha3DmaAsync(client, WH_DEV_ID_DMA, rng);
+        ret = whTest_CryptoSha3DmaAsync(client, WH_CLIENT_DEVID(client), rng);
     }
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_SHA3 */
