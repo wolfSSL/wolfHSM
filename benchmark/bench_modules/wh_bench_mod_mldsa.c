@@ -1138,7 +1138,7 @@ int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
 #endif /* !defined(WOLFSSL_NO_ML_DSA_65) */
 
 /* Benchmark functions for ML-DSA 87 */
-#if !defined(WOLFSSL_MLDSA_NO_SIGN)
+#if !defined(WOLFSSL_NO_ML_DSA_87)
 int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params)
 {
