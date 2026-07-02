@@ -96,6 +96,9 @@ int wh_Client_SheSetUidResponse(whClientContext* c)
 
     resp = (whMessageShe_SetUidResponse*)wh_CommClient_GetDataPtr(c->comm);
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK && dataSz < sizeof(*resp)) {
+        ret = WH_ERROR_ABORTED;
+    }
     if (ret == WH_ERROR_OK) {
         ret = resp->rc;
     }
@@ -150,6 +153,9 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
             initResp = (whMessageShe_SecureBootInitResponse*)respBuf;
         } while (ret == WH_ERROR_NOTREADY);
     }
+    if (ret == 0 && dataSz < sizeof(*initResp)) {
+        ret = WH_ERROR_ABORTED;
+    }
 
     /* send update sub command until we've sent the entire bootloader */
     while (ret == 0 && bootloaderSent < bootloaderLen) {
@@ -186,6 +192,13 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
                                              respBuf);
             } while (ret == WH_ERROR_NOTREADY);
         }
+        if (ret == 0) {
+            whMessageShe_SecureBootUpdateResponse* updateResp =
+                (whMessageShe_SecureBootUpdateResponse*)respBuf;
+            if (dataSz < sizeof(*updateResp)) {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
 
         /* increment sent  */
         if (ret == 0) {
@@ -204,6 +217,9 @@ int wh_Client_SheSecureBoot(whClientContext* c, uint8_t* bootloader,
             ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, respBuf);
             finishResp = (whMessageShe_SecureBootFinishResponse*)respBuf;
         } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0 && dataSz < sizeof(*finishResp)) {
+        ret = WH_ERROR_ABORTED;
     }
 
     if (ret == 0) {
@@ -245,7 +261,9 @@ int wh_Client_SheGetStatusResponse(whClientContext* c, uint8_t* sreg)
 
     /* return error or set sreg */
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR)
+        if (dataSz < sizeof(*resp))
+            ret = WH_ERROR_ABORTED;
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR)
             ret = resp->rc;
         else
             *sreg = resp->sreg;
@@ -307,7 +325,10 @@ int wh_Client_SheLoadKeyResponse(whClientContext* c, uint8_t* messageFour,
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
         }
         else {
@@ -366,6 +387,9 @@ int wh_Client_SheLoadPlainKeyResponse(whClientContext* c)
         (whMessageShe_LoadPlainKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == 0 && dataSz < sizeof(*resp)) {
+        ret = WH_ERROR_ABORTED;
+    }
     if (ret == 0) {
         ret = resp->rc;
     }
@@ -417,7 +441,10 @@ int wh_Client_SheExportRamKeyResponse(whClientContext* c, uint8_t* messageOne,
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
         }
         else {
@@ -473,6 +500,9 @@ int wh_Client_SheInitRndResponse(whClientContext* c)
 
     resp = (whMessageShe_InitRngResponse*)wh_CommClient_GetDataPtr(c->comm);
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == 0 && dataSz < sizeof(*resp)) {
+        ret = WH_ERROR_ABORTED;
+    }
     if (ret == 0) {
         ret = resp->rc;
     }
@@ -518,7 +548,9 @@ int wh_Client_SheRndResponse(whClientContext* c, uint8_t* out, uint32_t* outSz)
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
 
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR)
+        if (dataSz < sizeof(*resp))
+            ret = WH_ERROR_ABORTED;
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR)
             ret = resp->rc;
         else {
             memcpy(out, resp->rnd, sizeof(resp->rnd));
@@ -577,6 +609,9 @@ int wh_Client_SheExtendSeedResponse(whClientContext* c)
     resp = (whMessageShe_ExtendSeedResponse*)wh_CommClient_GetDataPtr(c->comm);
     ret  = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
 
+    if (ret == 0 && dataSz < sizeof(*resp)) {
+        ret = WH_ERROR_ABORTED;
+    }
     if (ret == 0) {
         ret = resp->rc;
     }
@@ -640,8 +675,15 @@ int wh_Client_SheEncEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
+        }
+        /* payload is only present on success, so validate its size before copy */
+        else if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
         }
         else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
@@ -712,8 +754,15 @@ int wh_Client_SheEncCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
+        }
+        /* payload is only present on success, so validate its size before copy */
+        else if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
         }
         else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
@@ -780,8 +829,15 @@ int wh_Client_SheDecEcbResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
+        }
+        /* payload is only present on success, so validate its size before copy */
+        else if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
         }
         else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
@@ -852,8 +908,15 @@ int wh_Client_SheDecCbcResponse(whClientContext* c, uint8_t* out, uint32_t sz)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
+        }
+        /* payload is only present on success, so validate its size before copy */
+        else if (dataSz < sizeof(*resp) + resp->sz) {
+            ret = WH_ERROR_ABORTED;
         }
         else if (sz < resp->sz) {
             ret = WH_ERROR_BADARGS;
@@ -919,7 +982,10 @@ int wh_Client_SheGenerateMacResponse(whClientContext* c, uint8_t* out,
 
     ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
         }
         else {
@@ -991,7 +1057,10 @@ int wh_Client_SheVerifyMacResponse(whClientContext* c, uint8_t* outStatus)
     resp = (whMessageShe_VerifyMacResponse*)wh_CommClient_GetDataPtr(c->comm);
     ret  = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+        if (dataSz < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != WH_SHE_ERC_NO_ERROR) {
             ret = resp->rc;
         }
         else {
