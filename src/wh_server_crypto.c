@@ -42,6 +42,9 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
+#ifdef WOLFSSL_SHA3
+#include "wolfssl/wolfcrypt/sha3.h"
+#endif
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #if defined(WOLFSSL_HAVE_LMS)
@@ -4540,6 +4543,146 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic, int devId,
     return ret;
 }
 #endif /* WOLFSSL_SHA512 */
+
+#if defined(WOLFSSL_SHA3)
+/* SHA3 - one handler dispatches all four variants on hashType. */
+
+typedef struct {
+    uint32_t blockSize;
+    uint32_t digestSize;
+    int (*initFn)(wc_Sha3* sha, void* heap, int devId);
+    int (*updateFn)(wc_Sha3* sha, const byte* data, word32 len);
+    int (*finalFn)(wc_Sha3* sha, byte* hash);
+} _Sha3VariantOps;
+
+static int _Sha3LookupOps(int hashType, _Sha3VariantOps* ops)
+{
+    switch (hashType) {
+#ifndef WOLFSSL_NOSHA3_224
+        case WC_HASH_TYPE_SHA3_224:
+            ops->blockSize  = WC_SHA3_224_BLOCK_SIZE;
+            ops->digestSize = WC_SHA3_224_DIGEST_SIZE;
+            ops->initFn     = wc_InitSha3_224;
+            ops->updateFn   = wc_Sha3_224_Update;
+            ops->finalFn    = wc_Sha3_224_Final;
+            return 0;
+#endif
+#ifndef WOLFSSL_NOSHA3_256
+        case WC_HASH_TYPE_SHA3_256:
+            ops->blockSize  = WC_SHA3_256_BLOCK_SIZE;
+            ops->digestSize = WC_SHA3_256_DIGEST_SIZE;
+            ops->initFn     = wc_InitSha3_256;
+            ops->updateFn   = wc_Sha3_256_Update;
+            ops->finalFn    = wc_Sha3_256_Final;
+            return 0;
+#endif
+#ifndef WOLFSSL_NOSHA3_384
+        case WC_HASH_TYPE_SHA3_384:
+            ops->blockSize  = WC_SHA3_384_BLOCK_SIZE;
+            ops->digestSize = WC_SHA3_384_DIGEST_SIZE;
+            ops->initFn     = wc_InitSha3_384;
+            ops->updateFn   = wc_Sha3_384_Update;
+            ops->finalFn    = wc_Sha3_384_Final;
+            return 0;
+#endif
+#ifndef WOLFSSL_NOSHA3_512
+        case WC_HASH_TYPE_SHA3_512:
+            ops->blockSize  = WC_SHA3_512_BLOCK_SIZE;
+            ops->digestSize = WC_SHA3_512_DIGEST_SIZE;
+            ops->initFn     = wc_InitSha3_512;
+            ops->updateFn   = wc_Sha3_512_Update;
+            ops->finalFn    = wc_Sha3_512_Final;
+            return 0;
+#endif
+        default:
+            return WH_ERROR_BADARGS;
+    }
+}
+
+static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
+                       int devId, const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize)
+{
+    int                          ret = 0;
+    wc_Sha3                      sha3[1];
+    whMessageCrypto_Sha3Request  req;
+    whMessageCrypto_Sha3Response res = {0};
+    const uint8_t*               inData;
+    _Sha3VariantOps              ops;
+    int                          k;
+
+    (void)ctx;
+
+    ret = _Sha3LookupOps(hashType, &ops);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (inSize < sizeof(whMessageCrypto_Sha3Request)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSha3Request(magic, cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if ((uint32_t)req.inSz >
+        (uint32_t)(inSize - sizeof(whMessageCrypto_Sha3Request))) {
+        return WH_ERROR_BADARGS;
+    }
+    if (!req.isLastBlock && (req.inSz % ops.blockSize) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.isLastBlock && req.inSz >= ops.blockSize) {
+        return WH_ERROR_BADARGS;
+    }
+
+    inData = (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha3Request);
+
+    ret = ops.initFn(sha3, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Restore Keccak state from client. initFn already zeroed t[] and i. */
+    for (k = 0; k < 25; k++) {
+        sha3->s[k] = req.resumeState.s[k];
+    }
+
+    if (req.inSz > 0) {
+        ret = ops.updateFn(sha3, inData, req.inSz);
+    }
+    if (ret == 0) {
+        if (req.isLastBlock) {
+            ret = ops.finalFn(sha3, res.hash);
+        }
+        else {
+            /* Post-condition: whole-block input must leave i == 0. */
+            if (sha3->i != 0) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                for (k = 0; k < 25; k++) {
+                    res.resumeState.s[k] = sha3->s[k];
+                }
+                res.resumeState.i = 0;
+            }
+        }
+    }
+
+    if (ret == 0) {
+        ret =
+            wh_MessageCrypto_TranslateSha3Response(magic, &res, cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(res);
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_SHA3 */
+
 #ifdef WOLFSSL_HAVE_MLDSA
 
 #ifndef WOLFSSL_MLDSA_NO_MAKE_KEY
@@ -5614,6 +5757,21 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     }
                     break;
 #endif /* WOLFSSL_SHA512 */
+#if defined(WOLFSSL_SHA3)
+                case WC_HASH_TYPE_SHA3_224:
+                case WC_HASH_TYPE_SHA3_256:
+                case WC_HASH_TYPE_SHA3_384:
+                case WC_HASH_TYPE_SHA3_512:
+                    WH_DEBUG_SERVER("SHA3 req recv. type:%u\n",
+                                    rqstHeader.algoType);
+                    ret = _HandleSha3(ctx, rqstHeader.algoType, magic, devId,
+                                      cryptoDataIn, cryptoInSize, cryptoDataOut,
+                                      &cryptoOutSize);
+                    if (ret != 0) {
+                        WH_DEBUG_SERVER("SHA3 ret = %d\n", ret);
+                    }
+                    break;
+#endif /* WOLFSSL_SHA3 */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;
@@ -6103,6 +6261,110 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, int devId,
     return ret;
 }
 #endif /* WOLFSSL_SHA512 */
+
+#if defined(WOLFSSL_SHA3)
+static int _HandleSha3Dma(whServerContext* ctx, int hashType, uint16_t magic,
+                          int devId, uint16_t seq, const void* cryptoDataIn,
+                          uint16_t inSize, void* cryptoDataOut,
+                          uint16_t* outSize)
+{
+    (void)seq;
+    int                             ret   = 0;
+    int                             preOk = 0;
+    whMessageCrypto_Sha3DmaRequest  req;
+    whMessageCrypto_Sha3DmaResponse res = {0};
+    wc_Sha3                         sha3[1];
+    const uint8_t*                  inlineData;
+    void*                           inAddr = NULL;
+    _Sha3VariantOps                 ops;
+    int                             k;
+
+    ret = _Sha3LookupOps(hashType, &ops);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (inSize < sizeof(whMessageCrypto_Sha3DmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSha3DmaRequest(
+        magic, (const whMessageCrypto_Sha3DmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if ((uint32_t)req.inSz >
+        (uint32_t)(inSize - sizeof(whMessageCrypto_Sha3DmaRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+    if (!req.isLastBlock && ((req.inSz % ops.blockSize) != 0 ||
+                             (req.input.sz % ops.blockSize) != 0)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.isLastBlock && (req.inSz >= ops.blockSize || req.input.sz != 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    inlineData =
+        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_Sha3DmaRequest);
+
+    ret = ops.initFn(sha3, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Restore Keccak state from client. initFn already zeroed t[] and i. */
+    for (k = 0; k < 25; k++) {
+        sha3->s[k] = req.resumeState.s[k];
+    }
+
+    if (ret == 0 && req.inSz > 0) {
+        ret = ops.updateFn(sha3, inlineData, req.inSz);
+    }
+
+    if (ret == 0 && req.input.sz > 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            preOk = 1;
+            ret   = ops.updateFn(sha3, inAddr, req.input.sz);
+        }
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+    if (preOk) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == 0) {
+        if (req.isLastBlock) {
+            ret = ops.finalFn(sha3, res.hash);
+        }
+        else {
+            if (sha3->i != 0) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                for (k = 0; k < 25; k++) {
+                    res.resumeState.s[k] = sha3->s[k];
+                }
+                res.resumeState.i = 0;
+            }
+        }
+    }
+
+    (void)wh_MessageCrypto_TranslateSha3DmaResponse(
+        magic, &res, (whMessageCrypto_Sha3DmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+
+    return ret;
+}
+#endif /* WOLFSSL_SHA3 */
 
 #if defined(WOLFSSL_HAVE_MLDSA)
 
@@ -8421,6 +8683,19 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     }
                     break;
 #endif /* WOLFSSL_SHA512 */
+#if defined(WOLFSSL_SHA3)
+                case WC_HASH_TYPE_SHA3_224:
+                case WC_HASH_TYPE_SHA3_256:
+                case WC_HASH_TYPE_SHA3_384:
+                case WC_HASH_TYPE_SHA3_512:
+                    ret = _HandleSha3Dma(ctx, rqstHeader.algoType, magic, devId,
+                                         seq, cryptoDataIn, cryptoInSize,
+                                         cryptoDataOut, &cryptoOutSize);
+                    if (ret != 0) {
+                        WH_DEBUG_SERVER("DMA SHA3 ret = %d\n", ret);
+                    }
+                    break;
+#endif /* WOLFSSL_SHA3 */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;
