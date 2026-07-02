@@ -184,6 +184,25 @@ int wh_Auth_Logout(whAuthContext* context, whUserId user_id)
 }
 
 
+/* Clears the local session under the auth lock. Fails without clearing if
+ * the lock can not be acquired, to avoid racing an in-flight login. */
+int wh_Auth_Reset(whAuthContext* context)
+{
+    int rc;
+
+    if (context == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = WH_AUTH_LOCK(context);
+    if (rc == WH_ERROR_OK) {
+        memset(&context->user, 0, sizeof(whAuthUser));
+        (void)WH_AUTH_UNLOCK(context);
+    } /* LOCK() */
+    return rc;
+}
+
+
 /* Check on request authorization and action permissions for current user
  * logged in */
 int wh_Auth_CheckRequestAuthorization(whAuthContext* context, uint16_t group,
