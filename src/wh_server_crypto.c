@@ -1802,8 +1802,10 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
      */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   sizeof(whMessageCrypto_HkdfResponse));
 
     /* Check if output size is valid */
     if (outSz > max_size) {
@@ -1963,8 +1965,10 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
 
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size =
+        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader) -
+                   sizeof(whMessageCrypto_CmacKdfResponse));
 
     if (outSz > max_size) {
         return WH_ERROR_BADARGS;
@@ -3653,9 +3657,10 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t tag_len     = req.authTagSz;
     whKeyId  key_id      = wh_KeyId_TranslateFromClient(
              WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len +
-                           key_len + iv_len + authin_len +
-                           ((enc == 0) ? tag_len : 0);
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesGcmRequest) +
+                           (uint64_t)len + (uint64_t)key_len +
+                           (uint64_t)iv_len + (uint64_t)authin_len +
+                           ((enc == 0) ? (uint64_t)tag_len : 0);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3678,6 +3683,12 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
 
     uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
                        ((enc == 0) ? 0 : tag_len);
+
+    /* Ensure the response output and tag fit within the comm data buffer */
+    if (res_len > (WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageCrypto_GenericResponseHeader))) {
+        return WH_ERROR_BADARGS;
+    }
 
     WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
             "authtagsz:%d reqsz:%u ressz:%u\n",

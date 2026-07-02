@@ -37,6 +37,7 @@
 
 /* Components */
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_utils.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/settings.h"
@@ -811,6 +812,7 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     whMessageKeystore_CacheRequest* req = NULL;
     uint8_t*                        packIn;
     uint16_t                        capSz;
+    int                             ret;
 
     if (c == NULL || in == NULL || inSz == 0 ||
         sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -841,8 +843,10 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     memcpy(packIn, in, inSz);
 
     /* write request */
-    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
-                                 sizeof(*req) + inSz, (uint8_t*)req);
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
+                                sizeof(*req) + inSz, (uint8_t*)req);
+    wh_Utils_ForceZero(packIn, inSz);
+    return ret;
 }
 
 int wh_Client_KeyCacheRequest(whClientContext* c, uint32_t flags,
@@ -1001,6 +1005,10 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
         if (resp->rc != 0) {
             ret = resp->rc;
         }
+        else if (size < sizeof(*resp) || resp->len > (size - sizeof(*resp))) {
+            /* Response frame does not contain the claimed key length */
+            ret = WH_ERROR_ABORTED;
+        }
         else {
             if (out == NULL) {
                 *outSz = resp->len;
@@ -1019,6 +1027,7 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 else
                     memcpy(label, resp->label, labelSz);
             }
+            wh_Utils_ForceZero(packOut, resp->len);
         }
     }
     return ret;
