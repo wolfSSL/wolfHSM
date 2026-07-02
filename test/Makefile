@@ -157,6 +157,11 @@ ifeq ($(SHE),1)
 	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Enable per-client crypto affinity (HW/SW devId selection) and its unit test
+ifeq ($(CRYPTO_AFFINITY),1)
+	DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
+endif
+
 # Support a TLS-capable build
 ifeq ($(TLS),1)
 	DEF += -DWOLFHSM_CFG_TLS

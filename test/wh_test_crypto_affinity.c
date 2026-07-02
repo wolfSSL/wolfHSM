@@ -26,8 +26,10 @@
 
 #include "wolfhsm/wh_settings.h"
 
-/* Only compile if we have crypto, client, server, and crypto callbacks */
-#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLF_CRYPTO_CB)
+/* Only compile if the crypto affinity feature is enabled and we have crypto,
+ * client, server, and crypto callbacks */
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLF_CRYPTO_CB) && \
+    defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
 
 #include <stdint.h>
 #include <stdio.h>
@@ -518,4 +520,5 @@ int whTest_CryptoAffinity(void)
     return WH_ERROR_OK;
 }
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLF_CRYPTO_CB */
+#endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLF_CRYPTO_CB && \
+          WOLFHSM_CFG_CRYPTO_AFFINITY */

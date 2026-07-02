@@ -40,6 +40,13 @@
  *  keys to be shared across multiple clients
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_CRYPTO_AFFINITY - If defined, enable per-client crypto affinity,
+ *  allowing a client to request that crypto operations run on the server's
+ *  hardware device (WH_CRYPTO_AFFINITY_HW) or in software
+ *  (WH_CRYPTO_AFFINITY_SW). When not defined, the server always uses its
+ *  configured devId and the affinity request header field is ignored.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
  *      Default: Not defined
  *
@@ -470,6 +477,12 @@
 
 #if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_KEYWRAP)
 #error "WOLFHSM_CFG_KEYWRAP is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#endif
+
+/* Crypto affinity selects the devId used for crypto operations, so it has no
+ * meaning without wolfCrypt. */
+#if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
+#error "WOLFHSM_CFG_CRYPTO_AFFINITY is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
 
 #if defined(WOLFHSM_CFG_HWKEYSTORE)

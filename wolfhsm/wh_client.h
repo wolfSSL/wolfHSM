@@ -483,11 +483,14 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_lifecycle_state,
         uint32_t *out_nvm_state);
 
+#if defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
 /**
  * @brief Sets the crypto affinity on the client context.
  *
  * Affinity is stored locally and transmitted per-message in every crypto
  * request. No round-trip to the server is required.
+ *
+ * Requires WOLFHSM_CFG_CRYPTO_AFFINITY.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] affinity Requested crypto affinity (WH_CRYPTO_AFFINITY_SW or
@@ -499,11 +502,14 @@ int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
 /**
  * @brief Gets the current crypto affinity from the client context.
  *
+ * Requires WOLFHSM_CFG_CRYPTO_AFFINITY.
+ *
  * @param[in] c Pointer to the client context.
  * @param[out] out_affinity Pointer to store the current crypto affinity.
  * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
  */
 int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
+#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
 
 /**
  * @brief Turns the DMA path on or off for this client.

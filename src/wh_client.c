@@ -512,6 +512,7 @@ int wh_Client_CommInfo(whClientContext* c,
     return rc;
 }
 
+#if defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
 int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity)
 {
     if (c == NULL) {
@@ -533,6 +534,7 @@ int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity)
     *out_affinity = c->cryptoAffinity;
     return WH_ERROR_OK;
 }
+#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
 
 int wh_Client_SetDmaMode(whClientContext* c, int useDma)
 {

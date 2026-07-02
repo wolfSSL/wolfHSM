@@ -5365,11 +5365,17 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
     wh_MessageCrypto_TranslateGenericRequestHeader(
         magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
+#if defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
     /* Compute devId from the per-message affinity field */
     devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
              ctx->devId != INVALID_DEVID)
                 ? ctx->devId
                 : INVALID_DEVID;
+#else
+    /* Crypto affinity disabled: always use the server's configured devId and
+     * ignore the request header affinity field. */
+    devId = ctx->devId;
+#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
 
     WH_DEBUG_SERVER_VERBOSE("HandleCryptoRequest. Action:%u\n", action);
     WH_DEBUG_VERBOSE_HEXDUMP("[server] Crypto Request:\n", (const uint8_t*)req_packet,
@@ -8372,11 +8378,17 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
     wh_MessageCrypto_TranslateGenericRequestHeader(
         magic, (whMessageCrypto_GenericRequestHeader*)req_packet, &rqstHeader);
 
+#if defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
     /* Compute devId from the per-message affinity field */
     devId = (rqstHeader.affinity == WH_CRYPTO_AFFINITY_HW &&
              ctx->devId != INVALID_DEVID)
                 ? ctx->devId
                 : INVALID_DEVID;
+#else
+    /* Crypto affinity disabled: always use the server's configured devId and
+     * ignore the request header affinity field. */
+    devId = ctx->devId;
+#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
 
     switch (action) {
         case WC_ALGO_TYPE_HASH:
