@@ -8497,11 +8497,12 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
+    *requestSent = false;
+
     ret = _Sha3RejectKeccak(sha);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-    *requestSent = false;
 
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
@@ -8609,6 +8610,10 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
 
     ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz <
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         for (k = 0; k < 25; k++) {
             sha->s[k] = res->resumeState.s[k];
         }
@@ -8692,6 +8697,10 @@ static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 
     ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&res);
     if (ret >= 0) {
+        if (dataSz <
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res)) {
+            return WH_ERROR_ABORTED;
+        }
         memcpy(out, res->hash, v->digestSize);
         /* Reset state, preserving heap and devId. */
         savedHeap  = sha->heap;
@@ -8825,6 +8834,8 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
+    *requestSent = false;
+
     ret = _Sha3RejectKeccak(sha);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -8832,7 +8843,6 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
     if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
         return WH_ERROR_REQUEST_PENDING;
     }
-    *requestSent = false;
 
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
@@ -8953,8 +8963,14 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&resp);
         if (ret >= 0) {
-            for (k = 0; k < 25; k++) {
-                sha->s[k] = resp->resumeState.s[k];
+            if (respSz <
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                for (k = 0; k < 25; k++) {
+                    sha->s[k] = resp->resumeState.s[k];
+                }
             }
         }
     }
@@ -9051,6 +9067,10 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&resp);
         if (ret >= 0) {
+            if (respSz <
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp)) {
+                return WH_ERROR_ABORTED;
+            }
             memcpy(out, resp->hash, v->digestSize);
             savedHeap  = sha->heap;
             savedDevId = sha->devId;

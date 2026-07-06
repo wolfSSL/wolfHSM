@@ -6521,7 +6521,7 @@ static int whTest_CryptoSha3OneVariant(whClientContext* ctx, int devId,
 }
 
 /* One-shot wrapper bad-arg coverage: (in == NULL, inLen != 0) must be
- * rejected before any state mutation. Regression for HIGH-1: the oneshot
+ * rejected before any state mutation. Regression check: the oneshot
  * wrappers previously skipped the update branch on this input and silently
  * returned a digest of the (empty) state. */
 static int whTest_CryptoSha3OneshotBadArgs(whClientContext*         ctx,
