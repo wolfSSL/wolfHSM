@@ -183,9 +183,12 @@ int wh_CommClient_RecvResponse(whCommClient* context,
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
         (void)wh_Timeout_Stop(&context->respTimeout);
 #endif
-        if (size < sizeof(*context->hdr)) {
-            /* Size is too small - transport-level corruption; treat as fatal
-             * and clear pending since the caller must tear down anyway. */
+        if ((size < sizeof(*context->hdr)) ||
+            (size > WH_COMM_MTU)) {
+            /* Size out of range - transport-level corruption (the transport
+             * clamps its copy, but reports the true peer-controlled length, so
+             * an oversized value here means a truncated/bogus message). Treat as
+             * fatal and clear pending since the caller must tear down anyway. */
             context->pending = 0;
             rc = WH_ERROR_ABORTED;
         }
@@ -369,7 +372,10 @@ int wh_CommServer_RecvRequest(whCommServer* context,
             &size,
             context->packet);
     if (rc == 0) {
-        if (size < sizeof(*context->hdr)) {
+        /* size is the true peer-controlled length; the transport clamps its own
+         * copy, so an out-of-range value here is transport-level corruption. */
+        if ((size < sizeof(*context->hdr)) ||
+            (size > WH_COMM_MTU)) {
             rc = WH_ERROR_ABORTED;
         }
         if (rc == 0) {
