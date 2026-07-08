@@ -850,6 +850,43 @@ int wh_Server_KeystoreCacheKeyChecked(whServerContext* server,
     return _KeystoreCacheKey(server, meta, in, 1);
 }
 
+#ifndef WC_NO_RNG
+static int _KeystoreCacheRandomKey(whServerContext* server, whNvmMetadata* meta)
+{
+    uint8_t*       slotBuf;
+    whNvmMetadata* slotMeta;
+    int            ret;
+
+    /* make sure id and length are valid */
+    if ((server == NULL) || (meta == NULL) || (meta->len == 0) ||
+        WH_KEYID_ISERASED(meta->id) ||
+        ((meta->len > WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE) &&
+         (meta->len > WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(server, meta->id, meta->len,
+                                                &slotBuf, &slotMeta);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Fill the slot directly from the server RNG */
+    ret = wc_RNG_GenerateBlock(server->crypto->rng, slotBuf, meta->len);
+    if (ret != 0) {
+        return ret;
+    }
+
+    memcpy((uint8_t*)slotMeta, (uint8_t*)meta, sizeof(whNvmMetadata));
+    _MarkKeyCommitted(_GetCacheContext(server, meta->id), meta->id, 0);
+
+    WH_DEBUG_SERVER_VERBOSE("hsmGenerateKey: cached keyid=0x%X, len=%u\n",
+                            meta->id, meta->len);
+
+    return WH_ERROR_OK;
+}
+#endif /* !WC_NO_RNG */
+
 static int _FindInCache(whServerContext* server, whKeyId keyId, int* out_index,
                         int* out_big, uint8_t** out_buffer,
                         whNvmMetadata** out_meta)
@@ -2268,6 +2305,68 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
             (void)wh_MessageKeystore_TranslateCacheResponse(
                 magic, &resp, (whMessageKeystore_CacheResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
+
+        case WH_KEY_CACHE_RANDOM: {
+            whMessageKeystore_CacheRandomRequest  req  = {0};
+            whMessageKeystore_CacheRandomResponse resp = {0};
+
+            /* Validate req_size can hold the fixed request struct */
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                /* translate request */
+                (void)wh_MessageKeystore_TranslateCacheRandomRequest(
+                    magic, (whMessageKeystore_CacheRandomRequest*)req_packet,
+                    &req);
+
+                /* set the metadata fields (no key material is sent) */
+                meta->id = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
+                meta->access = WH_NVM_ACCESS_ANY;
+                meta->flags  = req.flags;
+                meta->len    = req.sz;
+                /* truncate label if it's too large */
+                if (req.labelSz > WH_NVM_LABEL_LEN) {
+                    req.labelSz = WH_NVM_LABEL_LEN;
+                }
+                memcpy(meta->label, req.label, req.labelSz);
+            }
+
+#ifndef WC_NO_RNG
+            if (ret == WH_ERROR_OK) {
+                ret = WH_SERVER_NVM_LOCK(server);
+            }
+            if (ret == WH_ERROR_OK) {
+                /* get a new id if one wasn't provided */
+                if (WH_KEYID_ISERASED(meta->id)) {
+                    ret = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+                }
+                /* generate the key from the server RNG and cache it */
+                if (ret == WH_ERROR_OK) {
+                    ret = _KeystoreCacheRandomKey(server, meta);
+                }
+
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+#else
+            if (ret == WH_ERROR_OK) {
+                ret = WH_ERROR_NOTIMPL;
+            }
+#endif /* !WC_NO_RNG */
+
+            if (ret == WH_ERROR_OK) {
+                /* Translate server keyId back to client format with flags */
+                resp.id = wh_KeyId_TranslateToClient(meta->id);
+            }
+            resp.rc = ret;
+
+            (void)wh_MessageKeystore_TranslateCacheRandomResponse(
+                magic, &resp, (whMessageKeystore_CacheRandomResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
         } break;

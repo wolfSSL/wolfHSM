@@ -6753,6 +6753,90 @@ static int whTest_CacheExportKeyDma(whClientContext* ctx, whKeyId* inout_key_id,
 }
 #endif /* WOLFHSM_CFG_DMA */
 
+static int whTest_KeyCacheRandom(whClientContext* ctx, int devId,
+                                     WC_RNG* rng)
+{
+    (void)devId;
+    (void)rng; /* Unused */
+
+#define WH_TEST_KEYCACHERANDOM_KEYSIZE 32
+    int      ret;
+    int      i;
+    int      isZero;
+    uint16_t outLen;
+    uint16_t keyId;
+    uint16_t keyId2;
+    uint8_t  keyOut[WH_TEST_KEYCACHERANDOM_KEYSIZE] = {0};
+    uint8_t  labelIn[WH_NVM_LABEL_LEN]      = "KeyGenFromRng Test";
+    uint8_t  labelOut[WH_NVM_LABEL_LEN]     = {0};
+
+    /* Generate a key from the server RNG and cache it */
+    keyId = WH_KEYID_ERASED;
+    ret   = wh_Client_KeyCacheRandom(ctx, 0, labelIn, sizeof(labelIn),
+                                         WH_TEST_KEYCACHERANDOM_KEYSIZE, &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRandom %d\n", ret);
+    }
+    else if (keyId == WH_KEYID_ERASED) {
+        WH_ERROR_PRINT("KeyCacheRandom returned erased keyId\n");
+        ret = -1;
+    }
+
+    /* Export it back and verify size, label, and that RNG actually ran */
+    if (ret == 0) {
+        outLen = sizeof(keyOut);
+        ret    = wh_Client_KeyExport(ctx, keyId, labelOut, sizeof(labelOut),
+                                     keyOut, &outLen);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyExport %d\n", ret);
+        }
+        else if (outLen != WH_TEST_KEYCACHERANDOM_KEYSIZE) {
+            WH_ERROR_PRINT("KeyCacheRandom bad length %u\n", outLen);
+            ret = -1;
+        }
+        else if (memcmp(labelIn, labelOut, sizeof(labelIn)) != 0) {
+            WH_ERROR_PRINT("KeyCacheRandom label mismatch\n");
+            ret = -1;
+        }
+        else {
+            /* sanity: generated key should not be all zeros */
+            isZero = 1;
+            for (i = 0; i < (int)outLen; i++) {
+                if (keyOut[i] != 0) {
+                    isZero = 0;
+                    break;
+                }
+            }
+            if (isZero) {
+                WH_ERROR_PRINT("KeyCacheRandom produced all-zero key\n");
+                ret = -1;
+            }
+        }
+    }
+
+    /* A second generation should yield a distinct auto-assigned keyId */
+    if (ret == 0) {
+        keyId2 = WH_KEYID_ERASED;
+        ret    = wh_Client_KeyCacheRandom(ctx, 0, labelIn, sizeof(labelIn),
+                                              WH_TEST_KEYCACHERANDOM_KEYSIZE, &keyId2);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to wh_Client_KeyCacheRandom(2) %d\n", ret);
+        }
+        else if (keyId2 == keyId) {
+            WH_ERROR_PRINT("KeyCacheRandom reused keyId 0x%X\n", keyId);
+            ret = -1;
+        }
+        (void)wh_Client_KeyEvict(ctx, keyId2);
+    }
+
+    (void)wh_Client_KeyEvict(ctx, keyId);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("KEY CACHE RANDOM SUCCESS\n");
+    }
+    return ret;
+}
+
 static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
 {
     (void)devId; (void)rng; /* Unused */
@@ -15339,6 +15423,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         /* Test Key Cache functions */
         ret = whTest_KeyCache(client, WH_CLIENT_DEVID(client), rng);
+    }
+
+    if (ret == 0) {
+        /* Test server-side key generation from RNG */
+        ret = whTest_KeyCacheRandom(client, WH_DEV_ID, rng);
     }
 
     if (ret == 0) {

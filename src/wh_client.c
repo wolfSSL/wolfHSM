@@ -905,6 +905,105 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
     return ret;
 }
 
+int wh_Client_KeyCacheRandomRequest_ex(whClientContext* c, uint32_t flags,
+                                            uint8_t* label, uint16_t labelSz,
+                                            uint16_t keySz, uint16_t keyId)
+{
+    whMessageKeystore_CacheRandomRequest* req = NULL;
+    uint16_t                           capSz;
+
+    if (c == NULL || keySz == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_CacheRandomRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->id    = keyId;
+    req->flags = flags;
+    req->sz    = keySz;
+
+    if (label == NULL) {
+        req->labelSz = 0;
+    }
+    else {
+        /* write label */
+        capSz = (labelSz > WH_NVM_LABEL_LEN) ? WH_NVM_LABEL_LEN : labelSz;
+        req->labelSz = capSz;
+        memcpy(req->label, label, capSz);
+    }
+
+    /* write request (no key material is sent) */
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_RANDOM,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
+                                        uint8_t* label, uint16_t labelSz,
+                                        uint16_t keySz)
+{
+    return wh_Client_KeyCacheRandomRequest_ex(c, flags, label, labelSz,
+                                                  keySz, WH_KEYID_ERASED);
+}
+
+int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
+{
+    uint16_t                              group;
+    uint16_t                              action;
+    uint16_t                              size;
+    int                                   ret;
+    whMessageKeystore_CacheRandomResponse *resp = NULL;
+
+    if (c == NULL || keyId == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageKeystore_CacheRandomResponse*)wh_CommClient_GetDataPtr(
+        c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
+    if (ret == WH_ERROR_OK) {
+        if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            *keyId = resp->id;
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_KeyCacheRandom(whClientContext* c, uint32_t flags,
+                                 uint8_t* label, uint16_t labelSz,
+                                 uint16_t keySz, uint16_t* keyId)
+{
+    int ret = WH_ERROR_OK;
+
+    if (keyId == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyCacheRandomRequest_ex(c, flags, label, labelSz,
+                                                 keySz, *keyId);
+
+    if (ret == 0) {
+        do {
+            ret = wh_Client_KeyCacheRandomResponse(c, keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    WH_DEBUG_CLIENT_VERBOSE("label:%.*s key_id:%x ret:%d \n",
+           (label != NULL) ? (int)labelSz : 0,
+           (label != NULL) ? (const char*)label : "", *keyId, ret);
+    return ret;
+}
+
 int wh_Client_KeyEvictRequest(whClientContext* c, uint16_t keyId)
 {
     whMessageKeystore_EvictRequest* req = NULL;
