@@ -483,7 +483,6 @@ int wh_Client_CommInfo(whClientContext* c,
         uint32_t *out_lifecycle_state,
         uint32_t *out_nvm_state);
 
-#if defined(WOLFHSM_CFG_CRYPTO_AFFINITY)
 /**
  * @brief Sets the crypto affinity on the client context.
  *
@@ -509,7 +508,6 @@ int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
  * @return int Returns 0 on success, or WH_ERROR_BADARGS on invalid input.
  */
 int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
-#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
 
 /**
  * @brief Turns the DMA path on or off for this client.
