@@ -489,6 +489,8 @@ int wh_Client_CommInfo(whClientContext* c,
  * Affinity is stored locally and transmitted per-message in every crypto
  * request. No round-trip to the server is required.
  *
+ * Requires WOLFHSM_CFG_CRYPTO_AFFINITY.
+ *
  * @param[in] c Pointer to the client context.
  * @param[in] affinity Requested crypto affinity (WH_CRYPTO_AFFINITY_SW or
  *                     WH_CRYPTO_AFFINITY_HW).
@@ -498,6 +500,8 @@ int wh_Client_SetCryptoAffinity(whClientContext* c, uint32_t affinity);
 
 /**
  * @brief Gets the current crypto affinity from the client context.
+ *
+ * Requires WOLFHSM_CFG_CRYPTO_AFFINITY.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] out_affinity Pointer to store the current crypto affinity.

@@ -138,7 +138,7 @@ The same ID can name a key the client just cached, one provisioned into NVM at t
 
 Many of the platforms wolfHSM targets ship a dedicated crypto accelerator alongside their secure core. The server can use these accelerators per-algorithm through the same crypto callback mechanism: a port-supplied callback, registered at server init, redirects supported operations to the vendor's hardware driver, and anything not implemented in hardware falls back to wolfCrypt software. Which algorithms are accelerated depends on the silicon and is documented in each platform's port.
 
-Clients control whether a given crypto request should prefer hardware or software execution through the **crypto affinity** API. Affinity is a per-client setting with two values:
+Clients control whether a given crypto request should prefer hardware or software execution through the **crypto affinity** API. This feature is compiled in only when `WOLFHSM_CFG_CRYPTO_AFFINITY` is defined; when it is not, the server always uses its configured device ID and the client API below is unavailable. Affinity is a per-client setting with two values:
 
 - `WH_CRYPTO_AFFINITY_HW` (default): the server attempts to execute the operation using the configured hardware crypto device. If the server was not configured with a valid hardware device ID, or if the requested algorithm is not implemented in hardware, the request transparently falls back to wolfCrypt's software implementation.
 - `WH_CRYPTO_AFFINITY_SW`: the server always executes the operation using wolfCrypt's software implementation, bypassing any registered hardware device.
