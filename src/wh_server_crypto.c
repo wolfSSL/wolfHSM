@@ -6132,7 +6132,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     uint16_t    keySize       = 0;
 
     whMessageCrypto_MlDsaKeyGenDmaRequest req;
-    whMessageCrypto_MlDsaKeyGenDmaResponse res;
+    whMessageCrypto_MlDsaKeyGenDmaResponse res = {0};
 
     if (inSize < sizeof(whMessageCrypto_MlDsaKeyGenDmaRequest)) {
         return WH_ERROR_BADARGS;
