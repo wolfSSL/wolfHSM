@@ -14856,6 +14856,73 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
 #endif /* HAVE_ECC_DHE */
 #endif /* HAVE_ECC */
 
+#ifdef HAVE_CURVE25519
+    /* X25519 (Curve25519) shared secret without DERIVE flag */
+    WH_TEST_PRINT("  Testing X25519 shared secret without DERIVE flag...\n");
+    {
+        curve25519_key privKey[1];
+        curve25519_key pubKey[1];
+        uint8_t        x25519Secret[CURVE25519_KEYSIZE] = {0};
+        word32         x25519SecretLen                  = sizeof(x25519Secret);
+        whKeyId        privId                           = WH_KEYID_ERASED;
+        whKeyId        pubId                            = WH_KEYID_ERASED;
+
+        /* Generate a private key on the server WITHOUT the derive flag */
+        ret = wh_Client_Curve25519MakeCacheKey(
+            client, CURVE25519_KEYSIZE, &privId, WH_NVM_FLAGS_USAGE_SIGN,
+            (uint8_t*)"x25519-no-derive", strlen("x25519-no-derive"));
+        if (ret == 0) {
+            /* Valid peer public key (DERIVE allowed) */
+            ret = wh_Client_Curve25519MakeCacheKey(
+                client, CURVE25519_KEYSIZE, &pubId, WH_NVM_FLAGS_USAGE_DERIVE,
+                (uint8_t*)"x25519-peer", strlen("x25519-peer"));
+        }
+        if (ret == 0) {
+            ret = wc_curve25519_init_ex(privKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wc_curve25519_init_ex(pubKey, NULL,
+                                            WH_CLIENT_DEVID(client));
+                if (ret == 0) {
+                    /* Associate the cached keyIds with the local key objects */
+                    ret = wh_Client_Curve25519SetKeyId(privKey, privId);
+                    if (ret == 0) {
+                        ret = wh_Client_Curve25519SetKeyId(pubKey, pubId);
+                    }
+
+                    /* Must fail: private key lacks DERIVE */
+                    if (ret == 0) {
+                        ret = wc_curve25519_shared_secret(
+                            privKey, pubKey, x25519Secret, &x25519SecretLen);
+                        if (ret == WH_ERROR_USAGE) {
+                            WH_TEST_PRINT(
+                                "    PASS: Correctly denied key derivation\n");
+                            ret = 0; /* Test passed */
+                        }
+                        else {
+                            WH_ERROR_PRINT(
+                                "    FAIL: Expected WH_ERROR_USAGE, got %d\n",
+                                ret);
+                            ret = WH_ERROR_ABORTED;
+                        }
+                    }
+                    wc_curve25519_free(pubKey);
+                }
+                wc_curve25519_free(privKey);
+            }
+        }
+        /* Clean up cached keys */
+        if (!WH_KEYID_ISERASED(privId)) {
+            wh_Client_KeyEvict(client, privId);
+        }
+        if (!WH_KEYID_ISERASED(pubId)) {
+            wh_Client_KeyEvict(client, pubId);
+        }
+    }
+    if (ret != 0) {
+        return ret;
+    }
+#endif /* HAVE_CURVE25519 */
+
 #ifdef HAVE_HKDF
     /* HKDF without DERIVE flag */
     WH_TEST_PRINT("  Testing HKDF without DERIVE flag...\n");
