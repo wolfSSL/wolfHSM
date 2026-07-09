@@ -271,7 +271,7 @@ int posixLogFile_Iterate(void* context, whLogIterateCb iterate_cb,
         char               level_str[32];
         char               file_buf[256];
         char               func_buf[256];
-        char               msg_buf[WOLFHSM_CFG_LOG_MSG_MAX];
+        char               msg_buf[WOLFHSM_CFG_LOG_MSG_MAX] = {0};
         unsigned long long timestamp;
         unsigned int       line_num;
 
