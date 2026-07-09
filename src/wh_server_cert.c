@@ -953,6 +953,15 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             whMessageCert_EraseTrustedRequest req  = {0};
             whMessageCert_SimpleResponse      resp = {0};
 
+            /* Validate minimum size */
+            if (req_size < sizeof(req)) {
+                resp.rc = WH_ERROR_BADARGS;
+                wh_MessageCert_TranslateSimpleResponse(
+                    magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
             /* Convert request struct */
             wh_MessageCert_TranslateEraseTrustedRequest(
                 magic, (whMessageCert_EraseTrustedRequest*)req_packet, &req);
