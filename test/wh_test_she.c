@@ -405,6 +405,43 @@ int whTest_SheClientConfig(whClientConfig* config)
         WH_TEST_PRINT("SHE LOAD KEY UID checks SUCCESS\n");
     }
 
+    /* Corrupted M3 with valid M1/M2 must be rejected; reloading with the
+     * restored M3 at the same counter then succeeds. */
+    {
+        uint8_t savedM3;
+
+        if ((ret = wh_She_GenerateLoadableKey(
+                 SHE_TEST_VECTOR_KEY_ID, WH_SHE_MASTER_ECU_KEY_ID, 2, 0, sheUid,
+                 vectorRawKey, vectorMasterEcuKey, messageOne, messageTwo,
+                 messageThree, messageFour, messageFive)) != 0) {
+            WH_ERROR_PRINT("Failed to generate M3-test M1/M2/M3 %d\n", ret);
+            goto exit;
+        }
+
+        savedM3 = messageThree[0];
+        messageThree[0] ^= 0xFF;
+        ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree,
+                                   outMessageFour, outMessageFive);
+        if (ret != WH_SHE_ERC_KEY_UPDATE_ERROR) {
+            WH_ERROR_PRINT("SHE LOAD KEY corrupt M3: expected "
+                           "KEY_UPDATE_ERROR, got %d\n",
+                           ret);
+            ret = WH_ERROR_ABORTED;
+            goto exit;
+        }
+
+        messageThree[0] = savedM3;
+        if ((ret = wh_Client_SheLoadKey(client, messageOne, messageTwo,
+                                        messageThree, outMessageFour,
+                                        outMessageFive)) != 0) {
+            WH_ERROR_PRINT("SHE LOAD KEY restored M3: expected success, "
+                           "got %d\n",
+                           ret);
+            goto exit;
+        }
+        WH_TEST_PRINT("SHE LOAD KEY M3 CMAC auth SUCCESS\n");
+    }
+
     if ((ret = wh_Client_SheInitRnd(client)) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_SheInitRnd %d\n", ret);
         goto exit;
