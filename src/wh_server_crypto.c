@@ -1592,6 +1592,7 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic, int devId,
                 if (ret < 0) {
                     /* Problem dumping the public key.  Set to 0 length */
                     pub_size = 0;
+                    ret      = 0;
                 }
                 else {
                     pub_size = ret;
