@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ARXML ECUC module description for the wolfHSM AUTOSAR Crypto
+    Driver, R22-11. Integrators import this into their config tool
+    (DaVinci Configurator, ISOLAR-AB, EB tresos Studio) which generates
+    project-specific Crypto_PBcfg.c / Crypto_Lcfg.c from their ECU
+    configuration.
+
+    Schema notes
+    ------------
+    - REFINED-MODULE-DEF-REF points at the standard AUTOSAR
+      /AUTOSAR/EcucDefs/Crypto module so vendor tools recognise this
+      as a refinement of the standard Crypto Driver module.
+    - Each container declares LOWER- / UPPER-MULTIPLICITY so the
+      schema validator can produce useful diagnostics.
+    - Parameter definitions cover the subset surfaced by this port's
+      public API: driver object count, async queue depth, per-key
+      algorithm metadata, and the platform-specific transport target.
+      Integrators typically extend with project-specific containers
+      (CryptoKeyElement, CryptoPrimitive, CryptoJob, ...).
+-->
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00050.xsd">
+  <AR-PACKAGES>
+    <AR-PACKAGE>
+      <SHORT-NAME>wolfHSM</SHORT-NAME>
+      <AR-PACKAGES>
+        <AR-PACKAGE>
+          <SHORT-NAME>EcucModuleDefs</SHORT-NAME>
+          <ELEMENTS>
+            <ECUC-MODULE-DEF UUID="6f1f0eaf-1c6c-4f56-bc1d-7c4b1c0a4f01">
+              <SHORT-NAME>Crypto</SHORT-NAME>
+              <DESC><L-2 L="EN">wolfHSM Crypto Driver, AUTOSAR R22-11</L-2></DESC>
+              <LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY>
+              <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+              <REFINED-MODULE-DEF-REF DEST="ECUC-MODULE-DEF">/AUTOSAR/EcucDefs/Crypto</REFINED-MODULE-DEF-REF>
+              <CONTAINERS>
+
+                <ECUC-PARAM-CONF-CONTAINER-DEF UUID="6f1f0eaf-1c6c-4f56-bc1d-7c4b1c0a4f02">
+                  <SHORT-NAME>CryptoGeneral</SHORT-NAME>
+                  <DESC><L-2 L="EN">Driver-wide configuration.</L-2></DESC>
+                  <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                  <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                  <PARAMETERS>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoDriverObjectCount</SHORT-NAME>
+                      <DESC><L-2 L="EN">Number of Crypto Driver Objects (CRYPTO_DRIVER_OBJECT_COUNT).</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <DEFAULT-VALUE>1</DEFAULT-VALUE>
+                      <MIN>1</MIN>
+                      <MAX>255</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoMaxAsyncJobs</SHORT-NAME>
+                      <DESC><L-2 L="EN">Maximum queued async jobs per driver object (CRYPTO_MAX_ASYNC_JOBS).</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <DEFAULT-VALUE>4</DEFAULT-VALUE>
+                      <MIN>1</MIN>
+                      <MAX>32</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoVendorId</SHORT-NAME>
+                      <DESC><L-2 L="EN">AUTOSAR-registered vendor identifier (CRYPTO_VENDOR_ID).</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <DEFAULT-VALUE>0</DEFAULT-VALUE>
+                      <MIN>0</MIN>
+                      <MAX>65535</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-BOOLEAN-PARAM-DEF>
+                      <SHORT-NAME>CryptoDevErrorDetect</SHORT-NAME>
+                      <DESC><L-2 L="EN">Enable DET error reporting (CRYPTO_DEV_ERROR_DETECT).</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <DEFAULT-VALUE>true</DEFAULT-VALUE>
+                    </ECUC-BOOLEAN-PARAM-DEF>
+                  </PARAMETERS>
+                </ECUC-PARAM-CONF-CONTAINER-DEF>
+
+                <ECUC-PARAM-CONF-CONTAINER-DEF UUID="6f1f0eaf-1c6c-4f56-bc1d-7c4b1c0a4f03">
+                  <SHORT-NAME>CryptoDriverObject</SHORT-NAME>
+                  <DESC><L-2 L="EN">One Crypto Driver Object per wolfHSM client context.</L-2></DESC>
+                  <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                  <UPPER-MULTIPLICITY>255</UPPER-MULTIPLICITY>
+                  <PARAMETERS>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoDriverObjectId</SHORT-NAME>
+                      <DESC><L-2 L="EN">Object identifier passed to Crypto_ProcessJob.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <MIN>0</MIN>
+                      <MAX>254</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoQueueSize</SHORT-NAME>
+                      <DESC><L-2 L="EN">CSM-facing queue depth for this object.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <DEFAULT-VALUE>8</DEFAULT-VALUE>
+                      <MIN>1</MIN>
+                      <MAX>255</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                  </PARAMETERS>
+                </ECUC-PARAM-CONF-CONTAINER-DEF>
+
+                <ECUC-PARAM-CONF-CONTAINER-DEF UUID="6f1f0eaf-1c6c-4f56-bc1d-7c4b1c0a4f04">
+                  <SHORT-NAME>CryptoKey</SHORT-NAME>
+                  <DESC><L-2 L="EN">AUTOSAR Crypto Key descriptor, drives the wolfHSM Crypto_KeyDescriptorTable.</L-2></DESC>
+                  <LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY>
+                  <UPPER-MULTIPLICITY>*</UPPER-MULTIPLICITY>
+                  <PARAMETERS>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoKeyId</SHORT-NAME>
+                      <DESC><L-2 L="EN">cryptoKeyId used in Crypto_KeyType.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <MIN>0</MIN>
+                      <MAX>255</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-ENUMERATION-PARAM-DEF>
+                      <SHORT-NAME>CryptoKeyFamily</SHORT-NAME>
+                      <DESC><L-2 L="EN">Algorithm family — maps to Crypto_AlgorithmFamilyType.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <LITERALS>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>AES</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>RSA</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>ECCNIST</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>ED25519</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>X25519</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>HKDF</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                        <ECUC-ENUMERATION-LITERAL-DEF><SHORT-NAME>CMAC_KDF</SHORT-NAME></ECUC-ENUMERATION-LITERAL-DEF>
+                      </LITERALS>
+                    </ECUC-ENUMERATION-PARAM-DEF>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoKeyLengthBits</SHORT-NAME>
+                      <DESC><L-2 L="EN">Key length in bits.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <MIN>1</MIN>
+                      <MAX>16384</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                    <ECUC-INTEGER-PARAM-DEF>
+                      <SHORT-NAME>CryptoEccCurveId</SHORT-NAME>
+                      <DESC><L-2 L="EN">wolfCrypt curve id (ECC_SECP*). Used when family=ECCNIST.</L-2></DESC>
+                      <LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY>
+                      <UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY>
+                      <MIN>0</MIN>
+                      <MAX>255</MAX>
+                    </ECUC-INTEGER-PARAM-DEF>
+                  </PARAMETERS>
+                </ECUC-PARAM-CONF-CONTAINER-DEF>
+
+              </CONTAINERS>
+            </ECUC-MODULE-DEF>
+          </ELEMENTS>
+        </AR-PACKAGE>
+      </AR-PACKAGES>
+    </AR-PACKAGE>
+  </AR-PACKAGES>
+</AUTOSAR>
