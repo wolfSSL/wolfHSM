@@ -8733,7 +8733,7 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, int devId,
 
     int                            ret = 0;
     whMessageCrypto_RngDmaRequest  req;
-    whMessageCrypto_RngDmaResponse res;
+    whMessageCrypto_RngDmaResponse res = {0};
     void*                          outAddr = NULL;
 
     if (inSize < sizeof(whMessageCrypto_RngDmaRequest)) {
