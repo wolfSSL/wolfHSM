@@ -83,8 +83,8 @@ static int _NvmValidateClientId(whNvmId clientId)
     if ((clientId & WH_KEYID_MASK) == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
     }
-    if ((clientId &
-         (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) != 0) {
+    if ((clientId & (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) !=
+        0) {
         return WH_ERROR_BADARGS;
     }
     return WH_ERROR_OK;
@@ -223,7 +223,6 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 whNvmId hit_id = 0;
                 whNvmId total  = 0;
 
-                rc = WH_ERROR_OK;
                 for (;;) {
                     whNvmId next_id   = 0;
                     whNvmId remaining = 0;

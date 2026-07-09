@@ -85,7 +85,17 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
         } while (ret == WH_ERROR_NOTREADY);
     }
     if (ret == 0) {
-        ret = resp.rc;
+        /* Validate the response. A server built without
+         * WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT sends an empty response for
+         * this action; without this check the zero-initialized resp.rc
+         * would read as success even though no key was stored. */
+        if ((group != WH_MESSAGE_GROUP_SHE) ||
+            (action != WH_SHE_PRE_PROGRAM_KEY) || (dataSz != sizeof(resp))) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            ret = resp.rc;
+        }
     }
     return ret;
 }
@@ -115,7 +125,14 @@ int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
         } while (ret == WH_ERROR_NOTREADY);
     }
     if (ret == 0) {
-        ret = resp.rc;
+        /* Validate the response (see wh_Client_ShePreProgramKey) */
+        if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_DESTROY_KEY) ||
+            (dataSz != sizeof(resp))) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            ret = resp.rc;
+        }
     }
     return ret;
 }
