@@ -329,8 +329,8 @@ int wh_Server_CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
     }
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot. This matter for the global
-     * shared cache.  */
+     * the same snapshot of the shared cache slot. This matters for the global
+     * shared cache. */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
         ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
@@ -405,7 +405,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 /* Must import the key into the cache and return keyid */
                 /* Hold the NVM lock so id allocation and cache import are
                  * atomic with respect to other server contexts under
-                 * THREADSAFE. This matter for the shared global cache. */
+                 * THREADSAFE. This matters for the shared global cache. */
                 ret = WH_SERVER_NVM_LOCK(ctx);
                 if (ret == WH_ERROR_OK) {
                     if (WH_KEYID_ISERASED(key_id)) {
@@ -533,42 +533,43 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
     /* load the key from the keystore, enforcing the usage policy against the
      * same locked snapshot of the key that is exported */
     if (ret == 0) {
-    ret = wh_Server_CacheExportRsaKeyEnforce(ctx, key_id, requiredUsage, rsa);
-    if (ret == WH_ERROR_USAGE) {
-        /* Currently wolfCrypt doesn't have a way for crypto callbacks to
-        distinguish if a low level RSA operation (like encrypt/decrypt) is
-        being performed as part of a higher level operation like
-        sign/verify. Until that information is propagated to the
-        callback, the usage flags are treated as equivalent. */
-        if (op_type == RSA_PUBLIC_DECRYPT) {
+        ret =
+            wh_Server_CacheExportRsaKeyEnforce(ctx, key_id, requiredUsage, rsa);
+        if (ret == WH_ERROR_USAGE) {
+            /* Currently wolfCrypt doesn't have a way for crypto callbacks to
+            distinguish if a low level RSA operation (like encrypt/decrypt) is
+            being performed as part of a higher level operation like
+            sign/verify. Until that information is propagated to the
+            callback, the usage flags are treated as equivalent. */
+            if (op_type == RSA_PUBLIC_DECRYPT) {
                 /* Decrypt usage flag wasn't set so this might be a verify
                  * operation. Attempt to enforce against the verify flag */
                 ret = wh_Server_CacheExportRsaKeyEnforce(
                     ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, rsa);
-        }
-        else if (op_type == RSA_PRIVATE_ENCRYPT) {
+            }
+            else if (op_type == RSA_PRIVATE_ENCRYPT) {
                 /* Encrypt usage flag wasn't set so this might be a sign
                  * operation. Attempt to enforce against the sign flag */
                 ret = wh_Server_CacheExportRsaKeyEnforce(
                     ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, rsa);
+            }
         }
-    }
-    WH_DEBUG_SERVER_VERBOSE("CacheExportRsaKey keyid:%u, ret:%d\n", key_id,
-                            ret);
-    if (ret == 0) {
-        /* do the rsa operation */
-        ret = wc_RsaFunction(in, in_len, out, &out_len, op_type, rsa,
-                             ctx->crypto->rng);
-        WH_DEBUG_SERVER_VERBOSE(
-            "RsaFunction in:%p %u, out:%p, opType:%d, outLen:%d, ret:%d\n", in,
-            in_len, out, op_type, out_len, ret);
-    }
-    /* free the key */
-    wc_FreeRsaKey(rsa);
+        WH_DEBUG_SERVER_VERBOSE("CacheExportRsaKey keyid:%u, ret:%d\n", key_id,
+                                ret);
+        if (ret == 0) {
+            /* do the rsa operation */
+            ret = wc_RsaFunction(in, in_len, out, &out_len, op_type, rsa,
+                                 ctx->crypto->rng);
+            WH_DEBUG_SERVER_VERBOSE(
+                "RsaFunction in:%p %u, out:%p, opType:%d, outLen:%d, ret:%d\n",
+                in, in_len, out, op_type, out_len, ret);
+        }
+        /* free the key */
+        wc_FreeRsaKey(rsa);
     }
     if (evict != 0) {
         /* User requested to evict from cache, even if the call failed */
-    _CryptoEvictKeyLocked(ctx, key_id);
+        _CryptoEvictKeyLocked(ctx, key_id);
     }
     if (ret == 0) {
         whMessageCrypto_RsaResponse res;
@@ -717,7 +718,7 @@ int wh_Server_EccKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
     }
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot. This mattters for the shared
+     * the same snapshot of the shared cache slot. This matters for the shared
      * global cache. */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
@@ -805,7 +806,7 @@ int wh_Server_CacheExportEd25519KeyEnforce(whServerContext* ctx, whKeyId keyId,
 
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot. This mattters for the shared
+     * the same snapshot of the shared cache slot. This matters for the shared
      * global cache. */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
@@ -901,7 +902,7 @@ int wh_Server_CacheExportCurve25519KeyEnforce(whServerContext* server,
     }
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot. This mattters for the shared
+     * the same snapshot of the shared cache slot. This matters for the shared
      * global cache.  */
     ret = WH_SERVER_NVM_LOCK(server);
     if (ret == WH_ERROR_OK) {
@@ -1001,7 +1002,7 @@ int wh_Server_MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
 
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot.  This mattters for the shared
+     * the same snapshot of the shared cache slot.  This matters for the shared
      * global cache. */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
@@ -1088,7 +1089,7 @@ int wh_Server_MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
 
     /* Freshen, check usage and deserialize under one hold of the NVM lock so
      * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot.  This mattters for the shared
+     * the same snapshot of the shared cache slot.  This matters for the shared
      * global cache. */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
@@ -1430,7 +1431,7 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 res_size = 0;
                 /* Hold the NVM lock so id allocation and cache import are
                  * atomic with respect to other server contexts under
-                 * THREADSAFE.  This mattters for the shared
+                 * THREADSAFE.  This matters for the shared
                  * global cache. */
                 ret = WH_SERVER_NVM_LOCK(ctx);
                 if (ret == WH_ERROR_OK) {

@@ -472,8 +472,7 @@
 
 #if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
 
-/* Largest cached key the server will accept as a KDF input supplied by key ID
- * */
+/* Largest cached key the server accepts as a KDF input supplied by key ID */
 #ifndef WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE
 #define WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE 256
 #endif
