@@ -905,18 +905,19 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
     return ret;
 }
 
-int wh_Client_KeyCacheRandomRequest_ex(whClientContext* c, uint32_t flags,
-                                            uint8_t* label, uint16_t labelSz,
-                                            uint16_t keySz, uint16_t keyId)
+int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
+                                    uint8_t* label, uint16_t labelSz,
+                                    uint16_t keySz, uint16_t keyId)
 {
     whMessageKeystore_CacheRandomRequest* req = NULL;
-    uint16_t                           capSz;
+    uint16_t                              capSz;
 
     if (c == NULL || keySz == 0) {
         return WH_ERROR_BADARGS;
     }
 
-    req = (whMessageKeystore_CacheRandomRequest*)wh_CommClient_GetDataPtr(c->comm);
+    req = (whMessageKeystore_CacheRandomRequest*)wh_CommClient_GetDataPtr(
+        c->comm);
     if (req == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -938,14 +939,6 @@ int wh_Client_KeyCacheRandomRequest_ex(whClientContext* c, uint32_t flags,
     /* write request (no key material is sent) */
     return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE_RANDOM,
                                  sizeof(*req), (uint8_t*)req);
-}
-
-int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
-                                        uint8_t* label, uint16_t labelSz,
-                                        uint16_t keySz)
-{
-    return wh_Client_KeyCacheRandomRequest_ex(c, flags, label, labelSz,
-                                                  keySz, WH_KEYID_ERASED);
 }
 
 int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
@@ -989,8 +982,8 @@ int wh_Client_KeyCacheRandom(whClientContext* c, uint32_t flags,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_KeyCacheRandomRequest_ex(c, flags, label, labelSz,
-                                                 keySz, *keyId);
+    ret = wh_Client_KeyCacheRandomRequest(c, flags, label, labelSz, keySz,
+                                          *keyId);
 
     if (ret == 0) {
         do {

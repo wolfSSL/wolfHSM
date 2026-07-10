@@ -2340,19 +2340,19 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 #ifndef WC_NO_RNG
             if (ret == WH_ERROR_OK) {
                 ret = WH_SERVER_NVM_LOCK(server);
-            }
-            if (ret == WH_ERROR_OK) {
-                /* get a new id if one wasn't provided */
-                if (WH_KEYID_ISERASED(meta->id)) {
-                    ret = wh_Server_KeystoreGetUniqueId(server, &meta->id);
-                }
-                /* generate the key from the server RNG and cache it */
                 if (ret == WH_ERROR_OK) {
-                    ret = _KeystoreCacheRandomKey(server, meta);
-                }
+                    /* get a new id if one wasn't provided */
+                    if (WH_KEYID_ISERASED(meta->id)) {
+                        ret = wh_Server_KeystoreGetUniqueId(server, &meta->id);
+                    }
+                    /* generate the key from the server RNG and cache it */
+                    if (ret == WH_ERROR_OK) {
+                        ret = _KeystoreCacheRandomKey(server, meta);
+                    }
 
-                (void)WH_SERVER_NVM_UNLOCK(server);
-            } /* WH_SERVER_NVM_LOCK() */
+                    (void)WH_SERVER_NVM_UNLOCK(server);
+                } /* WH_SERVER_NVM_LOCK() */
+            }
 #else
             if (ret == WH_ERROR_OK) {
                 ret = WH_ERROR_NOTIMPL;

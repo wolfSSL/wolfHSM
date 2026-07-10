@@ -726,26 +726,9 @@ int wh_Client_KeyCache(whClientContext* c, uint32_t flags, uint8_t* label,
  * will be generated.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Client_KeyCacheRandomRequest_ex(whClientContext* c, uint32_t flags,
-                                            uint8_t* label, uint16_t labelSz,
-                                            uint16_t keySz, uint16_t keyId);
-
-/**
- * @brief Sends a request to generate a key from the server RNG and cache it.
- *
- * Like wh_Client_KeyCacheRandomRequest_ex, but always requests a
- * server-assigned key ID (WH_KEYID_ERASED). This function does not block.
- *
- * @param[in] c Pointer to the client context.
- * @param[in] flags Flags (whNvmFlags) for the generated key.
- * @param[in] label Pointer to the label associated with the key.
- * @param[in] labelSz Size of the label.
- * @param[in] keySz Number of random key bytes to generate.
- * @return int Returns 0 on success, or a negative error code on failure.
- */
 int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
-                                        uint8_t* label, uint16_t labelSz,
-                                        uint16_t keySz);
+                                    uint8_t* label, uint16_t labelSz,
+                                    uint16_t keySz, uint16_t keyId);
 
 /**
  * @brief Receives the response to a generate-and-cache request.

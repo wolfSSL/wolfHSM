@@ -6766,8 +6766,9 @@ static int whTest_KeyCacheRandom(whClientContext* ctx, int devId,
     uint16_t outLen;
     uint16_t keyId;
     uint16_t keyId2;
-    uint8_t  keyOut[WH_TEST_KEYCACHERANDOM_KEYSIZE] = {0};
-    uint8_t  labelIn[WH_NVM_LABEL_LEN]      = "KeyGenFromRng Test";
+    uint8_t  keyOut[WH_TEST_KEYCACHERANDOM_KEYSIZE]  = {0};
+    uint8_t  keyOut2[WH_TEST_KEYCACHERANDOM_KEYSIZE] = {0};
+    uint8_t  labelIn[WH_NVM_LABEL_LEN]      = "KeyCacheRandom Test";
     uint8_t  labelOut[WH_NVM_LABEL_LEN]     = {0};
 
     /* Generate a key from the server RNG and cache it */
@@ -6814,7 +6815,8 @@ static int whTest_KeyCacheRandom(whClientContext* ctx, int devId,
         }
     }
 
-    /* A second generation should yield a distinct auto-assigned keyId */
+    /* A second generation should yield a distinct auto-assigned keyId and
+     * distinct key material */
     if (ret == 0) {
         keyId2 = WH_KEYID_ERASED;
         ret    = wh_Client_KeyCacheRandom(ctx, 0, labelIn, sizeof(labelIn),
@@ -6825,6 +6827,24 @@ static int whTest_KeyCacheRandom(whClientContext* ctx, int devId,
         else if (keyId2 == keyId) {
             WH_ERROR_PRINT("KeyCacheRandom reused keyId 0x%X\n", keyId);
             ret = -1;
+        }
+        else {
+            /* Export the second key and confirm its bytes differ from the
+             * first — two RNG generations must not produce the same key */
+            outLen = sizeof(keyOut2);
+            ret    = wh_Client_KeyExport(ctx, keyId2, labelOut,
+                                         sizeof(labelOut), keyOut2, &outLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed to wh_Client_KeyExport(2) %d\n", ret);
+            }
+            else if (outLen != WH_TEST_KEYCACHERANDOM_KEYSIZE) {
+                WH_ERROR_PRINT("KeyCacheRandom(2) bad length %u\n", outLen);
+                ret = -1;
+            }
+            else if (memcmp(keyOut, keyOut2, outLen) == 0) {
+                WH_ERROR_PRINT("KeyCacheRandom produced identical keys\n");
+                ret = -1;
+            }
         }
         (void)wh_Client_KeyEvict(ctx, keyId2);
     }
