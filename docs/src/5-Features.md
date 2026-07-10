@@ -14,6 +14,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
 - [Non-Volatile Memory (NVM)](#non-volatile-memory-nvm)
     - [High Level NVM Interface](#high-level-nvm-interface)
     - [Object Metadata and Access Attributes](#object-metadata-and-access-attributes)
+    - [Client NVM Access and Per-Client Namespaces](#client-nvm-access-and-per-client-namespaces)
     - [NVM Backends](#nvm-backends)
     - [Flash Abstraction](#flash-abstraction)
     - [Optional NVM Backing](#optional-nvm-backing)
@@ -177,7 +178,7 @@ The NVM library presents non-volatile storage as a collection of opaque, variabl
 - A fixed-size **metadata** record describing the object (see [Object Metadata and Access Attributes](#object-metadata-and-access-attributes))
 - A variable-length **payload** of arbitrary bytes
 
-Applications and higher-level subsystems do not address NVM by byte offset; they create, read, enumerate, and destroy whole objects through the `wh_Nvm_*` API. This object orientation is what allows the keystore, certificate manager, and counter subsystems to share a single backing store without colliding: each subsystem owns a range of identifiers and a set of metadata flags, and the underlying NVM layer is unaware of what the objects mean.
+Applications and higher-level subsystems do not address NVM by byte offset; they create, read, enumerate, and destroy whole objects through the `wh_Nvm_*` API. This object orientation is what allows the keystore, certificate manager, and counter subsystems to share a single backing store without colliding: each subsystem owns a range of identifiers and a set of metadata flags, and the underlying NVM layer is unaware of what the objects mean. Remote clients get the same object model through the `wh_Client_Nvm*` request API, with one additional layer on top: the ids they supply are namespaced per client, as described in [Client NVM Access and Per-Client Namespaces](#client-nvm-access-and-per-client-namespaces).
 
 The core operations exposed by the interface are:
 
@@ -218,6 +219,28 @@ The flags field carries the policy attributes that subsystems use to gate operat
 The NVM library exposes both a raw and a policy-checked variant of the mutating and reading APIs (`wh_Nvm_AddObject` vs. `wh_Nvm_AddObjectChecked`, `wh_Nvm_DestroyObjects` vs. `wh_Nvm_DestroyObjectsChecked`, `wh_Nvm_Read` vs. `wh_Nvm_ReadChecked`). The checked variants honor the flags above and return `WH_ERROR_ACCESS` when the requested operation would violate them; the unchecked variants are used by server-internal code paths that need to manage the state itself (for example, to clear `NONMODIFIABLE` during a controlled revocation flow). Because policy enforcement happens server-side at the NVM layer, no client request can bypass it.
 
 The access field is used to express coarser-grained permissions (owner / other / user buckets, with read/write/exec/special bits) that higher layers may consult, and is the primary filter used by `wh_Nvm_List()` when enumerating objects.
+
+### Client NVM Access and Per-Client Namespaces
+
+Everything above describes the server's view of the object store. Clients reach it remotely through the `wh_Client_Nvm*` request API — `wh_Client_NvmAddObject`, `wh_Client_NvmRead`, `wh_Client_NvmList`, `wh_Client_NvmGetMetadata`, `wh_Client_NvmDestroyObjects`, `wh_Client_NvmGetAvailable`, and the [DMA variants](#dma-support) of add and read — which the server executes against the same `wh_Nvm_*` interface. The id a client supplies, however, is not the raw internal `whNvmId`: exactly as with [key ids](#key-cache-key-ids-and-nvm-backing-store), the server translates every client-supplied NVM id at the request boundary, giving each client a private namespace of objects.
+
+A client-facing NVM id uses the same encoding as a client-facing `whKeyId`:
+
+- **Bits 0–7**: the numeric object id, `1` through `255`. Zero is reserved as the erased sentinel and is rejected by `wh_Client_NvmAddObject` — unlike a key cache request, an NVM add never auto-assigns an id.
+- **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`): selects the **shared global namespace** instead of the calling client's private one. This is the same flag-and-translation mechanism used by [global keys](#global-keys), and like global keys it is honored when `WOLFHSM_CFG_GLOBAL_KEYS` is defined.
+- **Bits 9–10** (the wrapped and hardware-only key flags): not meaningful for NVM objects; `wh_Client_NvmAddObject` rejects ids carrying either flag.
+
+On each request the server expands the client's id into the full internal form with TYPE = `WH_KEYTYPE_NVM` and USER = the connection's client id (or `0` for the global namespace), and collapses it back in responses. The isolation consequences mirror the keystore's:
+
+- Every client sees the same `[1, 255]` id range, but two clients that both write "object 5" create two distinct objects; neither can read, overwrite, enumerate, or destroy the other's.
+- Because the translation always stamps TYPE = `WH_KEYTYPE_NVM` and the caller's own USER, the client NVM API cannot name keys, counters, SHE slots, or another client's objects at all. 
+- Objects in the global namespace are visible to every client that sets the GLOBAL flag. Factory images produced by the [NVM provisioning tool](6-Utilities.md#nvm-provisioning-tool) place plain `obj` entries with ids up to 255 in exactly this namespace, so provisioned objects are reachable by all clients out of the box.
+
+`wh_Client_NvmList` treats the GLOBAL flag on its `startId` argument as a namespace selector: pass `0` to enumerate the calling client's own objects from the beginning, or `WH_KEYID_CLIENT_GLOBAL_FLAG` to enumerate the global namespace. The returned count covers only the selected namespace, and each returned id carries the appropriate flag, so it can be passed back unchanged as the next `startId` to continue the walk.
+
+Access- and flags-based filtering and the policy-checked NVM variants apply unchanged after translation, and server-local code with direct access to the `wh_Nvm_*` API is unaffected — it continues to address objects by full internal id.
+
+For integrations that depend on the historical behavior, defining `WOLFHSM_CFG_LEGACY_CLIENT_NVM` disables the translation entirely and restores the flat 16-bit id space shared by all clients — along with the cross-client reachability that comes with it. See [Configuration](9-Configuration.md#nvm-storage).
 
 ### NVM Backends
 
@@ -298,7 +321,7 @@ Keys are named by a 16-bit identifier (`whKeyId`), which has two forms — a sim
 
 The server-side `whKeyId` packs three fields into its 16 bits:
 
-- **TYPE** (top 4 bits): the kind of object — `WH_KEYTYPE_CRYPTO` for ordinary crypto keys, `WH_KEYTYPE_SHE` for AUTOSAR SHE keys, `WH_KEYTYPE_COUNTER` for monotonic counters, `WH_KEYTYPE_WRAPPED` for wrapped-key metadata, and `WH_KEYTYPE_NVM` for non-key NVM objects that share the same id space.
+- **TYPE** (top 4 bits): the kind of object — `WH_KEYTYPE_CRYPTO` for ordinary crypto keys, `WH_KEYTYPE_SHE` for AUTOSAR SHE keys, `WH_KEYTYPE_COUNTER` for monotonic counters, `WH_KEYTYPE_WRAPPED` for wrapped-key metadata, and `WH_KEYTYPE_NVM` for non-key NVM objects that share the same id space (see [Client NVM Access and Per-Client Namespaces](#client-nvm-access-and-per-client-namespaces)).
 - **USER** (middle 4 bits): the owning client. Value `0` is reserved for the global-key namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is enabled.
 - **ID** (low 8 bits): the number the client chose.
 
@@ -670,10 +693,13 @@ The SHE client API is declared in `wolfhsm/wh_client_she.h` and maps one-to-one 
 - **MAC**: `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` (`CMD_GENERATE_MAC` / `CMD_VERIFY_MAC`) — CMAC generation and verification against a selected key slot
 - **Status**: `wh_Client_SheGetStatus` (`CMD_GET_STATUS`) — reads the SHE status register (SREG)
 
-In addition to the spec commands, wolfHSM exposes two non-standard helpers that fill gaps left by the spec's assumption of dedicated hardware:
+In addition to the spec commands, wolfHSM exposes non-standard helpers that fill gaps left by the spec's assumption of dedicated hardware:
 
 - `wh_Client_SheSetUid`: explicitly programs the 15-byte ECU UID that the key update protocol binds against. The AUTOSAR spec assumes this value is hardware-fused; wolfHSM needs a software path to install it, and rejects most SHE operations until it has been set.
-- `wh_Client_ShePreProgramKey`: writes a key directly into a SHE NVM slot, bypassing the encrypted M1–M5 protocol. This exists to support initial provisioning on a blank device — once a `MASTER_ECU_KEY` exists, all subsequent updates can go through the spec-compliant protocol.
+- `wh_Client_ShePreProgramKey`: writes a key directly into a SHE NVM slot over a dedicated SHE message, bypassing the encrypted M1–M5 protocol. This exists to support initial provisioning on a blank device — once a `MASTER_ECU_KEY` exists, all subsequent updates can go through the spec-compliant protocol.
+- `wh_Client_SheDestroyKey`: removes a SHE key slot from the calling client's NVM namespace, a capability the spec omits because it treats key slots as fixed hardware.
+
+Because `wh_Client_ShePreProgramKey` and `wh_Client_SheDestroyKey` bypass the SHE key-update and authorization protocols, both are compiled only when `WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT` is defined (see [Configuration](9-Configuration.md#cryptography-features)) and are intended for provisioning and test builds, not production firmware.
 
 All SHE commands return one of the spec's `WH_SHE_ERC_*` error codes (`SEQUENCE_ERROR`, `KEY_NOT_AVAILABLE`, `WRITE_PROTECTED`, `KEY_UPDATE_ERROR`, etc.) alongside the wolfHSM transport return code, so applications can distinguish protocol-level failures from communication failures.
 
@@ -746,7 +772,7 @@ The SHE extension is built on top of the same infrastructure as every other wolf
 - **Wrapped keys**: SHE keys interoperate with the [wrapped keys](#wrapped-keys) feature by explicit type rather than by flag (the SHE keyId namespace does not interpret the wrapped flag): the client passes `WH_KEYTYPE_SHE` to *wrap-export* to receive a slot's key wrapped under a [trusted KEK](#trusted-keks), and presents the blob to *unwrap-and-cache* to prime a slot directly in the key cache — the provisioning path for servers with [no NVM](#optional-nvm-backing), guarded by the slot's counter rollback check. *Unwrap-and-export* refuses SHE blobs, so a wrapped SHE key can re-enter the keystore but its plaintext is never returned to a client.
 - **Global keys**: not supported for SHE keys — every SHE keyId carries the connection's client ID in the USER field, and the SHE command set has no way to name the [global](#global-keys) (`WH_KEYUSER_GLOBAL`) namespace. Applications that need to share a key across clients must provision it into each client's SHE namespace separately.
 
-A typical automotive deployment uses the SHE extension end-to-end: the bootloader and `BOOT_MAC` are programmed into NVM at production using `wh_Client_ShePreProgramKey`, the device's UID is set on first boot with `wh_Client_SheSetUid`, secure boot is run on every reset via `wh_Client_SheSecureBoot`, in-field key updates flow through the encrypted `CMD_LOAD_KEY` protocol, and CAN message authentication uses `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` against pre-provisioned user-slot keys.
+A typical automotive deployment uses the SHE extension end-to-end: the bootloader and `BOOT_MAC` are programmed into NVM at production via whnvmtool or via `wh_Client_ShePreProgramKey`, the device's UID is set on first boot with `wh_Client_SheSetUid`, secure boot is run on every reset via `wh_Client_SheSecureBoot`, in-field key updates flow through the encrypted `CMD_LOAD_KEY` protocol, and CAN message authentication uses `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` against pre-provisioned user-slot keys.
 
 ## Non-Volatile Monotonic Counters
 

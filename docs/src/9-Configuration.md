@@ -72,6 +72,7 @@ These macros enable or tune optional cryptographic subsystems built on top of wo
 | Macro | Default | Description |
 |---|---|---|
 | `WOLFHSM_CFG_SHE_EXTENSION` | Undefined | If defined, compile the AUTOSAR SHE subsystem (SHE message types, SHE key slots, M1-M5 update protocol, SHE-specific RNG and SREG handling). Requires wolfCrypt built with AES, `WOLFSSL_CMAC`, `WOLFSSL_AES_DIRECT`, and `HAVE_AES_ECB`. |
+| `WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT` | Undefined | If defined, compile the SHE provisioning/test key-management helpers `wh_Client_ShePreProgramKey` and `wh_Client_SheDestroyKey` and their server handlers, which write and remove SHE key slots directly, bypassing the M1-M5 encrypted update protocol. Intended for provisioning and test builds only; leave undefined in production. Only meaningful when `WOLFHSM_CFG_SHE_EXTENSION` is defined. |
 | `WOLFHSM_CFG_KEYWRAP` | Undefined | If defined, compile the key-wrap subsystem (`wh_Client_KeyWrap*` / server counterparts). Uses AES-GCM internally and therefore requires wolfCrypt built with AES and `HAVE_AESGCM`. Incompatible with `WOLFHSM_CFG_NO_CRYPTO`. |
 | `WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE` | `2000` | Maximum size, in bytes, of a key that can be wrapped or unwrapped in a single operation. Only consulted when `WOLFHSM_CFG_KEYWRAP` is defined. |
 | `WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE` | `2000` | Maximum size, in bytes, of the plaintext or wrapped payload carried by a single key-wrap request. Only consulted when `WOLFHSM_CFG_KEYWRAP` is defined. |
@@ -98,6 +99,7 @@ These macros size the server-side key cache. The cache is split into "regular" s
 |---|---|---|
 | `WOLFHSM_CFG_NVM_OBJECT_COUNT` | `32` | Maximum number of objects the NVM directory can hold simultaneously (RAM directory cache *and* the on-disk directory it mirrors). Determines the upper bound on the number of keys, certificates, counters, and user objects that can coexist in NVM at one time. |
 | `WOLFHSM_CFG_SERVER_NVM_FLASH_LOG` | Undefined | If defined, compile the log-structured NVM flash backend (`wh_nvm_flash_log`). When enabled it can be selected at runtime as an alternative to the regular flash backend; useful for flash parts that tolerate fewer erases or that prefer append-only update patterns. |
+| `WOLFHSM_CFG_LEGACY_CLIENT_NVM` | Undefined | If defined, the server's client-facing NVM handlers pass object ids to the NVM layer verbatim, restoring the legacy flat 16-bit id space shared by all clients. When left undefined (the default), every client-supplied NVM id is translated into the server-internal TYPE/USER/ID encoding, giving each client a private `1`–`255` object namespace plus a shared global namespace selected with `WH_KEYID_CLIENT_GLOBAL_FLAG`, and preventing the client NVM API from reaching keys, counters, or other clients' objects. See [Client NVM Access and Per-Client Namespaces](5-Features.md#client-nvm-access-and-per-client-namespaces). |
 
 ## Certificate Manager
 

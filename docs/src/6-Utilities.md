@@ -20,6 +20,8 @@ The NVM provisioning tool (`tools/whnvmtool/`) is a host-side utility that build
 
 Because the on-flash layout depends on build-time configuration, the tool must be compiled against the same wolfHSM version as the target server and with a matching `WOLFHSM_CFG_NVM_OBJECT_COUNT`, and the `--size` argument must match the server's `whNvmFlash` partition size. For the full configuration file schema, command-line options, hex conversion recipe, and test workflow, see [`tools/whnvmtool/README.md`](https://github.com/wolfSSL/wolfHSM/blob/main/tools/whnvmtool/README.md).
 
+The ids in the configuration file are **server-internal** ids, written into the image verbatim. This matters when the provisioned objects are meant to be reached through the client NVM API, which namespaces ids per client (see [Client NVM Access and Per-Client Namespaces](5-Features.md#client-nvm-access-and-per-client-namespaces)): a plain `obj` entry with an id of `255` or below lands in the shared global namespace, which clients address by setting `WH_KEYID_CLIENT_GLOBAL_FLAG` on the request id. To pre-provision an object into one specific client's private namespace, encode the owning client id into bits 8–11 of the entry's id — the same encoding the tool's `key` entries construct from their separate `clientId` field. Servers built with `WOLFHSM_CFG_LEGACY_CLIENT_NVM` skip client-id translation, and their clients address provisioned objects by verbatim id instead.
+
 ## Benchmark Suite
 
 ### Benchmark Suite Overview
