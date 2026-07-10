@@ -8559,9 +8559,6 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_OK;
     }
 
-    /* Zero resumeState so the WH_PAD bytes aren't sent with comm-buffer
-     * residue (the s[] array is fully written below). */
-    memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->isLastBlock = 0;
     req->inSz        = wirePos;
     for (k = 0; k < 25; k++) {
@@ -8650,9 +8647,6 @@ static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
         dataPtr, v->hashType, ctx->cryptoAffinity);
     inlineData = (uint8_t*)(req + 1);
 
-    /* Zero resumeState so the WH_PAD bytes aren't sent with comm-buffer
-     * residue (the s[] array is fully written below). */
-    memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->isLastBlock = 1;
     req->inSz        = sha->i;
     for (k = 0; k < 25; k++) {
@@ -8888,9 +8882,6 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_OK;
     }
 
-    /* Zero resumeState so the WH_PAD bytes aren't sent with comm-buffer
-     * residue (the s[] array is fully written below). */
-    memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->isLastBlock = 0;
     req->inSz        = wirePos;
     for (k = 0; k < 25; k++) {
@@ -9018,9 +9009,6 @@ static int _Sha3DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha,
         dataPtr, v->hashType, ctx->cryptoAffinity);
     inlineData = (uint8_t*)(req + 1);
 
-    /* Zero resumeState so the WH_PAD bytes aren't sent with comm-buffer
-     * residue (the s[] array is fully written below). */
-    memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->isLastBlock = 1;
     req->inSz        = sha->i;
     for (k = 0; k < 25; k++) {

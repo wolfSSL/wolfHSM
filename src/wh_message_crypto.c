@@ -715,7 +715,6 @@ int wh_MessageCrypto_TranslateSha3State(uint16_t                         magic,
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, i);
     for (k = 0; k < 25; k++) {
         WH_T64(magic, dest, src, s[k]);
     }

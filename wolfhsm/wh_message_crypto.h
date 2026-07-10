@@ -902,13 +902,10 @@ int wh_MessageCrypto_TranslateSha2Response(
  * locally in sha3->t[] and only sends it on Final with isLastBlock=1.
  */
 
-/* SHA3 resume state - 200-byte Keccak state + buffer index, shared across
- * SHA3-224/256/384/512. Layout chosen so the uint64_t array sits at the
- * end (8-byte aligned). */
+/* SHA3 resume state - 200-byte Keccak state, shared across
+ * SHA3-224/256/384/512. The partial-block buffer lives on the
+ * client and the wire only carries whole-block input. */
 typedef struct {
-    uint32_t i; /* reserved, always 0 — the partial-block buffer lives on
-                 * the client; the wire only carries whole-block input */
-    uint8_t  WH_PAD[4];
     uint64_t s[25]; /* Keccak state */
 } whMessageCrypto_Sha3State;
 

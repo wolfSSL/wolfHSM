@@ -4666,7 +4666,6 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
                 for (k = 0; k < 25; k++) {
                     res.resumeState.s[k] = sha3->s[k];
                 }
-                res.resumeState.i = 0;
             }
         }
     }
@@ -6353,7 +6352,6 @@ static int _HandleSha3Dma(whServerContext* ctx, int hashType, uint16_t magic,
                 for (k = 0; k < 25; k++) {
                     res.resumeState.s[k] = sha3->s[k];
                 }
-                res.resumeState.i = 0;
             }
         }
     }
