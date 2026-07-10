@@ -14923,6 +14923,156 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     }
 #endif /* HAVE_CURVE25519 */
 
+#ifndef NO_RSA
+    /* RSA usage policy plus the sign/verify fallback (PUBLIC_DECRYPT falls back
+     * to VERIFY, PRIVATE_ENCRYPT to SIGN). */
+    WH_TEST_PRINT("  Testing RSA usage policy and sign/verify fallback...\n");
+    {
+        RsaKey  rsaKey[1];
+        whKeyId rsaId = WH_KEYID_ERASED;
+        byte    rsaIn[32];
+        byte    rsaSig[RSA_KEY_BYTES];
+        byte    rsaRec[RSA_KEY_BYTES];
+        int     opRc;
+        int     sigLen;
+
+        memset(rsaIn, 0xA5, sizeof(rsaIn));
+
+        /* SIGN only key: PublicEncrypt needs ENCRYPT, so deny. */
+        ret =
+            wh_Client_RsaMakeCacheKey(client, RSA_KEY_BITS, RSA_EXPONENT,
+                                      &rsaId, WH_NVM_FLAGS_USAGE_SIGN, 0, NULL);
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(rsaKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wh_Client_RsaSetKeyId(rsaKey, rsaId);
+                if (ret == 0) {
+                    opRc = wc_RsaPublicEncrypt(rsaIn, sizeof(rsaIn), rsaSig,
+                                               sizeof(rsaSig), rsaKey, rng);
+                    if (opRc == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: encrypt denied without "
+                                      "ENCRYPT\n");
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: expected WH_ERROR_USAGE, got %d\n",
+                            opRc);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_FreeRsaKey(rsaKey);
+            }
+            wh_Client_KeyEvict(client, rsaId);
+        }
+        if (ret != 0) {
+            return ret;
+        }
+
+        /* ENCRYPT only key: Verify needs DECRYPT or VERIFY, so deny. */
+        rsaId = WH_KEYID_ERASED;
+        ret   = wh_Client_RsaMakeCacheKey(client, RSA_KEY_BITS, RSA_EXPONENT,
+                                          &rsaId, WH_NVM_FLAGS_USAGE_ENCRYPT, 0,
+                                          NULL);
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(rsaKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wh_Client_RsaSetKeyId(rsaKey, rsaId);
+                if (ret == 0) {
+                    memset(rsaSig, 0, sizeof(rsaSig));
+                    opRc = wc_RsaSSL_Verify(rsaSig, sizeof(rsaSig), rsaRec,
+                                            sizeof(rsaRec), rsaKey);
+                    if (opRc == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: verify denied without "
+                                      "VERIFY\n");
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: expected WH_ERROR_USAGE, got %d\n",
+                            opRc);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_FreeRsaKey(rsaKey);
+            }
+            wh_Client_KeyEvict(client, rsaId);
+        }
+        if (ret != 0) {
+            return ret;
+        }
+
+        /* VERIFY only key: Sign needs ENCRYPT or SIGN, so deny. */
+        rsaId = WH_KEYID_ERASED;
+        ret   = wh_Client_RsaMakeCacheKey(client, RSA_KEY_BITS, RSA_EXPONENT,
+                                          &rsaId, WH_NVM_FLAGS_USAGE_VERIFY, 0,
+                                          NULL);
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(rsaKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wh_Client_RsaSetKeyId(rsaKey, rsaId);
+                if (ret == 0) {
+                    opRc = wc_RsaSSL_Sign(rsaIn, sizeof(rsaIn), rsaSig,
+                                          sizeof(rsaSig), rsaKey, rng);
+                    if (opRc == WH_ERROR_USAGE) {
+                        WH_TEST_PRINT("    PASS: sign denied without SIGN\n");
+                    }
+                    else {
+                        WH_ERROR_PRINT(
+                            "    FAIL: expected WH_ERROR_USAGE, got %d\n",
+                            opRc);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_FreeRsaKey(rsaKey);
+            }
+            wh_Client_KeyEvict(client, rsaId);
+        }
+        if (ret != 0) {
+            return ret;
+        }
+
+        /* 4) SIGN|VERIFY key: sign then verify must succeed via the fallback
+         *    paths, proving the fallback is live rather than dead code. */
+        rsaId = WH_KEYID_ERASED;
+        ret   = wh_Client_RsaMakeCacheKey(
+            client, RSA_KEY_BITS, RSA_EXPONENT, &rsaId,
+            WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL);
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(rsaKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wh_Client_RsaSetKeyId(rsaKey, rsaId);
+                if (ret == 0) {
+                    sigLen = wc_RsaSSL_Sign(rsaIn, sizeof(rsaIn), rsaSig,
+                                            sizeof(rsaSig), rsaKey, rng);
+                    if (sigLen < 0) {
+                        WH_ERROR_PRINT("    FAIL: sign via fallback %d\n",
+                                       sigLen);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                if (ret == 0) {
+                    opRc = wc_RsaSSL_Verify(rsaSig, sigLen, rsaRec,
+                                            sizeof(rsaRec), rsaKey);
+                    if (opRc != (int)sizeof(rsaIn) ||
+                        memcmp(rsaRec, rsaIn, sizeof(rsaIn)) != 0) {
+                        WH_ERROR_PRINT("    FAIL: verify via fallback %d\n",
+                                       opRc);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        WH_TEST_PRINT(
+                            "    PASS: sign/verify fallback round trip\n");
+                    }
+                }
+                wc_FreeRsaKey(rsaKey);
+            }
+            wh_Client_KeyEvict(client, rsaId);
+        }
+        if (ret != 0) {
+            return ret;
+        }
+    }
+#endif /* NO_RSA */
+
 #ifdef HAVE_HKDF
     /* HKDF without DERIVE flag */
     WH_TEST_PRINT("  Testing HKDF without DERIVE flag...\n");
