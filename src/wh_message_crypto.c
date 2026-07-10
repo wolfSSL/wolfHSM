@@ -463,6 +463,31 @@ int wh_MessageCrypto_TranslateEccVerifyResponse(
     return 0;
 }
 
+/* ECC Make Public Request translation */
+int wh_MessageCrypto_TranslateEccMakePubRequest(
+    uint16_t magic, const whMessageCrypto_EccMakePubRequest* src,
+    whMessageCrypto_EccMakePubRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* ECC Make Public Response translation */
+int wh_MessageCrypto_TranslateEccMakePubResponse(
+    uint16_t magic, const whMessageCrypto_EccMakePubResponse* src,
+    whMessageCrypto_EccMakePubResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, pubSz);
+    return 0;
+}
+
 /* ECC Check Request translation */
 int wh_MessageCrypto_TranslateEccCheckRequest(
     uint16_t magic, const whMessageCrypto_EccCheckRequest* src,
@@ -471,8 +496,12 @@ int wh_MessageCrypto_TranslateEccCheckRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
+    WH_T32(magic, dest, src, options);
     WH_T32(magic, dest, src, keyId);
     WH_T32(magic, dest, src, curveId);
+    WH_T32(magic, dest, src, checkOrder);
+    WH_T32(magic, dest, src, checkPriv);
+    WH_T32(magic, dest, src, pubSz);
     return 0;
 }
 

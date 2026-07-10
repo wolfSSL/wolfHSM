@@ -499,6 +499,16 @@ static int _ExportEccPublicKey(whServerContext* server, whKeyId keyId,
     ret = wc_ecc_init_ex(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_EccKeyCacheExport(server, keyId, key);
+        if (ret == 0 && key->type == ECC_PRIVATEKEY_ONLY) {
+            /* A private-only key has no public point to encode yet. Derive it,
+             * as the public half is not sensitive material. The RNG blinds the
+             * multiply on the multi-precision path (SP builds ignore it), but
+             * a keystore-only server has no crypto context: pass NULL so
+             * wolfCrypt skips the blinding instead of dereferencing NULL. */
+            WC_RNG* rng = (server->crypto != NULL) ? server->crypto->rng
+                                                   : NULL;
+            ret = wc_ecc_make_pub_ex(key, NULL, rng);
+        }
         if (ret == 0) {
             pub_ret = wc_EccPublicKeyToDer(key, out, (word32)*outSz, 1);
             if (pub_ret > 0) {

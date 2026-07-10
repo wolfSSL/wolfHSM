@@ -440,6 +440,20 @@
 #error "wolfHSM requires wolfCrypt built without NO_RNG"
 #endif
 
+/* Client response parsing calls wc_ecc_import_* on devId-bound keys (e.g.
+ * wh_Crypto_EccUpdatePrivateOnlyKeyDer from wh_Client_EccVerifyResponse)
+ * while the response still sits in the client's comm packet buffer. With
+ * WOLFSSL_VALIDATE_ECC_IMPORT those imports re-enter the crypto callback and
+ * run a nested HSM transaction that reuses that buffer. The wire protocol
+ * tolerates nesting (transactions are strictly sequential), but correctness
+ * would rest on every response parser having copied out all data it needs
+ * before any import — an invariant that is not enforced or audited. Server
+ * builds are unaffected: their import validation dispatches to the server's
+ * local crypto provider, not the transport. */
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFSSL_VALIDATE_ECC_IMPORT)
+#error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
+#endif
+
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \
