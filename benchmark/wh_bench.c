@@ -282,6 +282,26 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_ML_KEM_1024_DECAPS_DMA,
 #endif /* !WOLFSSL_NO_ML_KEM_1024 */
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+/* LMS (stateful, DMA-only) */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS) && \
+    !defined(WOLFSSL_LMS_VERIFY_ONLY)
+    BENCH_MODULE_IDX_LMS_KEY_GEN,
+    BENCH_MODULE_IDX_LMS_SIGN,
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS)
+    BENCH_MODULE_IDX_LMS_VERIFY,
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS */
+
+/* XMSS (stateful, DMA-only) */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
+    !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+    BENCH_MODULE_IDX_XMSS_KEY_GEN,
+    BENCH_MODULE_IDX_XMSS_SIGN,
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS)
+    BENCH_MODULE_IDX_XMSS_VERIFY,
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS */
 #endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
     /* number of modules. This must be the last entry and will be used as the
      * size of the global modules array */
@@ -496,6 +516,26 @@ static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_ML_KEM_1024_DECAPS_DMA]  = {"ML-KEM-1024-DECAPS-DMA",       wh_Bench_Mod_MlKem1024DecapsDma,      BENCH_THROUGHPUT_OPS, 0, NULL},
 #endif /* !WOLFSSL_NO_ML_KEM_1024 */
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+    /* LMS (stateful, DMA-only) */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS) && \
+    !defined(WOLFSSL_LMS_VERIFY_ONLY)
+    [BENCH_MODULE_IDX_LMS_KEY_GEN]             = {"LMS-L1H5W8-KEY-GEN",           wh_Bench_Mod_LmsKeyGen,               BENCH_THROUGHPUT_OPS, 0, NULL},
+    [BENCH_MODULE_IDX_LMS_SIGN]                = {"LMS-L1H5W8-SIGN",              wh_Bench_Mod_LmsSign,                 BENCH_THROUGHPUT_OPS, 0, NULL},
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS)
+    [BENCH_MODULE_IDX_LMS_VERIFY]              = {"LMS-L1H5W8-VERIFY",            wh_Bench_Mod_LmsVerify,               BENCH_THROUGHPUT_OPS, 0, NULL},
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS */
+
+    /* XMSS (stateful, DMA-only) */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
+    !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+    [BENCH_MODULE_IDX_XMSS_KEY_GEN]            = {"XMSS-SHA2_10_256-KEY-GEN",     wh_Bench_Mod_XmssKeyGen,              BENCH_THROUGHPUT_OPS, 0, NULL},
+    [BENCH_MODULE_IDX_XMSS_SIGN]               = {"XMSS-SHA2_10_256-SIGN",        wh_Bench_Mod_XmssSign,                BENCH_THROUGHPUT_OPS, 0, NULL},
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS)
+    [BENCH_MODULE_IDX_XMSS_VERIFY]             = {"XMSS-SHA2_10_256-VERIFY",      wh_Bench_Mod_XmssVerify,              BENCH_THROUGHPUT_OPS, 0, NULL},
+#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS */
 #endif /* !(WOLFHSM_CFG_NO_CRYPTO) */
 };
 /* clang-format on */
