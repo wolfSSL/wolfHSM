@@ -424,4 +424,30 @@ int wh_Bench_Mod_MlKem1024DecapsDma(whClientContext*  client,
                                     whBenchOpContext* ctx, int id,
                                     void* params);
 
+/*
+ * LMS benchmark module prototypes (wh_bench_mod_lms.c)
+ *
+ * LMS is stateful (hash-based) and DMA-only in wolfHSM, so there is a single
+ * variant per operation (no non-DMA counterpart).
+ */
+int wh_Bench_Mod_LmsKeyGen(whClientContext* client, whBenchOpContext* ctx,
+                           int id, void* params);
+int wh_Bench_Mod_LmsSign(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params);
+int wh_Bench_Mod_LmsVerify(whClientContext* client, whBenchOpContext* ctx,
+                           int id, void* params);
+
+/*
+ * XMSS benchmark module prototypes (wh_bench_mod_xmss.c)
+ *
+ * XMSS is stateful (hash-based) and DMA-only in wolfHSM, so there is a single
+ * variant per operation (no non-DMA counterpart).
+ */
+int wh_Bench_Mod_XmssKeyGen(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+int wh_Bench_Mod_XmssSign(whClientContext* client, whBenchOpContext* ctx,
+                          int id, void* params);
+int wh_Bench_Mod_XmssVerify(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+
 #endif /* WH_BENCH_MOD_ALL_H_ */
