@@ -739,11 +739,11 @@ int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
  * returns WH_ERROR_NOTREADY if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] keyId Pointer to store the key ID assigned by the server.
+ * @param[out] outKeyId Pointer to store the key ID assigned by the server.
  * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
  * available, or a negative error code on failure.
  */
-int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId);
+int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* outKeyId);
 
 /**
  * @brief Generates a key from the server RNG, caches it, and returns its ID.
@@ -757,13 +757,13 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId);
  * @param[in] label Pointer to the label associated with the key.
  * @param[in] labelSz Size of the label.
  * @param[in] keySz Number of random key bytes to generate.
- * @param[in,out] keyId On input, the requested key ID (or WH_KEYID_ERASED). On
- * success, stores the key ID assigned by the server.
+ * @param[in,out] inOutKeyId On input, the requested key ID (or
+ * WH_KEYID_ERASED). On success, stores the key ID assigned by the server.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyCacheRandom(whClientContext* c, uint32_t flags,
                                  uint8_t* label, uint16_t labelSz,
-                                 uint16_t keySz, uint16_t* keyId);
+                                 uint16_t keySz, uint16_t* inOutKeyId);
 
 /**
  * @brief Sends a key eviction request to the server.

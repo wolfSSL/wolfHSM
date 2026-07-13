@@ -941,7 +941,7 @@ int wh_Client_KeyCacheRandomRequest(whClientContext* c, uint32_t flags,
                                  sizeof(*req), (uint8_t*)req);
 }
 
-int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
+int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* outKeyId)
 {
     uint16_t                              group;
     uint16_t                              action;
@@ -949,7 +949,7 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
     int                                   ret;
     whMessageKeystore_CacheRandomResponse *resp = NULL;
 
-    if (c == NULL || keyId == NULL) {
+    if (c == NULL || outKeyId == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -965,7 +965,7 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
             ret = resp->rc;
         }
         else {
-            *keyId = resp->id;
+            *outKeyId = resp->id;
         }
     }
 
@@ -974,26 +974,26 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* keyId)
 
 int wh_Client_KeyCacheRandom(whClientContext* c, uint32_t flags,
                                  uint8_t* label, uint16_t labelSz,
-                                 uint16_t keySz, uint16_t* keyId)
+                                 uint16_t keySz, uint16_t* inOutKeyId)
 {
     int ret = WH_ERROR_OK;
 
-    if (keyId == NULL) {
+    if (inOutKeyId == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     ret = wh_Client_KeyCacheRandomRequest(c, flags, label, labelSz, keySz,
-                                          *keyId);
+                                          *inOutKeyId);
 
     if (ret == 0) {
         do {
-            ret = wh_Client_KeyCacheRandomResponse(c, keyId);
+            ret = wh_Client_KeyCacheRandomResponse(c, inOutKeyId);
         } while (ret == WH_ERROR_NOTREADY);
     }
 
     WH_DEBUG_CLIENT_VERBOSE("label:%.*s key_id:%x ret:%d \n",
            (label != NULL) ? (int)labelSz : 0,
-           (label != NULL) ? (const char*)label : "", *keyId, ret);
+           (label != NULL) ? (const char*)label : "", *inOutKeyId, ret);
     return ret;
 }
 
