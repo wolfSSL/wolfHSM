@@ -1615,9 +1615,9 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   const void* req_packet,
                                   uint16_t* out_resp_size, void* resp_packet)
 {
+    int ret = 0;
     (void)req_packet;
     (void)req_size;
-    int ret = 0;
 
     if (action == WH_SHE_GET_STATUS) {
         /* Status read is always permitted per AUTOSAR spec, even before boot 
