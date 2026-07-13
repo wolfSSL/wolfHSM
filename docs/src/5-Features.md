@@ -313,9 +313,10 @@ The two tiers keep one large key (e.g. an an ML-DSA-87 private key) from dictati
 
 Each cached key carries its full `whNvmMetadata` record alongside the key bytes, plus an internal **committed flag** marking whether a copy also exists in NVM. This flag is what makes the cache a true working set: when it needs a slot and none is free, the keystore evicts a key that is already committed (and can be reloaded later), but never an uncommitted one. Uncommitted keys are RAM-only, so the caller must commit them to survive eviction or reset; if the cache fills with uncommitted keys, the next cache operation returns `WH_ERROR_NOSPACE` instead of silently dropping material.
 
-A client drives this tier with five operations:
+A client drives this tier with six operations:
 
 - **Cache**: write key bytes and metadata into a server cache slot. The key is usable immediately but RAM-only.
+- **Cache Random**: have the server generate a random key from its own RNG and cache it into a server cache slot.
 - **Commit**: copy a cached key into NVM as a durable object. The cache copy is marked committed and becomes a candidate for eviction.
 - **Evict**: drop the cache copy. If the key was committed, the NVM copy remains and reloads on the next reference; if it was uncommitted, the key is gone.
 - **Export**: read a cached key's bytes back to the client, subject to `WH_NVM_FLAGS_NONEXPORTABLE`.

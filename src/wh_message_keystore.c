@@ -59,6 +59,38 @@ int wh_MessageKeystore_TranslateCacheResponse(
     return 0;
 }
 
+/* Key Cache Random Request translation */
+int wh_MessageKeystore_TranslateCacheRandomRequest(
+    uint16_t magic, const whMessageKeystore_CacheRandomRequest* src,
+    whMessageKeystore_CacheRandomRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, labelSz);
+    WH_T16(magic, dest, src, sz);
+    WH_T16(magic, dest, src, id);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, WH_NVM_LABEL_LEN);
+    }
+    return 0;
+}
+
+/* Key Cache Random Response translation */
+int wh_MessageKeystore_TranslateCacheRandomResponse(
+    uint16_t magic, const whMessageKeystore_CacheRandomResponse* src,
+    whMessageKeystore_CacheRandomResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, id);
+    return 0;
+}
+
 /* Key Evict Request translation */
 int wh_MessageKeystore_TranslateEvictRequest(
     uint16_t magic, const whMessageKeystore_EvictRequest* src,

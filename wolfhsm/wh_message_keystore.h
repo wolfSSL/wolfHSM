@@ -61,6 +61,34 @@ int wh_MessageKeystore_TranslateCacheResponse(
     uint16_t magic, const whMessageKeystore_CacheResponse* src,
     whMessageKeystore_CacheResponse* dest);
 
+/* Key Cache Random Request
+ * Requests the server to generate a key from its RNG and cache it. No key
+ * material is sent by the client. */
+typedef struct {
+    uint32_t flags;
+    uint32_t labelSz;
+    uint16_t sz;      /* number of random key bytes to generate */
+    uint16_t id;      /* requested keyId, or WH_KEYID_ERASED to auto-assign */
+    uint8_t  WH_PAD[4];
+    uint8_t  label[WH_NVM_LABEL_LEN];
+} whMessageKeystore_CacheRandomRequest;
+
+/* Key Cache Random Response */
+typedef struct {
+    uint32_t rc;
+    uint16_t id;
+    uint8_t  WH_PAD[6];
+} whMessageKeystore_CacheRandomResponse;
+
+/* Key Cache Random translation functions */
+int wh_MessageKeystore_TranslateCacheRandomRequest(
+    uint16_t magic, const whMessageKeystore_CacheRandomRequest* src,
+    whMessageKeystore_CacheRandomRequest* dest);
+
+int wh_MessageKeystore_TranslateCacheRandomResponse(
+    uint16_t magic, const whMessageKeystore_CacheRandomResponse* src,
+    whMessageKeystore_CacheRandomResponse* dest);
+
 /* Key Evict Request */
 typedef struct {
     uint16_t id;
