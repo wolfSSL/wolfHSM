@@ -629,6 +629,7 @@ The SHE client API is declared in `wolfhsm/wh_client_she.h` and maps one-to-one 
 - **Bulk crypto**: `wh_Client_SheEncEcb` / `wh_Client_SheEncCbc` / `wh_Client_SheDecEcb` / `wh_Client_SheDecCbc` (`CMD_ENC_*` / `CMD_DEC_*`) — AES-ECB and AES-CBC encrypt and decrypt against a selected key slot
 - **MAC**: `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` (`CMD_GENERATE_MAC` / `CMD_VERIFY_MAC`) — CMAC generation and verification against a selected key slot
 - **Status**: `wh_Client_SheGetStatus` (`CMD_GET_STATUS`) — reads the SHE status register (SREG)
+- **Module identity**: `wh_Client_SheGetId` (`CMD_GET_ID`) — returns the ECU UID, the status register, and a CMAC over the caller's challenge, UID, and status register computed under the `MASTER_ECU_KEY`, letting a party that holds that key verify the module's identity. If the `MASTER_ECU_KEY` slot is empty the MAC is computed with an all-zero key, per the spec.
 
 In addition to the spec commands, wolfHSM exposes two non-standard helpers that fill gaps left by the spec's assumption of dedicated hardware:
 

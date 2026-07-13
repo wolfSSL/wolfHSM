@@ -201,6 +201,63 @@ int wh_Client_SheGetStatusResponse(whClientContext* c, uint8_t* sreg);
  */
 int wh_Client_SheGetStatus(whClientContext* c, uint8_t* sreg);
 
+/** SHE identity functions */
+
+/**
+ * @brief Sends a request to read the SHE module identity (CMD_GET_ID).
+ *
+ * Sends an AUTOSAR SHE CMD_GET_ID request carrying a 16-byte challenge. The
+ * server returns the ECU UID, the status register, and a CMAC over the
+ * challenge, UID, and status register computed under the MASTER_ECU_KEY
+ * (slot 1). If the MASTER_ECU_KEY slot is empty the MAC is computed with an
+ * all-zero key, per the SHE spec.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] challenge Pointer to the challenge bytes.
+ * @param[in] challengeSz Length of @p challenge; must be at least
+ *                        WH_SHE_KEY_SZ (16).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SheGetIdRequest(whClientContext* c, uint8_t* challenge,
+    uint32_t challengeSz);
+
+/**
+ * @brief Receives the SHE module identity response (CMD_GET_ID).
+ *
+ * Consumes a CMD_GET_ID response and writes out the ECU UID, status register,
+ * and identity MAC.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] uid Buffer that receives the WH_SHE_UID_SZ (15) byte UID.
+ * @param[out] sreg Pointer to a byte that receives the status register value.
+ * @param[out] mac Buffer that receives the WH_SHE_KEY_SZ (16) byte identity MAC.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ * available yet, or a negative error code on failure.
+ */
+int wh_Client_SheGetIdResponse(whClientContext* c, uint8_t* uid, uint8_t* sreg,
+    uint8_t* mac);
+
+/**
+ * @brief Reads the SHE module identity with a blocking call (CMD_GET_ID).
+ *
+ * Sends a CMD_GET_ID request with the supplied @p challenge and busy-polls for
+ * the response, writing the ECU UID, status register, and identity MAC to
+ * @p uid, @p sreg, and @p mac respectively. The MAC is
+ * CMAC(MASTER_ECU_KEY, challenge || uid || sreg), allowing a tester to verify
+ * the module's identity.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] challenge Pointer to the challenge bytes.
+ * @param[in] challengeSz Length of @p challenge; must be at least
+ *                        WH_SHE_KEY_SZ (16).
+ * @param[out] uid Buffer that receives the WH_SHE_UID_SZ (15) byte UID.
+ * @param[out] sreg Pointer to a byte that receives the status register value.
+ * @param[out] mac Buffer that receives the WH_SHE_KEY_SZ (16) byte identity MAC.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SheGetId(whClientContext* c, uint8_t* challenge,
+    uint32_t challengeSz, uint8_t* uid, uint8_t* sreg, uint8_t* mac);
+
 /** SHE key management functions */
 
 /**

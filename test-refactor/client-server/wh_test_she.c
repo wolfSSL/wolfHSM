@@ -145,6 +145,13 @@ int whTest_She(whClientContext* client)
     uint8_t  messageThree[WH_SHE_M3_SZ];
     uint8_t  messageFour[WH_SHE_M4_SZ];
     uint8_t  messageFive[WH_SHE_M5_SZ];
+    uint8_t  sheChallenge[WH_SHE_KEY_SZ] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    uint8_t  sheGetIdUid[WH_SHE_UID_SZ];
+    uint8_t  sheGetIdMac[WH_SHE_KEY_SZ];
+    uint8_t  expectedGetIdMac[WH_SHE_KEY_SZ];
+    uint8_t  getIdMacInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ + 1];
+    word32   expectedGetIdMacSz = sizeof(expectedGetIdMac);
     const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
     const uint32_t SHE_WP_KEY_ID          = 6;
 
@@ -316,6 +323,39 @@ int whTest_She(whClientContext* client)
         goto exit;
     }
     WH_TEST_PRINT("SHE LOAD KEY SUCCESS\n");
+
+    /* === GET_ID identity + MAC verification === */
+
+    /* CMD_GET_ID: read the module identity and verify the identity MAC. The
+     * MASTER_ECU_KEY (slot 1) was loaded above with vectorMasterEcuKey, so we
+     * can recompute the expected CMAC over challenge || uid || sreg. */
+    if ((ret = wh_Client_SheGetId(client, sheChallenge, sizeof(sheChallenge),
+             sheGetIdUid, &sreg, sheGetIdMac)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheGetId %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(sheGetIdUid, sheUid, WH_SHE_UID_SZ) != 0) {
+        ret = WH_ERROR_ABORTED;
+        WH_ERROR_PRINT("SHE GET_ID returned an unexpected UID\n");
+        goto exit;
+    }
+    /* expected MAC = CMAC(MASTER_ECU_KEY, challenge || uid || sreg) */
+    memcpy(getIdMacInput, sheChallenge, WH_SHE_KEY_SZ);
+    memcpy(getIdMacInput + WH_SHE_KEY_SZ, sheGetIdUid, WH_SHE_UID_SZ);
+    getIdMacInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = sreg;
+    expectedGetIdMacSz = sizeof(expectedGetIdMac);
+    if ((ret = wc_AesCmacGenerate(expectedGetIdMac, &expectedGetIdMacSz,
+             getIdMacInput, sizeof(getIdMacInput), vectorMasterEcuKey,
+             sizeof(vectorMasterEcuKey))) != 0) {
+        WH_ERROR_PRINT("Failed to compute expected GET_ID MAC %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(sheGetIdMac, expectedGetIdMac, WH_SHE_KEY_SZ) != 0) {
+        ret = WH_ERROR_ABORTED;
+        WH_ERROR_PRINT("SHE GET_ID MAC mismatch\n");
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE GET ID SUCCESS\n");
 
     /* === LoadKey UID handling === */
 

@@ -265,6 +265,66 @@ int wh_Client_SheGetStatus(whClientContext* c, uint8_t* sreg)
     return ret;
 }
 
+int wh_Client_SheGetIdRequest(whClientContext* c, uint8_t* challenge,
+                              uint32_t challengeSz)
+{
+    whMessageShe_GetIdRequest* req = NULL;
+
+    if (c == NULL || challenge == NULL || challengeSz < WH_SHE_KEY_SZ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageShe_GetIdRequest*)wh_CommClient_GetDataPtr(c->comm);
+
+    memcpy(req->challenge, challenge, sizeof(req->challenge));
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_GET_ID,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_SheGetIdResponse(whClientContext* c, uint8_t* uid, uint8_t* sreg,
+                               uint8_t* mac)
+{
+    int                        ret;
+    uint16_t                   group;
+    uint16_t                   action;
+    uint16_t                   dataSz;
+    whMessageShe_GetIdResponse* resp = NULL;
+
+    if (c == NULL || uid == NULL || sreg == NULL || mac == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageShe_GetIdResponse*)wh_CommClient_GetDataPtr(c->comm);
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &dataSz, (uint8_t*)resp);
+    if (ret == 0) {
+        if (resp->rc != WH_SHE_ERC_NO_ERROR) {
+            ret = resp->rc;
+        }
+        else {
+            memcpy(uid, resp->uid, sizeof(resp->uid));
+            *sreg = resp->sreg;
+            memcpy(mac, resp->mac, sizeof(resp->mac));
+        }
+    }
+    return ret;
+}
+
+int wh_Client_SheGetId(whClientContext* c, uint8_t* challenge,
+                       uint32_t challengeSz, uint8_t* uid, uint8_t* sreg,
+                       uint8_t* mac)
+{
+    int ret;
+    ret = wh_Client_SheGetIdRequest(c, challenge, challengeSz);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_SheGetIdResponse(c, uid, sreg, mac);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_SheLoadKeyRequest(whClientContext* c, uint8_t* messageOne,
                                 uint8_t* messageTwo, uint8_t* messageThree)
 {
