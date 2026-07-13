@@ -46,8 +46,9 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-/* Value of WH_SHE_SB_SUCCESS from the wh_server_she.c internal enum.
+/* Values from the wh_server_she.c internal WH_SHE_SB_STATE enum.
  * Mirrored here since the enum is private to that translation unit. */
+#define TEST_SHE_SB_STATE_INIT 0
 #define TEST_SHE_SB_STATE_SUCCESS 3
 
 
@@ -475,6 +476,129 @@ int whTest_SheReqSizeChecking(whServerContext* server)
     memset(server->she, 0, sizeof(*server->she));
 
     WH_TEST_PRINT("SHE req_size checking test SUCCESS\n");
+
+    return 0;
+}
+
+
+/* Send one SHE action through the server and return its response rc. */
+static int32_t wh_She_SheActionRc(whServerContext* server, uint16_t action,
+                                  const void* req_packet, uint16_t req_size,
+                                  void* resp_packet)
+{
+    uint16_t resp_size = 0;
+    int      ret;
+
+    *((int32_t*)resp_packet) = WH_SHE_ERC_NO_ERROR;
+    ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE, action,
+                                     req_size, req_packet, &resp_size,
+                                     resp_packet);
+    if (ret != 0 || resp_size < sizeof(int32_t)) {
+        return WH_SHE_ERC_GENERAL_ERROR;
+    }
+    return *((const int32_t*)resp_packet);
+}
+
+
+/* Test that the SHE state gate rejects protected commands before the SHE
+ * state machine is initialized. */
+int whTest_SheStateGate(whServerContext* server)
+{
+    uint32_t i;
+    int32_t  rc;
+
+    /* Buffers for request and response packets */
+    uint8_t req_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    uint8_t resp_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+
+    /* Protected actions that must not run before the state machine is up.
+     * req_size is the valid size for each, so a deleted gate would let the
+     * handler proceed rather than fail on size alone. */
+    const struct {
+        uint16_t action;
+        uint16_t req_size;
+    } protectedActions[] = {
+        {WH_SHE_LOAD_PLAIN_KEY, sizeof(whMessageShe_LoadPlainKeyRequest)},
+        {WH_SHE_INIT_RND, 0},
+        {WH_SHE_ENC_ECB, sizeof(whMessageShe_EncEcbRequest)},
+    };
+    const uint32_t protectedCount =
+        sizeof(protectedActions) / sizeof(protectedActions[0]);
+
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Start from a clean SHE state machine: uidSet=0, sbState=INIT. */
+    memset(server->she, 0, sizeof(*server->she));
+    memset(req_packet, 0, sizeof(req_packet));
+
+    /*
+     * Phase 1: before UID setup. Protected commands must be rejected with
+     * WH_SHE_ERC_SEQUENCE_ERROR, while GET_STATUS is allowed (per SHE spec).
+     */
+    for (i = 0; i < protectedCount; i++) {
+        rc = wh_She_SheActionRc(server, protectedActions[i].action, req_packet,
+                                protectedActions[i].req_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_SEQUENCE_ERROR);
+    }
+    /* Secure boot itself also needs the UID set first. */
+    rc = wh_She_SheActionRc(server, WH_SHE_SECURE_BOOT_INIT, req_packet,
+                            sizeof(whMessageShe_SecureBootInitRequest),
+                            resp_packet);
+    WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_SEQUENCE_ERROR);
+    /* GET_STATUS is callable at any time, even before UID setup. */
+    rc = wh_She_SheActionRc(server, WH_SHE_GET_STATUS, req_packet, 0,
+                            resp_packet);
+    WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+    /* Rejected commands left no state behind. */
+    WH_TEST_ASSERT_RETURN(server->she->uidSet == 0);
+    WH_TEST_ASSERT_RETURN(server->she->rndInited == 0);
+
+    /* SET_UID passes the gate and provisions the UID. */
+    {
+        whMessageShe_SetUidRequest* uidReq =
+            (whMessageShe_SetUidRequest*)req_packet;
+        memset(uidReq, 0, sizeof(*uidReq));
+        memset(uidReq->uid, 0x5A, WH_SHE_UID_SZ);
+        rc = wh_She_SheActionRc(server, WH_SHE_SET_UID, req_packet,
+                                sizeof(*uidReq), resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+        WH_TEST_ASSERT_RETURN(server->she->uidSet == 1);
+    }
+    memset(req_packet, 0, sizeof(req_packet));
+
+    /*
+     * Phase 2: UID set but secure boot not yet successful. Isolates the
+     * secure-boot requirement from the UID check above.
+     */
+    server->she->sbState = TEST_SHE_SB_STATE_INIT;
+    for (i = 0; i < protectedCount; i++) {
+        rc = wh_She_SheActionRc(server, protectedActions[i].action, req_packet,
+                                protectedActions[i].req_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_SEQUENCE_ERROR);
+    }
+    rc = wh_She_SheActionRc(server, WH_SHE_GET_STATUS, req_packet, 0,
+                            resp_packet);
+    WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+    WH_TEST_ASSERT_RETURN(server->she->rndInited == 0);
+
+    /*
+     * Phase 3: UID set and secure boot successful. The gate must let a
+     * protected command reach its handler, proving it does not over-block.
+     * Keys are not provisioned here, so INIT_RND still fails inside the
+     * handler, but with a key error rather than a gate sequence error.
+     */
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+    rc = wh_She_SheActionRc(server, WH_SHE_INIT_RND, req_packet, 0,
+                            resp_packet);
+    WH_TEST_ASSERT_RETURN(rc != WH_SHE_ERC_SEQUENCE_ERROR);
+
+    /* Restore a clean SHE context so the poked state doesn't leak into the
+     * live request loop the server enters next. */
+    memset(server->she, 0, sizeof(*server->she));
+
+    WH_TEST_PRINT("SHE state gate test SUCCESS\n");
 
     return 0;
 }

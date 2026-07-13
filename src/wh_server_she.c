@@ -1615,18 +1615,34 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   const void* req_packet,
                                   uint16_t* out_resp_size, void* resp_packet)
 {
+    int ret = 0;
     (void)req_packet;
     (void)req_size;
 
-    /* TODO does SHE specify what this error should be? */
-    /* if we haven't secure booted, only allow secure boot requests */
-    if ((server->she->sbState != WH_SHE_SB_SUCCESS &&
-         (action != WH_SHE_SECURE_BOOT_INIT &&
-          action != WH_SHE_SECURE_BOOT_UPDATE &&
-          action != WH_SHE_SECURE_BOOT_FINISH && action != WH_SHE_GET_STATUS &&
-          action != WH_SHE_SET_UID)) ||
-        (action != WH_SHE_SET_UID && server->she->uidSet == 0)) {
-        /* Create an error response based on the action */
+    if (action == WH_SHE_GET_STATUS) {
+        /* Status read is always permitted per AUTOSAR spec, even before boot 
+         *or UID setup. */
+    }
+    else if (action == WH_SHE_SET_UID) {
+        /* Provisioning is one-shot: reject once the UID is already set. */
+        if (server->she->uidSet != 0) {
+            ret = WH_SHE_ERC_SEQUENCE_ERROR;
+        }
+    }
+    else if (server->she->uidSet == 0) {
+        /* Every remaining command needs a provisioned UID. */
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
+    else if (action != WH_SHE_SECURE_BOOT_INIT &&
+             action != WH_SHE_SECURE_BOOT_UPDATE &&
+             action != WH_SHE_SECURE_BOOT_FINISH &&
+             server->she->sbState != WH_SHE_SB_SUCCESS) {
+        /* Non-boot commands are blocked until secure boot succeeds. */
+        ret = WH_SHE_ERC_SEQUENCE_ERROR;
+    }
+
+    if (ret != 0) {
+        /* State is invalid, create an error response based on the action */
         switch (action) {
             case WH_SHE_SET_UID: {
                 whMessageShe_SetUidResponse resp;
@@ -1767,9 +1783,9 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                 break;
             }
         }
-        return WH_SHE_ERC_SEQUENCE_ERROR;
     }
-    return 0;
+
+    return ret;
 }
 
 int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
