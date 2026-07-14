@@ -3402,6 +3402,41 @@ int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
                                 uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Generate an ML-KEM key in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_MlKemExportPublicKey call. On success inout_key_id holds
+ * the cached keyId and pub is populated with the public key, associated with
+ * that keyId, and stamped with the client's HSM devId, so it is immediately
+ * usable both as the exported public key and as a handle to the cached private
+ * key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_MlKemMakeCacheKeyAndExportPublic(whClientContext* ctx, int level,
+                                               whKeyId* inout_key_id,
+                                               whNvmFlags flags,
+                                               uint16_t label_len,
+                                               const uint8_t* label,
+                                               MlKemKey* pub);
+
+/**
  * @brief Perform ML-KEM encapsulation using a server-cached public key.
  *
  * Generates a shared secret and ciphertext using the public key identified by
@@ -3507,6 +3542,39 @@ int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
  */
 int wh_Client_MlKemMakeExportKeyDma(whClientContext* ctx, int level,
                                     MlKemKey* key);
+
+/**
+ * @brief DMA variant: generate an ML-KEM key in the server key cache and return
+ *        its public key in one round-trip.
+ *
+ * Streams the public key back through the client's DMA buffer so the client
+ * avoids a separate wh_Client_MlKemExportPublicKeyDma call. On success
+ * inout_key_id holds the cached keyId and pub is populated with the public key,
+ * associated with that keyId, and stamped with the client's HSM devId, so it is
+ * immediately usable both as the exported public key and as a handle to the
+ * cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_MlKemMakeCacheKeyDma(whClientContext* ctx, int level,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, const uint8_t* label,
+                                   MlKemKey* pub);
 
 /**
  * @brief Perform ML-KEM encapsulation using DMA.

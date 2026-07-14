@@ -5223,6 +5223,26 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                                                         req.flags, label_size,
                                                         req.label);
                 }
+                if (ret == WH_ERROR_OK) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    word32 pubSize = 0;
+                    if ((wc_MlKemKey_PublicKeySize(key, &pubSize) == 0) &&
+                        ((uint32_t)pubSize <= (uint32_t)max_size) &&
+                        (wc_MlKemKey_EncodePublicKey(key, res_out, pubSize) ==
+                         0)) {
+                        res_size = (uint16_t)pubSize;
+                    }
+                    else {
+                        res_size = 0;
+                    }
+                }
             }
         }
         wc_MlKemKey_Free(key);
@@ -7009,10 +7029,46 @@ static int _HandleMlKemKeyGenDma(whServerContext* ctx, uint16_t magic,
                         ret = wh_Server_MlKemKeyCacheImport(
                             ctx, key, keyId, req.flags, req.labelSize,
                             req.label);
-                        if (ret == WH_ERROR_OK) {
-                            res.keyId   = wh_KeyId_TranslateToClient(keyId);
-                            res.keySize = keySize;
+                    }
+                    /* Stream the public key back through the client's DMA
+                     * buffer so it gets the pubkey without a separate
+                     * ExportPublicKey call. A freshly generated key must
+                     * serialize, so treat a failure as fatal: evict the
+                     * just-committed key and propagate the error rather than
+                     * returning a keyId with no public key. */
+                    if (ret == WH_ERROR_OK) {
+                        word32 pubSize = 0;
+                        if ((wc_MlKemKey_PublicKeySize(key, &pubSize) != 0) ||
+                            ((uint64_t)pubSize > req.key.sz)) {
+                            ret = WH_ERROR_ABORTED;
                         }
+                        else {
+                            ret = wh_Server_DmaProcessClientAddress(
+                                ctx, req.key.addr, &clientOutAddr, pubSize,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                (whServerDmaFlags){0});
+                            if (ret == WH_ERROR_OK) {
+                                if (wc_MlKemKey_EncodePublicKey(
+                                        key, (uint8_t*)clientOutAddr, pubSize) ==
+                                    0) {
+                                    keySize = (uint16_t)pubSize;
+                                }
+                                else {
+                                    ret = WH_ERROR_ABORTED;
+                                }
+                                (void)wh_Server_DmaProcessClientAddress(
+                                    ctx, req.key.addr, &clientOutAddr, keySize,
+                                    WH_DMA_OPER_CLIENT_WRITE_POST,
+                                    (whServerDmaFlags){0});
+                            }
+                        }
+                        if (ret != WH_ERROR_OK) {
+                            (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+                        }
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                        res.keySize = keySize;
                     }
                 }
             }
