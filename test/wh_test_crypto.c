@@ -3710,6 +3710,93 @@ static int whTest_CryptoEd25519ExportPublic(whClientContext* ctx, int devId,
     return ret;
 }
 
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_Ed25519ExportPublicKey and
+ * that it verifies a signature made by the cached private key. */
+static int whTest_CryptoEd25519CacheKeyAndExportPublic(whClientContext* ctx,
+                                                       int devId, WC_RNG* rng)
+{
+    int         ret       = 0;
+    whKeyId     keyId     = WH_KEYID_ERASED;
+    ed25519_key genPub[1] = {0};
+    ed25519_key refPub[1] = {0};
+    byte        msg[]     = "Ed25519 cache-export-public message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz     = sizeof(sig);
+    int         verified  = 0;
+    byte        genDer[128];
+    byte        refDer[128];
+    int         genDerSz  = 0;
+    int         refDerSz  = 0;
+    (void)devId;
+
+    ret = wc_ed25519_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+            ctx, &keyId, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+            NULL, genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519MakeCacheKeyAndExportPublic failed %d\n",
+                           ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKey. */
+    if (ret == 0) {
+        ret = wc_ed25519_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_Ed25519ExportPublicKey(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_Ed25519ExportPublicKey failed %d\n",
+                               ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        genDerSz = wc_Ed25519PublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+        refDerSz = wc_Ed25519PublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+        if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+            (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+            ret = -1;
+        }
+    }
+
+    /* Prove usability: sign on the HSM using genPub directly as the private-key
+     * handle (no separate key object), then verify locally with the exported
+     * public key (refPub) the client holds. */
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, genPub, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM Ed25519 sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, (word32)sizeof(msg),
+                                    &verified, refPub);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("verify with keygen pub failed ret=%d verify=%d\n",
+                           ret, verified);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_ed25519_free(refPub);
+    wc_ed25519_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    (void)rng;
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
 {
@@ -16556,6 +16643,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                                                rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Ed25519 export-public test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519CacheKeyAndExportPublic(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Ed25519 cache-and-export-public test failed: %d\n", ret);
         }
     }
 #ifdef WOLFHSM_CFG_DMA

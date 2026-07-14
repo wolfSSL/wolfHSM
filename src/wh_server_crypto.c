@@ -2341,6 +2341,24 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic, int devId,
                     ret = wh_Server_CacheImportEd25519Key(
                         ctx, key, key_id, flags, label_size, label);
                 }
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_Ed25519PublicKeyToDer(key, res_out, max_size, 1);
+                    if (pub_ret > 0) {
+                        ser_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        ser_size = 0;
+                    }
+                }
             }
         }
         wc_ed25519_free(key);
