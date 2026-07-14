@@ -721,6 +721,100 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Cache-and-export-public: a single keygen call returns the public key */
+    if (ret == 0) {
+        RsaKey   genPub[1];
+        RsaKey   refPub[1];
+        whKeyId  cacheId  = WH_KEYID_ERASED;
+        byte     genDer[2048];
+        byte     refDer[2048];
+        int      genDerSz = 0;
+        int      refDerSz = 0;
+        int      genInit  = 0;
+        int      refInit  = 0;
+
+        memset(cipherText, 0, sizeof(cipherText));
+        memset(finalText, 0, sizeof(finalText));
+
+        ret = wc_InitRsaKey_ex(genPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInit = 1;
+            ret     = wh_Client_RsaMakeCacheKeyAndExportPublic(
+                ctx, RSA_KEY_BITS, RSA_EXPONENT, &cacheId,
+                WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 0,
+                NULL, genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("RsaMakeCacheKeyAndExportPublic failed %d\n",
+                               ret);
+            }
+        }
+
+        /* Cross-check the keygen-returned public key against a separate
+         * ExportPublicKey call on the same cached keyId. */
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(refPub, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInit = 1;
+                ret     = wh_Client_RsaExportPublicKey(ctx, cacheId, refPub, 0,
+                                                       NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("RsaExportPublicKey failed %d\n", ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            genDerSz = wc_RsaKeyToPublicDer(genPub, genDer, sizeof(genDer));
+            refDerSz = wc_RsaKeyToPublicDer(refPub, refDer, sizeof(refDer));
+            if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+                ret = -1;
+            }
+        }
+
+        /* Prove the returned public key is usable: encrypt locally with the
+         * exported public key (refPub) the client holds, then decrypt on the
+         * HSM using genPub directly as the private-key handle (no separate key
+         * object). */
+        if (ret == 0) {
+            int encLen = wc_RsaPublicEncrypt(
+                (byte*)plainText, sizeof(plainText), (byte*)cipherText,
+                sizeof(cipherText), refPub, rng);
+            if (encLen < 0) {
+                WH_ERROR_PRINT("PublicEncrypt with keygen pub failed %d\n",
+                               encLen);
+                ret = encLen;
+            }
+            else {
+                int decLen = wc_RsaPrivateDecrypt(
+                    (byte*)cipherText, encLen, (byte*)finalText,
+                    sizeof(finalText), genPub);
+                if (decLen < 0) {
+                    WH_ERROR_PRINT("HSM PrivateDecrypt failed %d\n", decLen);
+                    ret = decLen;
+                }
+                else if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+                    WH_ERROR_PRINT("keygen-pub round-trip mismatch\n");
+                    ret = -1;
+                }
+            }
+        }
+
+        if (genInit != 0) {
+            (void)wc_FreeRsaKey(genPub);
+        }
+        if (refInit != 0) {
+            (void)wc_FreeRsaKey(refPub);
+        }
+        if (!WH_KEYID_ISERASED(cacheId)) {
+            (void)wh_Client_KeyEvict(ctx, cacheId);
+        }
+
+        if (ret == 0) {
+            WH_TEST_PRINT("RSA CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+        }
+    }
+
     if (ret == 0) {
         WH_TEST_PRINT("RSA SUCCESS\n");
     }

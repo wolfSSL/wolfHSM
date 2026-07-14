@@ -1082,6 +1082,39 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx,
         whKeyId* inout_key_id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
 
+/**
+ * @brief Generate an RSA key in the server key cache and return its public key
+ *        in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_RsaExportPublicKey call. On success inout_key_id holds the
+ * cached keyId and pub is populated with the public key, associated with that
+ * keyId, and stamped with the client's HSM devId, so it is immediately usable
+ * both as the exported public key and as a handle to the cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate in bits (e.g. 2048).
+ * @param[in] e Public exponent to use (e.g. WC_RSA_EXPONENT / 65537).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_RsaMakeCacheKeyAndExportPublic(whClientContext* ctx,
+        uint32_t size, uint32_t e,
+        whKeyId* inout_key_id, whNvmFlags flags,
+        uint32_t label_len, const uint8_t* label, RsaKey* pub);
+
 /* TODO: Request server to perform the RSA function */
 int wh_Client_RsaFunction(whClientContext* ctx,
         RsaKey* key, int rsa_type,

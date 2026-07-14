@@ -98,7 +98,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 /* Shared async halves used by the RsaMakeCacheKey/RsaMakeExportKey wrappers. */
 static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId key_id, whNvmFlags flags,
-                              uint32_t label_len, uint8_t* label);
+                              uint32_t label_len, const uint8_t* label);
 static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                RsaKey* out_rsa);
 #endif
@@ -4191,7 +4191,7 @@ int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
 
 static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId key_id, whNvmFlags flags,
-                              uint32_t label_len, uint8_t* label)
+                              uint32_t label_len, const uint8_t* label)
 {
     whMessageCrypto_RsaKeyGenRequest* req     = NULL;
     uint8_t*                          dataPtr = NULL;
@@ -4347,6 +4347,58 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx, uint32_t size, uint32_t e,
         } while (ret == WH_ERROR_NOTREADY);
         if (ret >= 0) {
             *inout_key_id = key_id;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_RsaMakeCacheKeyAndExportPublic(whClientContext* ctx,
+                                             uint32_t size, uint32_t e,
+                                             whKeyId* inout_key_id,
+                                             whNvmFlags flags,
+                                             uint32_t label_len,
+                                             const uint8_t* label,
+                                             RsaKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+    whKeyId key_id = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export pair, not the cache pair. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret      = _RsaMakeKeyRequest(ctx, size, e, in_keyId, flags, label_len,
+                                  label);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _RsaMakeKeyResponse(ctx, &key_id, pub);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret >= 0) {
+            *inout_key_id = key_id;
+            /* Associate the returned key with the cached keyId and stamp the
+             * client's HSM devId so pub is immediately usable both as the
+             * exported public key and as a handle to the cached private key,
+             * without the caller re-initializing it. */
+            wh_Client_RsaSetKeyId(pub, key_id);
+            pub->devId = WH_CLIENT_DEVID(ctx);
+        }
+        else if (!WH_KEYID_ISERASED(key_id)) {
+            /* The server committed a key but the best-effort export returned no
+             * usable public key (empty response body when it did not fit, or a
+             * client-side deserialize failure). Roll back so the operation is
+             * atomic and no cache slot is orphaned. key_id is only set from a
+             * parsed server response, so it is non-erased only when a key was
+             * actually committed - safe even when the caller supplied an
+             * explicit keyId. */
+            (void)wh_Client_KeyEvict(ctx, key_id);
+            *inout_key_id = WH_KEYID_ERASED;
         }
     }
     return ret;

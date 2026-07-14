@@ -376,8 +376,25 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 }
                 WH_DEBUG_SERVER_VERBOSE("RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n", key_id, ret);
                 if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret = wc_RsaKeyToPublicDer(rsa, out, max_size);
+                    if (pub_ret > 0) {
+                        der_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        der_size = 0;
+                    }
+                }
+                if (ret == 0) {
                     res.keyId = wh_KeyId_TranslateToClient(key_id);
-                    res.len   = 0;
+                    res.len   = der_size;
                 }
             }
         }
