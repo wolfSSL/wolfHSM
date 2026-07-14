@@ -2084,6 +2084,9 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 ret    = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
             }
             else {
+                uint16_t max_size =
+                    (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                               (out - (uint8_t*)cryptoDataOut));
                 ser_size = 0;
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
@@ -2104,6 +2107,24 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 }
                 WH_DEBUG_SERVER_VERBOSE("CacheImport: keyId:%u, ret:%d\n",
                        key_id, ret);
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_Curve25519PublicKeyToDer(key, out, max_size, 1);
+                    if (pub_ret > 0) {
+                        ser_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        ser_size = 0;
+                    }
+                }
             }
         }
         wc_curve25519_free(key);

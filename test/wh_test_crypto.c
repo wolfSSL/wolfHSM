@@ -4409,6 +4409,109 @@ static int whTest_CryptoCurve25519ExportPublic(whClientContext* ctx, int devId,
     }
     return ret;
 }
+
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_Curve25519ExportPublicKey and
+ * that an X25519 shared secret round-trips against the cached private key. */
+static int whTest_CryptoCurve25519CacheKeyAndExportPublic(whClientContext* ctx,
+                                                          int devId,
+                                                          WC_RNG* rng)
+{
+    int            ret        = 0;
+    whKeyId        keyId      = WH_KEYID_ERASED;
+    curve25519_key genPub[1]  = {0};
+    curve25519_key refPub[1]  = {0};
+    curve25519_key localKey[1] = {0};
+    uint8_t        genRaw[CURVE25519_KEYSIZE] = {0};
+    uint8_t        refRaw[CURVE25519_KEYSIZE] = {0};
+    word32         genRawLen  = sizeof(genRaw);
+    word32         refRawLen  = sizeof(refRaw);
+    uint8_t        shared_hsm[CURVE25519_KEYSIZE]   = {0};
+    uint8_t        shared_local[CURVE25519_KEYSIZE] = {0};
+    word32         len        = 0;
+    (void)devId;
+
+    ret = wc_curve25519_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+            ctx, (uint16_t)CURVE25519_KEYSIZE, &keyId,
+            WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0, genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Curve25519MakeCacheKeyAndExportPublic failed %d\n", ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKey. */
+    if (ret == 0) {
+        ret = wc_curve25519_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_Curve25519ExportPublicKey(ctx, keyId, refPub, 0,
+                                                      NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "wh_Client_Curve25519ExportPublicKey failed %d\n", ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        ret = wc_curve25519_export_public(genPub, genRaw, &genRawLen);
+        if (ret == 0) {
+            ret = wc_curve25519_export_public(refPub, refRaw, &refRawLen);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Curve25519 export_public failed %d\n", ret);
+        }
+        else if ((genRawLen != refRawLen) ||
+                 (memcmp(genRaw, refRaw, genRawLen) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+            ret = -1;
+        }
+    }
+
+    /* Shared-secret round-trip using genPub directly as the HSM private-key
+     * handle (no separate key object): our local private key * genPub's
+     * exported public key (computed locally) must equal genPub's HSM private
+     * key * our local public key (computed on the server). */
+    if (ret == 0) {
+        ret = wc_curve25519_init_ex(localKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, localKey);
+        }
+    }
+    if (ret == 0) {
+        len = sizeof(shared_local);
+        ret = wc_curve25519_shared_secret(localKey, genPub, shared_local, &len);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Local Curve25519 shared secret failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        len = sizeof(shared_hsm);
+        ret = wc_curve25519_shared_secret(genPub, localKey, shared_hsm, &len);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM Curve25519 shared secret failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        if (memcmp(shared_hsm, shared_local, len) != 0) {
+            WH_ERROR_PRINT("Curve25519 keygen-pub shared secret mismatch\n");
+            ret = -1;
+        }
+    }
+
+    wc_curve25519_free(localKey);
+    wc_curve25519_free(refPub);
+    wc_curve25519_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("CURVE25519 CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
 #endif /* HAVE_CURVE25519 */
 
 #ifndef NO_SHA256
@@ -16485,6 +16588,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                                                   WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Curve25519 export-public test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoCurve25519CacheKeyAndExportPublic(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Curve25519 cache-and-export-public test failed: %d\n", ret);
         }
     }
 #endif /* HAVE_CURVE25519 */

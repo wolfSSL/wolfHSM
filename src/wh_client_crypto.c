@@ -3075,13 +3075,26 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 
             /* Update the context if provided */
             if (key != NULL) {
-                uint16_t der_size = (uint16_t)(res->len);
-                uint8_t* key_der  = (uint8_t*)(res + 1);
-                /* Set the key_id.  Should be ERASED if EPHEMERAL */
+                uint16_t     der_size = (uint16_t)(res->len);
+                uint8_t*     key_der  = (uint8_t*)(res + 1);
+                const size_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                /* Set the key_id.  ERASED for EPHEMERAL, cached id otherwise. */
                 wh_Client_Curve25519SetKeyId(key, key_id);
 
-                if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                    /* Response has the exported key */
+                /* Response carries the exported key (EPHEMERAL) or the public
+                 * key (cached keygen). An empty body means the caller requested
+                 * key material the server did not return; also reject a length
+                 * that does not fit the received frame before deserializing. */
+                if (der_size == 0) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else if ((data_len < hdr_sz) ||
+                         (res->len > (data_len - hdr_sz))) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
                     ret = wh_Crypto_Curve25519DeserializeKey(key_der, der_size,
                                                              key);
                     WH_DEBUG_VERBOSE_HEXDUMP("[client] KeyGen export:", key_der,
@@ -3103,6 +3116,49 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx, uint16_t size,
 
     return _Curve25519MakeKey(ctx, size, inout_key_id, flags, label, label_len,
                               NULL);
+}
+
+int wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+    whClientContext* ctx, uint16_t size, whKeyId* inout_key_id,
+    whNvmFlags flags, const uint8_t* label, uint16_t label_len,
+    curve25519_key* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _Curve25519MakeKey(ctx, size, inout_key_id, flags, label, label_len,
+                             pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _Curve25519MakeKey) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_Curve25519SetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the best-effort export returned no
+         * public key (empty response body when it did not fit). Roll back so the
+         * operation is atomic and no cache slot is orphaned. A non-DMA keygen
+         * only yields WH_ERROR_ABORTED after the server has committed and
+         * returned the keyId, so evicting is safe even when the caller supplied
+         * an explicit keyId. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_Curve25519MakeExportKey(whClientContext* ctx, uint16_t size,
