@@ -4863,6 +4863,27 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                         }
                         WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
                                key_id, ret);
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
+                        if (ret == 0) {
+                            /* Best-effort public key export: when the
+                             * serialized public key fits in the response body,
+                             * return it so the client can skip a separate
+                             * ExportPublicKey call. When it does not fit (small
+                             * comm buffer or a large key), leave the body empty
+                             * and keep the cached key. Plain MakeCacheKey callers
+                             * ignore the body and see no regression;
+                             * MakeCacheKeyAndExportPublic callers detect the
+                             * empty body and evict the key themselves. */
+                            int pub_ret = wc_MlDsaKey_PublicKeyToDer(
+                                key, res_out, max_size, 1);
+                            if (pub_ret > 0) {
+                                res_size = (uint16_t)pub_ret;
+                            }
+                            else {
+                                res_size = 0;
+                            }
+                        }
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
                     }
                 }
             }
@@ -6446,6 +6467,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_MlDsaKeyGenDmaRequest req;
     whMessageCrypto_MlDsaKeyGenDmaResponse res;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_MlDsaKeyGenDmaRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -6520,10 +6543,46 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                                 req.label);
                             WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
                                 keyId, ret);
-                            if (ret == 0) {
-                                res.keyId   = wh_KeyId_TranslateToClient(keyId);
-                                res.keySize = keySize;
+                        }
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
+                        /* Stream the public key back through the client's DMA
+                         * buffer so it gets the pubkey without a separate
+                         * ExportPublicKey call. A freshly generated key must
+                         * serialize, so treat a failure as fatal: evict the
+                         * just-committed key and propagate the error rather
+                         * than returning a keyId with no public key. */
+                        if (ret == 0) {
+                            int rc = wh_Server_DmaProcessClientAddress(
+                                ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                (whServerDmaFlags){0});
+                            if (rc == 0) {
+                                int pub_ret = wc_MlDsaKey_PublicKeyToDer(
+                                    key, (byte*)clientOutAddr,
+                                    (word32)req.key.sz, 1);
+                                if (pub_ret > 0) {
+                                    keySize = (uint16_t)pub_ret;
+                                }
+                                else {
+                                    ret = (pub_ret < 0) ? pub_ret
+                                                        : WH_ERROR_ABORTED;
+                                }
+                                (void)wh_Server_DmaProcessClientAddress(
+                                    ctx, req.key.addr, &clientOutAddr, keySize,
+                                    WH_DMA_OPER_CLIENT_WRITE_POST,
+                                    (whServerDmaFlags){0});
                             }
+                            else {
+                                ret = rc;
+                            }
+                            if (ret != 0) {
+                                (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+                            }
+                        }
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
+                        if (ret == 0) {
+                            res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                            res.keySize = keySize;
                         }
                     }
                 }
