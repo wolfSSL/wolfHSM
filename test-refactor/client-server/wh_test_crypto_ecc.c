@@ -38,6 +38,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/asn.h"
 #include "wolfssl/wolfcrypt/random.h"
 
 #include "wolfhsm/wh_error.h"
@@ -543,6 +544,106 @@ static int _whTest_CryptoEccExportPublicKey(whClientContext* ctx)
 
     if (ret == 0) {
         WH_TEST_PRINT("ECC EXPORT-PUBLIC DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_EccExportPublicKey and that
+ * it verifies a signature made by the cached private key. */
+static int _whTest_CryptoEccCacheKeyAndExportPublic(whClientContext* ctx)
+{
+    int      devId    = WH_CLIENT_DEVID(ctx);
+    int      ret      = 0;
+    WC_RNG   rng[1];
+    ecc_key  genPub[1];
+    ecc_key  refPub[1] = {0};
+    whKeyId  keyId    = WH_KEYID_ERASED;
+    uint8_t  hash[TEST_ECC_KEYSIZE] = {
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+        0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+    uint8_t  sig[ECC_MAX_SIG_SIZE];
+    word32   sigLen   = sizeof(sig);
+    int      verify   = 0;
+    byte     genDer[256];
+    byte     refDer[256];
+    int      genDerSz = 0;
+    int      refDerSz = 0;
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ecc_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ecc_init_ex %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wh_Client_EccMakeCacheKeyAndExportPublic(
+        ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
+        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL, genPub);
+    if (ret != 0) {
+        WH_ERROR_PRINT("EccMakeCacheKeyAndExportPublic failed %d\n", ret);
+    }
+
+    /* Cross-check against a separate public export of the same keyId. */
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_EccExportPublicKey(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_EccExportPublicKey failed %d\n", ret);
+            }
+            else {
+                genDerSz =
+                    wc_EccPublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+                refDerSz =
+                    wc_EccPublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+                if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                    (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                    WH_ERROR_PRINT("keygen pubkey mismatch vs export\n");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    /* Sign on the server using genPub directly as the HSM private-key handle
+     * (no separate key object), then verify locally with the independently
+     * exported public key (refPub) the client holds. */
+    if (ret == 0) {
+        ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM ECC sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &verify,
+                                 refPub);
+        if ((ret != 0) || (verify != 1)) {
+            WH_ERROR_PRINT("verify with keygen pub failed ret=%d verify=%d\n",
+                           ret, verify);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_ecc_free(refPub);
+    wc_ecc_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    (void)wc_FreeRng(rng);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC CACHE-AND-EXPORT-PUBLIC DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
@@ -1742,6 +1843,7 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEcc(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheDuplicate(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheKeyAndExportPublic(ctx));
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCrossVerify(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccAsync(ctx));

@@ -1218,13 +1218,6 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 key_id = WH_KEYID_ERASED;
                 ret    = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out,
                                                       &res_size);
-                /* TODO: RSA has the following, should we do the same? */
-                /*
-                if (ret == 0) {
-                    res.keyId = 0;
-                    res.len = res_size;
-                }
-                */
             }
             else {
                 /* Must import the key into the cache and return keyid
@@ -1245,11 +1238,24 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                                                       label_size, label);
                 }
                 WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n", key_id, ret);
-                /* TODO: RSA has the following, should we do the same? */
-                /*
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len = 0;
-                */
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_EccPublicKeyToDer(key, res_out, max_size, 1);
+                    if (pub_ret > 0) {
+                        res_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        res_size = 0;
+                    }
+                }
             }
         }
         wc_ecc_free(key);

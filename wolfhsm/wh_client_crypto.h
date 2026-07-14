@@ -512,6 +512,39 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx,
         uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Generate an ECC key pair in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_EccExportPublicKey call. On success inout_key_id holds the
+ * cached keyId and pub is populated with the public key, associated with that
+ * keyId, and stamped with the client's HSM devId, so it is immediately usable
+ * both as the exported public key and as a handle to the cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate in bytes (e.g. 32 for P-256).
+ * @param[in] curveId wolfCrypt curve identifier (e.g. ECC_SECP256R1).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key. Must not be NULL.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_EccMakeCacheKeyAndExportPublic(whClientContext* ctx,
+        int size, int curveId,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        uint16_t label_len, const uint8_t* label, ecc_key* pub);
+
+/**
  * @brief Compute an ECDH shared secret using a public and private ECC key.
  *
  * This function requests the server to compute the shared secret using the

@@ -1576,6 +1576,103 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Cache-and-export-public: a single keygen call returns the public key */
+    if (ret == 0) {
+        whKeyId  cacheId  = WH_KEYID_ERASED;
+        ecc_key  genPub[1];
+        ecc_key  refPub[1];
+        byte     genDer[256];
+        byte     refDer[256];
+        int      genDerSz = 0;
+        int      refDerSz = 0;
+        int      genInit  = 0;
+        int      refInit  = 0;
+        uint8_t  sig[ECC_MAX_SIG_SIZE];
+        word32   sigLen   = sizeof(sig);
+        int      verify   = 0;
+        uint8_t  label[]  = "ecc-cache-export";
+        uint8_t  readLabel[WH_NVM_LABEL_LEN] = {0};
+
+        ret = wc_ecc_init_ex(genPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInit = 1;
+            /* Exercise label forwarding on the cache-and-export path. */
+            ret     = wh_Client_EccMakeCacheKeyAndExportPublic(
+                ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &cacheId,
+                WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+                sizeof(label), label, genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("EccMakeCacheKeyAndExportPublic failed %d\n",
+                               ret);
+            }
+        }
+
+        /* Cross-check the keygen-returned public key against ExportPublicKey,
+         * and confirm the label was stored with the cached key. */
+        if (ret == 0) {
+            ret = wc_ecc_init_ex(refPub, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInit = 1;
+                ret     = wh_Client_EccExportPublicKey(
+                    ctx, cacheId, refPub, sizeof(readLabel), readLabel);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("wh_Client_EccExportPublicKey failed %d\n",
+                                   ret);
+                }
+                else if (memcmp(readLabel, label, sizeof(label)) != 0) {
+                    WH_ERROR_PRINT("keygen label not stored with cached key\n");
+                    ret = -1;
+                }
+            }
+        }
+        if (ret == 0) {
+            genDerSz = wc_EccPublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+            refDerSz = wc_EccPublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+            if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+                ret = -1;
+            }
+        }
+
+        /* Prove usability: sign on the HSM using genPub directly as the
+         * private-key handle (no separate key object), then verify locally with
+         * the exported public key (refPub) the client holds. */
+        if (ret == 0) {
+            ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng,
+                                   genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("HSM ECC sign failed %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &verify,
+                                     refPub);
+            if ((ret != 0) || (verify != 1)) {
+                WH_ERROR_PRINT(
+                    "verify with keygen pub failed ret=%d verify=%d\n", ret,
+                    verify);
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+        }
+
+        if (genInit != 0) {
+            wc_ecc_free(genPub);
+        }
+        if (refInit != 0) {
+            wc_ecc_free(refPub);
+        }
+        if (!WH_KEYID_ISERASED(cacheId)) {
+            (void)wh_Client_KeyEvict(ctx, cacheId);
+        }
+
+        if (ret == 0) {
+            WH_TEST_PRINT("ECC CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+        }
+    }
+
     if (ret == 0) {
         WH_TEST_PRINT("ECC SUCCESS\n");
     }

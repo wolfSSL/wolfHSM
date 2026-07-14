@@ -81,7 +81,7 @@
  * and the blocking wrappers wh_Client_EccMakeCacheKey/EccMakeExportKey. */
 static int _EccMakeKeyRequest(whClientContext* ctx, int size, int curveId,
                               whKeyId key_id, whNvmFlags flags,
-                              uint16_t label_len, uint8_t* label);
+                              uint16_t label_len, const uint8_t* label);
 static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                ecc_key* out_key);
 #endif /* HAVE_ECC */
@@ -1931,7 +1931,7 @@ int wh_Client_EccExportPublicKey(whClientContext* ctx, whKeyId keyId,
  * blocking poll) to consume the reply. */
 static int _EccMakeKeyRequest(whClientContext* ctx, int size, int curveId,
                               whKeyId key_id, whNvmFlags flags,
-                              uint16_t label_len, uint8_t* label)
+                              uint16_t label_len, const uint8_t* label)
 {
     whMessageCrypto_EccKeyGenRequest* req     = NULL;
     uint8_t*                          dataPtr = NULL;
@@ -2021,14 +2021,17 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
             *out_key_id = key_id;
         }
 
-        /* If a DER blob is present (ephemeral/export keygen), deserialize it
-         * into the supplied key context.  When called from the cache wrapper,
-         * out_key is NULL and the server returns an empty body. */
+        /* A DER blob is present for both ephemeral/export keygen and the
+         * cache-and-export path. When key material was requested (out_key !=
+         * NULL) but the server returned an empty body, treat it as an error so
+         * a caller of ...AndExportPublic never receives an unpopulated key. */
         if (out_key != NULL) {
             if (res->len > 0) {
                 uint8_t* key_der  = (uint8_t*)(res + 1);
                 uint16_t der_size = (uint16_t)(res->len);
-                /* Ephemeral key — leave devCtx ERASED */
+                /* Leave devCtx ERASED here: ephemeral keygen keeps it that way,
+                 * and the cache-and-export wrapper overwrites it with the cached
+                 * keyId after this returns. */
                 wh_Client_EccSetKeyId(out_key, WH_KEYID_ERASED);
                 ret =
                     wh_Crypto_EccDeserializeKeyDer(key_der, der_size, out_key);
@@ -2036,8 +2039,7 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                          der_size);
             }
             else {
-                /* Cached key — stamp the assigned keyId */
-                wh_Client_EccSetKeyId(out_key, key_id);
+                ret = WH_ERROR_ABORTED;
             }
         }
     }
@@ -2100,6 +2102,58 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx, int size, int curveId,
         } while (ret == WH_ERROR_NOTREADY);
         if (ret >= 0) {
             *inout_key_id = key_id;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_EccMakeCacheKeyAndExportPublic(whClientContext* ctx, int size,
+                                             int curveId,
+                                             whKeyId* inout_key_id,
+                                             whNvmFlags flags,
+                                             uint16_t label_len,
+                                             const uint8_t* label,
+                                             ecc_key* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+    whKeyId key_id = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export pair, not the cache pair. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret      = _EccMakeKeyRequest(ctx, size, curveId, in_keyId, flags,
+                                  label_len, label);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _EccMakeKeyResponse(ctx, &key_id, pub);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret >= 0) {
+            *inout_key_id = key_id;
+            /* Associate the returned key with the cached keyId and stamp the
+             * client's HSM devId so pub is immediately usable both as the
+             * exported public key and as a handle to the cached private key,
+             * without the caller re-initializing it. */
+            wh_Client_EccSetKeyId(pub, key_id);
+            pub->devId = WH_CLIENT_DEVID(ctx);
+        }
+        else if (!WH_KEYID_ISERASED(key_id)) {
+            /* The server committed a key but the best-effort export returned no
+             * usable public key (empty response body when it did not fit, or a
+             * client-side deserialize failure). Roll back so the operation is
+             * atomic and no cache slot is orphaned. key_id is only set from a
+             * parsed server response, so it is non-erased only when a key was
+             * actually committed - safe even when the caller supplied an
+             * explicit keyId. */
+            (void)wh_Client_KeyEvict(ctx, key_id);
+            *inout_key_id = WH_KEYID_ERASED;
         }
     }
     return ret;
