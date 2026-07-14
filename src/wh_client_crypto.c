@@ -8759,48 +8759,129 @@ static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
 
 /* Per-variant public APIs - thin wrappers over the shared helpers. */
 
-#define WH_SHA3_VARIANT_API(NN)                                                \
-    int wh_Client_Sha3_##NN(whClientContext* ctx, wc_Sha3* sha,                \
-                            const uint8_t* in, uint32_t inLen, uint8_t* out)   \
-    {                                                                          \
-        return _Sha3Oneshot(ctx, sha, &whSha3_##NN, in, inLen, out);           \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##UpdateRequest(whClientContext* ctx, wc_Sha3* sha, \
-                                           const uint8_t* in, uint32_t inLen,  \
-                                           bool* requestSent)                  \
-    {                                                                          \
-        return _Sha3UpdateRequest(ctx, sha, &whSha3_##NN, in, inLen,           \
-                                  requestSent);                                \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##UpdateResponse(whClientContext* ctx,              \
-                                            wc_Sha3*         sha)              \
-    {                                                                          \
-        return _Sha3UpdateResponse(ctx, sha, &whSha3_##NN);                    \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##FinalRequest(whClientContext* ctx, wc_Sha3* sha)  \
-    {                                                                          \
-        return _Sha3FinalRequest(ctx, sha, &whSha3_##NN);                      \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##FinalResponse(whClientContext* ctx, wc_Sha3* sha, \
-                                           uint8_t* out)                       \
-    {                                                                          \
-        return _Sha3FinalResponse(ctx, sha, &whSha3_##NN, out);                \
-    }
-
 #ifndef WOLFSSL_NOSHA3_224
-WH_SHA3_VARIANT_API(224)
-#endif
-#ifndef WOLFSSL_NOSHA3_256
-WH_SHA3_VARIANT_API(256)
-#endif
-#ifndef WOLFSSL_NOSHA3_384
-WH_SHA3_VARIANT_API(384)
-#endif
-#ifndef WOLFSSL_NOSHA3_512
-WH_SHA3_VARIANT_API(512)
-#endif
+int wh_Client_Sha3_224(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out)
+{
+    return _Sha3Oneshot(ctx, sha, &whSha3_224, in, inLen, out);
+}
 
-#undef WH_SHA3_VARIANT_API
+int wh_Client_Sha3_224UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _Sha3UpdateRequest(ctx, sha, &whSha3_224, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_224UpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3UpdateResponse(ctx, sha, &whSha3_224);
+}
+
+int wh_Client_Sha3_224FinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3FinalRequest(ctx, sha, &whSha3_224);
+}
+
+int wh_Client_Sha3_224FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out)
+{
+    return _Sha3FinalResponse(ctx, sha, &whSha3_224, out);
+}
+#endif /* !WOLFSSL_NOSHA3_224 */
+
+#ifndef WOLFSSL_NOSHA3_256
+int wh_Client_Sha3_256(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out)
+{
+    return _Sha3Oneshot(ctx, sha, &whSha3_256, in, inLen, out);
+}
+
+int wh_Client_Sha3_256UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _Sha3UpdateRequest(ctx, sha, &whSha3_256, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_256UpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3UpdateResponse(ctx, sha, &whSha3_256);
+}
+
+int wh_Client_Sha3_256FinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3FinalRequest(ctx, sha, &whSha3_256);
+}
+
+int wh_Client_Sha3_256FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out)
+{
+    return _Sha3FinalResponse(ctx, sha, &whSha3_256, out);
+}
+#endif /* !WOLFSSL_NOSHA3_256 */
+
+#ifndef WOLFSSL_NOSHA3_384
+int wh_Client_Sha3_384(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out)
+{
+    return _Sha3Oneshot(ctx, sha, &whSha3_384, in, inLen, out);
+}
+
+int wh_Client_Sha3_384UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _Sha3UpdateRequest(ctx, sha, &whSha3_384, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_384UpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3UpdateResponse(ctx, sha, &whSha3_384);
+}
+
+int wh_Client_Sha3_384FinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3FinalRequest(ctx, sha, &whSha3_384);
+}
+
+int wh_Client_Sha3_384FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out)
+{
+    return _Sha3FinalResponse(ctx, sha, &whSha3_384, out);
+}
+#endif /* !WOLFSSL_NOSHA3_384 */
+
+#ifndef WOLFSSL_NOSHA3_512
+int wh_Client_Sha3_512(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out)
+{
+    return _Sha3Oneshot(ctx, sha, &whSha3_512, in, inLen, out);
+}
+
+int wh_Client_Sha3_512UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _Sha3UpdateRequest(ctx, sha, &whSha3_512, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_512UpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3UpdateResponse(ctx, sha, &whSha3_512);
+}
+
+int wh_Client_Sha3_512FinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3FinalRequest(ctx, sha, &whSha3_512);
+}
+
+int wh_Client_Sha3_512FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                    uint8_t* out)
+{
+    return _Sha3FinalResponse(ctx, sha, &whSha3_512, out);
+}
+#endif /* !WOLFSSL_NOSHA3_512 */
 
 #ifdef WOLFHSM_CFG_DMA
 /* SHA3 DMA helpers - inline first block (assembled from partial buffer) plus
@@ -9100,50 +9181,131 @@ static int _Sha3DmaOneshot(whClientContext* ctx, wc_Sha3* sha,
     return ret;
 }
 
-#define WH_SHA3_VARIANT_DMA_API(NN)                                            \
-    int wh_Client_Sha3_##NN##Dma(whClientContext* ctx, wc_Sha3* sha,           \
-                                 const uint8_t* in, uint32_t inLen,            \
-                                 uint8_t* out)                                 \
-    {                                                                          \
-        return _Sha3DmaOneshot(ctx, sha, &whSha3_##NN, in, inLen, out);        \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##DmaUpdateRequest(                                 \
-        whClientContext* ctx, wc_Sha3* sha, const uint8_t* in, uint32_t inLen, \
-        bool* requestSent)                                                     \
-    {                                                                          \
-        return _Sha3DmaUpdateRequest(ctx, sha, &whSha3_##NN, in, inLen,        \
-                                     requestSent);                             \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##DmaUpdateResponse(whClientContext* ctx,           \
-                                               wc_Sha3*         sha)           \
-    {                                                                          \
-        return _Sha3DmaUpdateResponse(ctx, sha, &whSha3_##NN);                 \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##DmaFinalRequest(whClientContext* ctx,             \
-                                             wc_Sha3*         sha)             \
-    {                                                                          \
-        return _Sha3DmaFinalRequest(ctx, sha, &whSha3_##NN);                   \
-    }                                                                          \
-    int wh_Client_Sha3_##NN##DmaFinalResponse(whClientContext* ctx,            \
-                                              wc_Sha3* sha, uint8_t* out)      \
-    {                                                                          \
-        return _Sha3DmaFinalResponse(ctx, sha, &whSha3_##NN, out);             \
-    }
+/* Per-variant DMA public APIs - thin wrappers over the shared DMA helpers. */
 
 #ifndef WOLFSSL_NOSHA3_224
-WH_SHA3_VARIANT_DMA_API(224)
-#endif
-#ifndef WOLFSSL_NOSHA3_256
-WH_SHA3_VARIANT_DMA_API(256)
-#endif
-#ifndef WOLFSSL_NOSHA3_384
-WH_SHA3_VARIANT_DMA_API(384)
-#endif
-#ifndef WOLFSSL_NOSHA3_512
-WH_SHA3_VARIANT_DMA_API(512)
-#endif
+int wh_Client_Sha3_224Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out)
+{
+    return _Sha3DmaOneshot(ctx, sha, &whSha3_224, in, inLen, out);
+}
 
-#undef WH_SHA3_VARIANT_DMA_API
+int wh_Client_Sha3_224DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent)
+{
+    return _Sha3DmaUpdateRequest(ctx, sha, &whSha3_224, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_224DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaUpdateResponse(ctx, sha, &whSha3_224);
+}
+
+int wh_Client_Sha3_224DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaFinalRequest(ctx, sha, &whSha3_224);
+}
+
+int wh_Client_Sha3_224DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out)
+{
+    return _Sha3DmaFinalResponse(ctx, sha, &whSha3_224, out);
+}
+#endif /* !WOLFSSL_NOSHA3_224 */
+
+#ifndef WOLFSSL_NOSHA3_256
+int wh_Client_Sha3_256Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out)
+{
+    return _Sha3DmaOneshot(ctx, sha, &whSha3_256, in, inLen, out);
+}
+
+int wh_Client_Sha3_256DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent)
+{
+    return _Sha3DmaUpdateRequest(ctx, sha, &whSha3_256, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_256DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaUpdateResponse(ctx, sha, &whSha3_256);
+}
+
+int wh_Client_Sha3_256DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaFinalRequest(ctx, sha, &whSha3_256);
+}
+
+int wh_Client_Sha3_256DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out)
+{
+    return _Sha3DmaFinalResponse(ctx, sha, &whSha3_256, out);
+}
+#endif /* !WOLFSSL_NOSHA3_256 */
+
+#ifndef WOLFSSL_NOSHA3_384
+int wh_Client_Sha3_384Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out)
+{
+    return _Sha3DmaOneshot(ctx, sha, &whSha3_384, in, inLen, out);
+}
+
+int wh_Client_Sha3_384DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent)
+{
+    return _Sha3DmaUpdateRequest(ctx, sha, &whSha3_384, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_384DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaUpdateResponse(ctx, sha, &whSha3_384);
+}
+
+int wh_Client_Sha3_384DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaFinalRequest(ctx, sha, &whSha3_384);
+}
+
+int wh_Client_Sha3_384DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out)
+{
+    return _Sha3DmaFinalResponse(ctx, sha, &whSha3_384, out);
+}
+#endif /* !WOLFSSL_NOSHA3_384 */
+
+#ifndef WOLFSSL_NOSHA3_512
+int wh_Client_Sha3_512Dma(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
+                          uint32_t inLen, uint8_t* out)
+{
+    return _Sha3DmaOneshot(ctx, sha, &whSha3_512, in, inLen, out);
+}
+
+int wh_Client_Sha3_512DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
+                                       const uint8_t* in, uint32_t inLen,
+                                       bool* requestSent)
+{
+    return _Sha3DmaUpdateRequest(ctx, sha, &whSha3_512, in, inLen, requestSent);
+}
+
+int wh_Client_Sha3_512DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaUpdateResponse(ctx, sha, &whSha3_512);
+}
+
+int wh_Client_Sha3_512DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha)
+{
+    return _Sha3DmaFinalRequest(ctx, sha, &whSha3_512);
+}
+
+int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                                       uint8_t* out)
+{
+    return _Sha3DmaFinalResponse(ctx, sha, &whSha3_512, out);
+}
+#endif /* !WOLFSSL_NOSHA3_512 */
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_SHA3 */
