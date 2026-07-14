@@ -4609,7 +4609,6 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
     whMessageCrypto_Sha3Response res = {0};
     const uint8_t*               inData;
     _Sha3VariantOps              ops;
-    int                          k;
 
     (void)ctx;
 
@@ -4646,9 +4645,7 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
     }
 
     /* Restore Keccak state from client. initFn already zeroed t[] and i. */
-    for (k = 0; k < 25; k++) {
-        sha3->s[k] = req.resumeState.s[k];
-    }
+    memcpy(sha3->s, req.resumeState.s, sizeof(sha3->s));
 
     if (req.inSz > 0) {
         ret = ops.updateFn(sha3, inData, req.inSz);
@@ -4663,9 +4660,7 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                for (k = 0; k < 25; k++) {
-                    res.resumeState.s[k] = sha3->s[k];
-                }
+                memcpy(res.resumeState.s, sha3->s, sizeof(res.resumeState.s));
             }
         }
     }
@@ -6276,7 +6271,6 @@ static int _HandleSha3Dma(whServerContext* ctx, int hashType, uint16_t magic,
     const uint8_t*                  inlineData;
     void*                           inAddr = NULL;
     _Sha3VariantOps                 ops;
-    int                             k;
 
     ret = _Sha3LookupOps(hashType, &ops);
     if (ret != 0) {
@@ -6314,9 +6308,7 @@ static int _HandleSha3Dma(whServerContext* ctx, int hashType, uint16_t magic,
     }
 
     /* Restore Keccak state from client. initFn already zeroed t[] and i. */
-    for (k = 0; k < 25; k++) {
-        sha3->s[k] = req.resumeState.s[k];
-    }
+    memcpy(sha3->s, req.resumeState.s, sizeof(sha3->s));
 
     if (ret == 0 && req.inSz > 0) {
         ret = ops.updateFn(sha3, inlineData, req.inSz);
@@ -6349,9 +6341,7 @@ static int _HandleSha3Dma(whServerContext* ctx, int hashType, uint16_t magic,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                for (k = 0; k < 25; k++) {
-                    res.resumeState.s[k] = sha3->s[k];
-                }
+                memcpy(res.resumeState.s, sha3->s, sizeof(res.resumeState.s));
             }
         }
     }

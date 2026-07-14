@@ -8491,7 +8491,6 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
     /* Snapshot of partial buffer for rollback if SendRequest fails */
     uint32_t savedI;
     uint8_t  savedT[WC_SHA3_224_BLOCK_SIZE]; /* largest block size: 144 */
-    int      k;
 
     if (ctx == NULL || sha == NULL || requestSent == NULL ||
         (in == NULL && inLen != 0)) {
@@ -8541,7 +8540,7 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         }
     }
 
-    /* Pack as many whole blocks from input as fit inline. */
+    /* Pack as many whole input blocks as will fit inline. */
     while ((inLen - i) >= v->blockSize &&
            (wirePos + v->blockSize) <= v->maxInlineSz) {
         memcpy(inlineData + wirePos, in + i, v->blockSize);
@@ -8561,9 +8560,7 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req->isLastBlock = 0;
     req->inSz        = wirePos;
-    for (k = 0; k < 25; k++) {
-        req->resumeState.s[k] = sha->s[k];
-    }
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
 
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
                                 sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -8589,7 +8586,6 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
     int                           ret    = 0;
     whMessageCrypto_Sha3Response* res    = NULL;
     uint8_t*                      dataPtr;
-    int                           k;
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
@@ -8611,9 +8607,7 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
             sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res)) {
             return WH_ERROR_ABORTED;
         }
-        for (k = 0; k < 25; k++) {
-            sha->s[k] = res->resumeState.s[k];
-        }
+        memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
     }
     return ret;
 }
@@ -8625,7 +8619,6 @@ static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
     whMessageCrypto_Sha3Request* req;
     uint8_t*                     inlineData;
     uint8_t*                     dataPtr;
-    int                          k;
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
@@ -8649,9 +8642,7 @@ static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req->isLastBlock = 1;
     req->inSz        = sha->i;
-    for (k = 0; k < 25; k++) {
-        req->resumeState.s[k] = sha->s[k];
-    }
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
     if (sha->i > 0) {
         memcpy(inlineData, sha->t, sha->i);
     }
@@ -8903,7 +8894,6 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
     uint32_t                        dmaSz          = 0;
     uint32_t                        savedI;
     uint8_t                         savedT[WC_SHA3_224_BLOCK_SIZE];
-    int                             k;
 
     if (ctx == NULL || sha == NULL || requestSent == NULL ||
         (in == NULL && inLen != 0)) {
@@ -8965,9 +8955,7 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req->isLastBlock = 0;
     req->inSz        = wirePos;
-    for (k = 0; k < 25; k++) {
-        req->resumeState.s[k] = sha->s[k];
-    }
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
     req->input.sz   = dmaSz;
     req->input.addr = 0;
 
@@ -9016,7 +9004,6 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
     uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha3DmaResponse* resp    = NULL;
     uint16_t                         respSz  = 0;
-    int                              k;
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
@@ -9040,9 +9027,7 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
                 ret = WH_ERROR_ABORTED;
             }
             else {
-                for (k = 0; k < 25; k++) {
-                    sha->s[k] = resp->resumeState.s[k];
-                }
+                memcpy(sha->s, resp->resumeState.s, sizeof(sha->s));
             }
         }
     }
@@ -9065,7 +9050,6 @@ static int _Sha3DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha,
     uint8_t*                        dataPtr = NULL;
     whMessageCrypto_Sha3DmaRequest* req     = NULL;
     uint8_t*                        inlineData;
-    int                             k;
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
@@ -9092,9 +9076,7 @@ static int _Sha3DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req->isLastBlock = 1;
     req->inSz        = sha->i;
-    for (k = 0; k < 25; k++) {
-        req->resumeState.s[k] = sha->s[k];
-    }
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
     req->input.sz   = 0;
     req->input.addr = 0;
 
