@@ -305,12 +305,15 @@ int wh_Client_SendRequest(whClientContext* c, uint16_t group, uint16_t action,
  * @param out_group Pointer to store the received group value.
  * @param out_action Pointer to store the received action value.
  * @param out_size Pointer to store the received size value.
+ * @param data_size The capacity of the caller-supplied data buffer. If the
+ * received payload exceeds it, WH_ERROR_BUFFER_SIZE is returned with *out_size
+ * set to the required size.
  * @param data Pointer to store the received data.
  * @return 0 if successful, a negative value if an error occurred.
  */
 int wh_Client_RecvResponse(whClientContext* c, uint16_t* out_group,
                            uint16_t* out_action, uint16_t* out_size,
-                           void* data);
+                           uint16_t data_size, void* data);
 
 /**
  * @brief Reports whether a request has been sent whose matching response has

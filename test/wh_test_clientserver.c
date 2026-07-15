@@ -1068,6 +1068,26 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
         WH_TEST_ASSERT_RETURN(strncmp(recv_buffer, send_buffer, recv_len) == 0);
     }
 
+    /* wh_Client_RecvResponse must return WH_ERROR_BUFFER_SIZE and report the 
+     * required size. */
+    {
+        uint8_t  tiny_buf[8] = {0};
+        uint16_t r_group     = 0;
+        uint16_t r_action    = 0;
+        uint16_t r_size      = 0;
+
+        send_len = snprintf(send_buffer, sizeof(send_buffer),
+                            "PayloadLargerThanTinyBuffer");
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_EchoRequest(client, send_len, send_buffer));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_BUFFER_SIZE ==
+            wh_Client_RecvResponse(client, &r_group, &r_action, &r_size,
+                                   sizeof(tiny_buf), tiny_buf));
+        WH_TEST_ASSERT_RETURN(r_size == send_len);
+    }
+
     /* Perform NVM tests */
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmInitRequest(client));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));

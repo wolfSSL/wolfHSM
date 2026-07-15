@@ -155,14 +155,14 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
  */
 int wh_CommClient_RecvResponse(whCommClient* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, void* data)
+        uint16_t* out_size, uint16_t data_size, void* data)
 {
     int rc = 0;
     uint16_t magic = 0;
     uint16_t kind = 0;
     uint16_t seq = 0;
     uint16_t size = sizeof(context->packet);
-    uint16_t data_size = 0;
+    uint16_t resp_size = 0;
 
     if ((context == NULL) || (context->hdr == NULL) ||
         (context->initialized == 0) || (context->transport_cb == NULL) ||
@@ -193,7 +193,7 @@ int wh_CommClient_RecvResponse(whCommClient* context,
             rc = WH_ERROR_ABORTED;
         }
         if (rc == 0) {
-            data_size = size - sizeof(*context->hdr);
+            resp_size = size - sizeof(*context->hdr);
             magic = context->hdr->magic;
             kind = wh_Translate16(magic, context->hdr->kind);
             seq = wh_Translate16(magic, context->hdr->seq);
@@ -224,15 +224,21 @@ int wh_CommClient_RecvResponse(whCommClient* context,
                 return WH_ERROR_NOTREADY;
             }
 
-            if (    (data != NULL) &&
-                    (data_size != 0) &&
-                    (data != context->data)) {
-                memcpy(data, context->data, data_size);
+            if ((data != NULL) && (resp_size > data_size)) {
+                rc = WH_ERROR_BUFFER_SIZE;
+            }
+            else {
+                /* Copy the data from the internal buffer if necessary */
+                if (    (data != NULL) &&
+                        (resp_size != 0) &&
+                        (data != context->data)) {
+                    memcpy(data, context->data, resp_size);
+                }
             }
             if (out_magic != NULL) *out_magic = magic;
             if (out_kind != NULL) *out_kind = kind;
             if (out_seq != NULL) *out_seq = seq;
-            if (out_size != NULL) *out_size = data_size;
+            if (out_size != NULL) *out_size = resp_size;
             context->pending = 0;
         }
     }
