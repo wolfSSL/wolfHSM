@@ -31,6 +31,10 @@
  *                                    cannot forge WH_NVM_FLAGS_TRUSTED via the
  *                                    NVM add, HKDF cache, or key cache paths
  *   _whTest_KeywrapDataWrapUsage   - data wrap requires USAGE_WRAP on the KEK
+ *   _whTest_KeywrapKeyUnwrapUnderflow - undersized wrapped-key blobs must
+ *                                    return WH_ERROR_BADARGS, not underflow
+ *   _whTest_KeywrapDataUnwrapUnderflow - undersized wrapped-data blobs must
+ *                                    return WH_ERROR_BADARGS, not underflow
  *
  * The trusted-KEK positive paths (wrap-export round-trip, unwrap-and-cache)
  * live in misc/wh_test_hwkeystore.c against the hardware KEK, and in
@@ -397,11 +401,90 @@ static int _whTest_KeywrapDataWrapUsage(whClientContext* client)
     return WH_ERROR_OK;
 }
 
+/* A wrapped blob smaller than its own header must be refused with
+ * WH_ERROR_BADARGS rather than underflowing the payload length. A usable KEK
+ * is cached first so the rejection can only come from the size check, not
+ * from KEK resolution */
+static int _whTest_KeywrapKeyUnwrapUnderflow(whClientContext* client)
+{
+    const uint16_t shortSizes[] = {0, 1};
+    int            ret          = WH_ERROR_OK;
+    whKeyId        kekId        = WH_KEYID_ERASED;
+    uint8_t        blob[1]      = {0};
+    size_t         i;
+
+    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
+
+    for (i = 0; i < sizeof(shortSizes) / sizeof(shortSizes[0]); i++) {
+        whNvmMetadata meta                       = {0};
+        uint8_t       keyOut[WH_TEST_KW_KEYSIZE] = {0};
+        uint16_t      keyOutSz                   = sizeof(keyOut);
+        uint16_t      cachedId                   = WH_KEYID_ERASED;
+
+        ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
+                                           blob, shortSizes[i], &meta, keyOut,
+                                           &keyOutSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("KeyUnwrapAndExport(sz=%u) expected BADARGS, "
+                           "got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+
+        ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                          blob, shortSizes[i], &cachedId);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("KeyUnwrapAndCache(sz=%u) expected BADARGS, "
+                           "got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+        ret = WH_ERROR_OK;
+    }
+
+    (void)wh_Client_KeyEvict(client, kekId);
+    return ret;
+}
+
+/* Same underflow guard on the opaque data path */
+static int _whTest_KeywrapDataUnwrapUnderflow(whClientContext* client)
+{
+    const uint32_t shortSizes[] = {0, 1};
+    int            ret          = WH_ERROR_OK;
+    whKeyId        kekId        = WH_KEYID_ERASED;
+    uint8_t        blob[1]      = {0};
+    size_t         i;
+
+    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
+
+    for (i = 0; i < sizeof(shortSizes) / sizeof(shortSizes[0]); i++) {
+        uint8_t  dataOut[WH_TEST_KW_KEYSIZE] = {0};
+        uint32_t dataOutSz                   = sizeof(dataOut);
+
+        ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, kekId, blob,
+                                   shortSizes[i], dataOut, &dataOutSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("DataUnwrap(sz=%u) expected BADARGS, got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+        ret = WH_ERROR_OK;
+    }
+
+    (void)wh_Client_KeyEvict(client, kekId);
+    return ret;
+}
+
 int whTest_KeyWrap(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapSwKekRoundTrip(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapTrustedKekPolicy(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataWrapUsage(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapKeyUnwrapUnderflow(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataUnwrapUnderflow(ctx));
 
     WH_TEST_PRINT("KEYWRAP POLICY SUCCESS\n");
     return 0;
