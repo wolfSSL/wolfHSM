@@ -772,15 +772,12 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
  * must be able to hold a full keypair DER (public + private). */
 #ifdef WOLFSSL_DILITHIUM_VERIFY_ONLY
 #define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_PUB_KEY_DER_SIZE
-WH_UTILS_STATIC_ASSERT(
-    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= MLDSA_MAX_PUB_KEY_DER_SIZE,
-    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA public key DER");
 #else
 #define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_BOTH_KEY_DER_SIZE
-WH_UTILS_STATIC_ASSERT(
-    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= MLDSA_MAX_BOTH_KEY_DER_SIZE,
-    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA keypair DER");
 #endif
+WH_UTILS_STATIC_ASSERT(
+    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE,
+    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA key DER");
 
 int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
                                   whKeyId keyId, whNvmFlags flags,
