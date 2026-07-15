@@ -14783,6 +14783,60 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     }
 #endif /* HAVE_ECC_SIGN */
 
+#ifdef HAVE_ECC_VERIFY
+    /* ECDSA verify without VERIFY flag */
+    WH_TEST_PRINT("  Testing ECDSA verify without VERIFY flag...\n");
+    {
+        ecc_key eccKey[1];
+        uint8_t sig[ECC_MAX_SIG_SIZE]       = {0};
+        word32  sigLen                      = sizeof(sig);
+        uint8_t hash[WC_SHA256_DIGEST_SIZE] = {0};
+        int     verifyResult                = 0;
+
+        /* Cache a SIGN only key so verification is denied by usage policy
+         * before the signature is checked. */
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_EccMakeCacheKey(
+              client, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_USAGE_SIGN,
+              strlen("ecc-no-verify"), (uint8_t*)"ecc-no-verify");
+        if (ret == 0) {
+            ret = wc_ecc_init_ex(eccKey, NULL, WH_CLIENT_DEVID(client));
+            if (ret == 0) {
+                ret = wc_ecc_set_curve(eccKey, 32, ECC_SECP256R1);
+                if (ret == 0) {
+                    ret = wh_Client_EccSetKeyId(eccKey, keyId);
+                    if (ret == 0) {
+                        ret = wc_RNG_GenerateBlock(rng, hash, sizeof(hash));
+                        if (ret == 0) {
+                            /* Usage enforcement runs before verify, so a
+                             * dummy signature is enough to kill the check. */
+                            ret = wc_ecc_verify_hash(sig, sigLen, hash,
+                                                     sizeof(hash),
+                                                     &verifyResult, eccKey);
+                            if (ret == WH_ERROR_USAGE) {
+                                WH_TEST_PRINT(
+                                    "    PASS: Correctly denied verification\n");
+                                ret = 0; /* Test passed */
+                            }
+                            else {
+                                WH_ERROR_PRINT("    FAIL: Expected "
+                                               "WH_ERROR_USAGE, got %d\n",
+                                               ret);
+                                ret = WH_ERROR_ABORTED;
+                            }
+                        }
+                    }
+                }
+                wc_ecc_free(eccKey);
+            }
+            wh_Client_KeyEvict(client, keyId);
+        }
+    }
+    if (ret != 0) {
+        return ret;
+    }
+#endif /* HAVE_ECC_VERIFY */
+
 #ifdef HAVE_ECC_DHE
     /* ECDH without DERIVE flag */
     WH_TEST_PRINT("  Testing ECDH without DERIVE flag...\n");
