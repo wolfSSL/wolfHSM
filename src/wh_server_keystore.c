@@ -1162,11 +1162,11 @@ int wh_Server_KeystoreReadKeyEnforce(whServerContext* server, whKeyId keyId,
             }
             else if (out != NULL) {
                 /* Don't hand back key material that failed the policy check */
-                memset(out, 0, *outSz);
+                wh_Utils_ForceZero(out, *outSz);
             }
         }
         (void)WH_SERVER_NVM_UNLOCK(server);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 
@@ -3638,38 +3638,6 @@ int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
 
     /* Key does not have ALL the required usage flags */
     return WH_ERROR_USAGE;
-}
-
-/* May be deprecated soon: see wh_server_keystore.h. Enforcing here and using
- * the key in a later lock scope leaves a TOCTOU window; prefer
- * wh_Server_KeystoreReadKeyEnforce or the typed wh_Server_*CacheExport*Enforce
- * wrappers. */
-int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
-                                          whKeyId          keyId,
-                                          whNvmFlags       requiredUsage)
-{
-    int            ret;
-    whNvmMetadata* meta = NULL;
-
-    /* Validate input parameters */
-    if (server == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Freshen the key and read its metadata under the NVM lock so the shared
-     * cache slot cannot be evicted or overwritten by another server context
-     * while we inspect the usage flags. FreshenKey hands back a pointer into
-     * the shared slot, so the policy check must complete before we unlock. */
-    ret = WH_SERVER_NVM_LOCK(server);
-    if (ret == WH_ERROR_OK) {
-        ret = wh_Server_KeystoreFreshenKey(server, keyId, NULL, &meta);
-        if (ret == WH_ERROR_OK) {
-            /* Enforce the usage policy with the obtained metadata */
-            ret = wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
-        }
-        (void)WH_SERVER_NVM_UNLOCK(server);
-    }
-    return ret;
 }
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

@@ -28,10 +28,8 @@
  * the shared global namespace. Each round asserts that all successful
  * keygens returned distinct ids.
  *
- * Requires WOLFHSM_CFG_THREADSAFE and WOLFHSM_CFG_GLOBAL_KEYS: global keys
- * (USER == 0) live in the one shared server->nvm->globalCache, which is
- * what makes the allocations contend. Under TSAN (TSAN=1) any unserialized
- * access to that cache is additionally reported as a data race.
+ * Under TSAN (TSAN=1) unserialized cache accesses are additionally
+ * reported as data races.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -90,10 +88,9 @@ int whTest_KeygenUniqueIdConcurrent(void* ctx)
 #include "wolfssl/wolfcrypt/dilithium.h"
 #endif
 
-/* TSAN transport shims: the mem transport's notify counter establishes
- * happens-before between client and server, but TSAN can't see it.
- * Annotating the send/recv pairs keeps the analysis on keystore/NVM
- * locking instead of transport false positives. */
+/* TSAN transport shims: TSAN can't see the mem transport's notify-counter
+ * handshake, so annotate the send/recv pairs to keep the analysis on
+ * keystore/NVM locking. */
 #ifdef WOLFHSM_CFG_TEST_STRESS_TSAN
 
 #ifndef __has_feature
@@ -160,16 +157,15 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 #define KU_ATOMIC_STORE(ptr, v) __atomic_store_n((ptr), (v), __ATOMIC_RELEASE)
 #define KU_ATOMIC_ADD(ptr, v) __atomic_add_fetch((ptr), (v), __ATOMIC_ACQ_REL)
 
-/* Four concurrent client/server pairs sharing one NVM. Four fits the
- * regular key cache (9 slots) and over-subscribes the big-key cache (3),
- * which is fine: only *successful* keygens must have distinct ids. */
+/* Four concurrent client/server pairs sharing one NVM. Four fits
+ * WOLFHSM_CFG_SERVER_KEYCACHE_COUNT but can over-subscribe the big-key
+ * cache; that's fine, only *successful* keygens must have distinct ids. */
 #define KU_NUM_CLIENTS 4
 
 #define KU_FLASH_RAM_SIZE (1024 * 1024)
 #define KU_FLASH_SECTOR_SIZE (128 * 1024)
 #define KU_FLASH_PAGE_SIZE 8
 
-/* Auto-id keygen messages are tiny: params in, key id out. */
 #define KU_BUFFER_SIZE 4096
 
 /* Rounds per algorithm; the slower big-key keygens use fewer to bound

@@ -359,6 +359,8 @@ static int DerNextSequence(const uint8_t* input, uint32_t maxIdx,
 }
 
 
+/* Caller (the cert request dispatch) holds the non-recursive
+ * WH_SERVER_NVM_LOCK, so only unlocked keystore primitives may be used here. */
 static int _verifyChainAgainstCmStore(
     whServerContext* server, WOLFSSL_CERT_MANAGER* cm, const uint8_t* chain,
     uint32_t chain_len, const whNvmId* trustedRootNvmIds, uint16_t numRoots,
@@ -481,13 +483,6 @@ static int _verifyChainAgainstCmStore(
             }
             /* This is the leaf cert, so if requested, cache the public key */
             else if (flags & WH_CERT_FLAGS_CACHE_LEAF_PUBKEY) {
-                /* The whole id allocation + cache import chain below is already
-                 * atomic: every caller of this function reaches it through the
-                 * cert request dispatch, which holds WH_SERVER_NVM_LOCK across
-                 * the entire verify call. The NVM lock is non-recursive, so we
-                 * must NOT re-acquire it here -- use the unlocked GetUniqueId +
-                 * GetCacheSlotChecked building blocks under the caller's lock.
-                 */
                 /* If the keyId is erased, get a unique key id for the public
                  * key. Otherwise cache the key using the provided keyId */
                 if (WH_KEYID_ISERASED(*inout_keyId)) {
@@ -1173,7 +1168,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             if (rc == WH_ERROR_OK) {
                 rc = wh_Server_CertVerifyCache_Clear(server);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            }
+            } /* WH_SERVER_NVM_LOCK() */
 #else
             rc = wh_Server_CertVerifyCache_Clear(server);
 #endif
@@ -1201,7 +1196,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     rc = wh_Server_CertVerifyCache_SetEnabled(server,
                                                               req.enable);
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                }
+                } /* WH_SERVER_NVM_LOCK() */
 #else
                 rc = wh_Server_CertVerifyCache_SetEnabled(server, req.enable);
 #endif

@@ -19,23 +19,15 @@
 /*
  * test-refactor/posix/wh_test_keyread_race.c
  *
- * Concurrent cached-key read test for the crypto request handlers in
- * src/wh_server_crypto.c. Companion to wh_test_keygen_unique_id.c, which
- * covers the write side.
- *
- * KR_NUM_CLIENTS client/server pairs share a single locked NVM, pre-seeded
- * with KR_NUM_KEYS committed global AES keys -- more keys than the shared
- * cache has slots, so most reads miss and reload from NVM. Each key is a
- * distinct constant byte and therefore encrypts a fixed plaintext to a
- * distinct, pre-computed ciphertext. Clients run barrier-aligned rounds,
- * each asking its server to AES-ECB encrypt that plaintext under a rotating
- * key id and comparing against the expected ciphertext; a mismatch means
- * the handler read the wrong key material out of the cache.
- *
- * Requires WOLFHSM_CFG_THREADSAFE and WOLFHSM_CFG_GLOBAL_KEYS: global keys
- * (USER == 0) live in the one shared server->nvm->globalCache, so the reads
- * contend on the same slots. Under TSAN (TSAN=1) any unserialized access to
- * that cache is additionally reported as a data race.
+ * Concurrent cached-key read test for the crypto request handlers.
+ * KR_NUM_CLIENTS client/server pairs share one locked NVM, seeded with more
+ * committed global AES keys than the shared cache has slots, so reads churn
+ * the cache. Barrier-aligned clients have their server AES-ECB encrypt a
+ * fixed block under a rotating key id and compare the result against a
+ * software-AES oracle; a mismatch means the handler read the wrong key
+ * material. Companion to wh_test_keygen_unique_id.c, which covers the write
+ * side. Under TSAN (TSAN=1) unserialized cache accesses are additionally
+ * reported as data races.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -88,10 +80,9 @@ int whTest_KeyReadRace(void* ctx)
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/aes.h"
 
-/* TSAN transport shims: the mem transport's notify counter establishes
- * happens-before between client and server, but TSAN can't see it.
- * Annotating the send/recv pairs keeps the analysis on keystore/NVM
- * locking instead of transport false positives. */
+/* TSAN transport shims: TSAN can't see the mem transport's notify-counter
+ * handshake, so annotate the send/recv pairs to keep the analysis on
+ * keystore/NVM locking. */
 #ifdef WOLFHSM_CFG_TEST_STRESS_TSAN
 
 #ifndef __has_feature
@@ -161,14 +152,12 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 /* Four concurrent client/server pairs sharing one NVM. */
 #define KR_NUM_CLIENTS 4
 
-/* More keys than the shared small-key cache has slots (16 by default), so
- * most reads miss and race to claim a slot and reload from NVM, but within
- * the NVM directory capacity (WOLFHSM_CFG_NVM_OBJECT_COUNT, default 32). */
+/* More keys than WOLFHSM_CFG_SERVER_KEYCACHE_COUNT slots, so reads race to
+ * claim and reload slots, but within WOLFHSM_CFG_NVM_OBJECT_COUNT. */
 #define KR_NUM_KEYS 24
 
-/* AES-128: a key size every AES build supports. Each key is a distinct
- * constant byte, so one wrong key byte changes the whole ciphertext block
- * by the cipher's avalanche. */
+/* AES-128; each key is a distinct constant byte, so any wrong key byte
+ * changes the whole ciphertext block. */
 #define KR_KEYSZ AES_128_KEY_SIZE
 
 /* Rounds per client, each barrier-aligned so the server-side reads overlap. */
@@ -178,10 +167,9 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 #define KR_FLASH_SECTOR_SIZE (128 * 1024)
 #define KR_FLASH_PAGE_SIZE 8
 
-/* One 16-byte block in, key referenced by id. */
 #define KR_BUFFER_SIZE 4096
 
-/* Distinct nonzero constant per key. Keys 0..KR_NUM_KEYS-1 -> 0x01..0x18. */
+/* Distinct nonzero constant byte per key */
 #define KR_KEYBYTE(i) ((uint8_t)(0x01 + (i)))
 /* Server-internal id of the i-th seeded global key (ids start at 1). */
 #define KR_SERVER_KEYID(i) \
@@ -231,8 +219,7 @@ typedef struct KrContext {
 
     KrPair pairs[KR_NUM_CLIENTS];
 
-    /* Fixed plaintext block and the per-key ciphertext oracle, computed once
-     * at setup with software AES. */
+    /* Fixed plaintext and its per-key software-AES ciphertext oracle */
     uint8_t plaintext[AES_BLOCK_SIZE];
     uint8_t expected[KR_NUM_KEYS][AES_BLOCK_SIZE];
 
@@ -246,7 +233,7 @@ typedef struct KrContext {
     pthread_barrier_t roundStart;
     pthread_barrier_t roundEnd;
 
-    /* Outcome counters, per client to avoid cross-thread contention. */
+    /* Per-client outcome counters */
     volatile int mismatches[KR_NUM_CLIENTS];
     volatile int hardErrors[KR_NUM_CLIENTS];
     volatile int successes[KR_NUM_CLIENTS];
@@ -465,9 +452,8 @@ static void* krClientThread(void* arg)
         /* Line all clients up so their server-side reads overlap. */
         pthread_barrier_wait(&ctx->roundStart);
 
-        /* INVALID_DEVID: the request goes through the explicit client API
-         * below, not the wolfCrypt cryptocb, so the Aes struct only has to
-         * carry the key id. */
+        /* INVALID_DEVID: the explicit client API is used instead of the
+         * cryptocb, so the Aes struct only carries the key id. */
         rc = wc_AesInit(aes, NULL, INVALID_DEVID);
         if (rc == 0) {
             rc = wh_Client_AesSetKeyId(aes, cid);
@@ -561,7 +547,6 @@ int whTest_KeyReadRace(void* ctx_arg)
     }
     barriersInited = 1;
 
-    /* Bring up the server threads and wait until all are connected. */
     for (i = 0; i < KR_NUM_CLIENTS; i++) {
         rc = pthread_create(&ctx->pairs[i].serverThread, NULL, krServerThread,
                             &ctx->pairs[i]);
@@ -583,14 +568,13 @@ int whTest_KeyReadRace(void* ctx_arg)
         goto stop_servers;
     }
 
-    /* Spawn the client threads, run all rounds, join. */
     for (i = 0; i < KR_NUM_CLIENTS; i++) {
         rc = pthread_create(&ctx->pairs[i].clientThread, NULL, krClientThread,
                             &ctx->pairs[i]);
         if (rc != 0) {
             WH_ERROR_PRINT("client thread %d create failed: %d\n", i, rc);
             /* A short barrier party would hang the started clients; join
-             * them first, then abort. Creation failure is not expected. */
+             * them before aborting. */
             result = WH_ERROR_ABORTED;
             for (--i; i >= 0; i--) {
                 pthread_join(ctx->pairs[i].clientThread, NULL);

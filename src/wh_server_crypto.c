@@ -242,6 +242,11 @@ static void _CryptoEvictKeyLocked(whServerContext* ctx, whKeyId keyId)
     if (ret == WH_ERROR_OK) {
         (void)wh_Server_KeystoreEvictKey(ctx, keyId);
         (void)WH_SERVER_NVM_UNLOCK(ctx);
+    } /* WH_SERVER_NVM_LOCK() */
+    else {
+        /* Requested eviction skipped: key material stays cached */
+        WH_DEBUG_SERVER("EvictKeyLocked: lock failed keyId:%u, ret:%d\n", keyId,
+                        ret);
     }
 }
 
@@ -317,8 +322,8 @@ int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
-                                       whNvmFlags requiredUsage, RsaKey* key)
+static int _CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
+                                     whNvmFlags requiredUsage, RsaKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -341,7 +346,7 @@ int wh_Server_CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
             ret = wh_Crypto_RsaDeserializeKeyDer(cacheMeta->len, cacheBuf, key);
         }
         (void)WH_SERVER_NVM_UNLOCK(ctx);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 
@@ -500,32 +505,31 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
 
     WH_DEBUG_SERVER_VERBOSE("HandleRsaFunction opType:%d inLen:%u keyId:%u outLen:%u\n",
             op_type, in_len, key_id, out_len);
-    switch (op_type)
-    {
-    case RSA_PUBLIC_ENCRYPT:
-    case RSA_PUBLIC_DECRYPT:
-    case RSA_PRIVATE_ENCRYPT:
-    case RSA_PRIVATE_DECRYPT:
-        /* Valid op_types */
-        break;
-    default:
-        /* Invalid opType */
-        WH_DEBUG_SERVER_VERBOSE("Unknown opType:%d\n", op_type);
+    switch (op_type) {
+        case RSA_PUBLIC_ENCRYPT:
+        case RSA_PUBLIC_DECRYPT:
+        case RSA_PRIVATE_ENCRYPT:
+        case RSA_PRIVATE_DECRYPT:
+            /* Valid op_types */
+            break;
+        default:
+            /* Invalid opType */
+            WH_DEBUG_SERVER_VERBOSE("Unknown opType:%d\n", op_type);
 
-        return BAD_FUNC_ARG;
+            return BAD_FUNC_ARG;
     }
 
     /* Determine the required key usage based on the RSA operation type */
     whNvmFlags requiredUsage = WH_NVM_FLAGS_NONE;
     switch (op_type) {
-    case RSA_PUBLIC_ENCRYPT:
-    case RSA_PRIVATE_ENCRYPT:
-        requiredUsage = WH_NVM_FLAGS_USAGE_ENCRYPT;
-        break;
-    case RSA_PUBLIC_DECRYPT:
-    case RSA_PRIVATE_DECRYPT:
-        requiredUsage = WH_NVM_FLAGS_USAGE_DECRYPT;
-        break;
+        case RSA_PUBLIC_ENCRYPT:
+        case RSA_PRIVATE_ENCRYPT:
+            requiredUsage = WH_NVM_FLAGS_USAGE_ENCRYPT;
+            break;
+        case RSA_PUBLIC_DECRYPT:
+        case RSA_PRIVATE_DECRYPT:
+            requiredUsage = WH_NVM_FLAGS_USAGE_DECRYPT;
+            break;
     }
 
     /* init rsa key */
@@ -533,8 +537,7 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
     /* load the key from the keystore, enforcing the usage policy against the
      * same locked snapshot of the key that is exported */
     if (ret == 0) {
-        ret =
-            wh_Server_CacheExportRsaKeyEnforce(ctx, key_id, requiredUsage, rsa);
+        ret = _CacheExportRsaKeyEnforce(ctx, key_id, requiredUsage, rsa);
         if (ret == WH_ERROR_USAGE) {
             /* Currently wolfCrypt doesn't have a way for crypto callbacks to
             distinguish if a low level RSA operation (like encrypt/decrypt) is
@@ -544,14 +547,14 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
             if (op_type == RSA_PUBLIC_DECRYPT) {
                 /* Decrypt usage flag wasn't set so this might be a verify
                  * operation. Attempt to enforce against the verify flag */
-                ret = wh_Server_CacheExportRsaKeyEnforce(
-                    ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, rsa);
+                ret = _CacheExportRsaKeyEnforce(ctx, key_id,
+                                                WH_NVM_FLAGS_USAGE_VERIFY, rsa);
             }
             else if (op_type == RSA_PRIVATE_ENCRYPT) {
                 /* Encrypt usage flag wasn't set so this might be a sign
                  * operation. Attempt to enforce against the sign flag */
-                ret = wh_Server_CacheExportRsaKeyEnforce(
-                    ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, rsa);
+                ret = _CacheExportRsaKeyEnforce(ctx, key_id,
+                                                WH_NVM_FLAGS_USAGE_SIGN, rsa);
             }
         }
         WH_DEBUG_SERVER_VERBOSE("CacheExportRsaKey keyid:%u, ret:%d\n", key_id,
@@ -614,8 +617,7 @@ static int _HandleRsaGetSize(whServerContext* ctx, uint16_t magic, int devId,
     ret = wc_InitRsaKey_ex(rsa, NULL, devId);
     /* load the key from the keystore (no usage requirement for size query) */
     if (ret == 0) {
-        ret = wh_Server_CacheExportRsaKeyEnforce(ctx, key_id, WH_NVM_FLAGS_NONE,
-                                                 rsa);
+        ret = _CacheExportRsaKeyEnforce(ctx, key_id, WH_NVM_FLAGS_NONE, rsa);
         /* get the size */
         if (ret == 0) {
             key_size = wc_RsaEncryptSize(rsa);
@@ -706,8 +708,8 @@ int wh_Server_EccKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_EccKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
-                                       whNvmFlags requiredUsage, ecc_key* key)
+static int _EccKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                     whNvmFlags requiredUsage, ecc_key* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -730,7 +732,7 @@ int wh_Server_EccKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
             ret = wh_Crypto_EccDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
         }
         (void)WH_SERVER_NVM_UNLOCK(ctx);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 #endif /* HAVE_ECC */
@@ -792,9 +794,9 @@ int wh_Server_CacheExportEd25519Key(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_CacheExportEd25519KeyEnforce(whServerContext* ctx, whKeyId keyId,
-                                           whNvmFlags   requiredUsage,
-                                           ed25519_key* key)
+static int _CacheExportEd25519KeyEnforce(whServerContext* ctx, whKeyId keyId,
+                                         whNvmFlags   requiredUsage,
+                                         ed25519_key* key)
 {
     uint8_t*       cacheBuf = NULL;
     whNvmMetadata* cacheMeta;
@@ -819,7 +821,7 @@ int wh_Server_CacheExportEd25519KeyEnforce(whServerContext* ctx, whKeyId keyId,
                                                      key);
         }
         (void)WH_SERVER_NVM_UNLOCK(ctx);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 #endif /* HAVE_ED25519 */
@@ -888,10 +890,10 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_CacheExportCurve25519KeyEnforce(whServerContext* server,
-                                              whKeyId          keyId,
-                                              whNvmFlags       requiredUsage,
-                                              curve25519_key*  key)
+static int _CacheExportCurve25519KeyEnforce(whServerContext* server,
+                                            whKeyId          keyId,
+                                            whNvmFlags       requiredUsage,
+                                            curve25519_key*  key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -916,7 +918,7 @@ int wh_Server_CacheExportCurve25519KeyEnforce(whServerContext* server,
                                                      key);
         }
         (void)WH_SERVER_NVM_UNLOCK(server);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 #endif /* HAVE_CURVE25519 */
@@ -988,9 +990,9 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
-                                         whNvmFlags   requiredUsage,
-                                         wc_MlDsaKey* key)
+static int _MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                       whNvmFlags   requiredUsage,
+                                       wc_MlDsaKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -1016,7 +1018,7 @@ int wh_Server_MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
             WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
         }
         (void)WH_SERVER_NVM_UNLOCK(ctx);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
@@ -1075,9 +1077,8 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-int wh_Server_MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
-                                         whNvmFlags requiredUsage,
-                                         MlKemKey*  key)
+static int _MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                       whNvmFlags requiredUsage, MlKemKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -1102,7 +1103,7 @@ int wh_Server_MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
             WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
         }
         (void)WH_SERVER_NVM_UNLOCK(ctx);
-    }
+    } /* WH_SERVER_NVM_LOCK() */
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
@@ -1534,12 +1535,12 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
             if (ret == 0) {
                 /* load the private key, enforcing the derive usage policy
                  * against the same locked snapshot that is exported */
-                ret = wh_Server_EccKeyCacheExportEnforce(
+                ret = _EccKeyCacheExportEnforce(
                     ctx, prv_key_id, WH_NVM_FLAGS_USAGE_DERIVE, prv_key);
                 if (ret == WH_ERROR_OK) {
                     /* load the public key (no usage requirement) */
-                    ret = wh_Server_EccKeyCacheExportEnforce(
-                        ctx, pub_key_id, WH_NVM_FLAGS_NONE, pub_key);
+                    ret = _EccKeyCacheExportEnforce(ctx, pub_key_id,
+                                                    WH_NVM_FLAGS_NONE, pub_key);
                 }
             }
             if (ret == WH_ERROR_OK) {
@@ -1664,8 +1665,8 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the private key, enforcing the sign usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_EccKeyCacheExportEnforce(ctx, key_id,
-                                                 WH_NVM_FLAGS_USAGE_SIGN, key);
+        ret = _EccKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                        key);
         if (ret == WH_ERROR_OK) {
             WH_DEBUG_SERVER_VERBOSE("EccSign: key_id=%x, in_len=%u, res_len=%u, ret=%d\n",
                 key_id, (unsigned)in_len, (unsigned)res_len, ret);
@@ -1752,8 +1753,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the public key, enforcing the verify usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_EccKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+        ret = _EccKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY,
+                                        key);
         if (ret == WH_ERROR_OK) {
             /* verify the signature */
             ret = wc_ecc_verify_hash(req_sig, sig_len, req_hash, hash_len,
@@ -1937,21 +1938,7 @@ int wh_Server_CmacKdfKeyCacheImport(whServerContext* ctx,
 #endif /* HAVE_CMAC_KDF */
 
 #if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
-/* Bound on KDF inputs supplied by key ID.
- *
- * When a KDF input (HKDF IKM, CMAC-KDF salt or Z) is named by key ID rather
- * than passed inline, the handler copies the key out of the cache slot into a
- * private buffer and releases the NVM lock before calling wolfCrypt. The copy
- * is what makes the usage-policy verdict and the key bytes come from the same
- * snapshot; deriving straight from the live slot instead would either race a
- * concurrent evict/overwrite or require holding the NVM lock across wolfCrypt.
- *
- * The consequence is that a cached KDF input larger than its private buffer is
- * rejected with WH_ERROR_NOSPACE. WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE bounds
- * the IKM and Z buffers; it covers every secret wolfHSM can itself cache as a
- * derive input, the largest being a P-521 ECDH shared secret at MAX_ECC_BYTES,
- *
- */
+/* Bound on KDF inputs supplied by key ID. */
 #ifdef HAVE_ECC
 WH_UTILS_STATIC_ASSERT(
     WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE >= MAX_ECC_BYTES,
@@ -2027,11 +2014,8 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Check if we should use cached key as input */
     if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
-        /* Copy the derive input key into a private buffer, enforcing the
-         * derive usage policy against the same locked snapshot that is read.
-         * HKDF then runs on the private copy after the lock is released.
-         * An IKM larger than cachedKeyBuf yields WH_ERROR_NOSPACE; see the
-         * bound on cached KDF inputs documented above _HandleHkdf(). */
+        /* Copy the IKM out, enforcing the derive usage policy against the
+         * same locked snapshot; see the KDF input bound above _HandleHkdf() */
         uint32_t cachedKeyLen = sizeof(cachedKeyBuf);
         ret                   = wh_Server_KeystoreReadKeyEnforce(
             ctx, keyIdIn, WH_NVM_FLAGS_USAGE_DERIVE, cachedKeyMeta,
@@ -2176,12 +2160,9 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
             ret = WH_ERROR_BADARGS;
             goto cleanup;
         }
-        /* Copy the derive salt into a private buffer, enforcing the derive
-         * usage policy against the same locked snapshot that is read. The KDF
-         * then runs on the private copy after the lock is released.
-         * A salt too big for cachedSaltBuf yields WH_ERROR_NOSPACE, where it
-         * would otherwise reach wc_KDA_KDF_twostep_cmac() and be rejected as
-         * BAD_FUNC_ARG. Both are failures; only the code differs. */
+        /* Copy the salt out, enforcing the derive usage policy against the
+         * same locked snapshot. An oversize salt now fails NOSPACE here
+         * rather than BAD_FUNC_ARG in wc_KDA_KDF_twostep_cmac() */
         uint32_t cachedSaltLen = sizeof(cachedSaltBuf);
         ret                    = wh_Server_KeystoreReadKeyEnforce(
             ctx, saltKeyId, WH_NVM_FLAGS_USAGE_DERIVE, cachedSaltMeta,
@@ -2198,11 +2179,8 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
             ret = WH_ERROR_BADARGS;
             goto cleanup;
         }
-        /* Copy the derive Z value into a private buffer, enforcing the derive
-         * usage policy against the same locked snapshot that is read. The KDF
-         * then runs on the private copy after the lock is released.
-         * A Z larger than cachedZBuf yields WH_ERROR_NOSPACE; see the bound on
-         * cached KDF inputs documented above _HandleHkdf(). */
+        /* Copy Z out, enforcing the derive usage policy against the same
+         * locked snapshot; see the KDF input bound above _HandleHkdf() */
         uint32_t cachedZLen = sizeof(cachedZBuf);
         ret                 = wh_Server_KeystoreReadKeyEnforce(
             ctx, zKeyId, WH_NVM_FLAGS_USAGE_DERIVE, cachedZMeta, cachedZBuf,
@@ -2440,11 +2418,11 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
             if (ret == 0) {
                 /* load the private key, enforcing the derive usage policy
                  * against the same locked snapshot that is exported */
-                ret = wh_Server_CacheExportCurve25519KeyEnforce(
+                ret = _CacheExportCurve25519KeyEnforce(
                     ctx, prv_key_id, WH_NVM_FLAGS_USAGE_DERIVE, priv);
                 if (ret == WH_ERROR_OK) {
                     /* load the public key (no usage requirement) */
-                    ret = wh_Server_CacheExportCurve25519KeyEnforce(
+                    ret = _CacheExportCurve25519KeyEnforce(
                         ctx, pub_key_id, WH_NVM_FLAGS_NONE, pub);
                 }
             }
@@ -2673,8 +2651,8 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the private key, enforcing the sign usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_CacheExportEd25519KeyEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        ret = _CacheExportEd25519KeyEnforce(ctx, key_id,
+                                            WH_NVM_FLAGS_USAGE_SIGN, key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ed25519_sign_msg_ex(req_msg, msg_len, sig, &sig_len, key,
                                          (byte)req.type, req_ctx,
@@ -2766,8 +2744,8 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the public key, enforcing the verify usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_CacheExportEd25519KeyEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+        ret = _CacheExportEd25519KeyEnforce(ctx, key_id,
+                                            WH_NVM_FLAGS_USAGE_VERIFY, key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ed25519_verify_msg_ex(req_sig, sig_len, req_msg, msg_len,
                                            &result, key, (byte)req.type,
@@ -2856,8 +2834,8 @@ static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
         if (ret == 0) {
             /* load the private key, enforcing the sign usage policy against
              * the same locked snapshot that is exported */
-            ret = wh_Server_CacheExportEd25519KeyEnforce(
-                ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+            ret = _CacheExportEd25519KeyEnforce(ctx, key_id,
+                                                WH_NVM_FLAGS_USAGE_SIGN, key);
             if (ret == WH_ERROR_OK) {
                 ret = wc_ed25519_sign_msg_ex(msgAddr, req.msg.sz, sigAddr,
                                              &sigLen, key, (byte)req.type,
@@ -2958,8 +2936,8 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
         if (ret == 0) {
             /* load the public key, enforcing the verify usage policy against
              * the same locked snapshot that is exported */
-            ret = wh_Server_CacheExportEd25519KeyEnforce(
-                ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+            ret = _CacheExportEd25519KeyEnforce(ctx, key_id,
+                                                WH_NVM_FLAGS_USAGE_VERIFY, key);
             if (ret == WH_ERROR_OK) {
                 int verified = 0;
                 ret          = wc_ed25519_verify_msg_ex(
@@ -5202,8 +5180,8 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the private key, enforcing the sign usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_MlDsaKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        ret = _MlDsaKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                          key);
         if (ret == WH_ERROR_OK) {
             /* sign the input using appropriate FIPS 204 API */
             if (preHashType != WC_HASH_TYPE_NONE) {
@@ -5299,8 +5277,8 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         /* load the public key, enforcing the verify usage policy against the
          * same locked snapshot that is exported */
-        ret = wh_Server_MlDsaKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+        ret = _MlDsaKeyCacheExportEnforce(ctx, key_id,
+                                          WH_NVM_FLAGS_USAGE_VERIFY, key);
         if (ret == WH_ERROR_OK) {
             /* verify the signature using appropriate FIPS 204 API */
             if (preHashType != WC_HASH_TYPE_NONE) {
@@ -5533,8 +5511,8 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
         keyInited = 1;
         /* Export the key, enforcing the derive usage policy against the same
          * locked snapshot that is exported */
-        ret = wh_Server_MlKemKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_DERIVE, key);
+        ret = _MlKemKeyCacheExportEnforce(ctx, key_id,
+                                          WH_NVM_FLAGS_USAGE_DERIVE, key);
     }
 
     /* Verify the exported key matches the requested level */
@@ -5643,8 +5621,8 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
         keyInited = 1;
         /* Export the key, enforcing the derive usage policy against the same
          * locked snapshot that is exported */
-        ret = wh_Server_MlKemKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_DERIVE, key);
+        ret = _MlKemKeyCacheExportEnforce(ctx, key_id,
+                                          WH_NVM_FLAGS_USAGE_DERIVE, key);
     }
 
     /* Verify the exported key matches the requested level */
@@ -6905,8 +6883,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
         /* Export the key, enforcing the sign usage policy against the same
          * locked snapshot that is exported. The non-DMA sign handler enforces
          * the same policy. */
-        ret = wh_Server_MlDsaKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        ret = _MlDsaKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                          key);
         if (ret == 0) {
             /* Process client message buffer address */
             ret = wh_Server_DmaProcessClientAddress(
@@ -7042,8 +7020,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     /* Export the key, enforcing the verify usage policy against the same
      * locked snapshot that is exported. The non-DMA verify handler enforces
      * the same policy. */
-    ret = wh_Server_MlDsaKeyCacheExportEnforce(ctx, key_id,
-                                               WH_NVM_FLAGS_USAGE_VERIFY, key);
+    ret = _MlDsaKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY,
+                                      key);
     if (ret == 0) {
         /* Process client signature buffer address */
         ret = wh_Server_DmaProcessClientAddress(
@@ -7368,8 +7346,8 @@ static int _HandleMlKemEncapsDma(whServerContext* ctx, uint16_t magic,
         keyInited = 1;
         /* Export the key, enforcing the derive usage policy against the same
          * locked snapshot that is exported */
-        ret = wh_Server_MlKemKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_DERIVE, key);
+        ret = _MlKemKeyCacheExportEnforce(ctx, key_id,
+                                          WH_NVM_FLAGS_USAGE_DERIVE, key);
     }
 
     /* Verify the exported key matches the requested level */
@@ -7500,8 +7478,8 @@ static int _HandleMlKemDecapsDma(whServerContext* ctx, uint16_t magic,
         keyInited = 1;
         /* Export the key, enforcing the derive usage policy against the same
          * locked snapshot that is exported */
-        ret = wh_Server_MlKemKeyCacheExportEnforce(
-            ctx, key_id, WH_NVM_FLAGS_USAGE_DERIVE, key);
+        ret = _MlKemKeyCacheExportEnforce(ctx, key_id,
+                                          WH_NVM_FLAGS_USAGE_DERIVE, key);
     }
 
     /* Verify the exported key matches the requested level */
@@ -8021,7 +7999,7 @@ static int _HandleLmsVerifyDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
             (void)WH_SERVER_NVM_UNLOCK(ctx);
-        }
+        } /* WH_SERVER_NVM_LOCK() */
     }
     if (ret == WH_ERROR_OK) {
         /* Deserialize leaves the key in PARMSET; wc_LmsKey_Verify needs
@@ -8127,7 +8105,7 @@ static int _HandleLmsSigsLeftDma(whServerContext* ctx, uint16_t magic,
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
             (void)WH_SERVER_NVM_UNLOCK(ctx);
-        }
+        } /* WH_SERVER_NVM_LOCK() */
     }
     if (ret == WH_ERROR_OK) {
         res.sigsLeft = (uint32_t)wc_LmsKey_SigsLeft(key);
@@ -8513,7 +8491,7 @@ static int _HandleXmssVerifyDma(whServerContext* ctx, uint16_t magic,
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_XmssKeyCacheExport(ctx, keyId, key);
             (void)WH_SERVER_NVM_UNLOCK(ctx);
-        }
+        } /* WH_SERVER_NVM_LOCK() */
     }
     if (ret == WH_ERROR_OK) {
         /* Deserialize leaves the key in PARMSET; wc_XmssKey_Verify needs

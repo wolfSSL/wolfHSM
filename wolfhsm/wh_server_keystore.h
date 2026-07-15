@@ -311,39 +311,4 @@ int wh_Server_KeystoreExportKeyDmaChecked(whServerContext* server,
 int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
                                       whNvmFlags           requiredUsage);
 
-/**
- * Validates that a key has the required usage policy flags set
- *
- * NOTE: this function may be deprecated soon. The policy check ends when it
- * unlocks, so a caller that afterwards exports or uses the key does so in a
- * separate lock scope and races an update to the key's usage flags. Prefer a
- * primitive that enforces and reads under a single lock:
- * wh_Server_KeystoreReadKeyEnforce for raw key bytes, or the typed
- * wh_Server_*CacheExport*Enforce wrappers in wh_server_crypto.h. This function
- * remains only for callers that genuinely need a standalone policy check and
- * never touch the key material.
- *
- * This function enforces key usage policies by checking that the specified
- * key has all the required usage flags set in its metadata. It retrieves
- * the key metadata from the cache or NVM storage and performs a bitwise
- * check against the required flags.
- *
- * Acquires WH_SERVER_NVM_LOCK internally under WOLFHSM_CFG_THREADSAFE. The
- * lock is non-recursive: callers that already hold it (e.g. the SHE or cert
- * request dispatch) must use wh_Server_KeystoreFreshenKey plus
- * wh_Server_KeystoreEnforceKeyUsage directly instead.
- *
- * @param server Pointer to the server context
- * @param keyId The translated server keyId (after client keyId translation)
- * @param requiredUsage The required usage policy flags (e.g.,
- *                      WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT)
- *
- * @return WH_ERROR_OK if the key has all required usage flags set
- * @return WH_ERROR_USAGE if the key does not have the required flags
- * @return Other error codes if key metadata cannot be retrieved
- */
-int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
-                                          whKeyId          keyId,
-                                          whNvmFlags       requiredUsage);
-
 #endif /* !WOLFHSM_WH_SERVER_KEYSTORE_H_ */
