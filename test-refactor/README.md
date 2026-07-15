@@ -111,8 +111,6 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_crypto.c::whTest_KeyCache`, `whTest_NonExportableKeystore` | Keystore tests (key-cache lifecycle and non-exportable-flag enforcement) dispatched from the legacy `whTest_Crypto`. The per-algorithm suites use `wh_Client_KeyCache`, but these dedicated keystore tests are not yet split out. |
 | `wh_test_crypto_affinity.c::whTest_CryptoAffinity` | |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | |
-| `wh_test_lock.c::whTest_LockConfig`, `whTest_LockPosix` | `whTest_LockConfig` to be reworked to fit the Misc group, likely with a context param. |
-| `wh_test_multiclient.c::whTest_MultiClient` | |
 | `wh_test_log.c::whTest_Log`, `whTest_LogBackend_RunAll` | `whTest_LogBackend_RunAll` to be reworked to fit the Misc group, likely with a context param. |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |
 | `wh_test_server_img_mgr.c::whTest_ServerImgMgr` | |
