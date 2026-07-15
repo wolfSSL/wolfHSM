@@ -30,6 +30,8 @@
  * the server's devId, which the shared port server (fixed at
  * INVALID_DEVID) cannot provide. The WithCb subtest exercises the HW
  * routing branch; the NoCb subtest exercises the SW fallback branch.
+ * Under WOLFHSM_CFG_DMA both subtests also drive an AES CBC DMA request
+ * so the DMA crypto dispatch's affinity routing is covered too.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -301,7 +303,58 @@ static int _whTest_CryptoAffinityWithCb(void)
     /* Crypto callback should NOT have been invoked */
     WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount == 0);
 
-    /* Test 7: NULL args validation */
+#ifdef WOLFHSM_CFG_DMA
+    /* Test 7: DMA path mirrors tests 5-6 but routes through the server's DMA
+     * crypto dispatch. HW affinity selects the HW devId (callback fires); SW
+     * affinity falls back to the SW devId (callback silent). */
+    cryptoCbInvokeCount = 0;
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    {
+        Aes     aes[1];
+        uint8_t key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
+        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaRequest(
+            client, aes, 1, plainIn, sizeof(plainIn), cipherOut));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaResponse(client, aes));
+        wc_AesFree(aes);
+    }
+    /* HW affinity DMA op triggers the HW callback */
+    WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount > 0);
+
+    cryptoCbInvokeCount = 0;
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_SW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    {
+        Aes     aes[1];
+        uint8_t key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
+        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaRequest(
+            client, aes, 1, plainIn, sizeof(plainIn), cipherOut));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaResponse(client, aes));
+        wc_AesFree(aes);
+    }
+    /* SW affinity DMA op does NOT trigger the HW callback */
+    WH_TEST_ASSERT_RETURN(cryptoCbInvokeCount == 0);
+#endif /* WOLFHSM_CFG_DMA */
+
+    /* Test 8: NULL args validation */
     rc = wh_Client_SetCryptoAffinity(NULL, WH_CRYPTO_AFFINITY_SW);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_BADARGS);
     rc = wh_Client_GetCryptoAffinity(NULL, &affinity);
@@ -503,6 +556,31 @@ static int _whTest_CryptoAffinityNoCb(void)
         WH_TEST_ASSERT_RETURN(outSize == sizeof(plainIn));
         wc_AesFree(aes);
     }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* Test 6: AES CBC DMA request with HW affinity still succeeds without a HW
+     * crypto callback: with no valid server devId the DMA dispatch falls back
+     * to INVALID_DEVID (SW). Exercises the DMA routing's SW-fallback branch. */
+    rc = wh_Client_SetCryptoAffinity(client, WH_CRYPTO_AFFINITY_HW);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    {
+        Aes     aes[1];
+        uint8_t key[AES_BLOCK_SIZE]       = {0x01};
+        uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
+        uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
+        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+
+        WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
+        WH_TEST_RETURN_ON_FAIL(
+            wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaRequest(
+            client, aes, 1, plainIn, sizeof(plainIn), cipherOut));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesCbcDmaResponse(client, aes));
+        wc_AesFree(aes);
+    }
+#endif /* WOLFHSM_CFG_DMA */
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));
