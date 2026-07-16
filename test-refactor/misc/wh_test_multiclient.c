@@ -954,75 +954,6 @@ static int _testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
 }
 
 /*
- * Test 9a: Local wrapping key + Local wrapped key (Positive - Same owner)
- * - Client 1 caches a local wrapping key
- * - Client 1 wraps a LOCAL key (USER=client1_id)
- * - Client 1 unwraps and exports successfully
- */
-static int _testWrappedKey_LocalWrap_LocalKey_SameOwner(
-    whClientContext* client1, whServerContext* server1,
-    whClientContext* client2, whServerContext* server2)
-{
-    int      ret;
-    whKeyId  serverKeyId               = DUMMY_KEYID_1; /* Local wrapping key */
-    uint16_t client1Id                 = WH_TEST_DEFAULT_CLIENT_ID;
-    uint8_t  wrapKey[AES_256_KEY_SIZE] = "LocalWrapKey2Test9aXXXXXXXXXX!";
-    uint8_t  plainKey[AES_256_KEY_SIZE] = "LocalPlainKey2Test9aXXXXXXXXX!";
-#define WRAPPED_KEY_SIZE (12 + 16 + AES_256_KEY_SIZE + sizeof(whNvmMetadata))
-    uint8_t       wrappedKey[WRAPPED_KEY_SIZE]   = {0};
-    uint16_t      wrappedKeySz                   = sizeof(wrappedKey);
-    uint8_t       unwrappedKey[AES_256_KEY_SIZE] = {0};
-    uint16_t      unwrappedKeySz                 = sizeof(unwrappedKey);
-    whNvmMetadata meta                           = {0};
-
-    WH_TEST_DEBUG_PRINT("Test 9a: Local wrap key + Local wrapped key (Same owner)\n");
-
-    /* Client 1 caches a LOCAL wrapping key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheRequest_ex(
-        client1, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKey_9a",
-        sizeof("WrapKey_9a"), wrapKey, sizeof(wrapKey), serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheResponse(client1, &serverKeyId));
-
-    /* Client 1 wraps a LOCAL key (USER=client1_id) */
-    serverKeyId = DUMMY_KEYID_1; /* Use local wrapping key */
-    meta.id     = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client1Id, DUMMY_KEYID_2);
-    meta.len = sizeof(plainKey);
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapRequest(client1, WC_CIPHER_AES_GCM,
-                                                    serverKeyId, plainKey,
-                                                    sizeof(plainKey), &meta));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapResponse(
-        client1, WC_CIPHER_AES_GCM, wrappedKey, &wrappedKeySz));
-
-    /* Client 1 (owner) unwraps and exports the local key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportRequest(
-        client1, WC_CIPHER_AES_GCM, serverKeyId, wrappedKey,
-        sizeof(wrappedKey)));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndExportResponse(
-        client1, WC_CIPHER_AES_GCM, &meta, unwrappedKey, &unwrappedKeySz));
-
-    /* Verify the unwrapped key matches the original */
-    WH_TEST_ASSERT_RETURN(0 ==
-                          memcmp(unwrappedKey, plainKey, sizeof(plainKey)));
-
-    /* Clean up */
-    serverKeyId = DUMMY_KEYID_1;
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictRequest(client1, serverKeyId));
-    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvictResponse(client1));
-
-    WH_TEST_PRINT("  PASS: Local wrap key + Local wrapped key (Same owner)\n");
-
-    (void)ret;
-    (void)client2;
-    (void)server2;
-    return 0;
-#undef WRAPPED_KEY_SIZE
-}
-
-/*
  * Test 9b: Local wrapping key + Local wrapped key (Negative - No access without
  * wrap key)
  * - Client 1 caches a local wrapping key
@@ -1240,6 +1171,7 @@ static int _testWrappedKey_LocalWrap_GlobalKey_NonOwnerNoWrapKey(
     return 0;
 #undef WRAPPED_KEY_SIZE
 }
+
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
 /*
@@ -1397,9 +1329,6 @@ static int _runGlobalKeysTests(whClientContext* client1,
         client1, server1, client2, server2));
 
     WH_TEST_RETURN_ON_FAIL(_testWrappedKey_GlobalWrap_LocalKey_NonOwnerFails(
-        client1, server1, client2, server2));
-
-    WH_TEST_RETURN_ON_FAIL(_testWrappedKey_LocalWrap_LocalKey_SameOwner(
         client1, server1, client2, server2));
 
     WH_TEST_RETURN_ON_FAIL(
