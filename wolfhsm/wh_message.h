@@ -94,6 +94,7 @@ enum WH_SHE_ENUM {
     WH_SHE_DEC_CBC,
     WH_SHE_GEN_MAC,
     WH_SHE_VERIFY_MAC,
+    WH_SHE_GET_ID,
 };
 
 /* counter actions */

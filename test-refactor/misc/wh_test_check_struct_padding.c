@@ -203,6 +203,8 @@ whMessageShe_GenMacRequest            sheGenMacReq;
 whMessageShe_GenMacResponse           sheGenMacRes;
 whMessageShe_VerifyMacRequest         sheVerifyMacReq;
 whMessageShe_VerifyMacResponse        sheVerifyMacRes;
+whMessageShe_GetIdRequest             sheGetIdReq;
+whMessageShe_GetIdResponse            sheGetIdRes;
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER)

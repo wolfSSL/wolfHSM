@@ -125,6 +125,10 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
 static int _VerifyMac(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet);
+static int _GetId(whServerContext* server, uint16_t magic, uint16_t req_size,
+                  const void* req_packet, uint16_t* out_resp_size,
+                  void* resp_packet);
+static uint8_t _BuildSreg(whServerContext* server);
 static int _TranslateSheReturnCode(int ret);
 static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                                   uint16_t action, uint16_t req_size,
@@ -431,6 +435,33 @@ static int _SecureBootFinish(whServerContext* server, uint16_t magic,
     return ret;
 }
 
+/* Compose the 8-bit SHE status register (SREG) from the current server state.
+ * TODO do we care about all the sreg fields? */
+static uint8_t _BuildSreg(whServerContext* server)
+{
+    uint8_t sreg = 0;
+
+    /* SECURE_BOOT */
+    if (server->she->cmacKeyFound) {
+        sreg |= WH_SHE_SREG_SECURE_BOOT;
+    }
+    /* BOOT_FINISHED */
+    if (server->she->sbState == WH_SHE_SB_SUCCESS ||
+        server->she->sbState == WH_SHE_SB_FAILURE) {
+        sreg |= WH_SHE_SREG_BOOT_FINISHED;
+    }
+    /* BOOT_OK */
+    if (server->she->sbState == WH_SHE_SB_SUCCESS) {
+        sreg |= WH_SHE_SREG_BOOT_OK;
+    }
+    /* RND_INIT */
+    if (server->she->rndInited == 1) {
+        sreg |= WH_SHE_SREG_RND_INIT;
+    }
+
+    return sreg;
+}
+
 static int _GetStatus(whServerContext* server, uint16_t magic,
                       uint16_t req_size, const void* req_packet,
                       uint16_t* out_resp_size, void* resp_packet)
@@ -445,26 +476,7 @@ static int _GetStatus(whServerContext* server, uint16_t magic,
     }
 
     if (ret == 0) {
-        /* TODO do we care about all the sreg fields? */
-        resp.sreg = 0;
-        /* SECURE_BOOT */
-        if (server->she->cmacKeyFound) {
-            resp.sreg |= WH_SHE_SREG_SECURE_BOOT;
-        }
-
-        /* BOOT_FINISHED */
-        if (server->she->sbState == WH_SHE_SB_SUCCESS ||
-            server->she->sbState == WH_SHE_SB_FAILURE) {
-            resp.sreg |= WH_SHE_SREG_BOOT_FINISHED;
-        }
-        /* BOOT_OK */
-        if (server->she->sbState == WH_SHE_SB_SUCCESS) {
-            resp.sreg |= WH_SHE_SREG_BOOT_OK;
-        }
-        /* RND_INIT */
-        if (server->she->rndInited == 1) {
-            resp.sreg |= WH_SHE_SREG_RND_INIT;
-        }
+        resp.sreg = _BuildSreg(server);
     }
 
     *out_resp_size = sizeof(resp);
@@ -1606,6 +1618,78 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
     return ret;
 }
 
+static int _GetId(whServerContext* server, uint16_t magic, uint16_t req_size,
+                  const void* req_packet, uint16_t* out_resp_size,
+                  void* resp_packet)
+{
+    int                        ret = 0;
+    uint32_t                   field = AES_BLOCK_SIZE;
+    uint32_t                   keySz;
+    uint8_t                    tmpKey[WH_SHE_KEY_SZ];
+    /* CMAC input: CHALLENGE || UID || SREG */
+    uint8_t                    macIn[WH_SHE_KEY_SZ + WH_SHE_UID_SZ + 1];
+    whMessageShe_GetIdRequest  req = {0};
+    whMessageShe_GetIdResponse resp = {0};
+
+    if (req_size < sizeof(req)) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+
+    if (ret == 0) {
+        ret = wh_MessageShe_TranslateGetIdRequest(magic, req_packet, &req);
+    }
+
+    if (ret == 0) {
+        /* Assemble the CMAC input: challenge || uid || sreg */
+        uint8_t sreg = _BuildSreg(server);
+        memcpy(macIn, req.challenge, WH_SHE_KEY_SZ);
+        memcpy(macIn + WH_SHE_KEY_SZ, server->she->uid, WH_SHE_UID_SZ);
+        macIn[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = sreg;
+
+        /* Load the MASTER_ECU_KEY. Per the SHE spec, if the slot is empty the
+         * MAC is computed with an all-zero key rather than returning an error.
+         * wh_Server_KeystoreReadKey already applies this substitution for the
+         * MASTER_ECU_KEY slot (returns a zero-filled key and rc 0), so the
+         * WH_ERROR_NOTFOUND branch below is only a defensive backstop for
+         * builds/paths where that substitution does not occur. */
+        keySz = WH_SHE_KEY_SZ;
+        ret   = wh_Server_KeystoreReadKey(
+              server,
+              WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
+                            WH_SHE_MASTER_ECU_KEY_ID),
+              NULL, tmpKey, &keySz);
+        if (ret == WH_ERROR_NOTFOUND) {
+            memset(tmpKey, 0, WH_SHE_KEY_SZ);
+            ret = 0;
+        }
+        else if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
+
+        /* Compute the identity MAC over challenge || uid || sreg */
+        if (ret == 0) {
+            ret = wc_AesCmacGenerate_ex(server->she->sheCmac, resp.mac,
+                                        (word32*)&field, macIn, sizeof(macIn),
+                                        tmpKey, WH_SHE_KEY_SZ, NULL,
+                                        server->devId);
+        }
+
+        /* Fill the remaining response fields */
+        if (ret == 0) {
+            memcpy(resp.uid, server->she->uid, sizeof(resp.uid));
+            resp.sreg = sreg;
+        }
+    }
+
+    resp.rc = _TranslateSheReturnCode(ret);
+    (void)wh_MessageShe_TranslateGetIdResponse(magic, &resp, resp_packet);
+    *out_resp_size = sizeof(resp);
+
+    wh_Utils_ForceZero(tmpKey, sizeof(tmpKey));
+
+    return ret;
+}
+
 
 /* TODO: This is terrible, but without implementing a SHE sub-protocol like we
  * do for crypto layer, there is no way to return non-request specific error
@@ -1636,8 +1720,11 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
     else if (action != WH_SHE_SECURE_BOOT_INIT &&
              action != WH_SHE_SECURE_BOOT_UPDATE &&
              action != WH_SHE_SECURE_BOOT_FINISH &&
+             action != WH_SHE_GET_ID &&
              server->she->sbState != WH_SHE_SB_SUCCESS) {
-        /* Non-boot commands are blocked until secure boot succeeds. */
+        /* Non-boot commands are blocked until secure boot succeeds. GET_ID is
+         * exempt (the AUTOSAR spec permits it in every state), though it still
+         * requires a provisioned UID via the uidSet check above. */
         ret = WH_SHE_ERC_SEQUENCE_ERROR;
     }
 
@@ -1779,6 +1866,14 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
                 resp.status = 1; /* Verification failed */
                 (void)wh_MessageShe_TranslateVerifyMacResponse(magic, &resp,
                                                                resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+            case WH_SHE_GET_ID: {
+                whMessageShe_GetIdResponse resp = {0};
+                resp.rc = WH_SHE_ERC_SEQUENCE_ERROR;
+                (void)wh_MessageShe_TranslateGetIdResponse(magic, &resp,
+                                                           resp_packet);
                 *out_resp_size = sizeof(resp);
                 break;
             }
@@ -1929,6 +2024,14 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
             if (ret == WH_ERROR_OK) {
                 ret = _VerifyMac(server, magic, req_size, req_packet,
                                  out_resp_size, resp_packet);
+                (void)WH_SERVER_NVM_UNLOCK(server);
+            } /* WH_SERVER_NVM_LOCK() */
+            break;
+        case WH_SHE_GET_ID:
+            ret = WH_SERVER_NVM_LOCK(server);
+            if (ret == WH_ERROR_OK) {
+                ret = _GetId(server, magic, req_size, req_packet, out_resp_size,
+                             resp_packet);
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
             break;

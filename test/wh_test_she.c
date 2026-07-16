@@ -164,6 +164,13 @@ int whTest_SheClientConfig(whClientConfig* config)
     uint8_t messageThree[WH_SHE_M3_SZ];
     uint8_t messageFour[WH_SHE_M4_SZ];
     uint8_t messageFive[WH_SHE_M5_SZ];
+    uint8_t sheChallenge[WH_SHE_KEY_SZ] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    uint8_t sheGetIdUid[WH_SHE_UID_SZ];
+    uint8_t sheGetIdMac[WH_SHE_KEY_SZ];
+    uint8_t expectedGetIdMac[WH_SHE_KEY_SZ];
+    uint8_t getIdMacInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ + 1];
+    word32  expectedGetIdMacSz = sizeof(expectedGetIdMac);
     uint32_t outClientId = 0;
     uint32_t outServerId = 0;
     const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
@@ -319,6 +326,37 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     WH_TEST_PRINT("SHE LOAD KEY SUCCESS\n");
+
+    /* CMD_GET_ID: read the module identity and verify the identity MAC. The
+     * MASTER_ECU_KEY (slot 1) was loaded above with vectorMasterEcuKey, so we
+     * can recompute the expected CMAC over challenge || uid || sreg. */
+    if ((ret = wh_Client_SheGetId(client, sheChallenge, sizeof(sheChallenge),
+             sheGetIdUid, &sreg, sheGetIdMac)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_SheGetId %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(sheGetIdUid, sheUid, WH_SHE_UID_SZ) != 0) {
+        ret = WH_ERROR_ABORTED;
+        WH_ERROR_PRINT("SHE GET_ID returned an unexpected UID\n");
+        goto exit;
+    }
+    /* expected MAC = CMAC(MASTER_ECU_KEY, challenge || uid || sreg) */
+    memcpy(getIdMacInput, sheChallenge, WH_SHE_KEY_SZ);
+    memcpy(getIdMacInput + WH_SHE_KEY_SZ, sheGetIdUid, WH_SHE_UID_SZ);
+    getIdMacInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = sreg;
+    expectedGetIdMacSz = sizeof(expectedGetIdMac);
+    if ((ret = wc_AesCmacGenerate(expectedGetIdMac, &expectedGetIdMacSz,
+             getIdMacInput, sizeof(getIdMacInput), vectorMasterEcuKey,
+             sizeof(vectorMasterEcuKey))) != 0) {
+        WH_ERROR_PRINT("Failed to compute expected GET_ID MAC %d\n", ret);
+        goto exit;
+    }
+    if (memcmp(sheGetIdMac, expectedGetIdMac, WH_SHE_KEY_SZ) != 0) {
+        ret = WH_ERROR_ABORTED;
+        WH_ERROR_PRINT("SHE GET_ID MAC mismatch\n");
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE GET ID SUCCESS\n");
 
     /* _LoadKey UID handling: a non-matching UID must be rejected, an
      * all-zero UID must be rejected unless the stored target key has
@@ -1637,6 +1675,26 @@ static int wh_She_TestReqSizeChecking(void)
         WH_TEST_ASSERT_RETURN(verifyMacResp->rc != WH_SHE_ERC_NO_ERROR);
     }
 
+    /*
+     * Test 18: WH_SHE_GET_ID with truncated request.
+     * Populate a valid challenge, but pass req_size one byte short.
+     */
+    {
+        whMessageShe_GetIdRequest* req =
+            (whMessageShe_GetIdRequest*)req_packet;
+        whMessageShe_GetIdResponse* getIdResp =
+            (whMessageShe_GetIdResponse*)resp_packet;
+        memset(getIdResp, 0, sizeof(*getIdResp));
+        memset(req->challenge, 0xAA, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_GetIdRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_GET_ID, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(*getIdResp));
+        WH_TEST_ASSERT_RETURN(getIdResp->rc != WH_SHE_ERC_NO_ERROR);
+    }
+
     WH_TEST_PRINT("SHE req_size checking test SUCCESS\n");
 
     wh_Server_Cleanup(server);
@@ -1833,6 +1891,173 @@ static int wh_She_TestStateGate(void)
 
     return ret;
 }
+
+/**
+ * Server-direct GET_ID tests for two paths not covered by the end-to-end flow:
+ *   1. Empty MASTER_ECU_KEY slot: the identity MAC must be computed with an
+ *      all-zero key (per the SHE spec), not error out.
+ *   2. GET_ID before secure boot: the command is whitelisted, so it must
+ *      succeed even when sbState != SUCCESS (SREG reflects the un-booted state).
+ * Both are driven through wh_Server_HandleSheRequest() with no key ever loaded.
+ */
+static int wh_She_TestGetId(void)
+{
+    int             ret = 0;
+    uint16_t        resp_size = 0;
+
+    uint8_t req_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    uint8_t resp_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+
+    uint8_t                     reqBuf[BUFFER_SIZE]  = {0};
+    uint8_t                     respBuf[BUFFER_SIZE] = {0};
+    whTransportMemConfig        tmcf[1]              = {{
+                            .req       = (whTransportMemCsr*)reqBuf,
+                            .req_size  = sizeof(reqBuf),
+                            .resp      = (whTransportMemCsr*)respBuf,
+                            .resp_size = sizeof(respBuf),
+    }};
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 125,
+    }};
+
+    static uint8_t   memory[FLASH_RAM_SIZE];
+    whFlashRamsimCtx fc[1]                  = {0};
+    whFlashRamsimCfg fc_conf[1]             = {{0}};
+    const whFlashCb  fcb[1]                 = {WH_FLASH_RAMSIM_CB};
+
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1]     = {0};
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
+    whNvmConfig       n_conf[1]  = {{
+               .cb      = nfcb,
+               .context = nfc,
+               .config  = nf_conf,
+    }};
+    whNvmContext      nvm[1]     = {{0}};
+
+    whServerCryptoContext crypto[1] = {0};
+    whServerSheContext    she[1];
+    whServerContext       server[1] = {0};
+
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
+        .crypto      = crypto,
+        .she         = she,
+        .devId       = INVALID_DEVID,
+    }};
+
+    /* Known UID and challenge so the identity MAC can be recomputed. */
+    uint8_t knownUid[WH_SHE_UID_SZ] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+        0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    uint8_t challenge[WH_SHE_KEY_SZ] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+        0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    uint8_t zeroKey[WH_SHE_KEY_SZ]                  = {0};
+    uint8_t macInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ + 1];
+    uint8_t expectedMac[WH_SHE_KEY_SZ];
+    word32  expectedMacSz;
+    uint8_t sregBooted   = 0;
+    uint8_t sregPreBoot  = 0;
+
+    memset(she, 0, sizeof(she));
+    memset(memory, 0, sizeof(memory));
+
+    fc_conf->size       = FLASH_RAM_SIZE;
+    fc_conf->sectorSize = FLASH_SECTOR_SIZE;
+    fc_conf->pageSize   = FLASH_PAGE_SIZE;
+    fc_conf->erasedByte = ~(uint8_t)0;
+    fc_conf->memory     = memory;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, s_conf->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    /* UID is set (GET_ID returns it), but NO MASTER_ECU_KEY is ever loaded, so
+     * the identity MAC must fall back to an all-zero key. */
+    server->she->uidSet = 1;
+    memcpy(server->she->uid, knownUid, WH_SHE_UID_SZ);
+
+    /*
+     * Case 1: empty MASTER_ECU_KEY, secure boot succeeded.
+     * Expect success, the stored UID echoed back, and the MAC computed under an
+     * all-zero key over challenge || uid || sreg.
+     */
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+    {
+        whMessageShe_GetIdRequest*  req  = (whMessageShe_GetIdRequest*)req_packet;
+        whMessageShe_GetIdResponse* resp =
+            (whMessageShe_GetIdResponse*)resp_packet;
+        memset(resp, 0, sizeof(*resp));
+        memcpy(req->challenge, challenge, WH_SHE_KEY_SZ);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_GET_ID, sizeof(*req), req_packet, &resp_size,
+                  resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(*resp));
+        WH_TEST_ASSERT_RETURN(resp->rc == WH_SHE_ERC_NO_ERROR);
+        WH_TEST_ASSERT_RETURN(memcmp(resp->uid, knownUid, WH_SHE_UID_SZ) == 0);
+
+        sregBooted = resp->sreg;
+        memcpy(macInput, challenge, WH_SHE_KEY_SZ);
+        memcpy(macInput + WH_SHE_KEY_SZ, knownUid, WH_SHE_UID_SZ);
+        macInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = resp->sreg;
+        expectedMacSz = sizeof(expectedMac);
+        WH_TEST_RETURN_ON_FAIL(wc_AesCmacGenerate(expectedMac, &expectedMacSz,
+            macInput, sizeof(macInput), zeroKey, sizeof(zeroKey)));
+        WH_TEST_ASSERT_RETURN(memcmp(resp->mac, expectedMac, WH_SHE_KEY_SZ) == 0);
+    }
+
+    /*
+     * Case 2: GET_ID before secure boot (sbState != SUCCESS).
+     * The command is whitelisted, so it must still succeed, and the SREG must
+     * reflect the un-booted state (differs from the booted SREG above).
+     */
+    server->she->sbState = TEST_SHE_SB_STATE_INIT;
+    {
+        whMessageShe_GetIdRequest*  req  = (whMessageShe_GetIdRequest*)req_packet;
+        whMessageShe_GetIdResponse* resp =
+            (whMessageShe_GetIdResponse*)resp_packet;
+        memset(resp, 0, sizeof(*resp));
+        memcpy(req->challenge, challenge, WH_SHE_KEY_SZ);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_GET_ID, sizeof(*req), req_packet, &resp_size,
+                  resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp->rc == WH_SHE_ERC_NO_ERROR);
+        WH_TEST_ASSERT_RETURN(memcmp(resp->uid, knownUid, WH_SHE_UID_SZ) == 0);
+
+        sregPreBoot = resp->sreg;
+        macInput[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = resp->sreg;
+        expectedMacSz = sizeof(expectedMac);
+        WH_TEST_RETURN_ON_FAIL(wc_AesCmacGenerate(expectedMac, &expectedMacSz,
+            macInput, sizeof(macInput), zeroKey, sizeof(zeroKey)));
+        WH_TEST_ASSERT_RETURN(memcmp(resp->mac, expectedMac, WH_SHE_KEY_SZ) == 0);
+    }
+
+    /* The booted and pre-boot status registers must differ, proving GET_ID's
+     * SREG reflects live server state rather than a fixed value. */
+    WH_TEST_ASSERT_RETURN(sregBooted != sregPreBoot);
+
+    WH_TEST_PRINT("SHE GET_ID empty-key / pre-secure-boot test SUCCESS\n");
+
+    wh_Server_Cleanup(server);
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+
+    return 0;
+}
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
@@ -1846,6 +2071,8 @@ int whTest_She(void)
     WH_TEST_RETURN_ON_FAIL(wh_She_TestReqSizeChecking());
     WH_TEST_PRINT("Testing SHE: state gate...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestStateGate());
+    WH_TEST_PRINT("Testing SHE: GET_ID empty-key / pre-secure-boot...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_She_TestGetId());
     WH_TEST_PRINT("Testing SHE: (pthread) mem core flow...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheClientConfig));

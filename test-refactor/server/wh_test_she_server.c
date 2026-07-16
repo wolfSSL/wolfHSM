@@ -471,6 +471,26 @@ int whTest_SheReqSizeChecking(whServerContext* server)
         WH_TEST_ASSERT_RETURN(verifyMacResp->rc != WH_SHE_ERC_NO_ERROR);
     }
 
+    /*
+     * Test 18: WH_SHE_GET_ID with truncated request.
+     * Populate a valid challenge, but pass req_size one byte short.
+     */
+    {
+        whMessageShe_GetIdRequest* req =
+            (whMessageShe_GetIdRequest*)req_packet;
+        whMessageShe_GetIdResponse* getIdResp =
+            (whMessageShe_GetIdResponse*)resp_packet;
+        memset(getIdResp, 0, sizeof(*getIdResp));
+        memset(req->challenge, 0xAA, WH_SHE_KEY_SZ);
+        req_size = sizeof(whMessageShe_GetIdRequest) - 1;
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                  WH_SHE_GET_ID, req_size,
+                  req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(*getIdResp));
+        WH_TEST_ASSERT_RETURN(getIdResp->rc != WH_SHE_ERC_NO_ERROR);
+    }
+
     /* Restore a clean SHE context so the poked uidSet/sbState don't
      * leak into the live request loop the server enters next. */
     memset(server->she, 0, sizeof(*server->she));
