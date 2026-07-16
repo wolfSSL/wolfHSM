@@ -4940,6 +4940,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6632,6 +6633,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 #ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;

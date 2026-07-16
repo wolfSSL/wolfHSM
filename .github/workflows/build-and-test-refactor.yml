@@ -57,6 +57,13 @@ jobs:
     - name: Build and test refactor DMA ASAN MLDSA verify-only
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 MLDSA_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Build and test with ML-DSA verify-only and a reduced keycache buffer.
+    # 4096 < MLDSA_MAX_BOTH_KEY_DER_SIZE(7520) so this would fail the static
+    # assert without MLDSA_VERIFY_ONLY; it passes because verify-only only
+    # needs MLDSA_MAX_PUB_KEY_DER_SIZE(2614). LMS/XMSS full keys fit in 4096.
+    - name: Build and test refactor DMA ASAN MLDSA verify-only reduced keycache
+      run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 MLDSA_VERIFY_ONLY=1 KEYCACHE_BIG_BUFSIZE=4096 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test refactor ASAN TESTWOLFCRYPT
       run: cd test-refactor/posix && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../../wolfssl && make run
