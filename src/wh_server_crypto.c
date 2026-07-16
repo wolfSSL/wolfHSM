@@ -770,7 +770,7 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 #ifdef WOLFSSL_HAVE_MLDSA
 /* When verify-only, the server caches only the public key DER. Otherwise it
  * must be able to hold a full keypair DER (public + private). */
-#ifdef WOLFSSL_DILITHIUM_VERIFY_ONLY
+#if defined(WOLFSSL_DILITHIUM_VERIFY_ONLY) || defined(WOLFSSL_MLDSA_VERIFY_ONLY)
 #define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_PUB_KEY_DER_SIZE
 #else
 #define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_BOTH_KEY_DER_SIZE
