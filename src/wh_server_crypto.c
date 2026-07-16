@@ -793,14 +793,12 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    /* The key may hold a full keypair, in which case
-     * wh_Crypto_MlDsaSerializeKeyDer() encodes both the public and private key
-     * (wc_MlDsaKey_KeyToDer()), so size for both keys, not just the private key. */
     ret = wh_Server_KeystoreGetCacheSlotChecked(
-        ctx, keyId, MLDSA_MAX_BOTH_KEY_DER_SIZE, &cacheBuf, &cacheMeta);
+        ctx, keyId, WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
-        ret = wh_Crypto_MlDsaSerializeKeyDer(key, MLDSA_MAX_BOTH_KEY_DER_SIZE,
-                                             cacheBuf, &der_size);
+        ret = wh_Crypto_MlDsaSerializeKeyDer(key,
+                                WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE,
+                                cacheBuf, &der_size);
         WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
 
@@ -4723,6 +4721,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -4833,6 +4832,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6375,6 +6375,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
 #ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6496,6 +6497,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;

@@ -152,6 +152,10 @@ ifeq ($(XMSS_VERIFY_ONLY),1)
 	DEF += -DWOLFSSL_XMSS_VERIFY_ONLY
 endif
 
+ifeq ($(MLDSA_VERIFY_ONLY),1)
+	DEF += -DWOLFSSL_MLDSA_VERIFY_ONLY
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
 	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
