@@ -61,12 +61,17 @@ clean:
 CC            ?= cc
 WOLFSSL_DIR   ?= ../wolfssl
 WOLFHSM_CFG_DIR ?= test/config
+PREFIX        ?= /usr/local
+SBOM_INSTALL_DIR ?= $(PREFIX)/share/doc/wolfhsm
+SBOM_VALIDATE ?= yes
+SBOM_DEP_WOLFSSL ?= yes
 VERSION        = $(shell sed -n 's/^. wolfHSM Release v//p' ChangeLog.md | head -1 | cut -d' ' -f1)
 SRCS          := $(sort $(wildcard src/*.c))
 SBOM_CDX       = wolfhsm-$(VERSION).cdx.json
 SBOM_SPDX      = wolfhsm-$(VERSION).spdx.json
+SBOM_SPDX_TV   = wolfhsm-$(VERSION).spdx
 
-.PHONY: sbom
+.PHONY: sbom install-sbom uninstall-sbom
 
 sbom:
 	@if [ -z "$(VERSION)" ]; then \
@@ -89,6 +94,13 @@ sbom:
 	    echo "ERROR: $(WOLFHSM_CFG_DIR)/wolfhsm_cfg.h not found." >&2; \
 	    echo "       Set WOLFHSM_CFG_DIR to the directory holding the" >&2; \
 	    echo "       wolfhsm_cfg.h (and user_settings.h) your build uses." >&2; \
+	    exit 1; \
+	fi
+	@if [ "$(SBOM_VALIDATE)" != "no" ] && \
+	    ! command -v pyspdxtools >/dev/null 2>&1; then \
+	    echo "ERROR: 'pyspdxtools' not found (pip install spdx-tools)." >&2; \
+	    echo "       It validates the SPDX output and converts it to" >&2; \
+	    echo "       tag-value. Set SBOM_VALIDATE=no to skip both." >&2; \
 	    exit 1; \
 	fi
 	@echo "wolfHSM version: $(VERSION)"
@@ -124,6 +136,29 @@ sbom:
 	if ! command -v python3 >/dev/null 2>&1; then \
 	    echo "ERROR: python3 not found." >&2; exit 1; \
 	fi && \
+	if [ -z "$${SOURCE_DATE_EPOCH:-}" ] && \
+	    command -v git >/dev/null 2>&1 && \
+	    git rev-parse --git-dir >/dev/null 2>&1; then \
+	    sde=$$(git log -1 --format=%ct 2>/dev/null); \
+	    if [ -n "$$sde" ]; then \
+	        SOURCE_DATE_EPOCH="$$sde"; export SOURCE_DATE_EPOCH; \
+	    fi; \
+	fi && \
+	dep_args=""; \
+	if [ "$(SBOM_DEP_WOLFSSL)" != "no" ]; then \
+	    if python3 $(WOLFSSL_DIR)/scripts/gen-sbom --help 2>/dev/null \
+	        | grep -q -- '--dep-wolfssl'; then \
+	        dep_args="--dep-wolfssl yes"; \
+	        wv=$$(sed -n 's/.*LIBWOLFSSL_VERSION_STRING[[:space:]]*"\([^"]*\)".*/\1/p' \
+	            "$(WOLFSSL_DIR)/wolfssl/version.h" 2>/dev/null); \
+	        if [ -n "$$wv" ]; then \
+	            dep_args="$$dep_args --dep-version wolfssl=$$wv"; \
+	        fi; \
+	    else \
+	        echo "NOTE: this gen-sbom lacks --dep-wolfssl; wolfssl will not"; \
+	        echo "      be listed as a dependency component in the SBOM."; \
+	    fi; \
+	fi && \
 	python3 $(WOLFSSL_DIR)/scripts/gen-sbom \
 	    --name wolfhsm \
 	    --version $(VERSION) \
@@ -131,6 +166,29 @@ sbom:
 	    --license-file LICENSING \
 	    --options-h "$$_defines" \
 	    --srcs $(SRCS) \
+	    $$dep_args \
 	    --cdx-out $(SBOM_CDX) \
-	    --spdx-out $(SBOM_SPDX)
-	@echo "Done: $(SBOM_CDX)  $(SBOM_SPDX)"
+	    --spdx-out $(SBOM_SPDX) && \
+	if [ "$(SBOM_VALIDATE)" != "no" ]; then \
+	    pyspdxtools --infile $(SBOM_SPDX) --outfile $(SBOM_SPDX_TV) && \
+	    echo "Done: $(SBOM_CDX)  $(SBOM_SPDX)  $(SBOM_SPDX_TV)"; \
+	else \
+	    echo "Done: $(SBOM_CDX)  $(SBOM_SPDX)"; \
+	fi
+
+# SBOM install is opt-in (`make install-sbom`), matching the family
+# convention in wolfssl's scripts/sbom.am: plain `make` never installs
+# SBOM files.  wolfHSM's root Makefile has no install/uninstall targets
+# to hook, so uninstall-sbom is standalone rather than chained.
+install-sbom: sbom
+	@mkdir -p $(DESTDIR)$(SBOM_INSTALL_DIR)
+	install -m 0644 $(SBOM_CDX) $(DESTDIR)$(SBOM_INSTALL_DIR)/
+	install -m 0644 $(SBOM_SPDX) $(DESTDIR)$(SBOM_INSTALL_DIR)/
+	@if [ -f "$(SBOM_SPDX_TV)" ]; then \
+	    install -m 0644 $(SBOM_SPDX_TV) $(DESTDIR)$(SBOM_INSTALL_DIR)/; \
+	fi
+
+uninstall-sbom:
+	-rm -f $(DESTDIR)$(SBOM_INSTALL_DIR)/$(SBOM_CDX) \
+	    $(DESTDIR)$(SBOM_INSTALL_DIR)/$(SBOM_SPDX) \
+	    $(DESTDIR)$(SBOM_INSTALL_DIR)/$(SBOM_SPDX_TV)

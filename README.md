@@ -38,7 +38,17 @@ make sbom WOLFSSL_DIR=../wolfssl
 ```
 
 This parses the version from `ChangeLog.md`, collects `src/*.c`, and writes
-`wolfhsm-<version>.cdx.json` and `wolfhsm-<version>.spdx.json`.
+`wolfhsm-<version>.cdx.json` and `wolfhsm-<version>.spdx.json`, then
+validates the SPDX output with `pyspdxtools` and converts it to tag-value
+`wolfhsm-<version>.spdx` (skip both with `SBOM_VALIDATE=no`). The SBOM
+lists wolfSSL as a dependency component with its version read from
+`WOLFSSL_DIR` (disable with `SBOM_DEP_WOLFSSL=no` for a
+`WOLFHSM_CFG_NO_CRYPTO` build). Output is reproducible: `SOURCE_DATE_EPOCH`
+is honoured and defaults to the last git commit time.
+
+Install the generated files under `$(PREFIX)/share/doc/wolfhsm` (default
+`PREFIX=/usr/local`) with `make install-sbom`; remove them with
+`make uninstall-sbom`. Plain `make` never generates or installs SBOM files.
 
 The SBOM records the build configuration by preprocessing
 `wolfhsm/wh_settings.h` against a config directory. `WOLFHSM_CFG_DIR`
@@ -59,7 +69,8 @@ the planned gen-sbom fix is.
 which ships in wolfSSL PR #10343 (pending a future wolfSSL release). If the
 script is absent the target fails with a message telling you what is missing.
 
-Requires `python3` and `pyspdxtools` (`pip install spdx-tools`).
+Requires `python3`, plus `pyspdxtools` (`pip install spdx-tools`) unless
+`SBOM_VALIDATE=no`.
 
 To invoke `gen-sbom` directly instead of through the target, run the same
 command it runs:
