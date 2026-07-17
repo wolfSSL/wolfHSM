@@ -31,6 +31,10 @@
 #define TEST_NVM_ID_NONDESTROYABLE 0x0003
 #define TEST_NVM_ID_NONMOD_DMA 0x0004
 #define TEST_NVM_ID_NONDESTROYABLE_DMA 0x0005
+#define TEST_NVM_ID_BATCH_A 0x0006
+#define TEST_NVM_ID_BATCH_B 0x0007
+#define TEST_NVM_ID_BATCH_ABSENT 0x0008
+#define TEST_NVM_ID_BATCH_PLAIN 0x0009
 #define TEST_KEY_ID_NONMOD 0x0001
 #define TEST_KEY_ID_MODIFIABLE 0x0002
 #define TEST_KEY_ID_PROMOTE 0x0003
@@ -197,6 +201,54 @@ static int _testNonExportableNvmAccess(whClientContext* client)
     return 0;
 }
 
+/* A destroy batch naming an absent id must still destroy the present ones.
+ * Leaves no artifacts, so this runs regardless of the persistent-artifact
+ * gate below. */
+static int _testNvmDestroyBatchMissingIdTolerated(whClientContext* client)
+{
+    int32_t     server_rc;
+    whNvmId     out_id;
+    whNvmAccess out_access;
+    whNvmFlags  out_flags;
+    whNvmSize   out_len;
+    uint8_t     data[]   = {0x13, 0x24, 0x35, 0x46};
+    uint8_t     label[]  = "BATCH";
+    uint8_t     labelLen = (uint8_t)strlen((const char*)label);
+    whNvmId     list[3]  = {TEST_NVM_ID_BATCH_A, TEST_NVM_ID_BATCH_ABSENT,
+                            TEST_NVM_ID_BATCH_B};
+
+    WH_TEST_PRINT("Testing NVM destroy batch containing an absent id...\n");
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        client, TEST_NVM_ID_BATCH_A, WH_NVM_ACCESS_ANY, 0, labelLen, label,
+        sizeof(data), data, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        client, TEST_NVM_ID_BATCH_B, WH_NVM_ACCESS_ANY, 0, labelLen, label,
+        sizeof(data), data, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* The absent id must not abort the batch */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmDestroyObjects(client, 3, list, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Both present objects must actually be gone */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(
+        client, TEST_NVM_ID_BATCH_A, &server_rc, &out_id, &out_access,
+        &out_flags, &out_len, 0, NULL));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(
+        client, TEST_NVM_ID_BATCH_B, &server_rc, &out_id, &out_access,
+        &out_flags, &out_len, 0, NULL));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND);
+
+    WH_TEST_PRINT("  NVM destroy batch with absent id tolerated: PASS\n");
+    return WH_ERROR_OK;
+}
+
 #if defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
 static int _testNvmNonmodifiableNoOverwrite(whClientContext* client)
 {
@@ -263,6 +315,9 @@ static int _testNvmNondestroyableModifyNoDestroy(whClientContext* client)
     uint8_t   readData[sizeof(data2)] = {0};
     whNvmSize readLen                 = sizeof(readData);
     whNvmId   list[1]                 = {TEST_NVM_ID_NONDESTROYABLE};
+    whNvmId   batchList[2]            = {TEST_NVM_ID_BATCH_PLAIN,
+                                         TEST_NVM_ID_NONDESTROYABLE};
+    whNvmId   plainList[1]            = {TEST_NVM_ID_BATCH_PLAIN};
     uint8_t   label[]                 = "NDY";
     uint8_t   labelLen                = (uint8_t)strlen((const char*)label);
 
@@ -299,6 +354,30 @@ static int _testNvmNondestroyableModifyNoDestroy(whClientContext* client)
                                              &readLen, readData));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(memcmp(readData, data2, sizeof(data2)) == 0);
+
+    /* A policy violation anywhere in the batch must abort the whole batch,
+     * leaving the permitted object in the same batch untouched. */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        client, TEST_NVM_ID_BATCH_PLAIN, WH_NVM_ACCESS_ANY, 0, labelLen, label,
+        sizeof(data1), data1, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmDestroyObjects(client, 2, batchList, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+
+    memset(readData, 0, sizeof(readData));
+    readLen = sizeof(readData);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmRead(client, TEST_NVM_ID_BATCH_PLAIN, 0,
+                                             sizeof(data1), &server_rc,
+                                             &readLen, readData));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(memcmp(readData, data1, sizeof(data1)) == 0);
+
+    /* The permitted object destroys fine on its own */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmDestroyObjects(client, 1, plainList, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
 
     WH_TEST_PRINT(
         "  NVM NONDESTROYABLE modify allowed, destroy denied: PASS\n");
@@ -680,6 +759,11 @@ int whTest_NvmFlags(whClientContext* client)
     if (ret != WH_ERROR_OK)
         return ret;
 
+    WH_TEST_PRINT("\n=== NVM Object Tests (destroy batch tolerance) ===\n");
+
+    ret = _testNvmDestroyBatchMissingIdTolerated(client);
+    if (ret != WH_ERROR_OK)
+        return ret;
 
 #if defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
     WH_TEST_PRINT("--- NVM Object Tests (NONMODIFIABLE/NODESTROYABLE) ---\n");

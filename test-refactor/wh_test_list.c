@@ -53,6 +53,7 @@ WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
 WH_TEST_DECL(whTest_HwKeystoreServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
+WH_TEST_DECL(whTest_NvmPolicyChecked);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_Counter);
 WH_TEST_DECL(whTest_Crypto_Aes);
@@ -116,6 +117,7 @@ const whTestCase whTestsServer[] = {
     { "whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly },
     { "whTest_ServerImgMgr", whTest_ServerImgMgr },
     { "whTest_NvmOptional", whTest_NvmOptional },
+    { "whTest_NvmPolicyChecked", whTest_NvmPolicyChecked },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
     { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
     { "whTest_HwKeystoreServer", whTest_HwKeystoreServer },
