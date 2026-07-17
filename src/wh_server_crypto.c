@@ -243,11 +243,6 @@ static void _CryptoEvictKeyLocked(whServerContext* ctx, whKeyId keyId)
         (void)wh_Server_KeystoreEvictKey(ctx, keyId);
         (void)WH_SERVER_NVM_UNLOCK(ctx);
     } /* WH_SERVER_NVM_LOCK() */
-    else {
-        /* Requested eviction skipped: key material stays cached */
-        WH_DEBUG_SERVER("EvictKeyLocked: lock failed keyId:%u, ret:%d\n", keyId,
-                        ret);
-    }
 }
 
 /** Public server crypto functions */
