@@ -129,7 +129,7 @@ static int _SheKeystoreChecks(whServerContext* server)
         sheKey[i] = (uint8_t)(0xF0 ^ i);
     }
 
-    sheId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_TEST_DEFAULT_CLIENT_ID, 0x05);
+    sheId = WH_SHE_MAKE_KEYID(WH_TEST_DEFAULT_CLIENT_ID, 0x05);
     memset(meta, 0, sizeof(meta));
     meta->id     = sheId;
     meta->len    = (whNvmSize)WH_SHE_KEY_SZ;
@@ -151,9 +151,8 @@ static int _SheKeystoreChecks(whServerContext* server)
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_OK ==
         wh_Server_KeystoreReadKey(server,
-                                  WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                WH_TEST_DEFAULT_CLIENT_ID,
-                                                WH_SHE_MASTER_ECU_KEY_ID),
+                                  WH_SHE_MAKE_KEYID(WH_TEST_DEFAULT_CLIENT_ID,
+                                                    WH_SHE_MASTER_ECU_KEY_ID),
                                   outMeta, outKey, &outSz));
     WH_TEST_ASSERT_RETURN(outSz == (uint32_t)WH_SHE_KEY_SZ);
     allZero = 1;

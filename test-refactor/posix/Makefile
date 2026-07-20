@@ -115,6 +115,13 @@ ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Share all SHE key slots across clients (global SHE device view). Implies
+# SHE=1. WOLFHSM_CFG_GLOBAL_KEYS comes from the test config.
+ifeq ($(SHE_GLOBAL),1)
+    DEF += -DWOLFHSM_CFG_SHE_EXTENSION
+    DEF += -DWOLFHSM_CFG_SHE_GLOBAL_KEYS
+endif
+
 # Support an authentication-capable build
 ifeq ($(AUTH),1)
     DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION

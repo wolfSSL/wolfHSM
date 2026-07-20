@@ -321,9 +321,9 @@ static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t sheFlags,
     uint8_t label[WH_NVM_LABEL_LEN] = {0};
 
     wh_She_Meta2Label(0, sheFlags, label);
-    return _NvmAddObject(
-        t, WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id, keyId), 0,
-        0, sizeof(label), label, keySz, key);
+    return _NvmAddObject(t,
+                         WH_SHE_MAKE_KEYID(t->client->comm->client_id, keyId),
+                         0, 0, sizeof(label), label, keySz, key);
 }
 
 static int _KeyWrapExport(TestCtx* t, whKeyId keyId, uint16_t keyType,
@@ -699,11 +699,10 @@ static int _SheKeywrapInterop(TestCtx* t)
     /* Prime an unused SHE slot via unwrap-and-cache, then use it. */
     memset(sheKey, 0x5a, sizeof(sheKey));
     blobSz = sizeof(blob);
-    ret = whTest_BuildSheKeyBlob(whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
-                                 WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                               t->client->comm->client_id,
-                                               SHE_PRIME_SLOT),
-                                 1, 0, sheKey, blob, &blobSz);
+    ret    = whTest_BuildSheKeyBlob(
+        whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+        WH_SHE_MAKE_KEYID(t->client->comm->client_id, SHE_PRIME_SLOT), 1, 0,
+        sheKey, blob, &blobSz);
     if (ret != 0) {
         WH_ERROR_PRINT("SHE interop: build prime blob failed %d\n", ret);
         return ret;
@@ -713,6 +712,20 @@ static int _SheKeywrapInterop(TestCtx* t)
         WH_ERROR_PRINT("SHE unwrap-and-cache failed %d\n", ret);
         return ret;
     }
+    /* Returned id is the slot number, with the global flag set when SHE
+     * slots are global */
+    if ((outId & WH_KEYID_MASK) != SHE_PRIME_SLOT) {
+        WH_ERROR_PRINT("SHE unwrap-and-cache returned wrong slot 0x%x\n",
+                       (unsigned)outId);
+        return WH_ERROR_ABORTED;
+    }
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    if ((outId & WH_KEYID_CLIENT_GLOBAL_FLAG) == 0) {
+        WH_ERROR_PRINT("SHE unwrap-and-cache missing global flag 0x%x\n",
+                       (unsigned)outId);
+        return WH_ERROR_ABORTED;
+    }
+#endif
     memset(ecbIn, 0x11, sizeof(ecbIn));
     ret = _SheEncEcb(t, SHE_PRIME_SLOT, ecbIn, ecbOut, sizeof(ecbIn));
     if (ret == 0) {
@@ -728,9 +741,8 @@ static int _SheKeywrapInterop(TestCtx* t)
      * equal-counter prime is accepted. */
     wh_She_Meta2Label(5, 0, ctrLabel);
     ret = _NvmAddObject(
-        t,
-        WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id, SHE_CTR_SLOT),
-        0, 0, sizeof(ctrLabel), ctrLabel, sizeof(sheKey), sheKey);
+        t, WH_SHE_MAKE_KEYID(t->client->comm->client_id, SHE_CTR_SLOT), 0, 0,
+        sizeof(ctrLabel), ctrLabel, sizeof(sheKey), sheKey);
     if (ret != 0) {
         WH_ERROR_PRINT("SHE interop: seed counter slot failed %d\n", ret);
         return ret;
@@ -739,8 +751,8 @@ static int _SheKeywrapInterop(TestCtx* t)
     blobSz = sizeof(blob);
     ret    = whTest_BuildSheKeyBlob(
         whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
-        WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id, SHE_CTR_SLOT),
-        3, 0, sheKey, blob, &blobSz);
+        WH_SHE_MAKE_KEYID(t->client->comm->client_id, SHE_CTR_SLOT), 3, 0,
+        sheKey, blob, &blobSz);
     if (ret != 0) {
         return ret;
     }
@@ -754,8 +766,8 @@ static int _SheKeywrapInterop(TestCtx* t)
     blobSz = sizeof(blob);
     ret    = whTest_BuildSheKeyBlob(
         whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
-        WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id, SHE_CTR_SLOT),
-        5, 0, sheKey, blob, &blobSz);
+        WH_SHE_MAKE_KEYID(t->client->comm->client_id, SHE_CTR_SLOT), 5, 0,
+        sheKey, blob, &blobSz);
     if (ret != 0) {
         return ret;
     }
@@ -764,6 +776,25 @@ static int _SheKeywrapInterop(TestCtx* t)
         WH_ERROR_PRINT("SHE counter equal expected OK, got %d\n", ret);
         return (ret != 0) ? ret : WH_ERROR_ABORTED;
     }
+
+#ifndef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    /* A blob carrying a global-namespace SHE id (minted by a global-SHE
+     * build) must be refused, since no SHE command on this build reads the
+     * global id and caching it would pin the slot with an unreachable key. */
+    blobSz = sizeof(blob);
+    ret    = whTest_BuildSheKeyBlob(
+        whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+        WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_KEYUSER_GLOBAL, SHE_PRIME_SLOT), 1, 0,
+        sheKey, blob, &blobSz);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = _KeyUnwrapAndCache(t, kekId, blob, blobSz, &outId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("SHE global-id blob expected ACCESS, got %d\n", ret);
+        return WH_ERROR_ABORTED;
+    }
+#endif /* !WOLFHSM_CFG_SHE_GLOBAL_KEYS */
 
     /* LoadKey update of a slot that is primed in cache and committed in NVM:
      * M4/M5 and later crypto must use the new key, not the stale cached
@@ -817,6 +848,48 @@ static int _SheKeywrapInterop(TestCtx* t)
             return WH_ERROR_ABORTED;
         }
     }
+
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    /* A blob minted by a per-client build carries USER=client_id; unwrap
+     * must move it to the global namespace where SHE commands look. */
+    {
+        const whNvmId SHE_LEGACY_SLOT = 8;
+
+        memset(sheKey, 0x5a, sizeof(sheKey));
+        blobSz = sizeof(blob);
+        ret    = whTest_BuildSheKeyBlob(
+            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+            WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id,
+                             SHE_LEGACY_SLOT),
+            1, 0, sheKey, blob, &blobSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("SHE interop: build legacy blob failed %d\n", ret);
+            return ret;
+        }
+        ret = _KeyUnwrapAndCache(t, kekId, blob, blobSz, &outId);
+        if (ret != 0) {
+            WH_ERROR_PRINT("SHE legacy-blob unwrap failed %d\n", ret);
+            return ret;
+        }
+        if ((outId & WH_KEYID_CLIENT_GLOBAL_FLAG) == 0 ||
+            (outId & WH_KEYID_MASK) != SHE_LEGACY_SLOT) {
+            WH_ERROR_PRINT("SHE legacy blob not normalized to global "
+                           "(outId 0x%x)\n",
+                           (unsigned)outId);
+            return WH_ERROR_ABORTED;
+        }
+        memset(ecbIn, 0x33, sizeof(ecbIn));
+        ret = _SheEncEcb(t, SHE_LEGACY_SLOT, ecbIn, ecbOut, sizeof(ecbIn));
+        if (ret == 0) {
+            ret =
+                _SheDecEcb(t, SHE_LEGACY_SLOT, ecbOut, ecbBack, sizeof(ecbOut));
+        }
+        if (ret != 0 || memcmp(ecbIn, ecbBack, sizeof(ecbIn)) != 0) {
+            WH_ERROR_PRINT("SHE legacy-slot ECB round trip failed %d\n", ret);
+            return (ret != 0) ? ret : WH_ERROR_ABORTED;
+        }
+    }
+#endif /* WOLFHSM_CFG_SHE_GLOBAL_KEYS */
 
     /* The client must not be able to evict the server-owned KEK. The
      * fixture's NVM is torn down with the test, so no further cleanup. */

@@ -2,7 +2,12 @@
 # key <clientId> <keyId> <access> <flags> <label> <file>
 key 0xC 0xFE 0xFF 0x00 "Label for key 1" test/data/key1.bin # hex values
 key 12 255 255 0 "Label for key 2" test/data/key2.bin # decimal values
+key 0 0x20 0xFF 0x00 "Global key" test/data/key1.bin # clientId 0 = global namespace
 # NVM object format is:
-# obj <metaDataId> <access> <flags> <label> <file> 
+# obj <metaDataId> <access> <flags> <label> <file>
 obj 14 0xFF 0x00 "Label for object 1" test/data/obj1.bin # arbitrary object
 obj 15 0xFF 0x00 "Label for object 2" test/data/obj2.bin # another arbitrary object
+# SHE key format is:
+# she <clientId> <sheSlot> <counter> <flags> <file>
+she 0xC 4 0 0x00 test/data/she1.bin # client 12 user slot 4
+she 0 1 5 0x01 test/data/she2.bin # global MASTER_ECU_KEY, counter 5, write-protect

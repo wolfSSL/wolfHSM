@@ -52,6 +52,17 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfhsm/wh_she_common.h"
+#include "wolfhsm/wh_she_crypto.h"
+#include "wolfhsm/wh_client_she.h"
+#include "wolfhsm/wh_message_she.h"
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
 #include "wh_test_common.h"
 #include "wh_test_keywrap_util.h"
 #include "wh_test_list.h"
@@ -1339,6 +1350,483 @@ static int _runGlobalKeysTests(whClientContext* client1,
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
 /* ============================================================================
+ * GLOBAL SHE KEYS TEST SUITE
+ *
+ * With WOLFHSM_CFG_SHE_GLOBAL_KEYS all SHE slots live in the global-keys
+ * namespace, so the two servers (sharing one NVM and its global cache) act as
+ * one SHE device seen by both clients. Uses the split request/response APIs
+ * since there is no server thread to pump requests.
+ * ========================================================================== */
+
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+
+/* SHE slots used by this suite */
+#define SHE_MC_USER_SLOT 4
+#define SHE_MC_LOAD_SLOT 5
+#define SHE_MC_PRIME_SLOT 8
+#define SHE_MC_CTR_SLOT 9
+
+/* Provision a SHE slot in the shared NVM, the way ShePreProgramKey does but
+ * with the split API. Counter and SHE flags go in the object label. */
+static int _sheGlobalAddNvmKey(whClientContext* client, whServerContext* server,
+                               uint8_t sheSlot, uint32_t counter,
+                               uint32_t sheFlags, const uint8_t* key)
+{
+    int     ret;
+    int32_t rc                      = 0;
+    uint8_t label[WH_NVM_LABEL_LEN] = {0};
+
+    wh_She_Meta2Label(counter, sheFlags, label);
+    ret = wh_Client_NvmAddObjectRequest(
+        client, WH_SHE_MAKE_KEYID(client->comm->client_id, sheSlot), 0, 0,
+        sizeof(label), label, WH_SHE_KEY_SZ, key);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_NvmAddObjectResponse(client, &rc);
+    }
+    if (ret == 0) {
+        ret = (int)rc;
+    }
+    return ret;
+}
+
+/* One ECB encrypt through the given client/server pair */
+static int _sheGlobalEncEcb(whClientContext* client, whServerContext* server,
+                            uint8_t sheSlot, uint8_t* in, uint8_t* out)
+{
+    int ret = wh_Client_SheEncEcbRequest(client, sheSlot, in, WH_SHE_KEY_SZ);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SheEncEcbResponse(client, out, WH_SHE_KEY_SZ);
+    }
+    return ret;
+}
+
+/* Software AES-ECB of one block, the expected value for the server results */
+static int _sheGlobalSwEcb(const uint8_t* key, const uint8_t* in, uint8_t* out)
+{
+    Aes aes[1];
+    int ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_AesSetKey(aes, key, WH_SHE_KEY_SZ, NULL, AES_ENCRYPTION);
+        if (ret == 0) {
+            ret = wc_AesEncryptDirect(aes, out, in);
+        }
+        wc_AesFree(aes);
+    }
+    return ret;
+}
+
+static int _sheGlobalSetUid(whClientContext* client, whServerContext* server,
+                            uint8_t* uid, uint32_t uidSz)
+{
+    int ret = wh_Client_SheSetUidRequest(client, uid, uidSz);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SheSetUidResponse(client);
+    }
+    return ret;
+}
+
+static int _sheGlobalLoadPlainKey(whClientContext* client,
+                                  whServerContext* server, uint8_t* key)
+{
+    int ret = wh_Client_SheLoadPlainKeyRequest(client, key, WH_SHE_KEY_SZ);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SheLoadPlainKeyResponse(client);
+    }
+    return ret;
+}
+
+/* boot MAC digest = CMAC_bootMacKey(zeros || size || bootloader) */
+static int _sheGlobalComputeBootMac(const uint8_t* bootloader,
+                                    uint32_t       bootloaderSz,
+                                    const uint8_t* bootMacKey,
+                                    uint8_t*       digestOut)
+{
+    int     ret;
+    Cmac    cmac[1];
+    uint8_t zeros[WH_SHE_BOOT_MAC_PREFIX_LEN] = {0};
+    word32  digestSz                          = AES_BLOCK_SIZE;
+
+    if ((ret = wc_InitCmac(cmac, bootMacKey, WH_SHE_KEY_SZ, WC_CMAC_AES,
+                           NULL)) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, zeros, sizeof(zeros))) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, (const uint8_t*)&bootloaderSz,
+                             sizeof(bootloaderSz))) != 0) {
+        return ret;
+    }
+    if ((ret = wc_CmacUpdate(cmac, bootloader, bootloaderSz)) != 0) {
+        return ret;
+    }
+    return wc_CmacFinal(cmac, digestOut, &digestSz);
+}
+
+/* The secure-boot protocol (INIT / UPDATE / FINISH) only has a blocking
+ * client API, so drive the messages directly and pump the server between
+ * each step. The bootloader used here fits one UPDATE chunk. */
+static int _sheGlobalSecureBoot(whClientContext* client,
+                                whServerContext* server, uint8_t* bootloader,
+                                uint32_t bootloaderLen)
+{
+    int      ret;
+    uint16_t group;
+    uint16_t action;
+    uint16_t dataSz;
+    uint8_t* respBuf;
+
+    whMessageShe_SecureBootInitRequest*    initReq;
+    whMessageShe_SecureBootUpdateRequest*  updateReq;
+    whMessageShe_SecureBootInitResponse*   initResp;
+    whMessageShe_SecureBootUpdateResponse* updateResp;
+    whMessageShe_SecureBootFinishResponse* finishResp;
+
+    if (bootloaderLen >
+        (uint32_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                   sizeof(whMessageShe_SecureBootUpdateRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    respBuf = (uint8_t*)wh_CommClient_GetDataPtr(client->comm);
+
+    /* INIT: announce the bootloader size */
+    initReq = (whMessageShe_SecureBootInitRequest*)wh_CommClient_GetDataPtr(
+        client->comm);
+    initReq->sz = bootloaderLen;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_INIT, sizeof(*initReq),
+        (uint8_t*)initReq));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    initResp = (whMessageShe_SecureBootInitResponse*)respBuf;
+    if (initResp->rc != WH_SHE_ERC_NO_ERROR) {
+        return initResp->rc;
+    }
+
+    /* UPDATE: feed the bootloader (single chunk) */
+    updateReq = (whMessageShe_SecureBootUpdateRequest*)wh_CommClient_GetDataPtr(
+        client->comm);
+    updateReq->sz = bootloaderLen;
+    memcpy((uint8_t*)(updateReq + 1), bootloader, bootloaderLen);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_UPDATE,
+        (uint16_t)(sizeof(*updateReq) + bootloaderLen), (uint8_t*)updateReq));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    updateResp = (whMessageShe_SecureBootUpdateResponse*)respBuf;
+    if (updateResp->rc != WH_SHE_ERC_NO_ERROR) {
+        return updateResp->rc;
+    }
+
+    /* FINISH: verify the boot MAC */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_FINISH, 0, NULL));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    finishResp = (whMessageShe_SecureBootFinishResponse*)respBuf;
+    return finishResp->rc;
+}
+
+static int _sheGlobalGetStatus(whClientContext* client, whServerContext* server,
+                               uint8_t* sreg)
+{
+    int ret = wh_Client_SheGetStatusRequest(client);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SheGetStatusResponse(client, sreg);
+    }
+    return ret;
+}
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+static int _sheGlobalUnwrapAndCache(whClientContext* client,
+                                    whServerContext* server, uint8_t* blob,
+                                    uint16_t blobSz, uint16_t* outId)
+{
+    /* The KEK is a global CRYPTO key, so unlike SHE slot ids the client must
+     * name it with the global flag */
+    int ret = wh_Client_KeyUnwrapAndCacheRequest(
+        client, WC_CIPHER_AES_GCM,
+        WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID), blob, blobSz);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
+    }
+    if (ret == 0) {
+        ret = wh_Client_KeyUnwrapAndCacheResponse(client, WC_CIPHER_AES_GCM,
+                                                  outId);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM */
+
+static int _runSheGlobalTests(whClientContext* client1,
+                              whServerContext* server1,
+                              whClientContext* client2,
+                              whServerContext* server2)
+{
+    int     ret;
+    int     i;
+    uint8_t sheUid[WH_SHE_UID_SZ];
+    uint8_t secretKey[WH_SHE_KEY_SZ];
+    uint8_t masterKey[WH_SHE_KEY_SZ];
+    uint8_t bootMacKey[WH_SHE_KEY_SZ];
+    uint8_t bootDigest[WH_SHE_KEY_SZ];
+    uint8_t bootloader[64];
+    uint8_t userKey[WH_SHE_KEY_SZ];
+    uint8_t loadKey[WH_SHE_KEY_SZ];
+    uint8_t ramKey[WH_SHE_KEY_SZ];
+    uint8_t ptIn[WH_SHE_KEY_SZ];
+    uint8_t ct1[WH_SHE_KEY_SZ];
+    uint8_t ct2[WH_SHE_KEY_SZ];
+    uint8_t ctSw[WH_SHE_KEY_SZ];
+    uint8_t sreg;
+    uint8_t m1[WH_SHE_M1_SZ];
+    uint8_t m2[WH_SHE_M2_SZ];
+    uint8_t m3[WH_SHE_M3_SZ];
+    uint8_t m4[WH_SHE_M4_SZ];
+    uint8_t m5[WH_SHE_M5_SZ];
+    uint8_t m4Out[WH_SHE_M4_SZ];
+    uint8_t m5Out[WH_SHE_M5_SZ];
+
+    WH_TEST_PRINT("Testing Global SHE Keys...\n");
+
+    for (i = 0; i < (int)sizeof(sheUid); i++) {
+        sheUid[i] = (uint8_t)i;
+    }
+    memset(secretKey, 0xA1, sizeof(secretKey));
+    memset(masterKey, 0xA2, sizeof(masterKey));
+    memset(bootMacKey, 0xA8, sizeof(bootMacKey));
+    memset(bootloader, 0xB7, sizeof(bootloader));
+    memset(userKey, 0xA3, sizeof(userKey));
+    memset(loadKey, 0xA4, sizeof(loadKey));
+    memset(ramKey, 0xA5, sizeof(ramKey));
+    memset(ptIn, 0x11, sizeof(ptIn));
+
+    /* Client 1 provisions the shared SHE slots, including the boot MAC key
+     * and the expected bootloader digest; same UID on both servers */
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalComputeBootMac(
+        bootloader, sizeof(bootloader), bootMacKey, bootDigest));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        client1, server1, WH_SHE_SECRET_KEY_ID, 0, 0, secretKey));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        client1, server1, WH_SHE_MASTER_ECU_KEY_ID, 0, 0, masterKey));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        client1, server1, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, bootMacKey));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        client1, server1, WH_SHE_BOOT_MAC, 0, 0, bootDigest));
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalAddNvmKey(client1, server1, SHE_MC_USER_SLOT, 0, 0, userKey));
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalSetUid(client1, server1, sheUid, sizeof(sheUid)));
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalSetUid(client2, server2, sheUid, sizeof(sheUid)));
+
+    /* Both servers secure boot against the keys client 1 provisioned. The
+     * boot state machine is per server, so each must boot on its own. */
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalSecureBoot(client1, server1, bootloader, sizeof(bootloader)));
+    sreg = 0;
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalGetStatus(client1, server1, &sreg));
+    WH_TEST_ASSERT_RETURN((sreg & WH_SHE_SREG_BOOT_OK) != 0);
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalSecureBoot(client2, server2, bootloader, sizeof(bootloader)));
+    sreg = 0;
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalGetStatus(client2, server2, &sreg));
+    WH_TEST_ASSERT_RETURN((sreg & WH_SHE_SREG_BOOT_OK) != 0);
+    WH_TEST_PRINT("  PASS: Both servers secure boot on shared boot keys\n");
+
+    /* Both clients encrypt with the slot client 1 provisioned */
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalEncEcb(client1, server1, SHE_MC_USER_SLOT, ptIn, ct1));
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalEncEcb(client2, server2, SHE_MC_USER_SLOT, ptIn, ct2));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalSwEcb(userKey, ptIn, ctSw));
+    WH_TEST_ASSERT_RETURN(memcmp(ct1, ct2, sizeof(ct1)) == 0);
+    WH_TEST_ASSERT_RETURN(memcmp(ct1, ctSw, sizeof(ct1)) == 0);
+    WH_TEST_PRINT("  PASS: Both clients share a provisioned SHE slot\n");
+
+    /* Client 1 installs a key with the LoadKey protocol; client 2 uses it */
+    WH_TEST_RETURN_ON_FAIL(wh_She_GenerateLoadableKey(
+        SHE_MC_LOAD_SLOT, WH_SHE_MASTER_ECU_KEY_ID, 1, 0, sheUid, loadKey,
+        masterKey, m1, m2, m3, m4, m5));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SheLoadKeyRequest(client1, m1, m2, m3));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SheLoadKeyResponse(client1, m4Out, m5Out));
+    WH_TEST_ASSERT_RETURN(memcmp(m4Out, m4, sizeof(m4)) == 0);
+    WH_TEST_ASSERT_RETURN(memcmp(m5Out, m5, sizeof(m5)) == 0);
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalEncEcb(client2, server2, SHE_MC_LOAD_SLOT, ptIn, ct2));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalSwEcb(loadKey, ptIn, ctSw));
+    WH_TEST_ASSERT_RETURN(memcmp(ct2, ctSw, sizeof(ct2)) == 0);
+    WH_TEST_PRINT("  PASS: LoadKey by client 1 visible to client 2\n");
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+    {
+        uint8_t  blob[128];
+        uint16_t blobSz;
+        uint16_t outId;
+        uint16_t expSz = (uint16_t)(WH_KEYWRAP_AES_GCM_HEADER_SIZE +
+                                    sizeof(whNvmMetadata) + WH_SHE_KEY_SZ);
+        uint8_t  primeKey[WH_SHE_KEY_SZ];
+        uint8_t  ctrKey[WH_SHE_KEY_SZ];
+
+        memset(primeKey, 0xA6, sizeof(primeKey));
+        memset(ctrKey, 0xA7, sizeof(ctrKey));
+
+        /* Wrap-export a SHE slot naming it by raw slot number, no global
+         * flag, under the shared trusted KEK */
+        blobSz = sizeof(blob);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExportRequest(
+            client1, WC_CIPHER_AES_GCM, SHE_MC_USER_SLOT, WH_KEYTYPE_SHE,
+            WH_CLIENT_KEYID_MAKE_GLOBAL(WH_TEST_MC_WRAP_KEK_ID)));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExportResponse(
+            client1, WC_CIPHER_AES_GCM, blob, &blobSz));
+        WH_TEST_ASSERT_RETURN(blobSz == expSz);
+        WH_TEST_PRINT("  PASS: Wrap-export of a SHE slot by raw slot id\n");
+
+        /* Client 1 builds a blob for an unused slot, client 2 primes it,
+         * client 1 uses it through the shared global cache */
+        blobSz = sizeof(blob);
+        WH_TEST_RETURN_ON_FAIL(whTest_BuildSheKeyBlob(
+            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+            WH_SHE_MAKE_KEYID(client1->comm->client_id, SHE_MC_PRIME_SLOT), 1,
+            0, primeKey, blob, &blobSz));
+        WH_TEST_RETURN_ON_FAIL(
+            _sheGlobalUnwrapAndCache(client2, server2, blob, blobSz, &outId));
+        WH_TEST_ASSERT_RETURN((outId & WH_KEYID_MASK) == SHE_MC_PRIME_SLOT);
+        WH_TEST_ASSERT_RETURN((outId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0);
+        WH_TEST_RETURN_ON_FAIL(
+            _sheGlobalEncEcb(client1, server1, SHE_MC_PRIME_SLOT, ptIn, ct1));
+        WH_TEST_RETURN_ON_FAIL(_sheGlobalSwEcb(primeKey, ptIn, ctSw));
+        WH_TEST_ASSERT_RETURN(memcmp(ct1, ctSw, sizeof(ct1)) == 0);
+        WH_TEST_PRINT("  PASS: Cross-client unwrap-and-cache prime\n");
+
+        /* Counter guard runs against the globally committed slot */
+        WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+            client1, server1, SHE_MC_CTR_SLOT, 5, 0, ctrKey));
+        blobSz = sizeof(blob);
+        WH_TEST_RETURN_ON_FAIL(whTest_BuildSheKeyBlob(
+            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+            WH_SHE_MAKE_KEYID(client2->comm->client_id, SHE_MC_CTR_SLOT), 3, 0,
+            ctrKey, blob, &blobSz));
+        ret = _sheGlobalUnwrapAndCache(client2, server2, blob, blobSz, &outId);
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("SHE global counter rollback expected ACCESS, got "
+                           "%d\n",
+                           ret);
+            return (ret == 0) ? WH_ERROR_ABORTED : ret;
+        }
+        blobSz = sizeof(blob);
+        WH_TEST_RETURN_ON_FAIL(whTest_BuildSheKeyBlob(
+            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+            WH_SHE_MAKE_KEYID(client2->comm->client_id, SHE_MC_CTR_SLOT), 5, 0,
+            ctrKey, blob, &blobSz));
+        WH_TEST_RETURN_ON_FAIL(
+            _sheGlobalUnwrapAndCache(client2, server2, blob, blobSz, &outId));
+        WH_TEST_PRINT("  PASS: Counter guard on a globally committed slot\n");
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM */
+
+    /* The RAM key is one shared volatile slot, but the plain-loaded state
+     * that allows exporting it is per server */
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalLoadPlainKey(client1, server1, ramKey));
+    WH_TEST_RETURN_ON_FAIL(
+        _sheGlobalEncEcb(client2, server2, WH_SHE_RAM_KEY_ID, ptIn, ct2));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalSwEcb(ramKey, ptIn, ctSw));
+    WH_TEST_ASSERT_RETURN(memcmp(ct2, ctSw, sizeof(ct2)) == 0);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SheExportRamKeyRequest(client2));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
+    ret = wh_Client_SheExportRamKeyResponse(client2, m1, m2, m3, m4, m5);
+    if (ret != WH_SHE_ERC_KEY_INVALID) {
+        WH_ERROR_PRINT("SHE global RAM key export without plain load expected "
+                       "KEY_INVALID, got %d\n",
+                       ret);
+        return (ret == 0) ? WH_ERROR_ABORTED : ret;
+    }
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalLoadPlainKey(client2, server2, ramKey));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SheExportRamKeyRequest(client2));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server2));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_SheExportRamKeyResponse(client2, m1, m2, m3, m4, m5));
+    WH_TEST_PRINT("  PASS: Shared RAM key, per-server export state\n");
+
+    /* Cleanup: evict the cached SHE entries (shared global cache, so one
+     * server suffices) and destroy the NVM objects so later suites and the
+     * next fixture run start clean. Clients cannot evict SHE-typed cache
+     * entries, so use the server API directly. */
+    {
+        static const uint8_t evictSlots[] = {
+            WH_SHE_MASTER_ECU_KEY_ID, WH_SHE_BOOT_MAC_KEY_ID, WH_SHE_BOOT_MAC,
+            SHE_MC_USER_SLOT,         SHE_MC_LOAD_SLOT,       SHE_MC_PRIME_SLOT,
+            SHE_MC_CTR_SLOT,          WH_SHE_RAM_KEY_ID,
+        };
+        /* All SHE ids are global here, so the client id argument is moot */
+        whNvmId destroyList[] = {
+            WH_SHE_MAKE_KEYID(0, WH_SHE_SECRET_KEY_ID),
+            WH_SHE_MAKE_KEYID(0, WH_SHE_MASTER_ECU_KEY_ID),
+            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC_KEY_ID),
+            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC),
+            WH_SHE_MAKE_KEYID(0, SHE_MC_USER_SLOT),
+            WH_SHE_MAKE_KEYID(0, SHE_MC_LOAD_SLOT),
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
+            /* Only created by the keywrap sub-tests above */
+            WH_SHE_MAKE_KEYID(0, SHE_MC_CTR_SLOT),
+#endif
+        };
+        int32_t rc = 0;
+
+        for (i = 0; i < (int)sizeof(evictSlots); i++) {
+            ret = wh_Server_KeystoreEvictKey(
+                server1,
+                WH_SHE_MAKE_KEYID(client1->comm->client_id, evictSlots[i]));
+            if (ret != 0 && ret != WH_ERROR_NOTFOUND) {
+                return ret;
+            }
+        }
+        WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsRequest(
+            client1, (whNvmId)(sizeof(destroyList) / sizeof(destroyList[0])),
+            destroyList));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_NvmDestroyObjectsResponse(client1, &rc));
+        WH_TEST_ASSERT_RETURN(rc == 0);
+    }
+
+    WH_TEST_PRINT("All Global SHE Keys Tests PASSED ===\n");
+    return 0;
+}
+
+#endif /* WOLFHSM_CFG_SHE_GLOBAL_KEYS && !WOLFHSM_CFG_NO_CRYPTO */
+
+/* ============================================================================
  * MULTI-CLIENT SEQUENTIAL TEST FRAMEWORK
  * ========================================================================== */
 
@@ -1428,6 +1916,11 @@ static int _whTest_MultiClient(void)
     /* Crypto contexts for both servers */
     whServerCryptoContext crypto1[1] = {0};
     whServerCryptoContext crypto2[1] = {0};
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+    /* SHE contexts for both servers */
+    whServerSheContext she1[1];
+    whServerSheContext she2[1];
+#endif
 #endif
 
     /* Server 1 configuration */
@@ -1444,6 +1937,9 @@ static int _whTest_MultiClient(void)
                       .nvm         = nvm, /* Shared NVM */
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
         .crypto = crypto1,
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+        .she = she1,
+#endif
 #endif
     }};
     whServerContext server1[1] = {0};
@@ -1463,6 +1959,9 @@ static int _whTest_MultiClient(void)
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
         .crypto = crypto2,
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+        .she = she2,
+#endif
 #endif
     }};
     whServerContext server2[1] = {0};
@@ -1470,6 +1969,11 @@ static int _whTest_MultiClient(void)
     /* Expose server contexts to connect callbacks */
     testServer1 = server1;
     testServer2 = server2;
+
+#if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_SHE_EXTENSION)
+    memset(she1, 0, sizeof(she1));
+    memset(she2, 0, sizeof(she2));
+#endif
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Initialize wolfCrypt */
@@ -1560,6 +2064,11 @@ static int _whTest_MultiClient(void)
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
         _runGlobalKeysTests(client1, server1, client2, server2));
+#endif
+
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+    WH_TEST_RETURN_ON_FAIL(
+        _runSheGlobalTests(client1, server1, client2, server2));
 #endif
 
     /* Future test suites here */

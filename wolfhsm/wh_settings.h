@@ -40,6 +40,12 @@
  *  keys to be shared across multiple clients
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_SHE_GLOBAL_KEYS - If defined, all AutoSAR SHE key slots live in
+ *  the global-keys namespace instead of being scoped per client, so every
+ *  client shares a single SHE device view. Requires WOLFHSM_CFG_GLOBAL_KEYS
+ *  and WOLFHSM_CFG_SHE_EXTENSION.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_CRYPTO_AFFINITY - If defined, enable per-client crypto affinity,
  *  allowing a client to request that crypto operations run on the server's
  *  hardware device (WH_CRYPTO_AFFINITY_HW) or in software
@@ -525,6 +531,16 @@
     !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE)
 #error \
     "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL requires WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE"
+#endif
+
+/* Enforce both dependencies so downstream code can gate on
+ * WOLFHSM_CFG_SHE_GLOBAL_KEYS alone. */
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_SHE_EXTENSION)
+#error "WOLFHSM_CFG_SHE_GLOBAL_KEYS requires WOLFHSM_CFG_SHE_EXTENSION"
+#endif
+
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_GLOBAL_KEYS)
+#error "WOLFHSM_CFG_SHE_GLOBAL_KEYS requires WOLFHSM_CFG_GLOBAL_KEYS"
 #endif
 
 /** Cache flushing and memory fencing synchronization primitives */
