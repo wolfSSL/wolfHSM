@@ -8695,11 +8695,34 @@ static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
     return ret;
 }
 
+/* Snapshot of the streaming state the offload path mutates: the Keccak
+ * state and the locally buffered partial block. */
+typedef struct {
+    uint64_t s[25];
+    uint8_t  t[WC_SHA3_224_BLOCK_SIZE]; /* largest block size: 144 */
+    uint32_t i;
+} _Sha3SavedState;
+
+static void _Sha3SaveState(const wc_Sha3* sha, _Sha3SavedState* saved)
+{
+    saved->i = sha->i;
+    memcpy(saved->s, sha->s, sizeof(saved->s));
+    memcpy(saved->t, sha->t, sizeof(saved->t));
+}
+
+static void _Sha3RestoreState(wc_Sha3* sha, const _Sha3SavedState* saved)
+{
+    sha->i = (uint8_t)saved->i;
+    memcpy(sha->s, saved->s, sizeof(saved->s));
+    memcpy(sha->t, saved->t, sizeof(saved->t));
+}
+
 static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
                         const whSha3Variant* v, const uint8_t* in,
                         uint32_t inLen, uint8_t* out)
 {
-    int ret = WH_ERROR_OK;
+    int             ret = WH_ERROR_OK;
+    _Sha3SavedState saved;
 
     /* _Sha3UpdatePerCallCapacity (below) reads sha->i, so validate sha here
      * rather than relying on the lower-level helper's NULL check. */
@@ -8712,6 +8735,11 @@ static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
     if (in == NULL && inLen != 0) {
         return WH_ERROR_BADARGS;
     }
+
+    /* A server without SHA3 answers NOT_COMPILED_IN, which wolfCrypt maps to
+     * CRYPTOCB_UNAVAILABLE and re-hashes the same input in software. Snapshot
+     * so that fallback cannot absorb any of it twice. */
+    _Sha3SaveState(sha, &saved);
 
     if (in != NULL && inLen > 0) {
         uint32_t consumed = 0;
@@ -8745,6 +8773,12 @@ static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
             } while (ret == WH_ERROR_NOTREADY);
         }
     }
+
+    /* Leave sha as the caller passed it so a fallback starts clean. */
+    if (ret != WH_ERROR_OK) {
+        _Sha3RestoreState(sha, &saved);
+    }
+
     return ret;
 }
 
@@ -9135,13 +9169,18 @@ static int _Sha3DmaOneshot(whClientContext* ctx, wc_Sha3* sha,
                            const whSha3Variant* v, const uint8_t* in,
                            uint32_t inLen, uint8_t* out)
 {
-    int ret = WH_ERROR_OK;
+    int             ret = WH_ERROR_OK;
+    _Sha3SavedState saved;
 
     /* Mirror _Sha3DmaUpdateRequest's invariant: skipping the update branch on
-     * (in == NULL && inLen != 0) would silently digest the current state. */
-    if (in == NULL && inLen != 0) {
+     * (in == NULL && inLen != 0) would silently digest the current state.
+     * sha is validated here since _Sha3SaveState dereferences it below. */
+    if (sha == NULL || (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Same fallback hazard as _Sha3Oneshot: snapshot before mutating. */
+    _Sha3SaveState(sha, &saved);
 
     if (in != NULL && inLen > 0) {
         bool sent = false;
@@ -9160,6 +9199,12 @@ static int _Sha3DmaOneshot(whClientContext* ctx, wc_Sha3* sha,
             } while (ret == WH_ERROR_NOTREADY);
         }
     }
+
+    /* Leave sha as the caller passed it so a fallback starts clean. */
+    if (ret != WH_ERROR_OK) {
+        _Sha3RestoreState(sha, &saved);
+    }
+
     return ret;
 }
 
