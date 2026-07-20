@@ -621,14 +621,16 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
     }
 
     /* (b) A client that provisions an NVM object carrying
-     * WH_NVM_FLAGS_TRUSTED at a crypto-key id (keys and NVM objects share
-     * the id space) must not obtain a trusted KEK either: the checked NVM
-     * add path strips the flag. */
+     * WH_NVM_FLAGS_TRUSTED at a crypto-key id must not obtain a trusted KEK
+     * either: the checked NVM add path strips the flag, and per-client NVM
+     * id translation keeps the object out of the crypto-key id space
+     * entirely. */
     {
         whKeyId nvmForgeId = WH_TEST_KEKID + 2;
         whNvmId nvmObjId   = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
                                            client->comm->client_id, nvmForgeId);
         int32_t nvmRc      = 0;
+        int     expectedRc;
 
         ret = wh_Client_NvmAddObject(
             client, nvmObjId, WH_NVM_ACCESS_ANY,
@@ -648,10 +650,21 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
             int32_t destroyRc = 0;
             (void)wh_Client_NvmDestroyObjects(client, 1, &nvmObjId, &destroyRc);
         }
-        if (ret != WH_ERROR_ACCESS) {
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+        /* Legacy flat id space: the forged object lands at the crypto-key
+         * id; the checked NVM add stripped the TRUSTED flag, so KEK use is
+         * refused. */
+        expectedRc = WH_ERROR_ACCESS;
+#else
+        /* Per-client NVM id translation stores the forged object as a plain
+         * NVM object in the caller's namespace, so no KEK exists at the
+         * crypto-key id at all. */
+        expectedRc = WH_ERROR_NOTFOUND;
+#endif
+        if (ret != expectedRc) {
             WH_ERROR_PRINT("trusted-kek: wrap-export with NVM-forged KEK "
-                           "expected ACCESS, got %d\n",
-                           ret);
+                           "expected %d, got %d\n",
+                           expectedRc, ret);
             (void)wh_Client_KeyEvict(client, srcKeyId);
             return WH_TEST_FAIL;
         }

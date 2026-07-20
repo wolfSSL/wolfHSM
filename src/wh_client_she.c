@@ -49,7 +49,8 @@
 
 #ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
-    whNvmFlags flags, uint8_t* key, whNvmSize keySz)
+                               uint32_t count, whNvmFlags flags, uint8_t* key,
+                               whNvmSize keySz)
 {
     int                                ret;
     uint16_t                           group;
@@ -72,6 +73,7 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     key_data = reqBuf + sizeof(*req);
 
     req->keyId = keyId;
+    req->count = count;
     req->flags = flags;
     req->keySz = keySz;
     memcpy(key_data, key, keySz);
