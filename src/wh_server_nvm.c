@@ -59,6 +59,15 @@ static whNvmId _NvmTranslateFromClient(whServerContext* server,
     (void)server;
     return clientId;
 #else
+    /* Clear the WRAPPED and HW client flags before translating. They are not
+     * valid for NVM objects and would otherwise override the WH_KEYTYPE_NVM
+     * type below, letting a client reach a wrapped-key or hardware object
+     * through the NVM API. Stripping them here keeps every request path
+     * TYPE=NVM. AddObject still rejects them outright (see
+     * _NvmValidateClientId) for a clear error; the GLOBAL namespace selector
+     * is preserved. */
+    clientId &=
+        (whNvmId) ~(WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG);
     return wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, server->comm->client_id,
                                         clientId);
 #endif

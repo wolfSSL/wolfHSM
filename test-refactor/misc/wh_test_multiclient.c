@@ -1401,6 +1401,21 @@ static int _nvmListViaServer(whClientContext* client, whServerContext* server,
     return WH_ERROR_OK;
 }
 
+static int _nvmGetMetadataViaServer(whClientContext* client,
+                                    whServerContext* server, whNvmId id,
+                                    int32_t* out_rc)
+{
+    whNvmId     got_id = 0;
+    whNvmAccess access = 0;
+    whNvmFlags  flags  = 0;
+    whNvmSize   len    = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataRequest(client, id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataResponse(
+        client, out_rc, &got_id, &access, &flags, &len, 0, NULL));
+    return WH_ERROR_OK;
+}
+
 /*
  * Client A adds NVM id 5 with secret payload. Client B reading id 5 must NOT
  * see A's bytes (either NOTFOUND, or B's own value if B has one).
@@ -1628,6 +1643,88 @@ static int _testNvmAddObjectRejections(whClientContext* client1,
     return WH_ERROR_OK;
 }
 
+/*
+ * The WRAPPED and HW client flags must not let the NVM API reach a
+ * differently-typed object. Plant a WRAPPED-typed and an HW-typed object in
+ * client1's own namespace at numeric id 9, then confirm the client NVM
+ * read/getmetadata/destroy verbs cannot touch them via those flags.
+ */
+static int _testNvmWrappedHwFlagIsolation(whClientContext* client1,
+                                          whServerContext* server1,
+                                          whClientContext* client2,
+                                          whServerContext* server2)
+{
+    const whNvmId   planted_id     = 9;
+    const uint8_t   secret[]       = "planted-non-nvm-secret";
+    const whNvmSize secretSz       = (whNvmSize)sizeof(secret);
+    const whKeyId   clientFlags[2] = {WH_KEYID_CLIENT_WRAPPED_FLAG,
+                                      WH_KEYID_CLIENT_HW_FLAG};
+    int32_t         out_rc         = 0;
+    whNvmSize       out_len        = 0;
+    uint8_t         buf[64]        = {0};
+    whNvmMetadata   meta           = {0};
+    whKeyId         wrappedId;
+    whKeyId         hwId;
+    int             i;
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT("Testing NVM WRAPPED/HW flag type isolation...\n");
+
+    wrappedId =
+        WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, server1->comm->client_id, planted_id);
+    hwId = WH_MAKE_KEYID(WH_KEYTYPE_HW, server1->comm->client_id, planted_id);
+
+    /* Plant the two forbidden objects directly in the shared store. */
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = secretSz;
+    meta.id     = wrappedId;
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
+    meta.id = hwId;
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
+
+    for (i = 0; i < 2; i++) {
+        whNvmId flagged = (whNvmId)(planted_id | clientFlags[i]);
+
+        /* Read: must not return the planted bytes. With the flag stripped this
+         * resolves to a nonexistent NVM object 9 and fails. */
+        memset(buf, 0, sizeof(buf));
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+            client1, server1, flagged, secretSz, &out_rc, &out_len, buf));
+        WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(memcmp(buf, secret, secretSz) != 0);
+
+        /* GetMetadata: must not surface the planted object. */
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmGetMetadataViaServer(client1, server1, flagged, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+        /* Destroy: must not reach the planted object. */
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmDestroyViaServer(client1, server1, flagged, &out_rc));
+    }
+
+    /* Both planted objects must still exist after the flagged destroys. */
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, wrappedId, &meta) ==
+                          WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, hwId, &meta) ==
+                          WH_ERROR_OK);
+
+    /* Clean up the planted objects. */
+    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &wrappedId);
+    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &hwId);
+
+    WH_TEST_PRINT("  NVM WRAPPED/HW flag isolation: PASS\n");
+    return WH_ERROR_OK;
+}
+
 static int _runNvmIdTranslationTests(whClientContext* client1,
                                      whServerContext* server1,
                                      whClientContext* client2,
@@ -1640,6 +1737,8 @@ static int _runNvmIdTranslationTests(whClientContext* client1,
         _testNvmGlobalNamespaceList(client1, server1, client2, server2));
     WH_TEST_RETURN_ON_FAIL(
         _testNvmAddObjectRejections(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmWrappedHwFlagIsolation(client1, server1, client2, server2));
     WH_TEST_PRINT("All NVM Id Translation Tests PASSED ===\n");
     return WH_ERROR_OK;
 }
