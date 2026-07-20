@@ -438,6 +438,7 @@ int wh_MessageShe_TranslatePreProgramKeyRequest(
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, count);
     WH_T32(magic, dest, src, flags);
     WH_T32(magic, dest, src, keySz);
     return 0;

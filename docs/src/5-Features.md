@@ -696,7 +696,7 @@ The SHE client API is declared in `wolfhsm/wh_client_she.h` and maps one-to-one 
 In addition to the spec commands, wolfHSM exposes non-standard helpers that fill gaps left by the spec's assumption of dedicated hardware:
 
 - `wh_Client_SheSetUid`: explicitly programs the 15-byte ECU UID that the key update protocol binds against. The AUTOSAR spec assumes this value is hardware-fused; wolfHSM needs a software path to install it, and rejects most SHE operations until it has been set.
-- `wh_Client_ShePreProgramKey`: writes a key directly into a SHE NVM slot over a dedicated SHE message, bypassing the encrypted M1–M5 protocol. This exists to support initial provisioning on a blank device — once a `MASTER_ECU_KEY` exists, all subsequent updates can go through the spec-compliant protocol.
+- `wh_Client_ShePreProgramKey`: writes a key, its protection flags, and its initial key counter directly into a SHE NVM slot over a dedicated SHE message, bypassing the encrypted M1–M5 protocol. This exists to support initial provisioning on a blank device — once a `MASTER_ECU_KEY` exists, all subsequent updates can go through the spec-compliant protocol.
 - `wh_Client_SheDestroyKey`: removes a SHE key slot from the calling client's NVM namespace, a capability the spec omits because it treats key slots as fixed hardware.
 
 Because `wh_Client_ShePreProgramKey` and `wh_Client_SheDestroyKey` bypass the SHE key-update and authorization protocols, both are compiled only when `WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT` is defined (see [Configuration](9-Configuration.md#cryptography-features)) and are intended for provisioning and test builds, not production firmware.

@@ -1679,7 +1679,7 @@ static int _PreProgramKey(whServerContext* server, uint16_t magic,
         meta.access = 0;
         meta.flags  = 0;
         meta.len    = (whNvmSize)req.keySz;
-        wh_She_Meta2Label(0, req.flags, meta.label);
+        wh_She_Meta2Label(req.count, req.flags, meta.label);
 
         ret = WH_SERVER_NVM_LOCK(server);
         if (ret == WH_ERROR_OK) {

@@ -210,12 +210,12 @@ int whTest_She(whClientContext* client)
         goto exit;
     }
     /* store the boot MAC key and digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
                                           bootMacDigest,
                                           sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
@@ -248,12 +248,12 @@ int whTest_She(whClientContext* client)
     /* === Loadable keys and test vectors === */
 
     /* load the secret key and prng seed using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
                                           secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, 0,
                                           prngSeed, sizeof(prngSeed))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
@@ -364,9 +364,9 @@ int whTest_She(whClientContext* client)
          * to the M2 layout overlap between flags and count). Then
          * re-load the slot with an all-zero UID; the server must
          * accept it because the stored flags contain WILDCARD. */
-        if ((ret = wh_Client_ShePreProgramKey(client, SHE_WILDCARD_KEY_ID,
-                WH_SHE_FLAG_WILDCARD, vectorRawKey, sizeof(vectorRawKey)))
-                != 0) {
+        if ((ret = wh_Client_ShePreProgramKey(
+                 client, SHE_WILDCARD_KEY_ID, 0, WH_SHE_FLAG_WILDCARD,
+                 vectorRawKey, sizeof(vectorRawKey))) != 0) {
             WH_ERROR_PRINT("Failed to preload wildcard key %d\n", ret);
             goto exit;
         }
@@ -480,10 +480,9 @@ int whTest_She(whClientContext* client)
      * overwritten via SHE LoadKey; the server must return
      * WH_SHE_ERC_WRITE_PROTECTED. Reuses the secret key (auth) and the
      * secure boot established above; uses a clean slot of its own. */
-    if ((ret = wh_Client_ShePreProgramKey(client, SHE_WP_KEY_ID,
-                                          WH_SHE_FLAG_WRITE_PROTECT,
-                                          vectorRawKey,
-                                          sizeof(vectorRawKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(
+             client, SHE_WP_KEY_ID, 0, WH_SHE_FLAG_WRITE_PROTECT, vectorRawKey,
+             sizeof(vectorRawKey))) != 0) {
         WH_ERROR_PRINT("Failed to pre-program write-protected key %d\n", ret);
         goto exit;
     }

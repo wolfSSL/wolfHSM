@@ -238,12 +238,15 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* store cmac key */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                          key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store cmac digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, bootMacDigest, sizeof(bootMacDigest))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
+                                          bootMacDigest,
+                                          sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -272,12 +275,14 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     WH_TEST_PRINT("SHE secure boot SUCCESS\n");
     /* load the secret key using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                          secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* load the prng seed using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, 0,
+                                          prngSeed, sizeof(prngSeed))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -375,9 +380,9 @@ int whTest_SheClientConfig(whClientConfig* config)
          * to the M2 layout overlap between flags and count). Then
          * re-load the slot with an all-zero UID; the server must
          * accept it because the stored flags contain WILDCARD. */
-        if ((ret = wh_Client_ShePreProgramKey(client,
-                SHE_WILDCARD_KEY_ID, WH_SHE_FLAG_WILDCARD, vectorRawKey,
-                sizeof(vectorRawKey))) != 0) {
+        if ((ret = wh_Client_ShePreProgramKey(
+                 client, SHE_WILDCARD_KEY_ID, 0, WH_SHE_FLAG_WILDCARD,
+                 vectorRawKey, sizeof(vectorRawKey))) != 0) {
             WH_ERROR_PRINT("Failed to preload wildcard key %d\n", ret);
             goto exit;
         }
@@ -491,9 +496,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         uint8_t       ecbIn[WH_SHE_KEY_SZ];
         uint8_t       ecbOut[WH_SHE_KEY_SZ];
         uint8_t       ecbBack[WH_SHE_KEY_SZ];
-        uint16_t      outId    = 0;
-        int32_t       serverRc = 0;
-        uint8_t       ctrLabel[WH_NVM_LABEL_LEN];
+        uint16_t      outId = 0;
 
         /* Wrap-export the cached RAM key (slot 14) by id; the blob must keep
          * TYPE=SHE and be the expected size. */
@@ -629,16 +632,8 @@ int whTest_SheClientConfig(whClientConfig* config)
         /* Counter guard on the SHE unwrap-and-cache path: seed an NVM SHE
          * slot with counter=5, then check a lower-counter prime is rejected
          * and an equal-counter prime is accepted. */
-        wh_She_Meta2Label(5, 0, ctrLabel);
-        ret = wh_Client_NvmAddObject(client,
-                                     WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                   client->comm->client_id,
-                                                   SHE_CTR_SLOT),
-                                     0, 0, sizeof(ctrLabel), ctrLabel,
-                                     sizeof(sheKey), sheKey, &serverRc);
-        if (ret == 0) {
-            ret = serverRc;
-        }
+        ret = wh_Client_ShePreProgramKey(client, SHE_CTR_SLOT, 5, 0, sheKey,
+                                         sizeof(sheKey));
         if (ret != 0) {
             WH_ERROR_PRINT("SHE interop: seed counter slot failed %d\n", ret);
             goto exit;
@@ -900,12 +895,12 @@ static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
         goto exit_boundary;
     }
 
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit_boundary;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
                                           bootMacDigest,
                                           sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
@@ -1059,16 +1054,16 @@ static int whTest_SheWriteProtect(whClientConfig* config)
     }
 
     /* pre-program boot MAC key and digest for secure boot */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_BOOT_MAC_KEY_ID, 0,
-             bootMacKey, sizeof(bootMacKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                          bootMacKey, sizeof(bootMacKey))) !=
+        0) {
         WH_ERROR_PRINT(
             "Failed to pre-program boot MAC key %d\n", ret);
         goto exit_wp;
     }
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_BOOT_MAC, 0,
-             bootMacDigest, sizeof(bootMacDigest))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
+                                          bootMacDigest,
+                                          sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program boot MAC digest %d\n",
             ret);
@@ -1092,19 +1087,17 @@ static int whTest_SheWriteProtect(whClientConfig* config)
     }
 
     /* pre-program the secret key as auth key */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_SECRET_KEY_ID, 0,
-             secretKey, sizeof(secretKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                          secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program secret key %d\n", ret);
         goto exit_wp;
     }
 
     /* pre-program the target key WITH write protect flag */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WP_TEST_KEY_ID,
-             WH_SHE_FLAG_WRITE_PROTECT,
-             rawKey, sizeof(rawKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WP_TEST_KEY_ID, 0,
+                                          WH_SHE_FLAG_WRITE_PROTECT, rawKey,
+                                          sizeof(rawKey))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program write-protected key %d\n",
             ret);
@@ -2209,12 +2202,12 @@ static int _SheInteropSecureBoot(whClientContext* client)
         return ret;
     }
 
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           bootMacKey, sizeof(bootMacKey))) !=
         0) {
         return ret;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, digest,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0, digest,
                                           sizeof(digest))) != 0) {
         return ret;
     }
@@ -2278,8 +2271,8 @@ static int _SheInteropProvision(whClientConfig* config)
 
     /* Provision the secret key, then load the master ECU key (auth=secret) and
      * the target key (auth=master ECU) using offline-generated M1/M2/M3. */
-    ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey,
-                                     sizeof(secretKey));
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                     secretKey, sizeof(secretKey));
     if (ret != 0) {
         goto exit;
     }

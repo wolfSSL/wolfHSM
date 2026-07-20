@@ -399,9 +399,9 @@ int wh_MessageShe_TranslateVerifyMacResponse(
  * test/provisioning use only. */
 typedef struct {
     uint32_t keyId;
+    uint32_t count;
     uint32_t flags;
     uint32_t keySz;
-    uint8_t  WH_PAD[4];
     /* Data follows:
      * uint8_t key[keySz]
      */
