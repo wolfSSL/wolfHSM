@@ -13,6 +13,7 @@ SHARED_CONFIG_DIR   ?= $(PROJECT_DIR)/../
 WOLFSSL_DIR			?= ../../../../wolfssl
 WOLFHSM_DIR			?= ../../../
 WOLFHSM_PORT_DIR	?= $(WOLFHSM_DIR)/port/posix
+WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
 
 # Output directory for build files
 BUILD_DIR			?= $(PROJECT_DIR)/Build
@@ -23,7 +24,8 @@ INC =   -I$(PROJECT_DIR) \
 		-I$(SHARED_CONFIG_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
-		-I$(WOLFHSM_PORT_DIR)
+		-I$(WOLFHSM_PORT_DIR) \
+		-I$(WOLFHSM_DEMO_CLIENT_DIR)
 
 # POSIX requires C source be defined before any header
 DEF += -D_POSIX_C_SOURCE=200809L
@@ -111,6 +113,12 @@ endif
 
 ifeq ($(DMA),1)
 CFLAGS += -DWOLFHSM_CFG_DMA
+endif
+
+# Provision the keywrap demo's trusted KEK in NVM. Off by default so the
+# client-only test suite sees an empty NVM; enable to run the keywrap demo.
+ifeq ($(DEMO_KEK),1)
+CFLAGS += -DWH_POSIX_PROVISION_DEMO_KEK
 endif
 
 ## Source files

@@ -83,7 +83,9 @@ typedef int (*whHwKeystoreCleanupCb)(void* context);
  *
  * The backend is the policy authority for hardware-only keys: it must return
  * an error (e.g. WH_ERROR_ACCESS or WH_ERROR_NOTFOUND) for any keyId it does
- * not serve.
+ * not serve. The core performs no usage-flag (WH_NVM_FLAGS_USAGE_WRAP) check on
+ * hardware keys, so the backend must also refuse any keyId not intended for
+ * keywrap KEK use.
  *
  * Output-buffer contract: on entry *inout_len is the capacity of out in bytes.
  * The backend MUST NOT write more than that many bytes to out and, on success,

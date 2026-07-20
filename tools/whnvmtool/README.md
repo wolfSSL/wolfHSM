@@ -59,6 +59,19 @@ where:
 - `<file>`: Valid file path to a file containing the key's data. Data will be read from this file and stored in the NVM key.
 
 
+### Provisioning a Trusted Key-Encryption Key (KEK)
+
+The keystore `wrap-export` and `unwrap-and-cache` operations require a **trusted KEK** — one the client can neither read nor set. On a system without a hardware keystore, this is a software key carrying the server-only `WH_NVM_FLAGS_TRUSTED` flag (bit 12). The server strips that flag from every client request, so the only way to set it is to write it directly into an NVM image with this tool (or via trusted server-internal boot code).
+
+To provision such a KEK, give a `key` entry the flag value `0x1205`, which is `WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_NONEXPORTABLE | WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_USAGE_WRAP` (`0x1000 | 0x0004 | 0x0001 | 0x0200`). The `WH_NVM_FLAGS_TRUSTED` bit alone already makes the key unreadable, immutable, and KEK-only through the client API; the remaining bits make that intent explicit. Use `clientId` 0 to place the KEK in the global namespace if clients reference it with the global flag, or a specific `clientId` to scope it to one client.
+
+```
+# A trusted software KEK for wrap-export / unwrap-and-cache (global namespace)
+key 0 0x20 0xFFFF 0x1205 "Export KEK" "path/to/kek.bin"
+```
+
+The KEK material file must be exactly the key size used to wrap (e.g. 32 bytes for AES-256) and must be kept secret from clients.
+
 ### General Schema Rules and Restrictions
 
 1. Each entry must be on a separate line.

@@ -364,6 +364,34 @@ int wh_MessageKeystore_TranslateKeyWrapResponse(
     uint16_t magic, const whMessageKeystore_KeyWrapResponse* src,
     whMessageKeystore_KeyWrapResponse* dest);
 
+/* Wrap-and-export (by id) Request: wrap a key the server already holds,
+ * identified by keyId, and return the wrapped blob. No data follows. */
+typedef struct {
+    uint16_t keyId;       /* client-facing id (+GLOBAL/WRAPPED flags) to wrap */
+    uint16_t keyType;     /* WH_KEYTYPE_* of the target key (CRYPTO or SHE) */
+    uint16_t serverKeyId; /* KEK (client-facing id) */
+    uint16_t cipherType;  /* enum wc_CipherType */
+} whMessageKeystore_KeyWrapExportRequest;
+
+/* Wrap-and-export (by id) Response */
+typedef struct {
+    uint32_t rc;
+    uint16_t wrappedKeySz;
+    uint16_t cipherType;
+    /* Data follows:
+     * uint8_t wrappedKey[wrappedKeySz]
+     */
+} whMessageKeystore_KeyWrapExportResponse;
+
+/* Wrap-and-export translation functions */
+int wh_MessageKeystore_TranslateKeyWrapExportRequest(
+    uint16_t magic, const whMessageKeystore_KeyWrapExportRequest* src,
+    whMessageKeystore_KeyWrapExportRequest* dest);
+
+int wh_MessageKeystore_TranslateKeyWrapExportResponse(
+    uint16_t magic, const whMessageKeystore_KeyWrapExportResponse* src,
+    whMessageKeystore_KeyWrapExportResponse* dest);
+
 /* Unwrap Key export Request */
 typedef struct {
     uint16_t wrappedKeySz;

@@ -197,6 +197,44 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
         }
     }
 
+    /* Test that a client must not be able to set the server-only trusted-KEK
+     * flag on its own stateful key */
+    if (ret == 0) {
+        LmsKey  kekKey[1];
+        int     kekInited = 0;
+        whKeyId kekId     = WH_KEYID_ERASED;
+
+        ret = wc_LmsKey_Init(kekKey, NULL, devId);
+        if (ret == 0) {
+            kekInited = 1;
+            ret       = wc_LmsKey_SetParameters(kekKey, WH_TEST_LMS_LEVELS,
+                                                WH_TEST_LMS_HEIGHT,
+                                                WH_TEST_LMS_WINTERNITZ);
+        }
+        if (ret == 0) {
+            ret = wh_Client_LmsMakeKeyDma(
+                ctx, kekKey, &kekId,
+                WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS trusted-flag keygen failed: ret=%d\n", ret);
+            }
+        }
+        /* A surviving WH_NVM_FLAGS_TRUSTED would make this evict
+         * WH_ERROR_ACCESS. */
+        if ((ret == 0) && !WH_KEYID_ISERASED(kekId)) {
+            ret = wh_Client_KeyEvict(ctx, kekId);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS server-only trusted flag not stripped "
+                               "(evict ret=%d)\n",
+                               ret);
+            }
+            (void)wh_Client_KeyErase(ctx, kekId);
+        }
+        if (kekInited) {
+            wc_LmsKey_Free(kekKey);
+        }
+    }
+
     /* Sign via cryptocb. */
     if (ret == 0) {
         sigLen = sigCap;

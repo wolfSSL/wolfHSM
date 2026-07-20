@@ -19,13 +19,8 @@
 /*
  * test-refactor/client-server/wh_test_crypto_keywrap.c
  *
- * Single-client key wrap tests over AES-GCM:
- *   _whTest_CryptoKeyWrapSameOwner    - wrap a local key, then unwrap and
- *                                       export it as the owner and confirm the
- *                                       recovered key matches the original
- *   _whTest_CryptoKeyWrapNoNvmPersist - an unwrapped key is cache-only, so
- *                                       commit and erase must reject a wrapped
- *                                       key id while eviction still succeeds
+ * Single-client key wrap tests over AES-GCM. Only covers paths that work with a
+ * plain client-cached KEK.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -105,71 +100,12 @@ static int _whTest_CryptoKeyWrapSameOwner(whClientContext* client)
     return WH_ERROR_OK;
 }
 
-/*
- * An unwrapped key is cache-only; the unwrapped key must never reach NVM.
- * This prevents an unwrapped key from shadowing a protected NVM entry, so
- * commit and erase must reject a wrapped key id while eviction succeeds.
- */
-static int _whTest_CryptoKeyWrapNoNvmPersist(whClientContext* client)
-{
-    int      ret;
-    whKeyId  wrapKeyId   = KEYWRAP_TEST_WRAPKEY_ID;
-    whKeyId  cachedKeyId = 0;
-    uint8_t  wrapKey[AES_256_KEY_SIZE]  = "NoNvmWrapKeyTest123456789aXX!";
-    uint8_t  plainKey[AES_256_KEY_SIZE] = "NoNvmPlainKeyTest12345678aXX!";
-    uint8_t  wrappedKey[KEYWRAP_TEST_WRAPPED_KEY_SIZE] = {0};
-    uint16_t wrappedKeySz               = sizeof(wrappedKey);
-    whNvmMetadata meta                  = {0};
-
-    WH_TEST_DEBUG_PRINT("Test: unwrapped key cannot persist to NVM\n");
-
-    /* Cache a local wrapping key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCache(
-        client, WH_NVM_FLAGS_USAGE_WRAP, (uint8_t*)"WrapKeyNoNvm",
-        sizeof("WrapKeyNoNvm"), wrapKey, sizeof(wrapKey), &wrapKeyId));
-
-    /* Wrap a local key */
-    meta.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
-                                                 KEYWRAP_TEST_PLAINKEY_ID);
-    meta.len = sizeof(plainKey);
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM,
-                                             wrapKeyId, plainKey,
-                                             sizeof(plainKey), &meta,
-                                             wrappedKey, &wrappedKeySz));
-
-    /* Unwrap and cache the key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCache(
-        client, WC_CIPHER_AES_GCM, wrapKeyId, wrappedKey, sizeof(wrappedKey),
-        &cachedKeyId));
-
-    /* Commit must refuse to persist a wrapped key to NVM */
-    ret = wh_Client_KeyCommit(client,
-                              WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
-    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
-
-    /* Erase must likewise refuse a wrapped key */
-    ret = wh_Client_KeyErase(client, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId));
-    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_ABORTED);
-
-    /* Cache-only eviction must still succeed */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(
-        client, WH_CLIENT_KEYID_MAKE_WRAPPED(cachedKeyId)));
-
-    /* Evict the wrapping key */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, wrapKeyId));
-
-    WH_TEST_PRINT("  PASS: unwrapped key cannot persist to NVM\n");
-
-    return WH_ERROR_OK;
-}
-
 int whTest_Crypto_KeyWrap(whClientContext* ctx)
 {
     /* A preceding suite may leave the DMA-preferred dispatch mode set; reset
      * to the std path so this suite runs the same way in every config. */
     (void)wh_Client_SetDmaMode(ctx, 0);
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoKeyWrapSameOwner(ctx));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoKeyWrapNoNvmPersist(ctx));
     return WH_ERROR_OK;
 }
 
