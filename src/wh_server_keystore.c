@@ -1962,10 +1962,18 @@ _HandleKeyWrapExportRequest(whServerContext*                        server,
     switch (targetKeyType) {
         case WH_KEYTYPE_CRYPTO:
         case WH_KEYTYPE_WRAPPED:
+            break;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
         case WH_KEYTYPE_SHE:
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+            /* All SHE keys are global in this build. Rewrite the id to its
+             * global form so it names the same key the SHE commands use,
+             * whether or not the client set the global flag. */
+            targetKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_KEYUSER_GLOBAL,
+                                        WH_KEYID_ID(targetKeyId));
 #endif
             break;
+#endif
         default:
             return WH_ERROR_BADARGS;
     }
@@ -2280,6 +2288,26 @@ static int _HandleKeyUnwrapAndCacheRequest(
         goto out;
     }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    /* All SHE keys are global in this build, but a blob made by a per-client
+     * build may hold a per-client id. Cached under that id the key would be
+     * unusable and impossible to evict, so rewrite the id to its global form
+     * before the duplicate and counter checks below. */
+    if (wrappedKeyType == WH_KEYTYPE_SHE) {
+        metadata.id = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_KEYUSER_GLOBAL,
+                                    WH_KEYID_ID(metadata.id));
+    }
+#elif defined(WOLFHSM_CFG_SHE_EXTENSION) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    /* SHE keys are per-client in this build, so a blob holding a global SHE
+     * id (made by a global-SHE build) would be cached where nothing can use
+     * or evict it. Reject it instead. */
+    if (wrappedKeyType == WH_KEYTYPE_SHE &&
+        wrappedKeyUser == WH_KEYUSER_GLOBAL) {
+        ret = WH_ERROR_ACCESS;
+        goto out;
+    }
+#endif
 
     /* Ensure a key with the unwrapped ID does not already exist in cache */
     if (_ExistsInCache(server, metadata.id)) {

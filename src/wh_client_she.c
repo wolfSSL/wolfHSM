@@ -56,9 +56,9 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
 
     /* Create a key with 0 counter */
     wh_She_Meta2Label(0, flags, label);
-    ret = wh_Client_NvmAddObject(c,
-            WH_MAKE_KEYID(WH_KEYTYPE_SHE, c->comm->client_id, keyId),
-            0, 0, sizeof(label), label, keySz, key, (int32_t*)&outRc);
+    ret = wh_Client_NvmAddObject(
+        c, WH_SHE_MAKE_KEYID(c->comm->client_id, keyId), 0, 0, sizeof(label),
+        label, keySz, key, (int32_t*)&outRc);
     if (ret == 0)
         ret = outRc;
     return ret;

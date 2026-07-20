@@ -42,6 +42,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
 - [AUTOSAR SHE Subsystem](#autosar-she-subsystem)
     - [Client API and Command Set](#client-api-and-command-set)
     - [SHE Key Slots and the wolfHSM Keystore](#she-key-slots-and-the-wolfhsm-keystore)
+    - [Global SHE Keys](#global-she-keys)
     - [Encrypted Key Update Protocol (M1–M5)](#encrypted-key-update-protocol-m1m5)
     - [Secure Boot](#secure-boot)
     - [Deterministic PRNG](#deterministic-prng)
@@ -346,6 +347,8 @@ Clients designate a key as global by setting the `WH_KEYID_CLIENT_GLOBAL_FLAG` b
 Global keys interact with the cache and NVM tiers in the same way as local keys, including the commit/evict/freshen flow, eviction of committed-only slots, and policy enforcement at the NVM layer. The only practical differences are the cache they occupy and the visibility they grant.
 
 > **Security note**: Because a global key is reachable by every client connected to the server, the security boundary it provides is the server itself, not any particular client. Global keys should be reserved for material that is genuinely shared across the trust domains of the connected clients — typically vendor-provisioned roots and shared symmetric keys for inter-client communication — and should not be used as a workaround for per-client key management. Per-key usage flags (see [Key Usage Policies](#key-usage-policies)) apply to global keys exactly as they do to local keys, and should be used to constrain how a shared key may be used regardless of which client invokes the operation.
+
+The [AUTOSAR SHE subsystem](#autosar-she-subsystem) can be layered onto this feature with `WOLFHSM_CFG_SHE_GLOBAL_KEYS`, which places all SHE slots in the global namespace so every client shares one SHE device; see [Global SHE Keys](#global-she-keys).
 
 ### Wrapped Keys
 
@@ -695,6 +698,26 @@ The SHE spec also requires every key to carry a 28-bit monotonic update counter 
 
 `RAM_KEY` is the one exception to NVM-backed storage. The spec defines it as volatile, so the server caches the loaded key in its [key cache](#key-cache-key-ids-and-nvm-backing-store) but never calls into the NVM layer for it; eviction or reset clears it. All other slots, including `PRNG_SEED`, persist.
 
+### Global SHE Keys
+
+By default every SHE keyId carries the connecting client's ID in its USER field, so each client gets its own private set of sixteen SHE slots. That is convenient when clients are mutually distrusting, but it does not match the AUTOSAR model, where SHE is a single physical device with one fixed set of slots shared by every host core. Defining `WOLFHSM_CFG_SHE_GLOBAL_KEYS` (which requires both `WOLFHSM_CFG_GLOBAL_KEYS` and `WOLFHSM_CFG_SHE_EXTENSION`) switches to that model: **all** SHE slots — `SECRET_KEY` through `RAM_KEY` and `PRNG_SEED` — are built in the [global-keys](#global-keys) namespace (USER = `WH_KEYUSER_GLOBAL`, 0) and are shared by every client.
+
+Nothing changes on the wire. Clients still name slots by their raw 0–15 slot number in every SHE command; the server resolves each SHE keyId into the global namespace internally. Two clients that program and use slot 4 now see the same key, and one shared `RAM_KEY` is visible to all. This is a build-time choice rather than a per-request flag because most SHE operations cannot carry one: the `CMD_LOAD_KEY` target and authorization slots are 4-bit fields inside the authenticated M1 message, and secure boot, PRNG, and RAM-key export address fixed slots.
+
+The mode composes with the [wrapped keys](#wrapped-keys) interop:
+
+- **Wrap-export** of a SHE slot needs no special flag — the server routes any `WH_KEYTYPE_SHE` target into the global namespace, so `wh_Client_KeyWrapExport(..., slot, WH_KEYTYPE_SHE, kek, ...)` names the same slot the SHE commands do.
+- **Unwrap-and-cache** normalizes a SHE blob's USER field to the global namespace after the ownership check, so a blob minted by a per-client build primes the slot the SHE commands actually read. The server-assigned id returned to the client carries `WH_KEYID_CLIENT_GLOBAL_FLAG`.
+- The **counter rollback guard** compares a primed blob's counter against the globally committed slot, so a stale blob cannot shadow a newer shared key.
+
+Some deployment limits follow from where the global cache lives:
+
+- **Sessions are per server, keys are shared.** The per-connection SHE runtime state — the secure-boot state machine, the ECU UID, the plaintext `RAM_KEY` load flag, and the PRNG working state — stays in each server's `whServerSheContext`. Each server must therefore still set its UID and run secure boot on its own even though it reads the shared boot keys. Servers that share an NVM must be provisioned with the same UID, or their `CMD_LOAD_KEY` M1 validation will diverge.
+- **NVM-less degrades to per-server.** The global cache is owned by the NVM context (`whNvmContext`), so a server started with `nvm == NULL` has no global cache and its global SHE keys fall back to that server's local cache. This is correct for a single NVM-less server but means multiple NVM-less servers do **not** share SHE state; sharing across servers requires a shared `whNvmContext`.
+- **One shared cache, sized for the slots.** With global SHE keys on, every client's SHE keys plus any global crypto keys share the one global cache; the default `WOLFHSM_CFG_SERVER_KEYCACHE_COUNT` with SHE enabled matches the sixteen SHE slots (see [Configuration](9-Configuration.md#keystore-and-key-cache)). Keys primed via unwrap-and-cache are uncommitted and are not evicted under cache pressure, and a client `KeyEvict` cannot target SHE-typed cache entries, so provisioning flows should keep the number of live uncommitted SHE entries small.
+
+When `WOLFHSM_CFG_SHE_GLOBAL_KEYS` is left undefined, SHE behaves exactly as described in the previous section, with per-client slots and no dependency on the global-keys feature.
+
 ### Encrypted Key Update Protocol (M1–M5)
 
 The most intricate piece of the SHE spec is the encrypted key update protocol that runs underneath `CMD_LOAD_KEY`. wolfHSM implements it as specified: the client constructs three input messages (M1, M2, M3) by encrypting and CMACing the new key and its metadata under keys derived from a chosen authorization key, sends them to the server, and receives two response messages (M4, M5) that prove the server stored the new key correctly.
@@ -744,7 +767,7 @@ The SHE extension is built on top of the same infrastructure as every other wolf
 - **Keystore**: SHE keys live in the same per-client `whKeyId` space as crypto keys, with the TYPE field disambiguating the two. SHE keys do not currently consume the per-key [usage flag policy](#key-usage-policies) machinery — usage constraints are expressed through the SHE-spec flag set in the label instead — but lifecycle flags like `NONMODIFIABLE` apply at the NVM layer just as they do for any other object.
 - **Communication layer**: every SHE command is a packet under the `WH_MESSAGE_GROUP_SHE` group and is dispatched through the [comm layer](#communication-layer-and-transports) like any other request. SHE clients work over every available transport without modification.
 - **Wrapped keys**: SHE keys interoperate with the [wrapped keys](#wrapped-keys) feature by explicit type rather than by flag (the SHE keyId namespace does not interpret the wrapped flag): the client passes `WH_KEYTYPE_SHE` to *wrap-export* to receive a slot's key wrapped under a [trusted KEK](#trusted-keks), and presents the blob to *unwrap-and-cache* to prime a slot directly in the key cache — the provisioning path for servers with [no NVM](#optional-nvm-backing), guarded by the slot's counter rollback check. *Unwrap-and-export* refuses SHE blobs, so a wrapped SHE key can re-enter the keystore but its plaintext is never returned to a client.
-- **Global keys**: not supported for SHE keys — every SHE keyId carries the connection's client ID in the USER field, and the SHE command set has no way to name the [global](#global-keys) (`WH_KEYUSER_GLOBAL`) namespace. Applications that need to share a key across clients must provision it into each client's SHE namespace separately.
+- **Global keys**: off by default — every SHE keyId carries the connection's client ID in the USER field, giving each client its own set of slots. Defining `WOLFHSM_CFG_SHE_GLOBAL_KEYS` instead places all SHE slots in the [global](#global-keys) (`WH_KEYUSER_GLOBAL`) namespace so every client shares one SHE device view; see [Global SHE Keys](#global-she-keys). Without that option, applications that need to share a key across clients must provision it into each client's SHE namespace separately.
 
 A typical automotive deployment uses the SHE extension end-to-end: the bootloader and `BOOT_MAC` are programmed into NVM at production using `wh_Client_ShePreProgramKey`, the device's UID is set on first boot with `wh_Client_SheSetUid`, secure boot is run on every reset via `wh_Client_SheSecureBoot`, in-field key updates flow through the encrypted `CMD_LOAD_KEY` protocol, and CAN message authentication uses `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` against pre-provisioned user-slot keys.
 

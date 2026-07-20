@@ -69,8 +69,8 @@ int whTest_SheMasterEcuKeyFallback(whServerContext* server)
         return WH_ERROR_BADARGS;
     }
 
-    masterEcuKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                   WH_SHE_MASTER_ECU_KEY_ID);
+    masterEcuKeyId =
+        WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_MASTER_ECU_KEY_ID);
 
     /* Fill keyBuf with non-zero to ensure it gets overwritten */
     memset(keyBuf, 0xFF, sizeof(keyBuf));
