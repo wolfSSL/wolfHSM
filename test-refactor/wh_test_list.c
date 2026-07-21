@@ -45,6 +45,7 @@ WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_HwKeystore);
 WH_TEST_DECL(whTest_KeystoreReqSize);
+WH_TEST_DECL(whTest_MessageCryptoTranslate);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_Lock);
 WH_TEST_DECL(whTest_CertVerify);
@@ -102,6 +103,7 @@ const whTestCase whTestsMisc[] = {
     { "whTest_Comm",             whTest_Comm },
     { "whTest_Dma",              whTest_Dma },
     { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
+    { "whTest_MessageCryptoTranslate", whTest_MessageCryptoTranslate },
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
     { "whTest_Lock",             whTest_Lock },
