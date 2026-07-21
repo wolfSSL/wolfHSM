@@ -40,6 +40,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_keystore.h"
+#include "wolfhsm/wh_message_nvm.h" /* For wh_MessageNvm_TranslateMetadata */
 #include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_log.h"
@@ -1805,6 +1806,7 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
 #endif /* !NO_AES */
 
 static int _HandleKeyWrapRequest(whServerContext*                  server,
+                                 uint16_t                          magic,
                                  whMessageKeystore_KeyWrapRequest* req,
                                  uint8_t* reqData, uint32_t reqDataSz,
                                  whMessageKeystore_KeyWrapResponse* resp,
@@ -1824,19 +1826,23 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
         return WH_ERROR_BADARGS;
     }
 
+    /* Set before any failure exit: the client checks cipherType before rc */
+    resp->cipherType = req->cipherType;
+    resp->wrappedKeySz = 0;
+
     /* Check if the reqData is big enough to hold the metadata and key */
     if (reqDataSz < sizeof(metadata) + req->keySz) {
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    /* Extract the metadata and key from reqData */
+    /* Extract the metadata and key. The metadata trailer arrives in the
+     * client's byte order, so translate before any field is used */
     memcpy(&metadata, reqData, sizeof(metadata));
+    ret = wh_MessageNvm_TranslateMetadata(magic, &metadata, &metadata);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
     memcpy(key, reqData + sizeof(metadata), req->keySz);
-
-    /* Ensure the cipher type in the response matches the request */
-    resp->cipherType = req->cipherType;
-    /* Wrapped key size is only passed back to the client on success */
-    resp->wrappedKeySz = 0;
 
     /* Ensure the keyId in the wrapped metadata has the wrapped flag set */
     if (!WH_KEYID_ISWRAPPED(metadata.id)) {
@@ -2012,16 +2018,18 @@ out:
 }
 
 static int _HandleKeyUnwrapAndExportRequest(
-    whServerContext* server, whMessageKeystore_KeyUnwrapAndExportRequest* req,
-    uint8_t* reqData, uint32_t reqDataSz,
-    whMessageKeystore_KeyUnwrapAndExportResponse* resp, uint8_t* respData,
-    uint32_t respDataSz)
+    whServerContext* server, uint16_t magic,
+    whMessageKeystore_KeyUnwrapAndExportRequest* req, uint8_t* reqData,
+    uint32_t reqDataSz, whMessageKeystore_KeyUnwrapAndExportResponse* resp,
+    uint8_t* respData, uint32_t respDataSz)
 {
-    int            ret;
+    /* Defensive: a case that never assigns ret cannot report success */
+    int            ret = WH_ERROR_BADARGS;
     uint8_t*       wrappedKey;
     whNvmMetadata* metadata;
     uint8_t*       key;
     whKeyId        serverKeyId;
+    uint16_t       keySz = 0;
 
     if (server == NULL || req == NULL || reqData == NULL || resp == NULL ||
         respData == NULL) {
@@ -2055,11 +2063,13 @@ static int _HandleKeyUnwrapAndExportRequest(
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
         case WC_CIPHER_AES_GCM: {
-            uint16_t keySz;
+            uint16_t wrappedKeyUser = 0;
+            uint16_t wrappedKeyType = 0;
 
             if (req->wrappedKeySz < WH_KEYWRAP_AES_GCM_HEADER_SIZE +
                                     sizeof(*metadata)) {
-                return WH_ERROR_BADARGS;
+                ret = WH_ERROR_BADARGS;
+                break;
             }
 
             keySz = req->wrappedKeySz -
@@ -2067,7 +2077,8 @@ static int _HandleKeyUnwrapAndExportRequest(
 
             /* Check if the response data can fit the metadata + key  */
             if (respDataSz < sizeof(*metadata) + keySz) {
-                return WH_ERROR_BUFFER_SIZE;
+                ret = WH_ERROR_BUFFER_SIZE;
+                break;
             }
 
             /* Unwrap the key. The plaintext is handed back to the client, not
@@ -2076,28 +2087,31 @@ static int _HandleKeyUnwrapAndExportRequest(
                                    /*requireTrustedKek=*/0, wrappedKey,
                                    req->wrappedKeySz, metadata, key, keySz);
             if (ret != WH_ERROR_OK) {
-                return ret;
+                break;
             }
 
             /* Dynamic keyId generation for wrapped keys is not allowed */
             if (WH_KEYID_IS_UNASSIGNED(metadata->id)) {
                 /* Wrapped keys must use explicit identifiers */
-                return WH_ERROR_BADARGS;
+                ret = WH_ERROR_BADARGS;
+                break;
             }
 
             /* Extract ownership from unwrapped metadata (preserves original
              * owner) */
-            uint16_t wrappedKeyUser = WH_KEYID_USER(metadata->id);
-            uint16_t wrappedKeyType = WH_KEYID_TYPE(metadata->id);
+            wrappedKeyUser = WH_KEYID_USER(metadata->id);
+            wrappedKeyType = WH_KEYID_TYPE(metadata->id);
 
             /* Require explicit wrapped-key encoding */
             if (wrappedKeyType != WH_KEYTYPE_WRAPPED) {
-                return WH_ERROR_ABORTED;
+                ret = WH_ERROR_ABORTED;
+                break;
             }
 
             /* Check if the key is exportable */
             if (metadata->flags & WH_NVM_FLAGS_NONEXPORTABLE) {
-                return WH_ERROR_ACCESS;
+                ret = WH_ERROR_ACCESS;
+                break;
             }
 
             /* Validate ownership: USER field must match requesting client.
@@ -2106,12 +2120,14 @@ static int _HandleKeyUnwrapAndExportRequest(
             /* Global keys (USER=0) can be exported by any client */
             if (wrappedKeyUser != WH_KEYUSER_GLOBAL &&
                 wrappedKeyUser != server->comm->client_id) {
-                return WH_ERROR_ACCESS;
+                ret = WH_ERROR_ACCESS;
+                break;
             }
 #else
             /* Without global keys, USER must match requesting client */
             if (wrappedKeyUser != server->comm->client_id) {
-                return WH_ERROR_ACCESS;
+                ret = WH_ERROR_ACCESS;
+                break;
             }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
@@ -2122,7 +2138,26 @@ static int _HandleKeyUnwrapAndExportRequest(
 #endif /* !NO_AES */
 
         default:
-            return WH_ERROR_BADARGS;
+            ret = WH_ERROR_BADARGS;
+            break;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* The blob stores metadata in server order, so every check above ran
+         * on native values. Convert to client order only on the way out */
+        ret = wh_MessageNvm_TranslateMetadata(magic, metadata, metadata);
+    }
+
+    /* Keyed off the final ret so a failed translation scrubs too. respData is
+     * the long-lived comm buffer, so wipe the trailer and any decrypted key */
+    if (ret != WH_ERROR_OK && respDataSz >= sizeof(*metadata)) {
+        uint32_t scrubSz = sizeof(*metadata) + keySz;
+
+        if (scrubSz > respDataSz) {
+            scrubSz = respDataSz;
+        }
+        resp->keySz = 0;
+        wh_Utils_ForceZero(metadata, scrubSz);
     }
 
     return ret;
@@ -2472,7 +2507,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
     /* validate args, even though these functions are only supposed to be
      * called by internal functions */
-    if ((server == NULL) || (req_packet == NULL) || (out_resp_size == NULL)) {
+    if ((server == NULL) || (req_packet == NULL) || (resp_packet == NULL) ||
+        (out_resp_size == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -3198,8 +3234,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             if (ret == WH_ERROR_OK) {
                 ret = WH_SERVER_NVM_LOCK(server);
                 if (ret == WH_ERROR_OK) {
-                    ret = _HandleKeyWrapRequest(server, &wrapReq, reqData,
-                                                reqDataSz, &wrapResp,
+                    ret = _HandleKeyWrapRequest(server, magic, &wrapReq,
+                                                reqData, reqDataSz, &wrapResp,
                                                 respData, respDataSz);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
@@ -3300,13 +3336,21 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 ret = WH_SERVER_NVM_LOCK(server);
                 if (ret == WH_ERROR_OK) {
                     ret = _HandleKeyUnwrapAndExportRequest(
-                        server, &unwrapReq, reqData, reqDataSz, &unwrapResp,
-                        respData, respDataSz);
+                        server, magic, &unwrapReq, reqData, reqDataSz,
+                        &unwrapResp, respData, respDataSz);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
             }
             unwrapResp.rc = ret;
+
+            /* The size below always counts a trailer, so clear what a failure
+             * would otherwise ship out of the shared buffer */
+            if (ret != WH_ERROR_OK && respDataSz >= sizeof(whNvmMetadata)) {
+                wh_Utils_ForceZero((uint8_t*)resp_packet +
+                                       sizeof(unwrapResp),
+                                   sizeof(whNvmMetadata));
+            }
 
             (void)wh_MessageKeystore_TranslateKeyUnwrapAndExportResponse(
                 magic, &unwrapResp, resp_packet);

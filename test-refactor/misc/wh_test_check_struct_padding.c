@@ -38,6 +38,8 @@ whMessageCustomCb_Request  whMessageCustomCb_Request_test;
 whMessageCustomCb_Response whMessageCustomCb_Response_test;
 
 #include "wolfhsm/wh_message_nvm.h"
+/* Raw wire struct: the key wrap trailers memcpy it across the boundary */
+whNvmMetadata                      whNvmMetadata_test;
 whMessageNvm_SimpleResponse        whMessageNvm_SimpleResponse_test;
 whMessageNvm_InitRequest           whMessageNvm_InitRequest_test;
 whMessageNvm_InitResponse          whMessageNvm_InitResponse_test;

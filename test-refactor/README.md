@@ -127,6 +127,8 @@ Not yet migrated (still live in `wolfHSM/test/`):
 ### Known coverage gaps
 - FLASH_LOG backend for server/client-group tests. In `test/`, cert (`whTest_CertRamSim`), crypto (`wh_ClientServer_MemThreadTest`), image-manager (`whTest_ServerImgMgr`), and client/server were each run against both the plain flash and flash-log NVM backends. The refactored server/client-group tests consume a single server context (`wh_test_posix_server.c` hard-codes `WH_NVM_FLASH_CB`), so only the plain flash backend is exercised. Restoring parity means selecting the server backend via `whTest_NvmCfgBackend` and running the server + client groups once per backend (flash, then flash-log) from `wh_test_posix_main.c`. Tracked as a follow-up; the port-specific `whTest_NvmFlashLog` already covers the flash-log NVM object lifecycle directly.
 
+- Cross-endian metadata on the DMA NVM paths. `server/wh_test_keywrap_endian.c` and `client-server/wh_test_keywrap_endian_e2e.c` cover the `whNvmMetadata` trailer the key wrap messages carry, which the server translates via `wh_MessageNvm_TranslateMetadata()`. The DMA NVM paths (`WH_MESSAGE_NVM_ACTION_ADDOBJECTDMA` ingress and `WH_MESSAGE_NVM_ACTION_READDMA` write-back) hand the same struct across untranslated, so a big-endian client against a little-endian server writes byte-reversed `id`, `access`, `flags` and `len` into NVM. Pre-existing and untested in either harness. A fix must translate into a local copy: the struct lives in client DMA memory, so translating in place would write into the client's buffer.
+
 ### Other improvements
 - Add callback from `wh_Server_HandleRequestMessage` to allow sleep and avoid a busy loop
 - Add client-only harness to feed invalid server inputs from the test bench with the goal of expanding coverage.

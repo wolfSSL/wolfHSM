@@ -77,6 +77,8 @@ WH_TEST_DECL(whTest_CryptoMlDsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoRsaBufferTooSmall);
 WH_TEST_DECL(whTest_CryptoSha256);
 WH_TEST_DECL(whTest_KeyWrap);
+WH_TEST_DECL(whTest_KeyWrapEndian);
+WH_TEST_DECL(whTest_KeyWrapEndianE2E);
 WH_TEST_DECL(whTest_She);
 WH_TEST_DECL(whTest_SheKeywrapInterop);
 WH_TEST_DECL(whTest_SheMasterEcuKeyFallback);
@@ -120,6 +122,7 @@ const whTestCase whTestsServer[] = {
     { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
     { "whTest_HwKeystoreServer", whTest_HwKeystoreServer },
     { "whTest_SheStateGate", whTest_SheStateGate },
+    { "whTest_KeyWrapEndian", whTest_KeyWrapEndian },
 };
 const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 
@@ -148,6 +151,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_CryptoRsaBufferTooSmall", whTest_CryptoRsaBufferTooSmall},
     {"whTest_CryptoSha256", whTest_CryptoSha256},
     {"whTest_KeyWrap", whTest_KeyWrap},
+    {"whTest_KeyWrapEndianE2E", whTest_KeyWrapEndianE2E},
     {"whTest_She", whTest_She},
     {"whTest_Echo", whTest_Echo},
     {"whTest_NvmDma", whTest_NvmDma},
