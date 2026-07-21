@@ -4839,6 +4839,14 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
         }
 
         if (ret == WH_ERROR_OK) {
+            const size_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            /* Defensive bound: res->outSz must fit within the actual received
+             * frame */
+            if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+                return WH_ERROR_ABORTED;
+            }
+
             /* Key is cached on server or is ephemeral */
             key_id = (whKeyId)(res->keyIdOut);
 
@@ -5001,6 +5009,14 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
     }
 
     if (ret == WH_ERROR_OK) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Defensive bound: res->outSz must fit within the actual received
+         * frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
         key_id = (whKeyId)(res->keyIdOut);
 
         if (inout_key_id != NULL) {
