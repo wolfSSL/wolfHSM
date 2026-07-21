@@ -53,6 +53,11 @@ enum WH_MESSAGE_NVM_MAX_ENUM {
     WH_MESSAGE_NVM_MAX_READ_LEN = WOLFHSM_CFG_COMM_DATA_LEN - sizeof(int32_t),
 };
 
+/* Translate a whNvmMetadata carried on the wire as a raw struct, rather than
+ * flattened into message fields. In-place safe (src may equal dest) */
+int wh_MessageNvm_TranslateMetadata(uint16_t magic, const whNvmMetadata* src,
+        whNvmMetadata* dest);
+
 /* Simple reusable response message */
 typedef struct {
     int32_t rc;
