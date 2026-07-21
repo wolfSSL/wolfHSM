@@ -394,6 +394,13 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             }
         }
         if (resp.rc == 0) {
+            /* A permit-all DMA config passes a zero metadata address through
+             * untouched, so reject it before it reaches the NVM layer. */
+            if (metadata == NULL) {
+                resp.rc = WH_ERROR_BADARGS;
+            }
+        }
+        if (resp.rc == 0) {
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && \
     (defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS))
             /* Block direct NVM import of stateful (LMS/XMSS) private key state;
