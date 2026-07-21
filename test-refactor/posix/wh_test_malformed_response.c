@@ -38,6 +38,7 @@
     !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
@@ -52,11 +53,9 @@
 
 #define WH_TEST_MALFORMED_BUFFER_SIZE 4096
 
-/* Kept well inside WOLFHSM_CFG_COMM_DATA_LEN so only a frame-length
- * check rejects it, not a buffer-capacity one. */
+/* Inside WOLFHSM_CFG_COMM_DATA_LEN, so only a frame-length check rejects it */
 #define WH_TEST_MALFORMED_CLAIMED_SZ 64
 
-/* Malformed frame shapes, ordered as the client drives them. */
 typedef enum {
     WH_TEST_MALFORMED_TRUNCATED = 0,
     WH_TEST_MALFORMED_OVERSIZED,
@@ -71,16 +70,12 @@ typedef struct {
     uint16_t          resSize; /* size of the algorithm's response struct */
 } whTestMalformedCase;
 
-/* Every keygen response in wh_message_crypto.h opens with this pair, so
- * the fake server fills them all the same way. */
+/* Every keygen response opens with this pair */
 typedef struct {
     uint32_t keyId;
     uint32_t len;
 } whTestMalformedKeyGenBody;
 
-
-/* Client calls. The key contexts never receive material, so a local
- * wolfCrypt devId suffices. */
 
 static int _callEd25519MakeKey(whClientContext* client)
 {
@@ -124,8 +119,20 @@ static int _callRsaMakeKey(whClientContext* client)
     return ret;
 }
 
-/* Curve25519 keygen is absent on purpose: it has no frame check yet,
- * so a row for it would fail until that path is fixed. */
+static int _callCurve25519MakeKey(whClientContext* client)
+{
+    curve25519_key key[1];
+    int            ret;
+
+    ret = wc_curve25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_Client_Curve25519MakeExportKey(client, CURVE25519_KEYSIZE, key);
+    wc_curve25519_free(key);
+    return ret;
+}
+
 static const whTestMalformedCase _malformedCases[] = {
     {"Ed25519 keygen", _callEd25519MakeKey,
      (uint16_t)sizeof(whMessageCrypto_Ed25519KeyGenResponse)},
@@ -133,6 +140,8 @@ static const whTestMalformedCase _malformedCases[] = {
      (uint16_t)sizeof(whMessageCrypto_EccKeyGenResponse)},
     {"RSA keygen", _callRsaMakeKey,
      (uint16_t)sizeof(whMessageCrypto_RsaKeyGenResponse)},
+    {"Curve25519 keygen", _callCurve25519MakeKey,
+     (uint16_t)sizeof(whMessageCrypto_Curve25519KeyGenResponse)},
 };
 
 #define WH_TEST_MALFORMED_CASE_COUNT \
@@ -140,12 +149,14 @@ static const whTestMalformedCase _malformedCases[] = {
 
 static const struct timespec WH_TEST_MALFORMED_ONE_MS = {0, 1000000};
 
-/* Set by the client thread so a failure reaches the caller. */
+/* Bounds the 1 ms retry loops so a stalled peer fails the suite, not hangs it */
+#define WH_TEST_MALFORMED_MAX_TRIES 5000
+
 static int _malformedClientRc = WH_TEST_SUCCESS;
+static int _malformedServerRc = WH_TEST_SUCCESS;
 
 
-/* Fake server. Echoes the request kind and sequence so the client
- * accepts the reply, then declares a payload the frame lacks. */
+/* Echoes the request kind and seq so the client accepts the reply */
 static void* _malformedServerThread(void* cf)
 {
     whCommServerConfig* config = (whCommServerConfig*)cf;
@@ -157,8 +168,10 @@ static void* _malformedServerThread(void* cf)
     uint16_t            rx_req_type  = 0;
     uint16_t            rx_req_seq   = 0;
     uint16_t            tx_resp_len  = 0;
+    size_t              step;
     size_t              shape;
     size_t              idx;
+    int                 tries;
     int                 ret;
 
     whMessageCrypto_GenericResponseHeader* hdr =
@@ -169,45 +182,69 @@ static void* _malformedServerThread(void* cf)
     ret = wh_CommServer_Init(server, config, NULL, NULL);
     WH_TEST_ASSERT_MSG(0 == ret, "Fake server Init: ret=%d", ret);
 
-    for (shape = 0; shape < (size_t)WH_TEST_MALFORMED_SHAPE_COUNT; shape++) {
-        for (idx = 0; idx < WH_TEST_MALFORMED_CASE_COUNT; idx++) {
-            do {
-                ret = wh_CommServer_RecvRequest(server, &rx_req_flags,
-                                                &rx_req_type, &rx_req_seq,
-                                                &rx_req_len, sizeof(rx_req),
-                                                rx_req);
-            } while ((ret == WH_ERROR_NOTREADY) &&
-                     (nanosleep(&WH_TEST_MALFORMED_ONE_MS, NULL) == 0));
-            WH_TEST_ASSERT_MSG(0 == ret, "Fake server RecvRequest: ret=%d",
-                               ret);
+    /* Flattened so a timeout exits the exchange in one break */
+    for (step = 0; step < (size_t)WH_TEST_MALFORMED_SHAPE_COUNT *
+                              WH_TEST_MALFORMED_CASE_COUNT;
+         step++) {
+        shape = step / WH_TEST_MALFORMED_CASE_COUNT;
+        idx   = step % WH_TEST_MALFORMED_CASE_COUNT;
 
-            memset(tx_resp, 0, sizeof(tx_resp));
-            /* algoType must come from the crypto request header, not the
-             * comm kind, or the client rejects the reply as a mismatch
-             * before it ever reaches the bounds check. */
-            hdr->rc = WH_ERROR_OK;
-            hdr->algoType =
-                ((whMessageCrypto_GenericRequestHeader*)rx_req)->algoType;
-
-            if (shape == (size_t)WH_TEST_MALFORMED_TRUNCATED) {
-                /* Stop short of the response struct the client reads */
-                tx_resp_len = (uint16_t)sizeof(*hdr);
+        tries = 0;
+        do {
+            ret = wh_CommServer_RecvRequest(server, &rx_req_flags,
+                                            &rx_req_type, &rx_req_seq,
+                                            &rx_req_len, sizeof(rx_req),
+                                            rx_req);
+            if (ret != WH_ERROR_NOTREADY) {
+                break;
             }
-            else {
-                body->keyId = 0;
-                body->len   = WH_TEST_MALFORMED_CLAIMED_SZ;
-                tx_resp_len =
-                    (uint16_t)(sizeof(*hdr) + _malformedCases[idx].resSize);
-            }
+            /* Ignored: ending the loop on an interrupted sleep would
+             * strand the client waiting for a response. */
+            (void)nanosleep(&WH_TEST_MALFORMED_ONE_MS, NULL);
+            tries++;
+        } while (tries < WH_TEST_MALFORMED_MAX_TRIES);
 
-            do {
-                ret = wh_CommServer_SendResponse(server, rx_req_flags,
-                                                 rx_req_type, rx_req_seq,
-                                                 tx_resp_len, tx_resp);
-            } while ((ret == WH_ERROR_NOTREADY) &&
-                     (nanosleep(&WH_TEST_MALFORMED_ONE_MS, NULL) == 0));
-            WH_TEST_ASSERT_MSG(0 == ret, "Fake server SendResponse: ret=%d",
-                               ret);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Fake server RecvRequest for %s: ret=%d\n",
+                           _malformedCases[idx].name, ret);
+            _malformedServerRc = WH_TEST_FAIL;
+            break;
+        }
+
+        memset(tx_resp, 0, sizeof(tx_resp));
+        /* From the request header, not the comm kind, or the client
+         * rejects the reply before reaching the bounds check. */
+        hdr->rc = WH_ERROR_OK;
+        hdr->algoType =
+            ((whMessageCrypto_GenericRequestHeader*)rx_req)->algoType;
+
+        if (shape == (size_t)WH_TEST_MALFORMED_TRUNCATED) {
+            /* Stop short of the response struct the client reads */
+            tx_resp_len = (uint16_t)sizeof(*hdr);
+        }
+        else {
+            body->keyId = 0;
+            body->len   = WH_TEST_MALFORMED_CLAIMED_SZ;
+            tx_resp_len =
+                (uint16_t)(sizeof(*hdr) + _malformedCases[idx].resSize);
+        }
+
+        tries = 0;
+        do {
+            ret = wh_CommServer_SendResponse(server, rx_req_flags, rx_req_type,
+                                             rx_req_seq, tx_resp_len, tx_resp);
+            if (ret != WH_ERROR_NOTREADY) {
+                break;
+            }
+            (void)nanosleep(&WH_TEST_MALFORMED_ONE_MS, NULL);
+            tries++;
+        } while (tries < WH_TEST_MALFORMED_MAX_TRIES);
+
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Fake server SendResponse for %s: ret=%d\n",
+                           _malformedCases[idx].name, ret);
+            _malformedServerRc = WH_TEST_FAIL;
+            break;
         }
     }
 
@@ -251,7 +288,6 @@ static void* _malformedClientThread(void* cf)
 
 int whTest_MalformedCryptoResponse(void* ctx)
 {
-    /* Transport memory shared by the client and fake server */
     uint8_t req[WH_TEST_MALFORMED_BUFFER_SIZE]  = {0};
     uint8_t resp[WH_TEST_MALFORMED_BUFFER_SIZE] = {0};
 
@@ -290,6 +326,7 @@ int whTest_MalformedCryptoResponse(void* ctx)
     (void)ctx;
 
     _malformedClientRc = WH_TEST_SUCCESS;
+    _malformedServerRc = WH_TEST_SUCCESS;
 
     rc = pthread_create(&sthread, NULL, _malformedServerThread, cs_conf);
     if (rc != 0) {
@@ -308,7 +345,10 @@ int whTest_MalformedCryptoResponse(void* ctx)
     (void)pthread_join(cthread, NULL);
     (void)pthread_join(sthread, NULL);
 
-    return _malformedClientRc;
+    if (_malformedClientRc != WH_TEST_SUCCESS) {
+        return _malformedClientRc;
+    }
+    return _malformedServerRc;
 }
 
 #else /* !WOLFHSM_CFG_TEST_POSIX || !WOLFHSM_CFG_ENABLE_CLIENT ||

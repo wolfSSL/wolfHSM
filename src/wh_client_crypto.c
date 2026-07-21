@@ -3008,6 +3008,14 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                                  (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+            const size_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+            /* Defensive bound: res->len must fit within the received frame */
+            if (data_len < hdr_sz || res->len > (data_len - hdr_sz)) {
+                return WH_ERROR_ABORTED;
+            }
+
             WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
                    "ret:%d\n",
                    (unsigned int)res->keyId, (unsigned int)res->len, ret);
