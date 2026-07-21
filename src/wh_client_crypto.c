@@ -3470,6 +3470,14 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     ret =
         _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_KEYGEN, (uint8_t**)&res);
     if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+        /* Defensive bound: res->outSz must fit within the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
         key_id = (whKeyId)res->keyId;
         if (inout_key_id != NULL) {
             *inout_key_id = key_id;
@@ -3479,11 +3487,6 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
                 uint8_t* out   = (uint8_t*)(res + 1);
                 uint16_t outSz = (uint16_t)res->outSz;
-                if (outSz + sizeof(whMessageCrypto_GenericResponseHeader) +
-                        sizeof(*res) >
-                    WOLFHSM_CFG_COMM_DATA_LEN) {
-                    return WH_ERROR_ABORTED;
-                }
                 ret = wh_Crypto_Ed25519DeserializeKeyDer(out, outSz, key);
             }
         }

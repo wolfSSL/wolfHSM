@@ -76,6 +76,10 @@ int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
 int whTest_NvmRecovery(void* ctx);
 
+/* Malformed-response test. Owns its own client and fake server over a
+ * private transport pair, so it can't use the runner's live contexts. */
+int whTest_MalformedCryptoResponse(void* ctx);
+
 /*
  * Port-owned contexts. The thread functions fill these in and
  * hand them to the group functions, paralleling the firmware
@@ -281,6 +285,13 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmRecovery",
             whTest_NvmRecovery, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        /* Runs here rather than in the client slot so its private
+         * client and fake server never overlap the real server. */
+        rc = whTestGroup_RunOne("whTest_MalformedCryptoResponse",
+            whTest_MalformedCryptoResponse, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
