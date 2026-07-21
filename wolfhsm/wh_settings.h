@@ -75,6 +75,17 @@
  *  WOLFHSM_CFG_ENABLE_TIMEOUT - If defined, include client-side support for
  *  blocking request timeouts
  *
+ *  WOLFHSM_CFG_ENABLE_AUTHENTICATION - EXPERIMENTAL. If defined, include the
+ *  Auth Manager (wh_auth*), which adds per-client user authentication and
+ *  per-user authorization to the server. Clients log in with a credential
+ *  (PIN or certificate) to establish a session, and the server checks the
+ *  resulting per-user permissions (per message group/action, plus key ID
+ *  access) before dispatching a request. Checks are only applied if the
+ *  server is configured with an auth context; without one all requests are
+ *  processed unchecked. The API and wire format are subject to change and
+ *  are not covered by compatibility guarantees.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
  *      Default: 32
  *
