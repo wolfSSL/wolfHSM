@@ -96,9 +96,13 @@ enum {
 
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
     !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
-/* Id of the trusted KEK the server task provisions for the SHE<->keywrap
- * interop tests. Defined here so the server task can use it too. */
+/* Trusted KEK id for the SHE<->keywrap interop tests. Override via
+ * WOLFHSM_CFG_TEST_SHE_INTEROP_KEK_ID (e.g. a hardware KEK). */
+#ifdef WOLFHSM_CFG_TEST_SHE_INTEROP_KEK_ID
+#define WH_SHE_INTEROP_KEK_ID WOLFHSM_CFG_TEST_SHE_INTEROP_KEK_ID
+#else
 #define WH_SHE_INTEROP_KEK_ID 0x20
+#endif
 #endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
@@ -119,6 +123,27 @@ static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 
     return rc;
 }
+
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
+    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+/* Server-side equivalent of whTest_BuildSheKeyBlob: wraps a SHE key by KEK id,
+ * so the KEK value is never shared with the client. */
+static int _SheServerWrapKeyBlob(whClientContext* client, uint16_t kekId,
+                                 whKeyId sheKeyId, uint32_t counter,
+                                 uint32_t sheFlags, const uint8_t* sheKey,
+                                 uint8_t* blob, uint16_t* blobSz)
+{
+    whNvmMetadata meta;
+
+    memset(&meta, 0, sizeof(meta));
+    meta.id  = sheKeyId;
+    meta.len = WH_SHE_KEY_SZ;
+    wh_She_Meta2Label(counter, sheFlags, meta.label);
+
+    return wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId, (void*)sheKey,
+                             WH_SHE_KEY_SZ, &meta, blob, blobSz);
+}
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
 
 int whTest_SheClientConfig(whClientConfig* config)
 {
@@ -608,13 +633,15 @@ int whTest_SheClientConfig(whClientConfig* config)
         /* Prime an unused SHE slot via unwrap-and-cache, then use it. */
         memset(sheKey, 0x5a, sizeof(sheKey));
         blobSz = sizeof(blob);
-        ret    = whTest_BuildSheKeyBlob(
-            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+        ret    = _SheServerWrapKeyBlob(
+            client, kekId,
             WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id,
                              SHE_PRIME_SLOT),
             1, 0, sheKey, blob, &blobSz);
-        if (ret != 0) {
-            WH_ERROR_PRINT("SHE interop: build prime blob failed %d\n", ret);
+        if (ret != 0 || blobSz != expSz) {
+            WH_ERROR_PRINT("SHE interop: build prime blob failed ret=%d "
+                           "sz=%u exp=%u\n", ret, blobSz, expSz);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
             goto exit;
         }
         ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
@@ -655,12 +682,15 @@ int whTest_SheClientConfig(whClientConfig* config)
         }
         /* lower counter -> rejected */
         blobSz = sizeof(blob);
-        ret    = whTest_BuildSheKeyBlob(
-            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+        ret    = _SheServerWrapKeyBlob(
+            client, kekId,
             WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id,
                              SHE_CTR_SLOT),
             3, 0, sheKey, blob, &blobSz);
-        if (ret != 0) {
+        if (ret != 0 || blobSz != expSz) {
+            WH_ERROR_PRINT("SHE interop: build rollback blob failed ret=%d "
+                           "sz=%u exp=%u\n", ret, blobSz, expSz);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
             goto exit;
         }
         ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
@@ -674,12 +704,15 @@ int whTest_SheClientConfig(whClientConfig* config)
 
         /* equal counter -> accepted */
         blobSz = sizeof(blob);
-        ret    = whTest_BuildSheKeyBlob(
-            whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
+        ret    = _SheServerWrapKeyBlob(
+            client, kekId,
             WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id,
                              SHE_CTR_SLOT),
             5, 0, sheKey, blob, &blobSz);
-        if (ret != 0) {
+        if (ret != 0 || blobSz != expSz) {
+            WH_ERROR_PRINT("SHE interop: build equal-counter blob failed "
+                           "ret=%d sz=%u exp=%u\n", ret, blobSz, expSz);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
             goto exit;
         }
         ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,

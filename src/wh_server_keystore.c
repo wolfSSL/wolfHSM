@@ -1838,12 +1838,30 @@ static int _HandleKeyWrapRequest(whServerContext*                  server,
     /* Wrapped key size is only passed back to the client on success */
     resp->wrappedKeySz = 0;
 
-    /* Ensure the keyId in the wrapped metadata has the wrapped flag set */
-    if (!WH_KEYID_ISWRAPPED(metadata.id)) {
+    /* Require a wrappable type: WRAPPED, or SHE so a SHE key can be wrapped and
+     * later primed via unwrap-and-cache. */
+    if (WH_KEYID_TYPE(metadata.id) != WH_KEYTYPE_WRAPPED
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+        && WH_KEYID_TYPE(metadata.id) != WH_KEYTYPE_SHE
+#endif
+    ) {
         WH_LOG_F(&server->log, WH_LOG_LEVEL_ERROR,
-                 "KeyWrapRequest: keyId:0x%08X is not wrapped", metadata.id);
+                 "KeyWrapRequest: keyId:0x%08X is not a wrappable type",
+                 metadata.id);
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+    /* SHE keys are a fixed size; reject a mis-sized blob up front so it can
+     * never be primed via unwrap-and-cache and mishandled by the SHE ops. */
+    if (WH_KEYID_TYPE(metadata.id) == WH_KEYTYPE_SHE &&
+        req->keySz != WH_SHE_KEY_SZ) {
+        WH_LOG_F(&server->log, WH_LOG_LEVEL_ERROR,
+                 "KeyWrapRequest: SHE keyId:0x%08X keySz:%u must be %u",
+                 metadata.id, req->keySz, WH_SHE_KEY_SZ);
+        return WH_ERROR_BADARGS;
+    }
+#endif
 
     /* Translate the server key id passed in from the client */
     serverKeyId = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
@@ -2237,6 +2255,17 @@ static int _HandleKeyUnwrapAndCacheRequest(
         ret = WH_ERROR_ABORTED;
         goto out;
     }
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+    /* SHE keys are a fixed size. Reject a mis-sized blob before it can be
+     * cached: the SHE ops read cached keys into fixed WH_SHE_KEY_SZ-derived
+     * buffers, so an over-length key would overflow (e.g. the LoadKey KDF
+     * input). This is the chokepoint for every unwrap source. */
+    if (wrappedKeyType == WH_KEYTYPE_SHE && metadata.len != WH_SHE_KEY_SZ) {
+        ret = WH_ERROR_ABORTED;
+        goto out;
+    }
+#endif
 
     /* Validate ownership: USER field must match requesting client.
      * The USER field specifies who owns this wrapped key. */
