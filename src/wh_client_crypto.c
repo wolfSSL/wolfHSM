@@ -9515,6 +9515,15 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
+                        const size_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+
+                        /* res->len must fit within the received frame */
+                        if (res_len < hdr_sz || res->len > (res_len - hdr_sz)) {
+                            return WH_ERROR_ABORTED;
+                        }
+
                         WH_DEBUG_CLIENT_VERBOSE(
                             "Res recv:keyid:%u, len:%u, ret:%d\n",
                             (unsigned int)res->keyId,
@@ -10106,6 +10115,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
     uint8_t*                              dataPtr = NULL;
     uintptr_t                             inAddr  = 0;
     uintptr_t                             outAddr = 0;
+    word32                                sig_cap = 0;
 
     /* Transaction state */
     whKeyId key_id;
@@ -10182,6 +10192,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             }
 
             if (ret == WH_ERROR_OK) {
+                /* Stash the caller's capacity: the response overwrites req */
+                sig_cap     = *out_len;
                 req->sig.sz = *out_len;
                 ret         = wh_Client_DmaProcessClientAddress(
                     ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
@@ -10216,6 +10228,16 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                                              (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
+                    if (ret >= 0) {
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+                        /* No trailing payload; sigLen must fit the caller's
+                         * buffer */
+                        if (res_len < hdr_sz || res->sigLen > sig_cap) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                    }
                     if (ret >= 0) {
                         /* Update signature length */
                         *out_len = res->sigLen;
