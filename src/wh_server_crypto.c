@@ -1169,12 +1169,14 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                               ret = WH_ERROR_OK;
     ecc_key                           key[1];
     whMessageCrypto_EccKeyGenRequest  req;
     whMessageCrypto_EccKeyGenResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_EccKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateEccKeyGenRequest(
@@ -2030,12 +2032,14 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                                    uint16_t inSize, void* cryptoDataOut,
                                    uint16_t* outSize)
 {
-    (void)inSize;
-
     int                                      ret = WH_ERROR_OK;
     curve25519_key                           key[1];
     whMessageCrypto_Curve25519KeyGenRequest  req;
     whMessageCrypto_Curve25519KeyGenResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_Curve25519KeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate request */
     ret = wh_MessageCrypto_TranslateCurve25519KeyGenRequest(
@@ -2262,12 +2266,14 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic, int devId,
                                 const void* cryptoDataIn, uint16_t inSize,
                                 void* cryptoDataOut, uint16_t* outSize)
 {
-    (void)inSize;
-
     int                                   ret = WH_ERROR_OK;
     ed25519_key                           key[1];
     whMessageCrypto_Ed25519KeyGenRequest  req;
     whMessageCrypto_Ed25519KeyGenResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_Ed25519KeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = wh_MessageCrypto_TranslateEd25519KeyGenRequest(
         magic, (const whMessageCrypto_Ed25519KeyGenRequest*)cryptoDataIn, &req);
@@ -4736,12 +4742,14 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int                                 ret = WH_ERROR_OK;
     wc_MlDsaKey                         key[1];
     whMessageCrypto_MlDsaKeyGenRequest  req;
     whMessageCrypto_MlDsaKeyGenResponse res;
+
+    if (inSize < sizeof(whMessageCrypto_MlDsaKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
@@ -4846,12 +4854,14 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    (void)inSize;
-
     int                                 ret;
     wc_MlDsaKey                         key[1];
     whMessageCrypto_MlDsaSignRequest    req;
     whMessageCrypto_MlDsaSignResponse   res;
+
+    if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
 
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaSignRequest(
@@ -4879,11 +4889,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* Validate input length against available data to prevent buffer overread
-     */
-    if (inSize < sizeof(whMessageCrypto_MlDsaSignRequest)) {
-        return WH_ERROR_BADARGS;
-    }
+    /* Validate the declared lengths against the remaining payload */
     word32 available_data = inSize - sizeof(whMessageCrypto_MlDsaSignRequest);
     if (in_len > available_data) {
         return WH_ERROR_BADARGS;
@@ -4958,6 +4964,10 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_MlDsaVerifyRequest  req;
     whMessageCrypto_MlDsaVerifyResponse res;
 
+    if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Translate the request */
     ret = wh_MessageCrypto_TranslateMlDsaVerifyRequest(
         magic, (whMessageCrypto_MlDsaVerifyRequest*)cryptoDataIn, &req);
@@ -4987,9 +4997,6 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     /* Validate lengths against available payload (overflow-safe) */
-    if (inSize < sizeof(whMessageCrypto_MlDsaVerifyRequest)) {
-        return WH_ERROR_BADARGS;
-    }
     uint32_t available = inSize - sizeof(whMessageCrypto_MlDsaVerifyRequest);
     if ((sig_len > available) || (hash_len > available) ||
         (sig_len > (available - hash_len))) {
