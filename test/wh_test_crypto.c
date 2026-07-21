@@ -16313,10 +16313,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
-    if (ret != 0) {
-        WH_ERROR_PRINT("Pre-Ed25519 tests ret=%d\n", ret);
-        return ret;
-    }
     (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
         ret = whTest_CryptoEd25519Inline(client, WH_CLIENT_DEVID(client), rng);

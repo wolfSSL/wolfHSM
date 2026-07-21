@@ -232,24 +232,37 @@ static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
 
     /* (b) A client that provisions an NVM object carrying
      * WH_NVM_FLAGS_TRUSTED at a crypto-key id must not obtain a trusted KEK
-     * either: the checked NVM add path strips the flag, and per-client NVM
-     * id translation keeps the object out of the crypto-key id space
-     * entirely. */
+     * either. The forged id embeds the client id in the USER bits, which
+     * overlap the client WRAPPED/HW flag bits, so depending on the client id
+     * the checked add either rejects the id outright or stores the object
+     * outside the crypto-key id space; either way no KEK may appear at the
+     * crypto-key id. */
     {
         whNvmId nvmObjId =
             WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, client->comm->client_id,
                           WH_TEST_KW_NVM_FORGE_ID);
-        int32_t nvmRc = 0;
+        int32_t nvmRc         = 0;
+        int32_t expectedAddRc = 0;
         int     expectedRc;
+
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+        if ((nvmObjId &
+             (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) != 0) {
+            /* Forged id aliases a client flag bit; the checked add rejects
+             * it before storing anything. */
+            expectedAddRc = WH_ERROR_BADARGS;
+        }
+#endif
 
         ret = wh_Client_NvmAddObject(
             client, nvmObjId, WH_NVM_ACCESS_ANY,
             WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP, sizeof(label),
             label, sizeof(srcKey), srcKey, &nvmRc);
-        if (ret != 0 || nvmRc != 0) {
-            WH_ERROR_PRINT("trusted-kek: NvmAddObject failed ret=%d rc=%d\n",
-                           ret, (int)nvmRc);
-            ret = (ret != 0) ? ret : (int)nvmRc;
+        if (ret != 0 || nvmRc != expectedAddRc) {
+            WH_ERROR_PRINT("trusted-kek: NvmAddObject expected rc=%d, got "
+                           "ret=%d rc=%d\n",
+                           (int)expectedAddRc, ret, (int)nvmRc);
+            ret = (ret != 0) ? ret : WH_ERROR_ABORTED;
             goto cleanup;
         }
         wrappedKeySz = sizeof(wrappedKey);
@@ -266,9 +279,9 @@ static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
          * refused. */
         expectedRc = WH_ERROR_ACCESS;
 #else
-        /* Per-client NVM id translation stores the forged object as a plain
-         * NVM object in the caller's namespace, so no KEK exists at the
-         * crypto-key id at all. */
+        /* An accepted forge is stored as a plain NVM object in the caller's
+         * namespace and a rejected one stores nothing, so no KEK exists at
+         * the crypto-key id either way. */
         expectedRc = WH_ERROR_NOTFOUND;
 #endif
         if (ret != expectedRc) {
