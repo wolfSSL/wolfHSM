@@ -256,11 +256,13 @@ int wh_Client_RngGenerateResponse(whClientContext* ctx, uint8_t* out,
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
     if (ret == WH_ERROR_OK) {
-        if (res->sz > WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ ||
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Reject a size the received message does not actually carry, or that
+         * exceeds the inline cap or the caller's buffer. */
+        if (res_len < hdr_sz || res->sz > (res_len - hdr_sz) ||
+            res->sz > WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ ||
             res->sz > *inout_size) {
-            /* Server returned more than the inline cap or the caller's buffer
-             * can hold. Guard the inline cap first to avoid reading past the
-             * comm buffer on a malformed response. */
             ret = WH_ERROR_ABORTED;
         }
         else {
@@ -399,6 +401,15 @@ int wh_Client_RngGenerateDmaResponse(whClientContext* ctx)
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&resp);
         /* On success, server has written random bytes directly to client
          * memory — nothing else to copy. */
+        if (ret == WH_ERROR_OK) {
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp);
+            /* Nothing here is read inline; the bound just holds a success rc
+             * to a full response (an error reply carries only the header). */
+            if (respSz < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
     }
 
     /* POST DMA cleanup using stashed addresses (runs on every non-NOTREADY
