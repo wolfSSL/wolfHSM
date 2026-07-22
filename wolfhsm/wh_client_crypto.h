@@ -281,6 +281,40 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx,
         const uint8_t* label, uint16_t label_len);
 
 /**
+ * @brief Generate a Curve25519 key in the server key cache and return its
+ *        public key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_Curve25519ExportPublicKey call. On success inout_key_id
+ * holds the cached keyId and pub is populated with the public key, associated
+ * with that keyId, and stamped with the client's HSM devId, so it is
+ * immediately usable both as the exported public key and as a handle to the
+ * cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate in bytes, normally set to
+ *                 CURVE25519_KEY_SIZE.
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_Curve25519MakeCacheKeyAndExportPublic(whClientContext* ctx,
+        uint16_t size,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        const uint8_t* label, uint16_t label_len, curve25519_key* pub);
+
+/**
  * @brief Generate a Curve25519 key by the server and export to the client
  *
  * This function requests the server to generate a new Curve25519 key pair and
@@ -510,6 +544,39 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx,
         int size, int curveId,
         whKeyId *inout_key_id, whNvmFlags flags,
         uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate an ECC key pair in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_EccExportPublicKey call. On success inout_key_id holds the
+ * cached keyId and pub is populated with the public key, associated with that
+ * keyId, and stamped with the client's HSM devId, so it is immediately usable
+ * both as the exported public key and as a handle to the cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate in bytes (e.g. 32 for P-256).
+ * @param[in] curveId wolfCrypt curve identifier (e.g. ECC_SECP256R1).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key. Must not be NULL.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_EccMakeCacheKeyAndExportPublic(whClientContext* ctx,
+        int size, int curveId,
+        whKeyId *inout_key_id, whNvmFlags flags,
+        uint16_t label_len, const uint8_t* label, ecc_key* pub);
 
 /**
  * @brief Compute an ECDH shared secret using a public and private ECC key.
@@ -939,6 +1006,40 @@ int wh_Client_Ed25519MakeCacheKey(whClientContext* ctx, whKeyId* inout_key_id,
                                   uint8_t* label);
 
 /**
+ * @brief Create a new Ed25519 key in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_Ed25519ExportPublicKey call. On success inout_key_id holds
+ * the cached keyId and pub is populated with the public key, associated with
+ * that keyId, and stamped with the client's HSM devId, so it is immediately
+ * usable both as the exported public key and as a handle to the cached private
+ * key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_Ed25519MakeCacheKeyAndExportPublic(whClientContext* ctx,
+                                                 whKeyId* inout_key_id,
+                                                 whNvmFlags flags,
+                                                 uint16_t label_len,
+                                                 const uint8_t* label,
+                                                 ed25519_key* pub);
+
+/**
  * @brief Sign a message using an Ed25519 key on the server.
  */
 int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
@@ -1081,6 +1182,39 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx,
         uint32_t size, uint32_t e,
         whKeyId* inout_key_id, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate an RSA key in the server key cache and return its public key
+ *        in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_RsaExportPublicKey call. On success inout_key_id holds the
+ * cached keyId and pub is populated with the public key, associated with that
+ * keyId, and stamped with the client's HSM devId, so it is immediately usable
+ * both as the exported public key and as a handle to the cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate in bits (e.g. 2048).
+ * @param[in] e Public exponent to use (e.g. WC_RSA_EXPONENT / 65537).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_RsaMakeCacheKeyAndExportPublic(whClientContext* ctx,
+        uint32_t size, uint32_t e,
+        whKeyId* inout_key_id, whNvmFlags flags,
+        uint32_t label_len, const uint8_t* label, RsaKey* pub);
 
 /* TODO: Request server to perform the RSA function */
 int wh_Client_RsaFunction(whClientContext* ctx,
@@ -2878,6 +3012,45 @@ int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
 int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
                                 whKeyId* inout_key_id, whNvmFlags flags,
                                 uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate an ML-DSA key in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_MlDsaExportPublicKey call. On success inout_key_id holds
+ * the cached keyId and pub is populated with the public key, associated with
+ * that keyId, and stamped with the client's HSM devId, so it is immediately
+ * usable both as the exported public key and as a handle to the cached private
+ * key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] size Size of the key to generate.
+ * @param[in] level ML-DSA security level of the key to generate.
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ * @note The server only serves this request when WOLFSSL_MLDSA_PUBLIC_KEY is
+ *       compiled in; otherwise the call returns an error.
+ */
+int wh_Client_MlDsaMakeCacheKeyAndExportPublic(whClientContext* ctx, int size,
+                                               int level,
+                                               whKeyId* inout_key_id,
+                                               whNvmFlags flags,
+                                               uint16_t label_len,
+                                               const uint8_t* label,
+                                               wc_MlDsaKey* pub);
 /**
  * @brief Sign a message using a ML-DSA private key.
  *
@@ -3015,6 +3188,41 @@ int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
  */
 int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
                                     wc_MlDsaKey* key);
+
+/**
+ * @brief DMA variant: generate an ML-DSA key in the server key cache and return
+ *        its public key in one round-trip.
+ *
+ * Streams the public key back through the client's DMA buffer so the client
+ * avoids a separate wh_Client_MlDsaExportPublicKeyDma call. On success
+ * inout_key_id holds the cached keyId and pub is populated with the public key,
+ * associated with that keyId, and stamped with the client's HSM devId, so it is
+ * immediately usable both as the exported public key and as a handle to the
+ * cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-DSA security level of the key to generate.
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ * @note The server only serves this request when WOLFSSL_MLDSA_PUBLIC_KEY is
+ *       compiled in; otherwise the call returns an error.
+ */
+int wh_Client_MlDsaMakeCacheKeyDma(whClientContext* ctx, int level,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, const uint8_t* label,
+                                   wc_MlDsaKey* pub);
 
 
 /**
@@ -3194,6 +3402,41 @@ int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
                                 uint16_t label_len, uint8_t* label);
 
 /**
+ * @brief Generate an ML-KEM key in the server key cache and return its public
+ *        key in one round-trip.
+ *
+ * Combines a cache keygen and a public-key export so the client avoids a
+ * separate wh_Client_MlKemExportPublicKey call. On success inout_key_id holds
+ * the cached keyId and pub is populated with the public key, associated with
+ * that keyId, and stamped with the client's HSM devId, so it is immediately
+ * usable both as the exported public key and as a handle to the cached private
+ * key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_MlKemMakeCacheKeyAndExportPublic(whClientContext* ctx, int level,
+                                               whKeyId* inout_key_id,
+                                               whNvmFlags flags,
+                                               uint16_t label_len,
+                                               const uint8_t* label,
+                                               MlKemKey* pub);
+
+/**
  * @brief Perform ML-KEM encapsulation using a server-cached public key.
  *
  * Generates a shared secret and ciphertext using the public key identified by
@@ -3299,6 +3542,39 @@ int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
  */
 int wh_Client_MlKemMakeExportKeyDma(whClientContext* ctx, int level,
                                     MlKemKey* key);
+
+/**
+ * @brief DMA variant: generate an ML-KEM key in the server key cache and return
+ *        its public key in one round-trip.
+ *
+ * Streams the public key back through the client's DMA buffer so the client
+ * avoids a separate wh_Client_MlKemExportPublicKeyDma call. On success
+ * inout_key_id holds the cached keyId and pub is populated with the public key,
+ * associated with that keyId, and stamped with the client's HSM devId, so it is
+ * immediately usable both as the exported public key and as a handle to the
+ * cached private key.
+ *
+ * @param[in] ctx Pointer to the client context.
+ * @param[in] level ML-KEM security level (WC_ML_KEM_512/768/1024).
+ * @param[in,out] inout_key_id Set to WH_KEYID_ERASED to have the server select
+ *                a unique id for this key.
+ * @param[in] flags Optional flags to associate with the key. Must not include
+ *                  WH_NVM_FLAGS_EPHEMERAL (returns WH_ERROR_BADARGS).
+ * @param[in] label_len Size of the label up to WH_NVM_LABEL_LEN. Set to 0 if
+ *                      not used.
+ * @param[in] label Optional label to associate with the key. Set to NULL if not
+ *                  used.
+ * @param[out] pub Key struct populated with the returned public key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ * @note pub is stamped with the HSM devId, so follow-on wolfCrypt operations
+ *       route to the server. Its public-key material is populated for local
+ *       encoding (e.g. wc_*PublicKeyToDer); to use pub for a purely-local
+ *       public-key operation, reset pub->devId = INVALID_DEVID first.
+ */
+int wh_Client_MlKemMakeCacheKeyDma(whClientContext* ctx, int level,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, const uint8_t* label,
+                                   MlKemKey* pub);
 
 /**
  * @brief Perform ML-KEM encapsulation using DMA.

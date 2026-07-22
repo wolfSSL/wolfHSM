@@ -377,8 +377,25 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 }
                 WH_DEBUG_SERVER_VERBOSE("RsaKeyGen CacheKeyRsa: keyId:%u, ret:%d\n", key_id, ret);
                 if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret = wc_RsaKeyToPublicDer(rsa, out, max_size);
+                    if (pub_ret > 0) {
+                        der_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        der_size = 0;
+                    }
+                }
+                if (ret == 0) {
                     res.keyId = wh_KeyId_TranslateToClient(key_id);
-                    res.len   = 0;
+                    res.len   = der_size;
                 }
             }
         }
@@ -1211,13 +1228,6 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 key_id = WH_KEYID_ERASED;
                 ret    = wh_Crypto_EccSerializeKeyDer(key, max_size, res_out,
                                                       &res_size);
-                /* TODO: RSA has the following, should we do the same? */
-                /*
-                if (ret == 0) {
-                    res.keyId = 0;
-                    res.len = res_size;
-                }
-                */
             }
             else {
                 /* Must import the key into the cache and return keyid
@@ -1238,11 +1248,24 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                                                       label_size, label);
                 }
                 WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n", key_id, ret);
-                /* TODO: RSA has the following, should we do the same? */
-                /*
-                res.keyId = WH_KEYID_ID(key_id);
-                res.len = 0;
-                */
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_EccPublicKeyToDer(key, res_out, max_size, 1);
+                    if (pub_ret > 0) {
+                        res_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        res_size = 0;
+                    }
+                }
             }
         }
         wc_ecc_free(key);
@@ -2073,6 +2096,9 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 ret    = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
             }
             else {
+                uint16_t max_size =
+                    (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                               (out - (uint8_t*)cryptoDataOut));
                 ser_size = 0;
                 /* Must import the key into the cache and return keyid */
                 if (WH_KEYID_ISERASED(key_id)) {
@@ -2093,6 +2119,24 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 }
                 WH_DEBUG_SERVER_VERBOSE("CacheImport: keyId:%u, ret:%d\n",
                        key_id, ret);
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_Curve25519PublicKeyToDer(key, out, max_size, 1);
+                    if (pub_ret > 0) {
+                        ser_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        ser_size = 0;
+                    }
+                }
             }
         }
         wc_curve25519_free(key);
@@ -2308,6 +2352,24 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 if (ret == 0) {
                     ret = wh_Server_CacheImportEd25519Key(
                         ctx, key, key_id, flags, label_size, label);
+                }
+                if (ret == 0) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    int pub_ret =
+                        wc_Ed25519PublicKeyToDer(key, res_out, max_size, 1);
+                    if (pub_ret > 0) {
+                        ser_size = (uint16_t)pub_ret;
+                    }
+                    else {
+                        ser_size = 0;
+                    }
                 }
             }
         }
@@ -4813,6 +4875,27 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                         }
                         WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
                                key_id, ret);
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
+                        if (ret == 0) {
+                            /* Best-effort public key export: when the
+                             * serialized public key fits in the response body,
+                             * return it so the client can skip a separate
+                             * ExportPublicKey call. When it does not fit (small
+                             * comm buffer or a large key), leave the body empty
+                             * and keep the cached key. Plain MakeCacheKey callers
+                             * ignore the body and see no regression;
+                             * MakeCacheKeyAndExportPublic callers detect the
+                             * empty body and evict the key themselves. */
+                            int pub_ret = wc_MlDsaKey_PublicKeyToDer(
+                                key, res_out, max_size, 1);
+                            if (pub_ret > 0) {
+                                res_size = (uint16_t)pub_ret;
+                            }
+                            else {
+                                res_size = 0;
+                            }
+                        }
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
                     }
                 }
             }
@@ -5151,6 +5234,26 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                     ret = wh_Server_MlKemKeyCacheImport(ctx, key, key_id,
                                                         req.flags, label_size,
                                                         req.label);
+                }
+                if (ret == WH_ERROR_OK) {
+                    /* Best-effort public key export: when the serialized
+                     * public key fits in the response body, return it so the
+                     * client can skip a separate ExportPublicKey call. When it
+                     * does not fit (small comm buffer or a large key), leave the
+                     * body empty and keep the cached key. Plain MakeCacheKey
+                     * callers ignore the body and see no regression;
+                     * MakeCacheKeyAndExportPublic callers detect the empty body
+                     * and evict the key themselves. */
+                    word32 pubSize = 0;
+                    if ((wc_MlKemKey_PublicKeySize(key, &pubSize) == 0) &&
+                        ((uint32_t)pubSize <= (uint32_t)max_size) &&
+                        (wc_MlKemKey_EncodePublicKey(key, res_out, pubSize) ==
+                         0)) {
+                        res_size = (uint16_t)pubSize;
+                    }
+                    else {
+                        res_size = 0;
+                    }
                 }
             }
         }
@@ -6396,6 +6499,8 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     whMessageCrypto_MlDsaKeyGenDmaRequest req;
     whMessageCrypto_MlDsaKeyGenDmaResponse res;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_MlDsaKeyGenDmaRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -6470,10 +6575,46 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                                 req.label);
                             WH_DEBUG_SERVER("CacheImport: keyId:%u, ret:%d\n",
                                 keyId, ret);
-                            if (ret == 0) {
-                                res.keyId   = wh_KeyId_TranslateToClient(keyId);
-                                res.keySize = keySize;
+                        }
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
+                        /* Stream the public key back through the client's DMA
+                         * buffer so it gets the pubkey without a separate
+                         * ExportPublicKey call. A freshly generated key must
+                         * serialize, so treat a failure as fatal: evict the
+                         * just-committed key and propagate the error rather
+                         * than returning a keyId with no public key. */
+                        if (ret == 0) {
+                            int rc = wh_Server_DmaProcessClientAddress(
+                                ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                (whServerDmaFlags){0});
+                            if (rc == 0) {
+                                int pub_ret = wc_MlDsaKey_PublicKeyToDer(
+                                    key, (byte*)clientOutAddr,
+                                    (word32)req.key.sz, 1);
+                                if (pub_ret > 0) {
+                                    keySize = (uint16_t)pub_ret;
+                                }
+                                else {
+                                    ret = (pub_ret < 0) ? pub_ret
+                                                        : WH_ERROR_ABORTED;
+                                }
+                                (void)wh_Server_DmaProcessClientAddress(
+                                    ctx, req.key.addr, &clientOutAddr, keySize,
+                                    WH_DMA_OPER_CLIENT_WRITE_POST,
+                                    (whServerDmaFlags){0});
                             }
+                            else {
+                                ret = rc;
+                            }
+                            if (ret != 0) {
+                                (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+                            }
+                        }
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
+                        if (ret == 0) {
+                            res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                            res.keySize = keySize;
                         }
                     }
                 }
@@ -6900,10 +7041,46 @@ static int _HandleMlKemKeyGenDma(whServerContext* ctx, uint16_t magic,
                         ret = wh_Server_MlKemKeyCacheImport(
                             ctx, key, keyId, req.flags, req.labelSize,
                             req.label);
-                        if (ret == WH_ERROR_OK) {
-                            res.keyId   = wh_KeyId_TranslateToClient(keyId);
-                            res.keySize = keySize;
+                    }
+                    /* Stream the public key back through the client's DMA
+                     * buffer so it gets the pubkey without a separate
+                     * ExportPublicKey call. A freshly generated key must
+                     * serialize, so treat a failure as fatal: evict the
+                     * just-committed key and propagate the error rather than
+                     * returning a keyId with no public key. */
+                    if (ret == WH_ERROR_OK) {
+                        word32 pubSize = 0;
+                        if ((wc_MlKemKey_PublicKeySize(key, &pubSize) != 0) ||
+                            ((uint64_t)pubSize > req.key.sz)) {
+                            ret = WH_ERROR_ABORTED;
                         }
+                        else {
+                            ret = wh_Server_DmaProcessClientAddress(
+                                ctx, req.key.addr, &clientOutAddr, pubSize,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                (whServerDmaFlags){0});
+                            if (ret == WH_ERROR_OK) {
+                                if (wc_MlKemKey_EncodePublicKey(
+                                        key, (uint8_t*)clientOutAddr, pubSize) ==
+                                    0) {
+                                    keySize = (uint16_t)pubSize;
+                                }
+                                else {
+                                    ret = WH_ERROR_ABORTED;
+                                }
+                                (void)wh_Server_DmaProcessClientAddress(
+                                    ctx, req.key.addr, &clientOutAddr, keySize,
+                                    WH_DMA_OPER_CLIENT_WRITE_POST,
+                                    (whServerDmaFlags){0});
+                            }
+                        }
+                        if (ret != WH_ERROR_OK) {
+                            (void)wh_Server_KeystoreEvictKey(ctx, keyId);
+                        }
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                        res.keySize = keySize;
                     }
                 }
             }
