@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_log.h"
 #include "wolfhsm/wh_log_ringbuf.h"
+#include "wolfhsm/wh_log_printf.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -233,7 +234,9 @@ static int whTest_LogFrontend(void)
     int                   i;
     mockLogExportArg      exportArgs;
     iterateValidationArgs valArgs;
-    whLogEntry            entry = {0};
+    whLogEntry            entry      = {0};
+    uint32_t              lineBefore = 0;
+    uint32_t              lineAfter  = 0;
 
     /* Setup */
     memset(&logCtx, 0, sizeof(logCtx));
@@ -259,9 +262,12 @@ static int whTest_LogFrontend(void)
     WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
     WH_TEST_ASSERT_RETURN(mockCtx.init_called == 1);
 
-    /* Test: Fill buffer completely and verify all entries */
+    /* Test: Fill buffer completely and verify all entries. Every entry is
+     * logged from the same line, bracketed to pin the recorded line. */
     for (i = 0; i < MOCK_LOG_MAX_ENTRIES; i++) {
+        lineBefore = __LINE__;
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Entry %d", i);
+        lineAfter = __LINE__;
     }
     WH_TEST_ASSERT_RETURN(mockCtx.count == MOCK_LOG_MAX_ENTRIES);
 
@@ -276,7 +282,8 @@ static int whTest_LogFrontend(void)
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
         WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[i].function, __func__,
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[i].line > 0);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[i].line > lineBefore);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[i].line < lineAfter);
         WH_TEST_ASSERT_RETURN(mockCtx.entries[i].timestamp > 0);
     }
 
@@ -324,6 +331,11 @@ static int whTest_LogMacros(void)
     whLogContext   logCtx;
     mockLogContext mockCtx;
     whLogConfig    logConfig;
+    uint32_t       lineBefore = 0;
+    uint32_t       lineAfter  = 0;
+    /* Index of the entry the current block checks. Bumped once per added
+     * entry so cases can be inserted without renumbering those below */
+    int idx = 0;
 
     /* Setup */
     memset(&logCtx, 0, sizeof(logCtx));
@@ -335,55 +347,66 @@ static int whTest_LogMacros(void)
     WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
 
     /* Test: WH_LOG_INFO creates proper entry with __FILE__/__LINE__ */
+    lineBefore = __LINE__;
     WH_LOG(&logCtx, WH_LOG_LEVEL_INFO, "Info message");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 1);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[0].level == WH_LOG_LEVEL_INFO);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].msg, "Info message",
+    lineAfter = __LINE__;
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Info message",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].file, __FILE__,
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].file, __FILE__,
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].function, __func__,
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].function, __func__,
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[0].line > 0);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line > lineBefore);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line < lineAfter);
+    idx++;
 
     /* Test: WH_LOG_ERROR creates proper entry */
     WH_LOG(&logCtx, WH_LOG_LEVEL_ERROR, "Error message");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 2);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[1].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[1].msg, "Error message",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Error message",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
+    idx++;
 
     /* Test: WH_LOG_SECEVENT creates proper entry */
     WH_LOG(&logCtx, WH_LOG_LEVEL_SECEVENT, "Security event");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 3);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[2].level == WH_LOG_LEVEL_SECEVENT);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[2].msg, "Security event",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_SECEVENT);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Security event",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
+    idx++;
 
     /* Test: WH_LOG_F creates proper entry with runtime string */
     {
         const char* runtime_info = "Runtime info message";
+        lineBefore               = __LINE__;
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "%s", runtime_info);
-        WH_TEST_ASSERT_RETURN(mockCtx.count == 4);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[3].level == WH_LOG_LEVEL_INFO);
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[3].msg, runtime_info,
+        lineAfter = __LINE__;
+        WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, runtime_info,
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[3].file, __FILE__,
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].file, __FILE__,
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[3].function, __func__,
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].function, __func__,
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[3].line > 0);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line > lineBefore);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line < lineAfter);
+        idx++;
     }
 
     /* Test: WH_LOG_F with empty string */
     {
         const char* empty_str = "";
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "%s", empty_str);
-        WH_TEST_ASSERT_RETURN(mockCtx.count == 5);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[4].level == WH_LOG_LEVEL_INFO);
-        WH_TEST_ASSERT_RETURN(
-            strncmp(mockCtx.entries[4].msg, "", WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[4].msg_len == 0);
+        WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "",
+                                      WOLFHSM_CFG_LOG_MSG_MAX) == 0);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 0);
+        idx++;
     }
 
     /* Test: WH_LOG_F with string exactly at max length */
@@ -397,28 +420,30 @@ static int whTest_LogMacros(void)
         exact_msg[WOLFHSM_CFG_LOG_MSG_MAX - 1] = '\0';
 
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "%s", exact_msg);
-        WH_TEST_ASSERT_RETURN(mockCtx.count == 6);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[5].level == WH_LOG_LEVEL_INFO);
+        WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
         /* Message should be exactly max length - 1 */
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[5].msg_len ==
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len ==
                               WOLFHSM_CFG_LOG_MSG_MAX - 1);
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[5].msg, exact_msg,
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, exact_msg,
                                       WOLFHSM_CFG_LOG_MSG_MAX) == 0);
         /* Should be null-terminated */
         WH_TEST_ASSERT_RETURN(
-            mockCtx.entries[5].msg[mockCtx.entries[5].msg_len] == '\0');
+            mockCtx.entries[idx].msg[mockCtx.entries[idx].msg_len] == '\0');
+        idx++;
     }
 
     /* Test: Log assert with true condition doesn't add log entry */
     WH_LOG_ASSERT(&logCtx, WH_LOG_LEVEL_ERROR, 1, "Assert Message");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 6);
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx);
 
     /* Test: Log assert with false condition adds log entry */
     WH_LOG_ASSERT(&logCtx, WH_LOG_LEVEL_ERROR, 0, "Assert Message");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 7);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[6].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[6].msg, "Assert Message",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Assert Message",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
+    idx++;
 
     /* Test: Timestamp is populated */
     WH_TEST_ASSERT_RETURN(mockCtx.entries[0].timestamp > 0);
@@ -437,6 +462,11 @@ static int whTest_LogFormattedMacros(void)
     whLogContext   logCtx;
     mockLogContext mockCtx;
     whLogConfig    logConfig;
+    uint32_t       lineBefore = 0;
+    uint32_t       lineAfter  = 0;
+    /* Index of the entry the current block checks. Bumped once per added
+     * entry so cases can be inserted without renumbering those below */
+    int idx = 0;
 
     /* Setup */
     memset(&logCtx, 0, sizeof(logCtx));
@@ -448,58 +478,67 @@ static int whTest_LogFormattedMacros(void)
     WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
 
     /* Test: WH_LOG_INFO_F with single integer */
+    lineBefore = __LINE__;
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Value: %d", 42);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 1);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[0].level == WH_LOG_LEVEL_INFO);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].msg, "Value: 42",
+    lineAfter = __LINE__;
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Value: 42",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[0].msg_len == 9);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].file, __FILE__,
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 9);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].file, __FILE__,
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[0].function, __func__,
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].function, __func__,
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[0].line > 0);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line > lineBefore);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].line < lineAfter);
+    idx++;
 
     /* Test: WH_LOG_ERROR_F with multiple integers */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_ERROR, "x=%d, y=%d", 10, 20);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 2);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[1].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[1].msg, "x=10, y=20",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "x=10, y=20",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[1].msg_len == 10);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 10);
+    idx++;
 
     /* Test: WH_LOG_SECEVENT_F with string formatting */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_SECEVENT, "User: %s", "admin");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 3);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[2].level == WH_LOG_LEVEL_SECEVENT);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[2].msg, "User: admin",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_SECEVENT);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "User: admin",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[2].msg_len == 11);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 11);
+    idx++;
 
     /* Test: WH_LOG_INFO_F with mixed types */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Status %d: %s", 404, "Not Found");
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 4);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[3].level == WH_LOG_LEVEL_INFO);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[3].msg,
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg,
                                   "Status 404: Not Found",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[3].msg_len == 21);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 21);
+    idx++;
 
     /* Test: WH_LOG_ERROR_F with hex formatting */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_ERROR, "Addr: 0x%08x", 0xDEADBEEF);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 5);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[4].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[4].msg, "Addr: 0xdeadbeef",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Addr: 0xdeadbeef",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[4].msg_len == 16);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 16);
+    idx++;
 
     /* Test: WH_LOG_F generic macro with level */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_ERROR, "val=%d", 123);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 6);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[5].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[5].msg, "val=123",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "val=123",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[5].msg_len == 7);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 7);
+    idx++;
 
     /* Test: Long formatted output (truncation) */
     {
@@ -511,59 +550,64 @@ static int whTest_LogFormattedMacros(void)
         longStr[sizeof(longStr) - 1] = '\0';
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "%s", longStr);
 
-        WH_TEST_ASSERT_RETURN(mockCtx.count == 7);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[6].level == WH_LOG_LEVEL_INFO);
+        WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
         /* Message should be truncated to WOLFHSM_CFG_LOG_MSG_MAX - 1 */
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[6].msg_len ==
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len ==
                               WOLFHSM_CFG_LOG_MSG_MAX - 1);
         /* Should be null-terminated */
         WH_TEST_ASSERT_RETURN(
-            mockCtx.entries[6].msg[mockCtx.entries[6].msg_len] == '\0');
+            mockCtx.entries[idx].msg[mockCtx.entries[idx].msg_len] == '\0');
 
         /* Verify the beginning of the truncated message */
         memset(expected, 'X', WOLFHSM_CFG_LOG_MSG_MAX - 1);
         expected[WOLFHSM_CFG_LOG_MSG_MAX - 1] = '\0';
         /* Compare up to the truncated length */
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[6].msg, expected,
+        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, expected,
                                       WOLFHSM_CFG_LOG_MSG_MAX - 1) == 0);
+        idx++;
     }
 
     /* Test: Format with multiple argument types */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_SECEVENT, "ID=%u, Name=%s, Code=0x%04x", 100,
              "test", 0xABCD);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 8);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[7].level == WH_LOG_LEVEL_SECEVENT);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[7].msg,
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_SECEVENT);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg,
                                   "ID=100, Name=test, Code=0xabcd",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[7].msg_len == 30);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 30);
+    idx++;
 
     /* Test: Pointer formatting */
     {
         void* ptr = (void*)0x1234;
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Pointer: %p", ptr);
-        WH_TEST_ASSERT_RETURN(mockCtx.count == 9);
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[8].level == WH_LOG_LEVEL_INFO);
+        WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_INFO);
         /* Just verify message contains "Pointer:" and is non-empty */
-        WH_TEST_ASSERT_RETURN(mockCtx.entries[8].msg_len > 9);
-        WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[8].msg, "Pointer: ", 9) ==
-                              0);
+        WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len > 9);
+        WH_TEST_ASSERT_RETURN(
+            strncmp(mockCtx.entries[idx].msg, "Pointer: ", 9) == 0);
+        idx++;
     }
 
     /* Test: Character formatting */
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_ERROR, "Char: %c", 'X');
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 10);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[9].msg, "Char: X",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg, "Char: X",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[9].msg_len == 7);
-
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].msg_len == 7);
+    idx++;
 
     /* Test assert formatting with simple int args */
     WH_LOG_ASSERT_F(&logCtx, WH_LOG_LEVEL_ERROR, 0, "Assert Message: %d", 42);
-    WH_TEST_ASSERT_RETURN(mockCtx.count == 11);
-    WH_TEST_ASSERT_RETURN(mockCtx.entries[10].level == WH_LOG_LEVEL_ERROR);
-    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[10].msg, "Assert Message: 42",
+    WH_TEST_ASSERT_RETURN(mockCtx.count == idx + 1);
+    WH_TEST_ASSERT_RETURN(mockCtx.entries[idx].level == WH_LOG_LEVEL_ERROR);
+    WH_TEST_ASSERT_RETURN(strncmp(mockCtx.entries[idx].msg,
+                                  "Assert Message: 42",
                                   WOLFHSM_CFG_LOG_MSG_MAX) == 0);
+    idx++;
 
     /* Test: Timestamp is populated */
     WH_TEST_ASSERT_RETURN(mockCtx.entries[0].timestamp > 0);
@@ -723,7 +767,6 @@ static int whTest_LogBackend_MessageHandling(whTestLogBackendTestConfig* cfg)
     maxMsg[sizeof(maxMsg) - 1] = '\0';
     WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "%s", maxMsg);
 
-
     /* Verify all entries were added */
     iterate_count = 0;
     WH_TEST_RETURN_ON_FAIL(
@@ -869,6 +912,7 @@ static int whTest_LogRingbuf(void)
     int                 i;
     int                 iterate_count;
     uint32_t            capacity;
+
     /* Backend storage for ring buffer */
     const size_t numLogEntries = 32;
     whLogEntry   ringbuf_buffer[32];
@@ -900,11 +944,9 @@ static int whTest_LogRingbuf(void)
     for (i = 0; i < 5; i++) {
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Message %d", i);
     }
-
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == 5);
 
     /* Verify the entries are correct */
-    WH_TEST_ASSERT_RETURN(ringbufCtx.count == 5);
     for (i = 0; i < 5; i++) {
         char expected[32];
         snprintf(expected, sizeof(expected), "Message %d", i);
@@ -927,8 +969,6 @@ static int whTest_LogRingbuf(void)
     for (i = 0; i < 5; i++) {
         WH_LOG_F(&logCtx, WH_LOG_LEVEL_INFO, "Wrapped %d", i);
     }
-
-    /* Count increments freely to track total messages ever written */
     WH_TEST_ASSERT_RETURN(ringbufCtx.count == capacity + 5);
 
     /* Verify oldest entries were overwritten */
@@ -1034,6 +1074,80 @@ static int whTest_LogRingbuf_Generic(void)
     return whTest_LogBackend_RunAll(&testCfg);
 }
 
+/* Printf backend tests. The printf backend is a write-only sink: it
+ * implements only Init and AddEntry, so the remaining frontend ops
+ * report NOTIMPL. Exercises both the "log always" and "drop unless
+ * debug" config paths and the bad-args/uninitialized rejections. */
+static int whTest_LogPrintf(void)
+{
+    whLogContext       logCtx;
+    whLogPrintfContext printfCtx;
+    whLogPrintfConfig  printfCfg;
+    whLogConfig        logConfig;
+    whLogCb            printfCb      = WH_LOG_PRINTF_CB;
+    whLogEntry         entry         = {0};
+    int                iterate_count = 0;
+
+    memset(&printfCtx, 0, sizeof(printfCtx));
+
+    /* Direct backend bad-args rejections */
+    WH_TEST_ASSERT_RETURN(whLogPrintf_Init(NULL, NULL) == WH_ERROR_BADARGS);
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(NULL, &entry) ==
+                          WH_ERROR_BADARGS);
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(&printfCtx, NULL) ==
+                          WH_ERROR_BADARGS);
+
+    /* Adding to an uninitialized backend is rejected */
+    WH_TEST_ASSERT_RETURN(whLogPrintf_AddEntry(&printfCtx, &entry) ==
+                          WH_ERROR_ABORTED);
+
+    /* Init with NULL config uses defaults (logIfNotDebug = 0) */
+    memset(&logCtx, 0, sizeof(logCtx));
+    memset(&printfCtx, 0, sizeof(printfCtx));
+    logConfig.cb      = &printfCb;
+    logConfig.context = &printfCtx;
+    logConfig.config  = NULL;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
+    WH_TEST_ASSERT_RETURN(printfCtx.initialized == 1);
+    WH_TEST_ASSERT_RETURN(printfCtx.logIfNotDebug == 0);
+
+    /* With logIfNotDebug = 0 and a non-debug build, entries are dropped */
+    WH_LOG(&logCtx, WH_LOG_LEVEL_INFO, "Dropped unless debug build");
+
+    /* Re-init with logIfNotDebug = 1 so entries are always printed */
+    memset(&logCtx, 0, sizeof(logCtx));
+    memset(&printfCtx, 0, sizeof(printfCtx));
+    printfCfg.logIfNotDebug = 1;
+    logConfig.config        = &printfCfg;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_Init(&logCtx, &logConfig));
+    WH_TEST_ASSERT_RETURN(printfCtx.logIfNotDebug == 1);
+
+    /* Exercise the print path for each known level */
+    WH_LOG(&logCtx, WH_LOG_LEVEL_INFO, "Printf info");
+    WH_LOG(&logCtx, WH_LOG_LEVEL_ERROR, "Printf error");
+    WH_LOG(&logCtx, WH_LOG_LEVEL_SECEVENT, "Printf secevent");
+
+    /* An out-of-range level exercises the level-to-string default */
+    entry.timestamp = 1;
+    entry.level     = (whLogLevel)999;
+    entry.file      = __FILE__;
+    entry.function  = __func__;
+    entry.line      = __LINE__;
+    entry.msg_len   = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Log_AddEntry(&logCtx, &entry));
+
+    /* The printf backend implements no store, so the remaining frontend
+     * operations report NOTIMPL */
+    WH_TEST_ASSERT_RETURN(wh_Log_Cleanup(&logCtx) == WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(wh_Log_Export(&logCtx, NULL) == WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(
+        wh_Log_Iterate(&logCtx, iterateCallbackCount, &iterate_count) ==
+        WH_ERROR_NOTIMPL);
+    WH_TEST_ASSERT_RETURN(wh_Log_Clear(&logCtx) == WH_ERROR_NOTIMPL);
+
+    return WH_ERROR_OK;
+}
+
 /* Portable log test entry point (Misc group) */
 int whTest_Log(void* ctx)
 {
@@ -1056,6 +1170,9 @@ int whTest_Log(void* ctx)
 
     WH_TEST_PRINT("Testing ring buffer backend...\n");
     WH_TEST_RETURN_ON_FAIL(whTest_LogRingbuf());
+
+    WH_TEST_PRINT("Testing printf backend...\n");
+    WH_TEST_RETURN_ON_FAIL(whTest_LogPrintf());
 
     return WH_ERROR_OK;
 }
