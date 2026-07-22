@@ -584,7 +584,8 @@ int wh_Client_CommCloseResponse(whClientContext* c)
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
-                (resp_action != WH_MESSAGE_COMM_ACTION_CLOSE) ){
+                (resp_action != WH_MESSAGE_COMM_ACTION_CLOSE) ||
+                (resp_size != 0) ){
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
@@ -867,7 +868,12 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -955,7 +961,12 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* outKeyId)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -1025,7 +1036,12 @@ int wh_Client_KeyEvictResponse(whClientContext* c)
                                  (uint8_t*)&resp);
 
     if (ret == 0) {
-        if (resp.rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp.rc != 0) {
             ret = resp.rc;
         }
     }
@@ -1088,8 +1104,16 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bounds: the fixed fields, then the key material, must fit
+         * within the actual received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
+        }
+        else if (resp->len > (size - sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
         }
         else {
             if (out == NULL) {
@@ -1174,8 +1198,16 @@ int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bounds: the fixed fields, then the key material, must fit
+         * within the actual received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
+        }
+        else if (resp->len > (size - sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
         }
         else {
             if (out == NULL) {
@@ -1252,7 +1284,12 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1309,7 +1346,12 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1366,7 +1408,12 @@ int wh_Client_KeyRevokeResponse(whClientContext* c)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1425,7 +1472,12 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else if (counter != NULL) {
@@ -1504,7 +1556,12 @@ int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else if (counter != NULL) {
@@ -1565,7 +1622,12 @@ int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -1626,7 +1688,12 @@ int wh_Client_CounterDestroyResponse(whClientContext* c)
     ret = wh_Client_RecvResponse(c, &group, &action, &size,
                                  WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
