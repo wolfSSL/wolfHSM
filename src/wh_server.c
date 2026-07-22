@@ -267,17 +267,16 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_MessageComm_TranslateInitRequest(magic,
                 (whMessageCommInitRequest*)req_packet, &req);
 
-        if (req.client_id > WH_CLIENT_ID_MAX) {
+        /* client_id 0 (USER=0) names the shared/global and factory-provisioned
+         * namespace, not a client, so it is never a valid connection id. The
+         * client library already refuses it; enforce it here too so a raw
+         * client cannot bind id 0 and reach that namespace through the
+         * per-client key and NVM APIs. */
+        if ((req.client_id == WH_KEYUSER_GLOBAL) ||
+            (req.client_id > WH_CLIENT_ID_MAX)) {
             *out_resp_size = 0;
             return WH_ERROR_BADARGS;
         }
-#ifdef WOLFHSM_CFG_GLOBAL_KEYS
-        /* USER=0 is reserved for global keys, client_id must be non-zero */
-        if (req.client_id == WH_KEYUSER_GLOBAL) {
-            *out_resp_size = 0;
-            return WH_ERROR_BADARGS;
-        }
-#endif
 
         /* Process the init action */
         server->comm->client_id = req.client_id;

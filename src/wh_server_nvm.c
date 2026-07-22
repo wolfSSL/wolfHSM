@@ -159,6 +159,23 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
         return WH_ERROR_BADARGS;
     }
 
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    /* Client NVM ids are translated through the connection's client id (the
+     * USER field). Before COMM INIT binds a nonzero id that field is 0, which
+     * would map every request into the USER=0 (shared/global and factory-
+     * provisioned) namespace. Refuse NVM from an unbound client; a valid
+     * connection always has a nonzero id, so this only rejects pre-handshake
+     * requests. */
+    if (server->comm->client_id == WH_KEYUSER_GLOBAL) {
+        whMessageNvm_SimpleResponse resp = {0};
+        resp.rc = WH_ERROR_ACCESS;
+        wh_MessageNvm_TranslateSimpleResponse(
+            magic, &resp, (whMessageNvm_SimpleResponse*)resp_packet);
+        *out_resp_size = sizeof(resp);
+        return WH_ERROR_ACCESS;
+    }
+#endif
+
     /* III: Translate function returns do not need to be checked since args
      * are not NULL */
 
