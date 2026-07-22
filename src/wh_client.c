@@ -318,7 +318,7 @@ int wh_Client_CommInitResponse(whClientContext* c,
                                 uint32_t *out_serverid)
 {
     int rc = 0;
-    whMessageCommInitResponse msg = {0};
+    whMessageCommInitResponse* msg = NULL;
     uint16_t resp_group = 0;
     uint16_t resp_action = 0;
     uint16_t resp_size = 0;
@@ -327,23 +327,30 @@ int wh_Client_CommInitResponse(whClientContext* c,
         return WH_ERROR_BADARGS;
     }
 
+    /* Receive into the comm buffer: the comm layer copies the whole received
+     * payload in without bounding it to the caller's buffer size */
+    msg = (whMessageCommInitResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
     rc = wh_Client_RecvResponse(c,
             &resp_group, &resp_action,
-            &resp_size, &msg);
+            &resp_size, msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
                 (resp_action != WH_MESSAGE_COMM_ACTION_INIT) ||
-                (resp_size != sizeof(msg)) ){
+                (resp_size != sizeof(*msg)) ){
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
             /* Valid message */
             if (out_clientid != NULL) {
-                *out_clientid = msg.client_id;
+                *out_clientid = msg->client_id;
             }
             if (out_serverid != NULL) {
-                *out_serverid = msg.server_id;
+                *out_serverid = msg->server_id;
             }
         }
     }
@@ -398,7 +405,7 @@ int wh_Client_CommInfoResponse(whClientContext* c,
         uint32_t *out_nvm_state)
 {
     int rc = 0;
-    whMessageCommInfoResponse msg = {0};
+    whMessageCommInfoResponse* msg = NULL;
     uint16_t resp_group = 0;
     uint16_t resp_action = 0;
     uint16_t resp_size = 0;
@@ -407,59 +414,66 @@ int wh_Client_CommInfoResponse(whClientContext* c,
         return WH_ERROR_BADARGS;
     }
 
+    /* Receive into the comm buffer: the comm layer copies the whole received
+     * payload in without bounding it to the caller's buffer size */
+    msg = (whMessageCommInfoResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (msg == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
     rc = wh_Client_RecvResponse(c,
             &resp_group, &resp_action,
-            &resp_size, &msg);
+            &resp_size, msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
                 (resp_action != WH_MESSAGE_COMM_ACTION_INFO) ||
-                (resp_size != sizeof(msg)) ){
+                (resp_size != sizeof(*msg)) ){
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
             /* Valid message */
             if (out_version != NULL) {
-                memcpy(out_version, msg.version, sizeof(msg.version));
+                memcpy(out_version, msg->version, sizeof(msg->version));
             }
             if (out_build != NULL) {
-                memcpy(out_build, msg.build, sizeof(msg.build));
+                memcpy(out_build, msg->build, sizeof(msg->build));
             }
             if (out_cfg_comm_data_len != NULL) {
-                *out_cfg_comm_data_len = msg.cfg_comm_data_len;
+                *out_cfg_comm_data_len = msg->cfg_comm_data_len;
             }
             if (out_cfg_nvm_object_count != NULL) {
-                *out_cfg_nvm_object_count = msg.cfg_nvm_object_count;
+                *out_cfg_nvm_object_count = msg->cfg_nvm_object_count;
             }
             if (out_cfg_keycache_count != NULL) {
-                *out_cfg_keycache_count = msg.cfg_server_keycache_count;
+                *out_cfg_keycache_count = msg->cfg_server_keycache_count;
             }
             if (out_cfg_keycache_bufsize != NULL) {
-                *out_cfg_keycache_bufsize = msg.cfg_server_keycache_bufsize;
+                *out_cfg_keycache_bufsize = msg->cfg_server_keycache_bufsize;
             }
             if (out_cfg_keycache_bigcount != NULL) {
-                *out_cfg_keycache_bigcount = msg.cfg_server_keycache_bigcount;
+                *out_cfg_keycache_bigcount = msg->cfg_server_keycache_bigcount;
             }
             if (out_cfg_keycache_bigbufsize != NULL) {
-                *out_cfg_keycache_bigbufsize = msg.cfg_server_keycache_bigbufsize;
+                *out_cfg_keycache_bigbufsize = msg->cfg_server_keycache_bigbufsize;
             }
             if (out_cfg_customcb_count != NULL) {
-                *out_cfg_customcb_count = msg.cfg_server_customcb_count;
+                *out_cfg_customcb_count = msg->cfg_server_customcb_count;
             }
             if (out_cfg_dmaaddr_count != NULL) {
-                *out_cfg_dmaaddr_count = msg.cfg_server_dmaaddr_count;
+                *out_cfg_dmaaddr_count = msg->cfg_server_dmaaddr_count;
             }
             if (out_debug_state != NULL) {
-                *out_debug_state = msg.debug_state;
+                *out_debug_state = msg->debug_state;
             }
             if (out_boot_state != NULL) {
-                *out_boot_state = msg.boot_state;
+                *out_boot_state = msg->boot_state;
             }
             if (out_lifecycle_state != NULL) {
-                *out_lifecycle_state = msg.lifecycle_state;
+                *out_lifecycle_state = msg->lifecycle_state;
             }
             if (out_nvm_state != NULL) {
-                *out_nvm_state = msg.nvm_state;
+                *out_nvm_state = msg->nvm_state;
             }
         }
     }
@@ -591,7 +605,8 @@ int wh_Client_CommCloseResponse(whClientContext* c)
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_COMM) ||
-                (resp_action != WH_MESSAGE_COMM_ACTION_CLOSE) ){
+                (resp_action != WH_MESSAGE_COMM_ACTION_CLOSE) ||
+                (resp_size != 0) ){
             /* Invalid message */
             rc = WH_ERROR_ABORTED;
         } else {
@@ -711,7 +726,7 @@ int wh_Client_CustomCbRequest(whClientContext* c, const whMessageCustomCb_Reques
 int wh_Client_CustomCbResponse(whClientContext*          c,
                              whMessageCustomCb_Response* outResp)
 {
-    whMessageCustomCb_Response resp;
+    whMessageCustomCb_Response* resp = NULL;
     uint16_t                 resp_group  = 0;
     uint16_t                 resp_action = 0;
     uint16_t                 resp_size   = 0;
@@ -721,18 +736,25 @@ int wh_Client_CustomCbResponse(whClientContext*          c,
         return WH_ERROR_BADARGS;
     }
 
+    /* Receive into the comm buffer: the comm layer copies the whole received
+     * payload in without bounding it to the caller's buffer size */
+    resp = (whMessageCustomCb_Response*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
     rc =
-        wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &resp);
+        wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, resp);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
 
-    if (resp_size != sizeof(resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM) {
+    if (resp_size != sizeof(*resp) || resp_group != WH_MESSAGE_GROUP_CUSTOM) {
         /* message invalid */
         return WH_ERROR_ABORTED;
     }
 
-    memcpy(outResp, &resp, sizeof(resp));
+    memcpy(outResp, resp, sizeof(*resp));
 
     return WH_ERROR_OK;
 }
@@ -874,7 +896,12 @@ int wh_Client_KeyCacheResponse(whClientContext* c, uint16_t* keyId)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -961,7 +988,12 @@ int wh_Client_KeyCacheRandomResponse(whClientContext* c, uint16_t* outKeyId)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -1021,17 +1053,29 @@ int wh_Client_KeyEvictResponse(whClientContext* c)
     uint16_t                         action;
     uint16_t                         size;
     int                              ret;
-    whMessageKeystore_EvictResponse resp;
+    whMessageKeystore_EvictResponse* resp = NULL;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)&resp);
+    /* Receive into the comm buffer: the comm layer copies the whole received
+     * payload in without bounding it to the caller's buffer size */
+    resp = (whMessageKeystore_EvictResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
 
     if (ret == 0) {
-        if (resp.rc != 0) {
-            ret = resp.rc;
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
         }
     }
 
@@ -1092,8 +1136,16 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bounds: the fixed fields, then the key material, must fit
+         * within the actual received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
+        }
+        else if (resp->len > (size - sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
         }
         else {
             if (out == NULL) {
@@ -1177,8 +1229,16 @@ int wh_Client_KeyExportPublicResponse(whClientContext* c, uint8_t* label,
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bounds: the fixed fields, then the key material, must fit
+         * within the actual received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
+        }
+        else if (resp->len > (size - sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
         }
         else {
             if (out == NULL) {
@@ -1254,7 +1314,12 @@ int wh_Client_KeyCommitResponse(whClientContext* c)
 
     ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1310,7 +1375,12 @@ int wh_Client_KeyEraseResponse(whClientContext* c)
 
     ret  = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1366,7 +1436,12 @@ int wh_Client_KeyRevokeResponse(whClientContext* c)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == 0) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
@@ -1424,7 +1499,12 @@ int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else if (counter != NULL) {
@@ -1502,7 +1582,12 @@ int wh_Client_CounterIncrementResponse(whClientContext* c, uint32_t* counter)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else if (counter != NULL) {
@@ -1562,7 +1647,12 @@ int wh_Client_CounterReadResponse(whClientContext* c, uint32_t* counter)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
         else {
@@ -1622,7 +1712,12 @@ int wh_Client_CounterDestroyResponse(whClientContext* c)
 
     ret = wh_Client_RecvResponse(c, &group, &action, &size, (uint8_t*)resp);
     if (ret == WH_ERROR_OK) {
-        if (resp->rc != 0) {
+        /* Defensive bound: the response fields must fit within the actual
+         * received frame */
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
             ret = resp->rc;
         }
     }
