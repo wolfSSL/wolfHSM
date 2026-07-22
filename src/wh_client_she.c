@@ -52,14 +52,14 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
                                uint32_t count, whNvmFlags flags, uint8_t* key,
                                whNvmSize keySz)
 {
-    int                                ret;
-    uint16_t                           group;
-    uint16_t                           action;
-    uint16_t                           dataSz;
-    whMessageShe_PreProgramKeyRequest* req;
-    whMessageShe_PreProgramKeyResponse resp = {0};
-    uint8_t*                           reqBuf;
-    uint8_t*                           key_data;
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            dataSz;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf;
+    uint8_t*                            key_data;
 
     if (c == NULL || key == NULL || keySz == 0) {
         return WH_ERROR_BADARGS;
@@ -81,22 +81,28 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
                                 sizeof(*req) + keySz, reqBuf);
     if (ret == 0) {
+        /* Receive into the COMM_DATA_LEN-sized comm buffer (as every other
+         * handler here does) so the copy is bounded; a small stack struct
+         * could be overrun by an oversized response. */
+        resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+            c->comm);
         do {
             ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                                         sizeof(resp), (uint8_t*)&resp);
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
+                                         (uint8_t*)resp);
         } while (ret == WH_ERROR_NOTREADY);
     }
     if (ret == 0) {
         /* Validate the response. A server built without
          * WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT sends an empty response for
-         * this action; without this check the zero-initialized resp.rc
-         * would read as success even though no key was stored. */
+         * this action; the size check rejects it so a stale buffer is never
+         * read as a successful rc. */
         if ((group != WH_MESSAGE_GROUP_SHE) ||
-            (action != WH_SHE_PRE_PROGRAM_KEY) || (dataSz != sizeof(resp))) {
+            (action != WH_SHE_PRE_PROGRAM_KEY) || (dataSz != sizeof(*resp))) {
             ret = WH_ERROR_ABORTED;
         }
         else {
-            ret = resp.rc;
+            ret = resp->rc;
         }
     }
     return ret;
@@ -104,12 +110,12 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
 
 int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
 {
-    int                             ret;
-    uint16_t                        group;
-    uint16_t                        action;
-    uint16_t                        dataSz;
-    whMessageShe_DestroyKeyRequest* req;
-    whMessageShe_DestroyKeyResponse resp = {0};
+    int                              ret;
+    uint16_t                         group;
+    uint16_t                         action;
+    uint16_t                         dataSz;
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
 
     if (c == NULL) {
         return WH_ERROR_BADARGS;
@@ -121,19 +127,24 @@ int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,
                                 sizeof(*req), (uint8_t*)req);
     if (ret == 0) {
+        /* Receive into the comm buffer, not a stack struct (see
+         * wh_Client_ShePreProgramKey). */
+        resp =
+            (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
         do {
             ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
-                                         sizeof(resp), (uint8_t*)&resp);
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
+                                         (uint8_t*)resp);
         } while (ret == WH_ERROR_NOTREADY);
     }
     if (ret == 0) {
         /* Validate the response (see wh_Client_ShePreProgramKey) */
         if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_DESTROY_KEY) ||
-            (dataSz != sizeof(resp))) {
+            (dataSz != sizeof(*resp))) {
             ret = WH_ERROR_ABORTED;
         }
         else {
-            ret = resp.rc;
+            ret = resp->rc;
         }
     }
     return ret;

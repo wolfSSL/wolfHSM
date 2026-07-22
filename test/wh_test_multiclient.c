@@ -1580,6 +1580,200 @@ static int _testNvmClientIsolation(whClientContext* client1,
     return WH_ERROR_OK;
 }
 
+/*
+ * A connection that has not completed COMM INIT has client_id 0, which would
+ * translate every NVM request into the USER=0 namespace (shared/global and
+ * factory-provisioned objects). The server must refuse NVM requests from such
+ * an unbound client. Force the server connection's client_id to 0 and confirm
+ * a planted USER=0 object is never read, enumerated, added over, or destroyed.
+ */
+static int _testNvmUnboundClientRejected(whClientContext* client1,
+                                         whServerContext* server1,
+                                         whClientContext* client2,
+                                         whServerContext* server2)
+{
+    const whNvmId planted_id = 8;
+    whNvmId       planted_nvm_id;
+    whNvmMetadata meta = {0};
+    uint8_t       saved_id;
+    int32_t       out_rc = 0;
+    int           prc;
+    int           leaked  = 0;
+    whNvmId       count   = 0;
+    whNvmId       list_id = 0;
+    whNvmSize     out_len = 0;
+    uint8_t       buf[64] = {0};
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT(
+        "Testing NVM reject of unbound (client_id 0) connection...\n");
+
+    /* Plant a USER=0 object directly, as provisioning would. */
+    planted_nvm_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_NVM, WH_KEYUSER_GLOBAL, planted_id);
+    meta.id     = planted_nvm_id;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = sizeof(NVM_ISOLATION_PAYLOAD_B);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, sizeof(NVM_ISOLATION_PAYLOAD_B),
+                         NVM_ISOLATION_PAYLOAD_B) == WH_ERROR_OK);
+
+    /* Force the server connection into the unbound (pre-COMM-INIT) state. */
+    saved_id                 = server1->comm->client_id;
+    server1->comm->client_id = WH_KEYUSER_GLOBAL;
+
+    /* A verb counts as refused when the response parse fails (an early reject
+     * sends a SimpleResponse whose size won't match a read/list/metadata
+     * response) or when out_rc is an error. Accumulate a "leaked" flag across
+     * all verbs, then restore client_id before asserting so a failure can't
+     * corrupt later tests sharing this server. */
+
+    /* Read: refused, and never returns the planted bytes. */
+    prc = wh_Client_NvmReadRequest(client1, planted_id, 0, sizeof(buf));
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmReadResponse(client1, &out_rc, &out_len, buf);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+    if (memcmp(buf, NVM_ISOLATION_PAYLOAD_B, sizeof(NVM_ISOLATION_PAYLOAD_B)) ==
+        0) {
+        leaked = 1;
+    }
+
+    /* GetMetadata: refused. */
+    out_rc = 0;
+    prc    = wh_Client_NvmGetMetadataRequest(client1, planted_id);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        whNvmId     got_id = 0;
+        whNvmAccess access = 0;
+        whNvmFlags  flags  = 0;
+        whNvmSize   len    = 0;
+        prc = wh_Client_NvmGetMetadataResponse(client1, &out_rc, &got_id,
+                                               &access, &flags, &len, 0, NULL);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* List: refused (cannot enumerate the USER=0 namespace). */
+    out_rc = 0;
+    prc    = wh_Client_NvmListRequest(client1, WH_NVM_ACCESS_ANY,
+                                      WH_NVM_FLAGS_NONE, 0);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmListResponse(client1, &out_rc, &count, &list_id);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* Destroy: refused. */
+    out_rc = 0;
+    {
+        whNvmId destroy_id = planted_id;
+        prc = wh_Client_NvmDestroyObjectsRequest(client1, 1, &destroy_id);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmDestroyObjectsResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* Add: refused. */
+    out_rc = 0;
+    prc    = wh_Client_NvmAddObjectRequest(
+        client1, 5, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, 0, NULL,
+        sizeof(NVM_ISOLATION_PAYLOAD_A), NVM_ISOLATION_PAYLOAD_A);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmAddObjectResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* DMA add: refused (shares the same handler entry gate). */
+    out_rc = 0;
+    {
+        whNvmMetadata dma_meta = {0};
+        dma_meta.id            = 5;
+        dma_meta.access        = WH_NVM_ACCESS_ANY;
+        dma_meta.flags         = WH_NVM_FLAGS_NONE;
+        dma_meta.len           = sizeof(NVM_ISOLATION_PAYLOAD_A);
+        prc = wh_Client_NvmAddObjectDmaRequest(client1, &dma_meta,
+                                               sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                               NVM_ISOLATION_PAYLOAD_A);
+        if (prc == WH_ERROR_OK) {
+            prc = wh_Server_HandleRequestMessage(server1);
+        }
+        if (prc == WH_ERROR_OK) {
+            prc = wh_Client_NvmAddObjectDmaResponse(client1, &out_rc);
+        }
+        if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+            leaked = 1;
+        }
+    }
+
+    /* DMA read: refused, and never returns the planted bytes. */
+    out_rc = 0;
+    memset(buf, 0, sizeof(buf));
+    prc = wh_Client_NvmReadDmaRequest(client1, planted_id, 0,
+                                      sizeof(NVM_ISOLATION_PAYLOAD_B), buf);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmReadDmaResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+    if (memcmp(buf, NVM_ISOLATION_PAYLOAD_B, sizeof(NVM_ISOLATION_PAYLOAD_B)) ==
+        0) {
+        leaked = 1;
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    /* Restore the bound client id before asserting. */
+    server1->comm->client_id = saved_id;
+
+    WH_TEST_ASSERT_RETURN(leaked == 0);
+
+    /* The planted USER=0 object must still exist, unchanged. */
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_ASSERT_RETURN(wh_Nvm_Read(server1->nvm, planted_nvm_id, 0,
+                                      sizeof(NVM_ISOLATION_PAYLOAD_B),
+                                      buf) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_B,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_B)) == 0);
+
+    /* Cleanup */
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_DestroyObjects(server1->nvm, 1, &planted_nvm_id) == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM unbound-client reject: PASS\n");
+    return WH_ERROR_OK;
+}
+
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
 /*
  * List has two namespaces:
@@ -1919,6 +2113,8 @@ static int _runNvmIdTranslationTests(whClientContext* client1,
     WH_TEST_PRINT("=== NVM Id Translation Tests Begin ===\n");
     WH_TEST_RETURN_ON_FAIL(
         _testNvmClientIsolation(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmUnboundClientRejected(client1, server1, client2, server2));
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
         _testNvmGlobalNamespaceList(client1, server1, client2, server2));
