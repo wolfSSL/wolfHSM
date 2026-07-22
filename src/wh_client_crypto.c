@@ -5229,9 +5229,17 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     /* wolfCrypt allows positive error codes on success */
     if (ret >= 0) {
-        /* Restore state from response (server has finalized; buffer/digest
-         * carry the post-finalization state). */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore state from response (server has finalized; buffer/digest
+             * carry the post-finalization state). */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
@@ -5349,10 +5357,17 @@ int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac)
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        /* Restore full state from server. The server may leave a partial
-         * (or whole) block in its buffer after wc_CmacUpdate (CMAC's last
-         * block has special handling), so we round-trip the whole state. */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        /* No trailing payload on update, but the state must be in the frame */
+        if (res_len < sizeof(whMessageCrypto_GenericResponseHeader) +
+                          sizeof(*res)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore full state from server. The server may leave a partial
+             * (or whole) block in its buffer after wc_CmacUpdate (CMAC's last
+             * block has special handling), so we round-trip the whole state. */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
     }
     return ret;
 }
@@ -5439,9 +5454,17 @@ int wh_Client_CmacFinalResponse(whClientContext* ctx, Cmac* cmac,
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        /* Restore final state from response (server's bufferSz is 0 after
-         * Final). */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore final state from response (server's bufferSz is 0 after
+             * Final). */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
@@ -5680,7 +5703,18 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
         if (ret >= 0) {
-            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            /* The MAC bytes the response claims must be in the received
+             * frame. A failed server request replies with the generic header
+             * only, so this bound stays inside the success branch. */
+            if (respSz < hdr_sz || res->outSz > (respSz - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret >= 0) {
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
+            }
             if (ret >= 0) {
                 ret = _CmacValidateTagLen(*outMacLen);
             }
@@ -5825,9 +5859,18 @@ int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac)
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
         if (ret >= 0) {
-            /* Restore full state from server (includes any partial/whole
-             * block left in the server's wc_CmacUpdate buffer). */
-            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+            /* No trailing payload on update, but the state must be in the
+             * frame */
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*res)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret >= 0) {
+                /* Restore full state from server (includes any partial/whole
+                 * block left in the server's wc_CmacUpdate buffer). */
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
+            }
         }
     }
 
@@ -5914,7 +5957,15 @@ int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (respSz < hdr_sz || res->outSz > (respSz - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
