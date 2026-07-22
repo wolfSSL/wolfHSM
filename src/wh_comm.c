@@ -156,9 +156,10 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
  * *out_size set to the required size. On success *out_size holds the actual
  * payload size.
  */
-int wh_CommClient_RecvResponse(whCommClient* context,
-        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, uint16_t data_size, void* data)
+int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
+                               uint16_t* out_kind, uint16_t* out_seq,
+                               uint16_t* out_size, uint16_t data_size,
+                               void* data)
 {
     int rc = 0;
     uint16_t magic = 0;
@@ -227,8 +228,7 @@ int wh_CommClient_RecvResponse(whCommClient* context,
                 return WH_ERROR_NOTREADY;
             }
 
-            if ((data != NULL) &&
-                (payload_size != 0) &&
+            if ((data != NULL) && (payload_size != 0) &&
                 (data != context->data)) {
                 if (payload_size > data_size) {
                     rc = WH_ERROR_BUFFER_SIZE;
@@ -240,7 +240,8 @@ int wh_CommClient_RecvResponse(whCommClient* context,
             if (out_magic != NULL) *out_magic = magic;
             if (out_kind != NULL) *out_kind = kind;
             if (out_seq != NULL) *out_seq = seq;
-            if (out_size != NULL) *out_size = payload_size;
+            if (out_size != NULL)
+                *out_size = payload_size;
             context->pending = 0;
         }
     }
