@@ -65,7 +65,7 @@ static whNvmId _NvmTranslateFromClient(whServerContext* server,
      * through the NVM API. Stripping them here keeps every request path
      * TYPE=NVM. AddObject still rejects them outright (see
      * _NvmValidateClientId) for a clear error; the GLOBAL namespace selector
-     * is preserved. */
+     * is preserved (honored only when WOLFHSM_CFG_GLOBAL_KEYS is enabled). */
     clientId &=
         (whNvmId) ~(WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG);
     return wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, server->comm->client_id,
@@ -86,7 +86,8 @@ static whNvmId _NvmTranslateToClient(whNvmId serverId)
 /* Reject ids that are invalid in the translated scheme: the bare id portion
  * must be non-zero (id=0 is the erased sentinel; auto-generation is not
  * supported here) and the WRAPPED and HW flags are not valid for NVM
- * objects. */
+ * objects. Without global keys the GLOBAL flag is also rejected, so an add
+ * fails loudly instead of silently landing in the caller's own namespace. */
 static int _NvmValidateClientId(whNvmId clientId)
 {
     if ((clientId & WH_KEYID_MASK) == WH_KEYID_ERASED) {
@@ -96,6 +97,12 @@ static int _NvmValidateClientId(whNvmId clientId)
         0) {
         return WH_ERROR_BADARGS;
     }
+#ifndef WOLFHSM_CFG_GLOBAL_KEYS
+    /* No global namespace in this build */
+    if ((clientId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+#endif
     return WH_ERROR_OK;
 }
 #endif
@@ -213,6 +220,7 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
             rc = WH_SERVER_NVM_LOCK(server);
             if (rc == WH_ERROR_OK) {
 #ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
                 /* The GLOBAL flag on startId selects which namespace to
                  * iterate: set => global (USER=0), clear => this client's own
                  * objects (USER=client_id). The flag rides through both
@@ -222,6 +230,12 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                     ((req.startId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0)
                         ? WH_KEYUSER_GLOBAL
                         : server->comm->client_id;
+#else
+                /* Without global keys the GLOBAL flag is inert, here and in
+                 * the translation helpers: only the caller's own namespace
+                 * can be listed. */
+                const uint16_t target_user = server->comm->client_id;
+#endif
                 /* startId id-portion of 0 is the start-from-beginning
                  * sentinel; pass it through unchanged. Otherwise translate to
                  * the server-internal id so wh_Nvm_List resumes after it. */

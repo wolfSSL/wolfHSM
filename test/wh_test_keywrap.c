@@ -642,6 +642,12 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
              * it before storing anything. */
             expectedAddRc = WH_ERROR_BADARGS;
         }
+#ifndef WOLFHSM_CFG_GLOBAL_KEYS
+        if ((nvmObjId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
+            /* Without global keys an aliased GLOBAL bit is rejected too */
+            expectedAddRc = WH_ERROR_BADARGS;
+        }
+#endif
 #endif
 
         ret = wh_Client_NvmAddObject(

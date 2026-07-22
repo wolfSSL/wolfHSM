@@ -35,8 +35,11 @@
 
 #define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
 
-/* Enable global keys feature for testing */
+/* Enable global keys feature for testing. NOGLOBALKEYS=1 builds leave it
+ * disabled to cover that configuration. */
+#ifndef WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
 #define WOLFHSM_CFG_GLOBAL_KEYS
+#endif
 
 /* Enable logging feature for testing */
 #define WOLFHSM_CFG_LOGGING

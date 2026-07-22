@@ -172,6 +172,11 @@ ifeq ($(SHE_GLOBAL),1)
 	DEF += -DWOLFHSM_CFG_SHE_GLOBAL_KEYS
 endif
 
+# Build with the global keys feature disabled
+ifeq ($(NOGLOBALKEYS),1)
+	DEF += -DWOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
+endif
+
 # Enable per-client crypto affinity (HW/SW devId selection) and its unit test
 ifeq ($(CRYPTO_AFFINITY),1)
 	DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
