@@ -467,7 +467,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_INIT,
         sizeof(*initReq), (uint8_t*)initReq));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -485,7 +486,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_UPDATE,
         (uint16_t)(sizeof(*updateReq) + bootloaderLen), (uint8_t*)updateReq));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -498,7 +500,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
     WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_FINISH, 0, NULL));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
