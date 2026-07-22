@@ -639,6 +639,43 @@ int wh_MessageCrypto_TranslateEd25519VerifyResponse(
     return 0;
 }
 
+/* Number of chaining words in a SHA-2 intermediate state, for every variant */
+#define WH_MESSAGE_CRYPTO_SHA2_STATE_WORDS 8
+
+/* Swap the host-order chaining words of a serialized SHA-2 state, as the SHA3
+ * Keccak state does. wordSize is 4 (SHA224/256) or 8 (SHA384/512); any other
+ * value, including 0 for a finalized digest, copies the array verbatim. */
+static void _TranslateSha2State(uint16_t magic, uint8_t* dest,
+                                const uint8_t* src, uint32_t hashSz,
+                                uint32_t wordSize)
+{
+    uint32_t i;
+    uint32_t stateSz = WH_MESSAGE_CRYPTO_SHA2_STATE_WORDS * wordSize;
+    uint32_t w32;
+    uint64_t w64;
+
+    if (dest != src) {
+        memcpy(dest, src, hashSz);
+    }
+    if (stateSz > hashSz) {
+        return;
+    }
+    if (wordSize == sizeof(uint32_t)) {
+        for (i = 0; i < stateSz; i += wordSize) {
+            memcpy(&w32, dest + i, sizeof(w32));
+            w32 = wh_Translate32(magic, w32);
+            memcpy(dest + i, &w32, sizeof(w32));
+        }
+    }
+    else if (wordSize == sizeof(uint64_t)) {
+        for (i = 0; i < stateSz; i += wordSize) {
+            memcpy(&w64, dest + i, sizeof(w64));
+            w64 = wh_Translate64(magic, w64);
+            memcpy(dest + i, &w64, sizeof(w64));
+        }
+    }
+}
+
 /* SHA256 Request translation. Only the fixed-size header is translated; any
  * trailing variable-length input bytes (uint8_t in[inSz]) are raw bytes that
  * do not need endian translation. */
@@ -651,11 +688,10 @@ int wh_MessageCrypto_TranslateSha256Request(
     }
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
-    /* Hash value is just a byte array, no translation needed */
-    if (src != dest) {
-        memcpy(dest->resumeState.hash, src->resumeState.hash,
-               sizeof(src->resumeState.hash));
-    }
+    /* A request always carries intermediate state, even on the last block */
+    _TranslateSha2State(magic, dest->resumeState.hash, src->resumeState.hash,
+                        (uint32_t)sizeof(src->resumeState.hash),
+                        (uint32_t)sizeof(uint32_t));
     WH_T32(magic, dest, src, isLastBlock);
     WH_T32(magic, dest, src, inSz);
     return 0;
@@ -675,21 +711,29 @@ int wh_MessageCrypto_TranslateSha512Request(
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
     WH_T32(magic, dest, src, resumeState.hashType);
-    /* Hash value is just a byte array, no translation needed */
-    if (src != dest) {
-        memcpy(dest->resumeState.hash, src->resumeState.hash,
-               sizeof(src->resumeState.hash));
-    }
+    /* A request always carries intermediate state, even on the last block */
+    _TranslateSha2State(magic, dest->resumeState.hash, src->resumeState.hash,
+                        (uint32_t)sizeof(src->resumeState.hash),
+                        (uint32_t)sizeof(uint64_t));
     WH_T32(magic, dest, src, isLastBlock);
     WH_T32(magic, dest, src, inSz);
     return 0;
 }
 #endif /* WOLFSSL_SHA512 || WOLFSSL_SHA384 */
 
-/* SHA2 Response translation */
+/* SHA2 Response translation, treating hash as a finalized digest */
 int wh_MessageCrypto_TranslateSha2Response(
     uint16_t magic, const whMessageCrypto_Sha2Response* src,
     whMessageCrypto_Sha2Response* dest)
+{
+    return wh_MessageCrypto_TranslateSha2Response_ex(magic, src, dest, 0);
+}
+
+/* SHA2 Response translation. stateWordSize is the chaining word size when hash
+ * carries intermediate state, or 0 when it carries a finalized digest. */
+int wh_MessageCrypto_TranslateSha2Response_ex(
+    uint16_t magic, const whMessageCrypto_Sha2Response* src,
+    whMessageCrypto_Sha2Response* dest, uint32_t stateWordSize)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -697,10 +741,8 @@ int wh_MessageCrypto_TranslateSha2Response(
     WH_T32(magic, dest, src, hiLen);
     WH_T32(magic, dest, src, loLen);
     WH_T32(magic, dest, src, hashType);
-    /* Hash value is just a byte array, no translation needed */
-    if (src != dest) {
-        memcpy(dest->hash, src->hash, sizeof(src->hash));
-    }
+    _TranslateSha2State(magic, dest->hash, src->hash,
+                        (uint32_t)sizeof(src->hash), stateWordSize);
     return 0;
 }
 
@@ -1024,10 +1066,9 @@ int wh_MessageCrypto_TranslateSha256DmaRequest(
 
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
-    if (src != dest) {
-        memcpy(dest->resumeState.hash, src->resumeState.hash,
-               sizeof(src->resumeState.hash));
-    }
+    _TranslateSha2State(magic, dest->resumeState.hash, src->resumeState.hash,
+                        (uint32_t)sizeof(src->resumeState.hash),
+                        (uint32_t)sizeof(uint32_t));
 
     ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
     if (ret != 0) {
@@ -1053,10 +1094,9 @@ int wh_MessageCrypto_TranslateSha512DmaRequest(
 
     WH_T32(magic, dest, src, resumeState.hiLen);
     WH_T32(magic, dest, src, resumeState.loLen);
-    if (src != dest) {
-        memcpy(dest->resumeState.hash, src->resumeState.hash,
-               sizeof(src->resumeState.hash));
-    }
+    _TranslateSha2State(magic, dest->resumeState.hash, src->resumeState.hash,
+                        (uint32_t)sizeof(src->resumeState.hash),
+                        (uint32_t)sizeof(uint64_t));
     WH_T32(magic, dest, src, resumeState.hashType);
 
     ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
@@ -1070,10 +1110,19 @@ int wh_MessageCrypto_TranslateSha512DmaRequest(
     return 0;
 }
 
-/* SHA2 DMA Response translation */
+/* SHA2 DMA Response translation, treating hash as a finalized digest */
 int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
     whMessageCrypto_Sha2DmaResponse* dest)
+{
+    return wh_MessageCrypto_TranslateSha2DmaResponse_ex(magic, src, dest, 0);
+}
+
+/* SHA2 DMA Response translation. stateWordSize is the chaining word size when
+ * hash carries intermediate state, or 0 when it carries a finalized digest. */
+int wh_MessageCrypto_TranslateSha2DmaResponse_ex(
+    uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
+    whMessageCrypto_Sha2DmaResponse* dest, uint32_t stateWordSize)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -1081,9 +1130,8 @@ int wh_MessageCrypto_TranslateSha2DmaResponse(
 
     WH_T32(magic, dest, src, hiLen);
     WH_T32(magic, dest, src, loLen);
-    if (src != dest) {
-        memcpy(dest->hash, src->hash, sizeof(src->hash));
-    }
+    _TranslateSha2State(magic, dest->hash, src->hash,
+                        (uint32_t)sizeof(src->hash), stateWordSize);
     WH_T32(magic, dest, src, hashType);
 
     return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,

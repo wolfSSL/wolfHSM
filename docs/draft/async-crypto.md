@@ -128,7 +128,7 @@ is:
 | Sha256Request / Sha512Request            |  resumeState + control fields
 |   resumeState.hiLen     (4 bytes)        |
 |   resumeState.loLen     (4 bytes)        |
-|   resumeState.hash      (32 or 64 bytes) |  intermediate digest
+|   resumeState.hash      (32 or 64 bytes) |  intermediate digest (see below)
 |   [resumeState.hashType (4 bytes)]       |  SHA-512 family only
 |   isLastBlock           (4 bytes)        |
 |   inSz                  (4 bytes)        |
@@ -345,6 +345,22 @@ reaches the server:
 
 The hash state (`resumeState`) always travels **inline**, not via DMA, for
 cross-architecture concerns (endian translation, etc.)
+
+### Endianness of `resumeState.hash`
+
+`resumeState.hash` is not an opaque byte array.  wolfCrypt keeps the SHA-2
+chaining variables in `wc_Sha256.digest` / `wc_Sha512.digest` as **host-order**
+`word32` / `word64`, and the client copies them to the wire verbatim, so the
+field carries eight chaining words in the *client's* byte order.  The server
+byte-swaps each word when the client's `magic` reports the opposite endianness,
+exactly as it does for the SHA-3 Keccak state (`whMessageCrypto_Sha3State`).
+
+The response field is context-dependent: on a non-final update it carries the
+same host-order chaining words, but on `isLastBlock` it carries the finalized
+digest, which wolfCrypt has already emitted in canonical big-endian byte order
+and which must not be swapped.  The response translation helpers therefore take
+the chaining word size (4, 8, or 0 for a finalized digest) from the caller —
+see `wh_MessageCrypto_TranslateSha2Response_ex()`.
 
 DMA async functions require the client to stash the translated DMA address
 across the Request/Response boundary for POST cleanup.  This context is stored
