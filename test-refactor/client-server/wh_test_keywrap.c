@@ -19,13 +19,9 @@
 /*
  * test-refactor/client-server/wh_test_keywrap.c
  *
- * Keywrap policy coverage that runs against any server (no trusted KEK
- * needed on the positive paths, and the negatives prove a client cannot
- * mint one):
- *   _whTest_KeywrapSwKekRoundTrip  - wrap a plaintext key under a plain
- *                                    client-cached KEK and unwrap-and-export
- *                                    it back (only unwrap-and-cache and
- *                                    wrap-export require a trusted KEK)
+ * Keywrap policy and input-validation coverage that runs against any server:
+ * the negatives prove a client cannot mint a trusted KEK or slip an
+ * undersized blob past the size checks.
  *   _whTest_KeywrapTrustedKekPolicy - wrap-export and unwrap-and-cache must
  *                                    refuse a plain client KEK, and a client
  *                                    cannot forge WH_NVM_FLAGS_TRUSTED via the
@@ -36,8 +32,10 @@
  *   _whTest_KeywrapDataUnwrapUnderflow - undersized wrapped-data blobs must
  *                                    return WH_ERROR_BADARGS, not underflow
  *
- * The trusted-KEK positive paths (wrap-export round-trip, unwrap-and-cache)
- * live in misc/wh_test_hwkeystore.c against the hardware KEK, and in
+ * The positive wrap/unwrap-and-export round trip under a plain client KEK
+ * lives in wh_test_crypto_keywrap.c. The trusted-KEK positive paths
+ * (wrap-export round-trip, unwrap-and-cache) live in
+ * misc/wh_test_hwkeystore.c against the hardware KEK, and in
  * misc/wh_test_multiclient.c against an NVM-provisioned KEK.
  */
 
@@ -93,68 +91,6 @@ static int _CacheSwKek(whClientContext* client, whKeyId* outKekId)
                                               label, (uint16_t)sizeof(label),
                                               kek, sizeof(kek), &kekId));
     *outKekId = kekId;
-    return WH_ERROR_OK;
-}
-
-/* Positive software-KEK round trip; needs no trusted KEK. Wrap a plaintext key
- * under the plain KEK, unwrap-and-export the blob, and confirm the key
- * material and metadata come back unchanged */
-static int _whTest_KeywrapSwKekRoundTrip(whClientContext* client)
-{
-    int           ret;
-    whKeyId       kekId = WH_KEYID_ERASED;
-    uint8_t       plainKey[WH_TEST_KW_KEYSIZE];
-    uint8_t       tmpPlainKey[WH_TEST_KW_KEYSIZE];
-    uint16_t      tmpPlainKeySz = sizeof(tmpPlainKey);
-    uint8_t       wrappedKey[WH_TEST_KW_WRAPPED_KEYSIZE];
-    uint16_t      wrappedKeySz = sizeof(wrappedKey);
-    whNvmMetadata metadata     = {0};
-    whNvmMetadata tmpMetadata  = {0};
-    size_t        i;
-
-    metadata.id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
-                                                       WH_TEST_KW_META_ID);
-    metadata.len   = WH_TEST_KW_KEYSIZE;
-    metadata.flags = WH_NVM_FLAGS_USAGE_ANY;
-    memcpy(metadata.label, "SwKek Key Label", sizeof("SwKek Key Label"));
-
-    for (i = 0; i < sizeof(plainKey); i++) {
-        plainKey[i] = (uint8_t)(0x7B ^ i);
-    }
-
-    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
-
-    /* Wrap the plaintext key under the plain software KEK */
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId, plainKey,
-                            sizeof(plainKey), &metadata, wrappedKey,
-                            &wrappedKeySz);
-    if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("sw-kek: KeyWrap failed %d\n", ret);
-        (void)wh_Client_KeyEvict(client, kekId);
-        return ret;
-    }
-
-    /* Unwrap-and-export the blob and confirm the material round-trips */
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
-                                       wrappedKey, wrappedKeySz, &tmpMetadata,
-                                       tmpPlainKey, &tmpPlainKeySz);
-    (void)wh_Client_KeyEvict(client, kekId);
-    if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("sw-kek: KeyUnwrapAndExport failed %d\n", ret);
-        return ret;
-    }
-
-    if (tmpPlainKeySz != sizeof(plainKey) ||
-        memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
-        WH_ERROR_PRINT("sw-kek: unwrapped key material mismatch\n");
-        return WH_ERROR_ABORTED;
-    }
-
-    if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
-        WH_ERROR_PRINT("sw-kek: unwrapped metadata mismatch\n");
-        return WH_ERROR_ABORTED;
-    }
-
     return WH_ERROR_OK;
 }
 
@@ -480,7 +416,6 @@ static int _whTest_KeywrapDataUnwrapUnderflow(whClientContext* client)
 
 int whTest_KeyWrap(whClientContext* ctx)
 {
-    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapSwKekRoundTrip(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapTrustedKekPolicy(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataWrapUsage(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapKeyUnwrapUnderflow(ctx));
