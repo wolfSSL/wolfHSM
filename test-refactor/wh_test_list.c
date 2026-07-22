@@ -66,6 +66,7 @@ WH_TEST_DECL(whTest_Crypto_Ed25519);
 WH_TEST_DECL(whTest_Crypto_Kdf);
 WH_TEST_DECL(whTest_Crypto_KeyPolicy);
 WH_TEST_DECL(whTest_Crypto_KeyWrap);
+WH_TEST_DECL(whTest_Crypto_Keystore);
 WH_TEST_DECL(whTest_Crypto_Lms);
 WH_TEST_DECL(whTest_Crypto_MlDsa);
 WH_TEST_DECL(whTest_Crypto_Rng);
@@ -139,6 +140,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_Crypto_Kdf", whTest_Crypto_Kdf},
     {"whTest_Crypto_KeyPolicy", whTest_Crypto_KeyPolicy},
     {"whTest_Crypto_KeyWrap", whTest_Crypto_KeyWrap},
+    {"whTest_Crypto_Keystore", whTest_Crypto_Keystore},
     {"whTest_Crypto_Lms", whTest_Crypto_Lms},
     {"whTest_Crypto_MlDsa", whTest_Crypto_MlDsa},
     {"whTest_Crypto_Rng", whTest_Crypto_Rng},
