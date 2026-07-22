@@ -437,14 +437,35 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
 }
 
 
-int wh_Auth_BaseUserGet(void* context, const char* username,
-                        whUserId*          out_user_id,
+int wh_Auth_BaseUserGet(void* context, uint16_t current_user_id,
+                        const char* username, whUserId* out_user_id,
                         whAuthPermissions* out_permissions)
 {
-    whAuthBase_User* user = wh_Auth_BaseFindUser(username);
-    if (user == NULL) {
-        return WH_ERROR_NOTFOUND;
+    whAuthBase_User* user;
+    int              is_admin;
+
+    if (current_user_id == WH_USER_ID_INVALID ||
+        current_user_id > WH_AUTH_BASE_MAX_USERS) {
+        return WH_ERROR_ACCESS;
     }
+
+    is_admin = WH_AUTH_IS_ADMIN(users[current_user_id - 1].user.permissions);
+
+    user = wh_Auth_BaseFindUser(username);
+    if (user == NULL || user->user.user_id == WH_USER_ID_INVALID) {
+        /* A non-admin caller gets the same error whether or not the name
+         * exists, so the response is not an account-enumeration oracle. */
+        if (is_admin) {
+            return WH_ERROR_NOTFOUND;
+        }
+        return WH_ERROR_ACCESS;
+    }
+
+    /* A non-admin caller may only read its own record. */
+    if (!is_admin && user->user.user_id != current_user_id) {
+        return WH_ERROR_ACCESS;
+    }
+
     *out_user_id     = user->user.user_id;
     *out_permissions = user->user.permissions;
     (void)context;

@@ -189,7 +189,8 @@ typedef struct {
                               whUserId user_id, whAuthPermissions permissions);
 
     /* Get user information by username */
-    int (*UserGet)(void* context, const char* username, whUserId* out_user_id,
+    int (*UserGet)(void* context, whUserId current_user_id,
+                   const char* username, whUserId* out_user_id,
                    whAuthPermissions* out_permissions);
 
     /* Set user credentials (PIN, etc.) */
@@ -348,6 +349,9 @@ int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
 
 /**
  * @brief Get user information.
+ *
+ * The caller's own user id gates access: a non-admin caller may only read its
+ * own record, and a denied or missing lookup both return WH_ERROR_ACCESS.
  *
  * @param[in] context Pointer to the auth context.
  * @param[in] username The username to look up.
