@@ -1683,14 +1683,18 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
  * The server translates each request id into a TYPE/USER/ID server-internal
  * encoding via `wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, client_id, id)`
  * before reaching the underlying NVM layer. This gives every client a private
- * 1..255 namespace plus a shared 1..255 global namespace and prevents the
- * client NVM API from being used to reach keys, counters, SHE objects, or
- * other clients' data.
+ * 1..255 namespace (plus a shared 1..255 global namespace when
+ * WOLFHSM_CFG_GLOBAL_KEYS is defined) and prevents the client NVM API from
+ * being used to reach keys, counters, SHE objects, or other clients' data.
+ * Without WOLFHSM_CFG_GLOBAL_KEYS, USER=0 objects such as factory-provisioned
+ * ones are unreachable through this API.
  *
- * `wh_Client_NvmList` honors the GLOBAL flag on `startId` as a namespace
- * selector: pass 0 to iterate the calling client's own objects, or
- * `WH_KEYID_CLIENT_GLOBAL_FLAG` to iterate the global namespace. Returned ids
- * carry the appropriate flag so the caller can chain calls.
+ * With WOLFHSM_CFG_GLOBAL_KEYS, `wh_Client_NvmList` honors the GLOBAL flag on
+ * `startId` as a namespace selector: pass 0 to iterate the calling client's
+ * own objects, or `WH_KEYID_CLIENT_GLOBAL_FLAG` to iterate the global
+ * namespace. Returned ids carry the appropriate flag so the caller can chain
+ * calls. Without it, the flag is ignored and List walks the caller's own
+ * namespace.
  *
  * Define `WOLFHSM_CFG_LEGACY_CLIENT_NVM` to disable translation entirely and
  * fall back to the legacy global-flat 16-bit id space.

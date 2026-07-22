@@ -1650,6 +1650,24 @@ static int _testNvmGlobalFlagDisabled(whClientContext* client1,
         sizeof(NVM_ISOLATION_PAYLOAD_A), NVM_ISOLATION_PAYLOAD_A, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
 
+#ifdef WOLFHSM_CFG_DMA
+    /* The DMA add path shares the same id validation */
+    {
+        whNvmMetadata dma_meta = {0};
+        dma_meta.id            = 5 | WH_KEYID_CLIENT_GLOBAL_FLAG;
+        dma_meta.access        = WH_NVM_ACCESS_ANY;
+        dma_meta.flags         = WH_NVM_FLAGS_NONE;
+        dma_meta.len           = sizeof(NVM_ISOLATION_PAYLOAD_A);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectDmaRequest(
+            client1, &dma_meta, sizeof(NVM_ISOLATION_PAYLOAD_A),
+            NVM_ISOLATION_PAYLOAD_A));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_NvmAddObjectDmaResponse(client1, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+    }
+#endif
+
     /* Add an own object without the flag */
     WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, own_id,
                                             sizeof(NVM_ISOLATION_PAYLOAD_A),
