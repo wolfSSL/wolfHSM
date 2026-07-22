@@ -120,6 +120,11 @@ ifeq ($(AUTH),1)
     DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
 endif
 
+# Enable per-client crypto affinity (HW/SW devId selection) and its unit test
+ifeq ($(CRYPTO_AFFINITY),1)
+    DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
+endif
+
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST

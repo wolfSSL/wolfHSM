@@ -42,6 +42,7 @@
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
+WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_HwKeystore);
 WH_TEST_DECL(whTest_KeystoreReqSize);
@@ -101,6 +102,7 @@ const whTestCase whTestsMisc[] = {
     { "whTest_ClientDevId",      whTest_ClientDevId },
     { "whTest_Comm",             whTest_Comm },
     { "whTest_Dma",              whTest_Dma },
+    { "whTest_CryptoAffinity",   whTest_CryptoAffinity },
     { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
