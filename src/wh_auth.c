@@ -491,8 +491,8 @@ int wh_Auth_UserGet(whAuthContext* context, const char* username,
 
     rc = WH_AUTH_LOCK(context);
     if (rc == WH_ERROR_OK) {
-        rc = context->cb->UserGet(context->context, username, out_user_id,
-                                  out_permissions);
+        rc = context->cb->UserGet(context->context, context->user.user_id,
+                                  username, out_user_id, out_permissions);
 
         (void)WH_AUTH_UNLOCK(context);
     } /* LOCK() */
