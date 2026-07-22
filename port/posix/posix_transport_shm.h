@@ -48,6 +48,38 @@
  * versions of requests by configuring the base address of the DMA request to be
  * the mapped address of the DMA block.
  *
+ * req_size and resp_size must each be a non-zero multiple of
+ * sizeof(whTransportMemCsr), since every buffer begins with a control/status
+ * word and the buffer that follows must stay aligned.  Server init fails with
+ * WH_ERROR_BADARGS otherwise, and a client rejects an object whose header
+ * declares sizes that do not meet the same rule.
+ *
+ * Threat model
+ *
+ * This transport is intended for testing, debugging, and as a reference port.
+ * It is not a security boundary and must not be used where the client and the
+ * server belong to different trust domains.  Specifically:
+ *
+ * - Same trust domain assumed.  Both peers are expected to run under the same
+ *   uid, and each is trusted with the contents and the lifetime of the shared
+ *   object.  Anything a peer places in the shared memory is trusted input.
+ *
+ * - No peer authentication.  Whichever process opens the named object is taken
+ *   to be the peer.  A process that wins the race to create the name can
+ *   interpose between a client and a server, and the name is unlinked by the
+ *   client on successful mapping, so it can be recreated by anyone afterwards.
+ *
+ * - No isolation and no availability guarantee.  A peer may ftruncate() the
+ *   object out from under the other side, which faults on the next access, or
+ *   simply never advance the control/status words and stall the exchange.
+ *
+ * The header fields are validated against the real size of the shared object,
+ * so a malformed or truncated object cannot steer this process into an
+ * out-of-bounds access.  That is robustness against a corrupt object, not
+ * protection against a hostile peer, and it does not make this transport a
+ * trusted channel.  Use a transport with an actual isolation boundary when the
+ * peer is not trusted.
+ *
  */
 
 #ifndef PORT_POSIX_POSIX_TRANSPORT_SHM_H_
