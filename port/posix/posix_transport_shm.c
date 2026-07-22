@@ -73,7 +73,7 @@ enum {
 /** Local declarations */
 
 /* Memory map and interpret the header block */
-static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map);
+static int posixTransportShm_Map(int fd, ptshmMapping* map);
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER)
 /* Create and map a shared object for transport */
@@ -91,29 +91,83 @@ static int posixTransportShm_HandleMap(posixTransportShmContext* ctx);
 #endif
 
 /** Local Definitions */
-static int posixTransportShm_Map(int fd, size_t size, ptshmMapping* map)
+static int posixTransportShm_Map(int fd, ptshmMapping* map)
 {
-    int   ret = WH_ERROR_OK;
-    void* ptr = NULL;
+    int          ret       = WH_ERROR_OK;
+    void*        ptr       = NULL;
+    ptshmHeader* header    = NULL;
+    struct stat  st[1]     = {0};
+    size_t       size      = 0;
+    size_t       total     = 0;
+    size_t       map_len   = 0;
+    size_t       dma_size  = 0;
+    uint16_t     req_size  = 0;
+    uint16_t     resp_size = 0;
 
     if ((fd < 0) || (map == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Map the shared memory object */
-    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (ptr != MAP_FAILED) {
-        memset(map, 0, sizeof(*map));
-        map->ptr      = ptr;
-        map->size     = size;
-        map->header   = (ptshmHeader*)ptr;
-        map->req      = (uint8_t*)(map->header + 1);
-        map->resp     = map->req + map->header->req_size;
-        map->dma      = map->resp + map->header->resp_size;
-        map->dma_size = map->header->dma_size;
-    }
-    else {
+    /* The object size bounds the layout; the header is never trusted for it */
+    if (fstat(fd, st) != 0) {
         ret = WH_ERROR_ABORTED;
+    }
+    else if (st->st_size < (off_t)sizeof(ptshmHeader)) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    /* Snapshot the peer-writable sizes from a header-only mapping, so the full
+     * mapping can be sized from them rather than the object size. */
+    if (ret == WH_ERROR_OK) {
+        size   = (size_t)st->st_size;
+        header = (ptshmHeader*)mmap(NULL, sizeof(ptshmHeader), PROT_READ,
+                                    MAP_SHARED, fd, 0);
+        if (header == MAP_FAILED) {
+            ret = WH_ERROR_ABORTED;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        req_size  = header->req_size;
+        resp_size = header->resp_size;
+        dma_size  = header->dma_size;
+        (void)munmap((void*)header, sizeof(ptshmHeader));
+        header = NULL;
+
+        /* Each buffer must be a whole number of control/status words, or the
+         * transport underflows a length check or misaligns a pointer. total
+         * cannot overflow, so dma_size checks against the remainder. */
+        total = sizeof(ptshmHeader) + (size_t)req_size + (size_t)resp_size;
+        if ((req_size < sizeof(whTransportMemCsr)) ||
+            ((req_size % sizeof(whTransportMemCsr)) != 0) ||
+            (resp_size < sizeof(whTransportMemCsr)) ||
+            ((resp_size % sizeof(whTransportMemCsr)) != 0) || (total > size) ||
+            (dma_size > (size - total))) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Only the declared footprint, so padding past it is never mapped */
+        map_len = total + dma_size;
+        ptr = mmap(NULL, map_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (ptr == MAP_FAILED) {
+            ret = WH_ERROR_ABORTED;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        header = (ptshmHeader*)ptr;
+        memset(map, 0, sizeof(*map));
+        map->ptr       = ptr;
+        map->size      = map_len;
+        map->header    = header;
+        map->req       = (uint8_t*)(map->header + 1);
+        map->resp      = map->req + req_size;
+        map->dma       = map->resp + resp_size;
+        map->req_size  = req_size;
+        map->resp_size = resp_size;
+        map->dma_size  = dma_size;
     }
     return ret;
 }
@@ -139,13 +193,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
                 ptshmHeader* header = (ptshmHeader*)mmap(
                     NULL, sizeof(*header), PROT_READ, MAP_SHARED, fd, 0);
                 if (header != MAP_FAILED) {
-                    size_t size = 0;
-                    if (header->initialized == PTSHM_INITIALIZED_CREATOR) {
-                        /* Read provided sizes */
-                        size = sizeof(*header) + header->req_size +
-                               header->resp_size + header->dma_size;
-                    }
-                    else {
+                    if (header->initialized != PTSHM_INITIALIZED_CREATOR) {
                         /* Header not configured */
                         ret = WH_ERROR_NOTREADY;
                     }
@@ -153,7 +201,7 @@ static int posixTransportShm_UseMap(char* name, ptshmMapping* map)
                     (void)munmap((void*)header, sizeof(*header));
 
                     if (ret == WH_ERROR_OK) {
-                        ret = posixTransportShm_Map(fd, size, map);
+                        ret = posixTransportShm_Map(fd, map);
                         if (ret == WH_ERROR_OK) {
                             /* Unlnk the object */
                             (void)shm_unlink(name);
@@ -202,7 +250,13 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
     int ret = WH_ERROR_OK;
     int fd  = -1;
 
-    if ((name == NULL) || (map == NULL)) {
+    /* Apply the same buffer size rule to the configuration before the object
+     * exists, so a misconfigured server cannot leave a stale object behind */
+    if ((name == NULL) || (map == NULL) ||
+        (req_size < sizeof(whTransportMemCsr)) ||
+        ((req_size % sizeof(whTransportMemCsr)) != 0) ||
+        (resp_size < sizeof(whTransportMemCsr)) ||
+        ((resp_size % sizeof(whTransportMemCsr)) != 0)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -229,7 +283,11 @@ static int posixTransportShm_CreateMap(char* name, uint16_t req_size,
 
                 /* Unmap the header and remap the full area */
                 (void)munmap((void*)header, sizeof(*header));
-                ret = posixTransportShm_Map(fd, size, map);
+                ret = posixTransportShm_Map(fd, map);
+                if (ret != WH_ERROR_OK) {
+                    /* Don't leave an object a client would keep rejecting */
+                    (void)shm_unlink(name);
+                }
             }
             else {
                 /* Problem mapping the header */
@@ -268,8 +326,8 @@ static int posixTransportShm_HandleMap(posixTransportShmContext* ctx)
         ret = posixTransportShm_UseMap(ctx->name, map);
         if (ret == WH_ERROR_OK) {
             /* Configure the underlying transport context */
-            tMemCfg->req_size  = map->header->req_size;
-            tMemCfg->resp_size = map->header->resp_size;
+            tMemCfg->req_size  = map->req_size;
+            tMemCfg->resp_size = map->resp_size;
             tMemCfg->req       = map->req;
             tMemCfg->resp      = map->resp;
 
@@ -405,8 +463,8 @@ int posixTransportShm_ServerInit(void* c, const void* cf,
         ctx->connectcb_arg = connectcb_arg;
 
         /* Configure the underlying transport context */
-        tMemCfg->req_size  = map->header->req_size;
-        tMemCfg->resp_size = map->header->resp_size;
+        tMemCfg->req_size  = map->req_size;
+        tMemCfg->resp_size = map->resp_size;
         tMemCfg->req       = map->req;
         tMemCfg->resp      = map->resp;
 
