@@ -985,12 +985,9 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 17, 0));
     WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 32, 0));
     WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 255, 0));
-#ifdef WOLFHSM_CFG_GLOBAL_KEYS
-    /* USER=0 is reserved for global keys */
+    /* client_id 0 (USER=0) names the shared/factory-provisioned namespace,
+     * so INIT rejects it in every build. */
     WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 0, 0));
-#else
-    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 0, 1));
-#endif
     WH_TEST_RETURN_ON_FAIL(
         _testInitClientIdBoundary(client, server, WH_CLIENT_ID_MAX, 1));
     /* Restore default client_id so the rest of the sequential test runs with

@@ -122,6 +122,8 @@ int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
     }
 
     req = (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(c->comm);
+    /* Zero the struct so the pad field is not sent as stale buffer bytes */
+    memset(req, 0, sizeof(*req));
     req->keyId = keyId;
 
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,

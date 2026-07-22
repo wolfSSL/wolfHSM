@@ -1662,7 +1662,13 @@ static int _PreProgramKey(whServerContext* server, uint16_t magic,
     const uint8_t*                     key_data;
     const uint16_t                     hdr_len = sizeof(req);
 
-    if (req_size < hdr_len) {
+    /* SHE key ids embed the connection's client id. Before COMM INIT binds a
+     * nonzero id, this would write into the USER=0 factory-provisioned
+     * namespace, so refuse unbound clients (same gate as the NVM group). */
+    if (server->comm->client_id == WH_KEYUSER_GLOBAL) {
+        ret = WH_ERROR_ACCESS;
+    }
+    if ((ret == 0) && (req_size < hdr_len)) {
         ret = WH_ERROR_BUFFER_SIZE;
     }
     if (ret == 0) {
@@ -1710,7 +1716,11 @@ static int _DestroyKey(whServerContext* server, uint16_t magic,
     whMessageShe_DestroyKeyResponse resp = {0};
     whNvmId                         id;
 
-    if (req_size < sizeof(req)) {
+    /* Same unbound-client gate as _PreProgramKey */
+    if (server->comm->client_id == WH_KEYUSER_GLOBAL) {
+        ret = WH_ERROR_ACCESS;
+    }
+    if ((ret == 0) && (req_size < sizeof(req))) {
         ret = WH_ERROR_BUFFER_SIZE;
     }
     if (ret == 0) {

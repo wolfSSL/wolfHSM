@@ -1342,6 +1342,69 @@ static void* _whServerTask(void* cf)
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
+/* SHE key management must be refused until COMM INIT binds a client id since
+ * unbound requests would target the USER=0 factory-provisioned namespace. */
+static int whTest_ShePreInitKeyMgmtRejected(whClientConfig* config)
+{
+    int             ret                = 0;
+    whClientContext client[1]          = {0};
+    uint8_t         key[WH_SHE_KEY_SZ] = {0};
+    uint32_t        outClientId        = 0;
+    uint32_t        outServerId        = 0;
+
+    if (config == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+
+    /* Before COMM INIT the server must reject both actions */
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, key,
+                                     sizeof(key));
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("pre-init ShePreProgramKey: expected ACCESS, got %d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit_preinit;
+    }
+    ret = wh_Client_SheDestroyKey(client, WH_SHE_BOOT_MAC_KEY_ID);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("pre-init SheDestroyKey: expected ACCESS, got %d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit_preinit;
+    }
+
+    /* After COMM INIT both must succeed */
+    ret = wh_Client_CommInit(client, &outClientId, &outServerId);
+    if (ret != 0) {
+        goto exit_preinit;
+    }
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, key,
+                                     sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("post-init ShePreProgramKey failed %d\n", ret);
+        goto exit_preinit;
+    }
+    ret = wh_Client_SheDestroyKey(client, WH_SHE_BOOT_MAC_KEY_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("post-init SheDestroyKey failed %d\n", ret);
+    }
+
+exit_preinit:
+    /* Tell server to close */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+
+    if (ret == 0) {
+        WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+    }
+    else {
+        wh_Client_Cleanup(client);
+    }
+
+    return ret;
+}
+
 static void _whClientServerThreadTest(whClientConfig*   c_conf,
                                       whServerConfig*   s_conf,
                                       whTestSheClientFn clientFn)
@@ -2501,6 +2564,9 @@ int whTest_She(void)
     WH_TEST_PRINT("Testing SHE: (pthread) mem write protect...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheWriteProtect));
+    WH_TEST_PRINT("Testing SHE: (pthread) mem pre-init key mgmt gate...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_ClientServer_MemThreadTest(whTest_ShePreInitKeyMgmtRejected));
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
     WH_TEST_PRINT("Testing SHE: (pthread) wrapped-key reboot interop...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestWrappedInterop());

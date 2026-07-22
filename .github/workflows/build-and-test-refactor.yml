@@ -146,6 +146,12 @@ jobs:
       if: matrix.group == 'wolfcrypt'
       run: cd test-refactor/posix && make clean && make -j NOGLOBALKEYS=1 DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Build and test with the legacy flat client NVM id space
+    # (WOLFHSM_CFG_LEGACY_CLIENT_NVM)
+    - name: Build and test refactor ASAN LEGACYNVM DMA
+      if: matrix.group == 'wolfcrypt'
+      run: cd test-refactor/posix && make clean && make -j LEGACYNVM=1 DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test with DEBUG=1
     - name: Build and test refactor with DEBUG
       if: matrix.group == 'base'

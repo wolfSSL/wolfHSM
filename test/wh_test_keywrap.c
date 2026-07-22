@@ -622,11 +622,9 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
 
     /* (b) A client that provisions an NVM object carrying
      * WH_NVM_FLAGS_TRUSTED at a crypto-key id must not obtain a trusted KEK
-     * either. The forged id embeds the client id in the USER bits, which
-     * overlap the client WRAPPED/HW flag bits, so depending on the client id
-     * the checked add either rejects the id outright or stores the object
-     * outside the crypto-key id space; either way no KEK may appear at the
-     * crypto-key id. */
+     * either. The forged id carries the crypto TYPE bits above the client id
+     * and flag fields, so the checked add rejects it and no KEK may appear
+     * at the crypto-key id. */
     {
         whKeyId nvmForgeId    = WH_TEST_KEKID + 2;
         whNvmId nvmObjId      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
@@ -636,18 +634,7 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
         int     expectedRc;
 
 #ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
-        if ((nvmObjId &
-             (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) != 0) {
-            /* Forged id aliases a client flag bit; the checked add rejects
-             * it before storing anything. */
-            expectedAddRc = WH_ERROR_BADARGS;
-        }
-#ifndef WOLFHSM_CFG_GLOBAL_KEYS
-        if ((nvmObjId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
-            /* Without global keys an aliased GLOBAL bit is rejected too */
-            expectedAddRc = WH_ERROR_BADARGS;
-        }
-#endif
+        expectedAddRc = WH_ERROR_BADARGS;
 #endif
 
         ret = wh_Client_NvmAddObject(
@@ -675,9 +662,8 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
          * refused. */
         expectedRc = WH_ERROR_ACCESS;
 #else
-        /* An accepted forge is stored as a plain NVM object in the caller's
-         * namespace and a rejected one stores nothing, so no KEK exists at
-         * the crypto-key id either way. */
+        /* The rejected forge stored nothing, so no KEK exists at the
+         * crypto-key id. */
         expectedRc = WH_ERROR_NOTFOUND;
 #endif
         if (ret != expectedRc) {

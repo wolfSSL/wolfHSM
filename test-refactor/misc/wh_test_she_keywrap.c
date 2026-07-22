@@ -176,6 +176,11 @@ static int _ProvisionNvmKek(whNvmContext* nvm)
     return wh_Nvm_AddObject(nvm, &meta, meta.len, whTest_KeywrapKek);
 }
 
+static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t count,
+                             uint32_t sheFlags, const uint8_t* key,
+                             whNvmSize keySz);
+static int _SheDestroyKey(TestCtx* t, whNvmId keyId);
+
 /* Fresh server + fresh (empty) NVM every call: the reboot interop relies on
  * this modeling a real power cycle between sessions. */
 static int _SetupClientServer(TestCtx* t)
@@ -251,6 +256,14 @@ static int _SetupClientServer(TestCtx* t)
         wh_Server_SetConnected(t->server, WH_COMM_CONNECTED));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(t->client, t->c_conf));
 
+    /* Until COMM INIT binds a client id, SHE key management must be refused
+     * since an unbound request would target the USER=0 factory namespace. */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _ShePreProgramKey(t, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                            s_bootMacKey, WH_SHE_KEY_SZ));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _SheDestroyKey(t, WH_SHE_BOOT_MAC_KEY_ID));
+
     /* Comm init so the server learns the client id */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(t->client));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
@@ -307,12 +320,12 @@ static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t count,
                              uint32_t sheFlags, const uint8_t* key,
                              whNvmSize keySz)
 {
-    whMessageShe_PreProgramKeyRequest* req;
-    whMessageShe_PreProgramKeyResponse resp   = {0};
-    uint8_t*                           reqBuf = NULL;
-    uint16_t                           group  = 0;
-    uint16_t                           action = 0;
-    uint16_t                           dataSz = 0;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf = NULL;
+    uint16_t                            group  = 0;
+    uint16_t                            action = 0;
+    uint16_t                            dataSz = 0;
 
     reqBuf     = (uint8_t*)wh_CommClient_GetDataPtr(t->client->comm);
     req        = (whMessageShe_PreProgramKeyRequest*)reqBuf;
@@ -326,13 +339,51 @@ static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t count,
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
         (uint16_t)(sizeof(*req) + keySz), reqBuf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_RecvResponse(
-        t->client, &group, &action, &dataSz, sizeof(resp), (uint8_t*)&resp));
+    /* Receive into the comm buffer so the copy is bounded. An oversized
+     * response could overrun a small stack struct (see
+     * wh_Client_ShePreProgramKey). */
+    resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_RecvResponse(t->client, &group, &action,
+                                                  &dataSz,
+                                                  WOLFHSM_CFG_COMM_DATA_LEN,
+                                                  (uint8_t*)resp));
     if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_PRE_PROGRAM_KEY) ||
-        (dataSz != sizeof(resp))) {
+        (dataSz != sizeof(*resp))) {
         return WH_ERROR_ABORTED;
     }
-    return (int)resp.rc;
+    return (int)resp->rc;
+}
+
+/* Split equivalent of wh_Client_SheDestroyKey() */
+static int _SheDestroyKey(TestCtx* t, whNvmId keyId)
+{
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
+    uint16_t                         group  = 0;
+    uint16_t                         action = 0;
+    uint16_t                         dataSz = 0;
+
+    req = (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    memset(req, 0, sizeof(*req));
+    req->keyId = keyId;
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_SendRequest(t->client, WH_MESSAGE_GROUP_SHE,
+                              WH_SHE_DESTROY_KEY, sizeof(*req), (uint8_t*)req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
+    resp = (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_RecvResponse(t->client, &group, &action,
+                                                  &dataSz,
+                                                  WOLFHSM_CFG_COMM_DATA_LEN,
+                                                  (uint8_t*)resp));
+    if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_DESTROY_KEY) ||
+        (dataSz != sizeof(*resp))) {
+        return WH_ERROR_ABORTED;
+    }
+    return (int)resp->rc;
 }
 
 static int _KeyWrapExport(TestCtx* t, whKeyId keyId, uint16_t keyType,

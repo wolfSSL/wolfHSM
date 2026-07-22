@@ -177,6 +177,11 @@ ifeq ($(NOGLOBALKEYS),1)
 	DEF += -DWOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
 endif
 
+# Build with the legacy flat client NVM id space
+ifeq ($(LEGACYNVM),1)
+	DEF += -DWOLFHSM_CFG_LEGACY_CLIENT_NVM
+endif
+
 # Enable per-client crypto affinity (HW/SW devId selection) and its unit test
 ifeq ($(CRYPTO_AFFINITY),1)
 	DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY

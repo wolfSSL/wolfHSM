@@ -93,6 +93,13 @@ static int _NvmValidateClientId(whNvmId clientId)
     if ((clientId & WH_KEYID_MASK) == WH_KEYID_ERASED) {
         return WH_ERROR_BADARGS;
     }
+    /* Bits above the id and client-flag fields would be silently dropped by
+     * translation, remapping the request onto a different object. Reject them
+     * so a legacy-style 16-bit id fails loudly instead. */
+    if ((clientId & (whNvmId) ~(WH_KEYID_MASK | WH_CLIENT_KEYID_FLAGS_MASK)) !=
+        0) {
+        return WH_ERROR_BADARGS;
+    }
     if ((clientId & (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) !=
         0) {
         return WH_ERROR_BADARGS;
@@ -262,10 +269,19 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                         : _NvmTranslateFromClient(server, req.startId);
                 whNvmId hit_id = 0;
                 whNvmId total  = 0;
+                int     iter   = 0;
 
                 for (;;) {
                     whNvmId next_id   = 0;
                     whNvmId remaining = 0;
+                    /* The directory holds at most
+                     * WOLFHSM_CFG_NVM_OBJECT_COUNT entries, so a backend that
+                     * fails to advance past cur must not hang the server
+                     * while it holds the NVM lock. */
+                    if (iter++ >= WOLFHSM_CFG_NVM_OBJECT_COUNT) {
+                        rc = WH_ERROR_ABORTED;
+                        break;
+                    }
                     rc = wh_Nvm_List(server->nvm, req.access, req.flags, cur,
                                      &remaining, &next_id);
                     if (rc != WH_ERROR_OK || remaining == 0) {

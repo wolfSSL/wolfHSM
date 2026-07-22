@@ -1948,6 +1948,13 @@ static int _testNvmAddObjectRejections(whClientContext* client1,
                                             (const uint8_t*)"data", &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
 
+    /* bits above the id and client-flag fields (a legacy-style internal id)
+     * must fail, not silently truncate to id 0x42 */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, 0x1042, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
     WH_TEST_PRINT("  NVM AddObject rejections: PASS\n");
     return WH_ERROR_OK;
 }
