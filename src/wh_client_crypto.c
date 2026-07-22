@@ -3062,6 +3062,14 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
                                  (uint8_t**)&res);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
+            const size_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+            /* Defensive bound: res->len must fit within the received frame */
+            if (data_len < hdr_sz || res->len > (data_len - hdr_sz)) {
+                return WH_ERROR_ABORTED;
+            }
+
             WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
                    "ret:%d\n",
                    (unsigned int)res->keyId, (unsigned int)res->len, ret);
@@ -3580,6 +3588,14 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     ret =
         _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_KEYGEN, (uint8_t**)&res);
     if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+        /* Defensive bound: res->outSz must fit within the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
         key_id = (whKeyId)res->keyId;
         if (inout_key_id != NULL) {
             *inout_key_id = key_id;
@@ -3592,11 +3608,6 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
             if (res->outSz > 0) {
                 uint8_t* out   = (uint8_t*)(res + 1);
                 uint16_t outSz = (uint16_t)res->outSz;
-                if (outSz + sizeof(whMessageCrypto_GenericResponseHeader) +
-                        sizeof(*res) >
-                    WOLFHSM_CFG_COMM_DATA_LEN) {
-                    return WH_ERROR_ABORTED;
-                }
                 ret = wh_Crypto_Ed25519DeserializeKeyDer(out, outSz, key);
             }
             else {
