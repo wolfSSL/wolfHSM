@@ -421,7 +421,8 @@ static int _testDma(whServerContext* server, whClientContext* client)
  * single-thread pump makes the old KeyCacheDma use-after-free deterministic.
  * On failure control jumps to cleanup so the callbacks are always unregistered.
  */
-#define BOUNCE_TEST_NVM_ID 0x4242 /* arbitrary id, destroyed at end of test */
+#define BOUNCE_TEST_NVM_ID 0x42 /* arbitrary valid client NVM id (1-255), \
+                                 * destroyed at end of test */
 
 /* Local fail/assert helpers that unwind to cleanup instead of returning. */
 #define BOUNCE_FAIL(expr)                          \

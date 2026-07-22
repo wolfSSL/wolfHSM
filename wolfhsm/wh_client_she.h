@@ -69,13 +69,19 @@
 
 /** SHE provisioning and identity functions */
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+/* Test/provisioning-only key management. These bypass the SHE M1-M5
+ * authenticated key update and debug-authorization protocols and must NOT be
+ * exposed in production builds. Gated by WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT.
+ */
+
 /**
  * @brief Pre-programs a SHE key directly into NVM, bypassing the key update
  * protocol.
  *
  * This is a wolfHSM-specific provisioning helper that has no equivalent in the
  * AUTOSAR SHE command set. It writes @p key straight into the SHE NVM slot
- * @p keyId with an update counter of zero, skipping the encrypted M1-M5
+ * @p keyId with the update counter @p count, skipping the encrypted M1-M5
  * CMD_LOAD_KEY protocol. It is intended for the initial provisioning of a
  * blank device (for example installing the MASTER_ECU_KEY or BOOT_MAC at
  * production) before any key-update authorization key exists; subsequent
@@ -84,6 +90,8 @@
  *
  * @param[in] c Pointer to the client context.
  * @param[in] keyId SHE key slot to write (0-15, e.g. WH_SHE_MASTER_ECU_KEY_ID).
+ * @param[in] count Initial SHE key counter to store with the key (0 for a
+ *                  factory-fresh slot).
  * @param[in] flags SHE key protection flags to store with the key
  *                  (WH_SHE_FLAG_WRITE_PROTECT, WH_SHE_FLAG_BOOT_PROTECT, etc.).
  * @param[in] key Pointer to the key material to store.
@@ -91,7 +99,23 @@
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
-    whNvmFlags flags, uint8_t* key, whNvmSize keySz);
+                               uint32_t count, whNvmFlags flags, uint8_t* key,
+                               whNvmSize keySz);
+
+/**
+ * @brief Destroys a pre-programmed SHE key (wolfHSM-specific).
+ *
+ * Removes the SHE key in slot @p keyId from the calling client's NVM
+ * namespace. Like wh_Client_ShePreProgramKey(), this is a provisioning helper
+ * with no AUTOSAR SHE equivalent, since the spec treats SHE keys as fixed
+ * hardware slots.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId SHE key slot to destroy (0-15).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 /**
  * @brief Sends a request to set the ECU UID (wolfHSM-specific).

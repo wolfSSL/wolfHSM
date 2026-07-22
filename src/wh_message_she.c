@@ -429,4 +429,53 @@ int wh_MessageShe_TranslateVerifyMacResponse(
     return 0;
 }
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+int wh_MessageShe_TranslatePreProgramKeyRequest(
+    uint16_t magic, const whMessageShe_PreProgramKeyRequest* src,
+    whMessageShe_PreProgramKeyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, count);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keySz);
+    return 0;
+}
+
+int wh_MessageShe_TranslatePreProgramKeyResponse(
+    uint16_t magic, const whMessageShe_PreProgramKeyResponse* src,
+    whMessageShe_PreProgramKeyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    return 0;
+}
+
+int wh_MessageShe_TranslateDestroyKeyRequest(
+    uint16_t magic, const whMessageShe_DestroyKeyRequest* src,
+    whMessageShe_DestroyKeyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+int wh_MessageShe_TranslateDestroyKeyResponse(
+    uint16_t magic, const whMessageShe_DestroyKeyResponse* src,
+    whMessageShe_DestroyKeyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    return 0;
+}
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
+
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */

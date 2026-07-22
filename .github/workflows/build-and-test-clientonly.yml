@@ -34,14 +34,18 @@ jobs:
         repository: wolfssl/wolfssl
         path: wolfssl
 
-    # Build example server
+    # Build example server. The SHE client tests use the test-only
+    # preprogram/destroy key-management messages, so the CI server must be
+    # built with WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT (never enable this in
+    # production builds).
     - name: Build POSIX server
       run: |
         cd examples/posix/wh_posix_server
+        SHE_TEST_CFLAGS="-Wextra -DWOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT"
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         else
-            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl
+            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         fi
 
     # Start the server in the background
@@ -108,16 +112,18 @@ jobs:
             make -j CLIENT_ONLY=1 TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../wolfssl && make run
         fi
 
-    # Rebuild the server with AUTH support and restart
+    # Rebuild the server with AUTH support and restart. Keep the SHE test
+    # key-management define so the SHE client tests still work.
     - name: Rebuild and restart POSIX server for AUTH
       run: |
         kill $SERVER_PID || true
         cd examples/posix/wh_posix_server
         make clean
+        SHE_TEST_CFLAGS="-Wextra -DWOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT"
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+            make -j SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         else
-            make -j TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+            make -j TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         fi
         rm -f *.bin || true
         ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &

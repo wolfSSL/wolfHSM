@@ -95,6 +95,8 @@ enum WH_SHE_ENUM {
     WH_SHE_DEC_CBC,
     WH_SHE_GEN_MAC,
     WH_SHE_VERIFY_MAC,
+    WH_SHE_PRE_PROGRAM_KEY,
+    WH_SHE_DESTROY_KEY,
 };
 
 /* counter actions */

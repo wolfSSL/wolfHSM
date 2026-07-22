@@ -50,6 +50,17 @@
  *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_LEGACY_CLIENT_NVM - If defined, the client-facing NVM message
+ *  handlers in wh_server_nvm.c pass IDs to the underlying NVM layer verbatim
+ *  (legacy raw, globally-flat ID space).  When NOT defined (the default),
+ *  every client-supplied NVM id is translated via
+ *  wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, client_id, id) so each client
+ *  has its own private 1..255 id namespace plus a shared 1..255 global
+ *  namespace (selected with WH_KEYID_CLIENT_GLOBAL_FLAG).  This closes the
+ *  loophole where a client could reach another client's keys / objects via
+ *  the raw NVM API.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that
  *  can be wrapped
  *      Default: 512
