@@ -54,19 +54,23 @@ static uint64_t _benchGetTimeUs(void)
 }
 
 /* Initialize benchmark context */
-int wh_Bench_Init(whBenchOpContext* ctx)
+int wh_Bench_Init(whBenchOpContext* ctx, whBenchOp* ops, int maxOps)
 {
     int i;
 
-    if (ctx == NULL) {
+    if (ctx == NULL || ops == NULL || maxOps <= 0) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Clear all benchmark operations */
-    memset(ctx, 0, sizeof(whBenchOpContext));
+    /* Clear the context and all benchmark operations */
+    memset(ctx, 0, sizeof(*ctx));
+    memset(ops, 0, (size_t)maxOps * sizeof(*ops));
+
+    ctx->ops    = ops;
+    ctx->maxOps = maxOps;
 
     /* Initialize each operation entry */
-    for (i = 0; i < MAX_BENCH_OPS; i++) {
+    for (i = 0; i < maxOps; i++) {
         ctx->ops[i].valid      = 0;
         ctx->ops[i].inProgress = 0;
         ctx->ops[i].minTimeUs =
@@ -98,7 +102,7 @@ int wh_Bench_RegisterOp(whBenchOpContext* ctx, const char* name,
     }
 
     /* Check if we have room for a new operation */
-    if (ctx->opCount >= MAX_BENCH_OPS) {
+    if (ctx->opCount >= ctx->maxOps) {
         return WH_ERROR_BADARGS;
     }
 

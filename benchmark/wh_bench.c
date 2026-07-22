@@ -37,7 +37,6 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_utils.h"
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
 /* Include transport-specific headers */
@@ -308,9 +307,8 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_COUNT
 } BenchModuleIdx;
 
-/* Ensure we have enough space for all modules in the context */
-WH_UTILS_STATIC_ASSERT(MAX_BENCH_OPS > BENCH_MODULE_IDX_COUNT,
-                       "More modules expected than MAX_BENCH_OPS");
+/* Storage for the registered operations, one per module */
+static whBenchOp g_benchOps[BENCH_MODULE_IDX_COUNT];
 
 /* clang-format off */
 static BenchModule g_benchModules[] = {
@@ -578,7 +576,7 @@ static int _runClientBenchmarks(whClientContext* client, int transport,
     WH_BENCH_PRINTF("Running benchmarks...\n");
 
     /* Initialize benchmark context */
-    ret = wh_Bench_Init(&benchCtx);
+    ret = wh_Bench_Init(&benchCtx, g_benchOps, BENCH_MODULE_IDX_COUNT);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to initialize benchmark context: %d\n", ret);
         return ret;
