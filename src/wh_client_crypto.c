@@ -10829,6 +10829,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
     uint8_t*                              dataPtr = NULL;
     uintptr_t                             inAddr  = 0;
     uintptr_t                             outAddr = 0;
+    word32                                sigCap  = 0;
 
     /* Transaction state */
     whKeyId key_id;
@@ -10838,6 +10839,9 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
         (out == NULL) || (out_len == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
+    /* Caller's signature buffer capacity, before the response overwrites it */
+    sigCap = *out_len;
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
@@ -10905,7 +10909,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             }
 
             if (ret == WH_ERROR_OK) {
-                req->sig.sz = *out_len;
+                req->sig.sz = sigCap;
                 ret         = wh_Client_DmaProcessClientAddress(
                     ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
@@ -10941,14 +10945,25 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        /* Update signature length */
-                        *out_len = res->sigLen;
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+                        if (res_len < hdr_sz) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else if (res->sigLen > sigCap) {
+                            ret = WH_ERROR_BADARGS;
+                        }
+                        else {
+                            /* Update signature length */
+                            *out_len = res->sigLen;
+                        }
                     }
                 }
             }
 
             (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)out, (void**)&outAddr, *out_len,
+                ctx, (uintptr_t)out, (void**)&outAddr, sigCap,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
             (void)wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)in, (void**)&inAddr, in_len,
@@ -11755,6 +11770,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
 
     uint8_t  buffer[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
     uint16_t buffer_len = sizeof(buffer);
+    uint16_t res_len    = 0;
 
     if ((ctx == NULL) || (key == NULL)) {
         return WH_ERROR_BADARGS;
@@ -11810,7 +11826,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
     }
     if (ret == WH_ERROR_OK) {
         do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                          WOLFHSM_CFG_COMM_DATA_LEN,
                                          (uint8_t*)dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
@@ -11824,28 +11840,33 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
         ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN,
                                  (uint8_t**)&res);
         if (ret >= 0) {
-            key_id = (whKeyId)res->keyId;
-            if (inout_key_id != NULL) {
-                *inout_key_id = key_id;
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            if (res_len < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
             }
-            if (key != NULL) {
-                wh_Client_MlKemSetKeyId(key, key_id);
-                /* buffer holds the exported key (EPHEMERAL) or the public key
-                 * (cached keygen); keySize bounds the DMA write. An empty result
-                 * means the caller requested key material the server did not
-                 * return. */
-                if (res->keySize == 0) {
-                    ret = WH_ERROR_ABORTED;
+            else {
+                key_id = (whKeyId)res->keyId;
+                if (inout_key_id != NULL) {
+                    *inout_key_id = key_id;
                 }
-                else if (res->keySize > buffer_len) {
-                    ret = WH_ERROR_BADARGS;
-                }
-                else {
-                    ret = wh_Crypto_MlKemDeserializeKey(
-                        buffer, (uint16_t)res->keySize, key);
+                if (key != NULL) {
+                    wh_Client_MlKemSetKeyId(key, key_id);
+                    /* buffer holds the exported key (EPHEMERAL) or the public
+                     * key (cached keygen); keySize bounds the DMA write. An
+                     * empty result means the server returned no key material. */
+                    if (res->keySize == 0) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->keySize > buffer_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        ret = wh_Crypto_MlKemDeserializeKey(
+                            buffer, (uint16_t)res->keySize, key);
+                    }
                 }
             }
-
         }
     }
 
@@ -12231,6 +12252,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12266,7 +12288,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12281,11 +12303,19 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                key_id = (whKeyId)res->keyId;
-                if (inout_key_id != NULL) {
-                    *inout_key_id = key_id;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
                 }
-                wh_Client_LmsSetKeyId(key, key_id);
+                else {
+                    key_id = (whKeyId)res->keyId;
+                    if (inout_key_id != NULL) {
+                        *inout_key_id = key_id;
+                    }
+                    wh_Client_LmsSetKeyId(key, key_id);
+                }
             }
         }
 
@@ -12342,6 +12372,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12369,7 +12400,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12386,7 +12417,13 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
             ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                if (res->sigLen > sigCap) {
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else if (res->sigLen > sigCap) {
                     ret = WH_ERROR_BADARGS;
                 }
                 else {
@@ -12443,6 +12480,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12469,7 +12507,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12487,8 +12525,16 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY,
                                      (uint8_t**)&resp);
             if (ret >= 0) {
-                *res = (int)resp->res;
-                ret = WH_ERROR_OK;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*resp);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    *res = (int)resp->res;
+                    ret  = WH_ERROR_OK;
+                }
             }
         }
     }
@@ -12528,6 +12574,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12540,7 +12587,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
                                     (uint8_t*)dataPtr);
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12550,9 +12597,17 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                /* The server mirrors wc_LmsKey_SigsLeft(), which is a
-                 * boolean. Normalize so the only nonzero return is 1. */
-                ret = (res->sigsLeft != 0) ? 1 : 0;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    /* The server mirrors wc_LmsKey_SigsLeft(), which is a
+                     * boolean. Normalize so the only nonzero return is 1. */
+                    ret = (res->sigsLeft != 0) ? 1 : 0;
+                }
             }
         }
     }
@@ -12668,6 +12723,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12713,7 +12769,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12728,11 +12784,19 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                key_id = (whKeyId)res->keyId;
-                if (inout_key_id != NULL) {
-                    *inout_key_id = key_id;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
                 }
-                wh_Client_XmssSetKeyId(key, key_id);
+                else {
+                    key_id = (whKeyId)res->keyId;
+                    if (inout_key_id != NULL) {
+                        *inout_key_id = key_id;
+                    }
+                    wh_Client_XmssSetKeyId(key, key_id);
+                }
             }
         }
 
@@ -12789,6 +12853,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12816,7 +12881,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12833,7 +12898,13 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
             ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                if (res->sigLen > sigCap) {
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else if (res->sigLen > sigCap) {
                     ret = WH_ERROR_BADARGS;
                 }
                 else {
@@ -12891,6 +12962,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12917,7 +12989,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         }
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12935,8 +13007,16 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY,
                                      (uint8_t**)&resp);
             if (ret >= 0) {
-                *res = (int)resp->res;
-                ret = WH_ERROR_OK;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*resp);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    *res = (int)resp->res;
+                    ret  = WH_ERROR_OK;
+                }
             }
         }
     }
@@ -12976,6 +13056,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         uint16_t action = WC_ALGO_TYPE_PK;
         uint16_t req_len =
             sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
             return WH_ERROR_BADARGS;
@@ -12988,7 +13069,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
                                     (uint8_t*)dataPtr);
         if (ret == WH_ERROR_OK) {
             do {
-                ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                              WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
@@ -12998,9 +13079,17 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
                                      WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT,
                                      (uint8_t**)&res);
             if (ret >= 0) {
-                /* The server mirrors wc_XmssKey_SigsLeft(), which is a
-                 * boolean. Normalize so the only nonzero return is 1. */
-                ret = (res->sigsLeft != 0) ? 1 : 0;
+                const uint32_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    /* The server mirrors wc_XmssKey_SigsLeft(), which is a
+                     * boolean. Normalize so the only nonzero return is 1. */
+                    ret = (res->sigsLeft != 0) ? 1 : 0;
+                }
             }
         }
     }
