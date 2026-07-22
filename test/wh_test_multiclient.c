@@ -1572,6 +1572,7 @@ static int _testNvmClientIsolation(whClientContext* client1,
     return WH_ERROR_OK;
 }
 
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
 /*
  * List has two namespaces:
  *  - own       : startId without GLOBAL flag
@@ -1677,6 +1678,91 @@ static int _testNvmGlobalNamespaceList(whClientContext* client1,
     WH_TEST_PRINT("  NVM global namespace list: PASS\n");
     return WH_ERROR_OK;
 }
+
+#else  /* !WOLFHSM_CFG_GLOBAL_KEYS */
+
+/*
+ * Without global keys there is no global namespace: AddObject must reject
+ * the GLOBAL flag and the other verbs must ignore it, resolving to the
+ * caller's own namespace. USER=0 objects (e.g. provisioned by whnvmtool)
+ * must stay unreachable, including via List.
+ */
+static int _testNvmGlobalFlagDisabled(whClientContext* client1,
+                                      whServerContext* server1,
+                                      whClientContext* client2,
+                                      whServerContext* server2)
+{
+    const whNvmId own_id     = 3;
+    const whNvmId planted_id = 6;
+    whNvmId       planted_nvm_id;
+    whNvmMetadata meta    = {0};
+    int32_t       out_rc  = 0;
+    whNvmId       count   = 0;
+    whNvmId       cur     = 0;
+    whNvmSize     out_len = 0;
+    uint8_t       buf[64] = {0};
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT("Testing NVM GLOBAL flag with global keys disabled...\n");
+
+    /* Plant a USER=0 object directly, as provisioning would */
+    planted_nvm_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_NVM, WH_KEYUSER_GLOBAL, planted_id);
+    meta.id     = planted_nvm_id;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = sizeof(NVM_ISOLATION_PAYLOAD_B);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, sizeof(NVM_ISOLATION_PAYLOAD_B),
+                         NVM_ISOLATION_PAYLOAD_B) == WH_ERROR_OK);
+
+    /* AddObject with the GLOBAL flag fails loudly */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+        client1, server1, 5 | WH_KEYID_CLIENT_GLOBAL_FLAG,
+        sizeof(NVM_ISOLATION_PAYLOAD_A), NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+
+    /* Add an own object without the flag */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, own_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* A GLOBAL-flagged List ignores the flag: it walks the caller's own
+     * namespace and never surfaces the planted USER=0 object */
+    cur = WH_KEYID_CLIENT_GLOBAL_FLAG;
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(count == 1);
+    WH_TEST_ASSERT_RETURN(cur == own_id);
+
+    /* Read ignores the flag the same way: it resolves to the own object */
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, own_id | WH_KEYID_CLIENT_GLOBAL_FLAG, sizeof(buf),
+        &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A, out_len) == 0);
+
+    /* The planted USER=0 object is not reachable via the flag */
+    WH_TEST_RETURN_ON_FAIL(_nvmGetMetadataViaServer(
+        client1, server1, planted_id | WH_KEYID_CLIENT_GLOBAL_FLAG, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* Cleanup */
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client1, server1, own_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_DestroyObjects(server1->nvm, 1, &planted_nvm_id) == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM GLOBAL flag disabled semantics: PASS\n");
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
 /*
  * Reject malformed AddObject requests:
@@ -1807,8 +1893,13 @@ static int _runNvmIdTranslationTests(whClientContext* client1,
     WH_TEST_PRINT("=== NVM Id Translation Tests Begin ===\n");
     WH_TEST_RETURN_ON_FAIL(
         _testNvmClientIsolation(client1, server1, client2, server2));
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
         _testNvmGlobalNamespaceList(client1, server1, client2, server2));
+#else
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmGlobalFlagDisabled(client1, server1, client2, server2));
+#endif
     WH_TEST_RETURN_ON_FAIL(
         _testNvmAddObjectRejections(client1, server1, client2, server2));
     WH_TEST_RETURN_ON_FAIL(

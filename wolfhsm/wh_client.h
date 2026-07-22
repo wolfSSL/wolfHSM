@@ -1671,8 +1671,13 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
  *                                           targets the shared global NVM
  *                                           namespace. When clear, it targets
  *                                           the calling client's own
- *                                           namespace.
+ *                                           namespace. Requires
+ *                                           WOLFHSM_CFG_GLOBAL_KEYS; without
+ *                                           it AddObject rejects the flag and
+ *                                           the other verbs ignore it.
  *   - Bit  9     (`WH_KEYID_CLIENT_WRAPPED_FLAG`): reserved; NVM AddObject
+ *                                           rejects ids with this flag set.
+ *   - Bit 10     (`WH_KEYID_CLIENT_HW_FLAG`): reserved; NVM AddObject
  *                                           rejects ids with this flag set.
  *
  * The server translates each request id into a TYPE/USER/ID server-internal

@@ -227,7 +227,7 @@ Everything above describes the server's view of the object store. Clients reach 
 A client-facing NVM id uses the same encoding as a client-facing `whKeyId`:
 
 - **Bits 0–7**: the numeric object id, `1` through `255`. Zero is reserved as the erased sentinel and is rejected by `wh_Client_NvmAddObject` — unlike a key cache request, an NVM add never auto-assigns an id.
-- **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`): selects the **shared global namespace** instead of the calling client's private one. This is the same flag-and-translation mechanism used by [global keys](#global-keys), and like global keys it is honored when `WOLFHSM_CFG_GLOBAL_KEYS` is defined.
+- **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`): selects the **shared global namespace** instead of the calling client's private one. This is the same flag-and-translation mechanism used by [global keys](#global-keys), and like global keys it is honored when `WOLFHSM_CFG_GLOBAL_KEYS` is defined. Without that define there is no global namespace: `wh_Client_NvmAddObject` rejects ids carrying the flag, and the remaining verbs (including `wh_Client_NvmList`) ignore it and operate on the caller's own namespace.
 - **Bits 9–10** (the wrapped and hardware-only key flags): not meaningful for NVM objects; `wh_Client_NvmAddObject` rejects ids carrying either flag.
 
 On each request the server expands the client's id into the full internal form with TYPE = `WH_KEYTYPE_NVM` and USER = the connection's client id (or `0` for the global namespace), and collapses it back in responses. The isolation consequences mirror the keystore's:

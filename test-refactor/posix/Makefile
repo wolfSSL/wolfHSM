@@ -115,6 +115,11 @@ ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Build with the global keys feature disabled
+ifeq ($(NOGLOBALKEYS),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
+endif
+
 # Support an authentication-capable build
 ifeq ($(AUTH),1)
     DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION

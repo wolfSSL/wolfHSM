@@ -73,6 +73,11 @@ jobs:
     - name: Build and test ASAN SHE
       run: cd test && make clean && make -j SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test with the global keys feature disabled (exercises the NVM
+    # id translation paths with WOLFHSM_CFG_GLOBAL_KEYS undefined)
+    - name: Build and test ASAN NOGLOBALKEYS
+      run: cd test && make clean && make -j NOGLOBALKEYS=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test with per-client crypto affinity enabled (runs the crypto
     # affinity unit test, gated behind WOLFHSM_CFG_CRYPTO_AFFINITY)
     - name: Build and test CRYPTO_AFFINITY ASAN

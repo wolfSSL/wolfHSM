@@ -32,7 +32,10 @@
 
 #define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
 
+/* NOGLOBALKEYS=1 builds leave global keys disabled to cover that config */
+#ifndef WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
 #define WOLFHSM_CFG_GLOBAL_KEYS
+#endif
 
 #define WOLFHSM_CFG_LOGGING
 
