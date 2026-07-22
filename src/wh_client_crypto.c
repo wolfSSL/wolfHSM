@@ -249,7 +249,8 @@ int wh_Client_RngGenerateResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -390,7 +391,8 @@ int wh_Client_RngGenerateDmaResponse(whClientContext* ctx)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -516,7 +518,8 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -701,7 +704,8 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -847,7 +851,8 @@ int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1018,7 +1023,8 @@ int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1171,7 +1177,8 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1354,7 +1361,8 @@ int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1527,7 +1535,8 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1751,7 +1760,8 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1997,7 +2007,8 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2255,7 +2266,8 @@ static int _EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2490,7 +2502,8 @@ int wh_Client_EccSignResponse(whClientContext* ctx, uint8_t* sig,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2692,7 +2705,8 @@ int wh_Client_EccVerifyResponse(whClientContext* ctx, ecc_key* opt_key,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2886,7 +2900,7 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
     if (ret == 0) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                (uint8_t*)packet);
+                WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)packet);
         } while (ret == WH_ERROR_NOTREADY);
     }
     if (ret == 0) {
@@ -3051,6 +3065,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
     if (ret == 0) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
                                          (uint8_t*)dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
     }
@@ -3248,7 +3263,8 @@ static int _Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3566,6 +3582,7 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     uint16_t res_len = 0;
     do {
         ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     WOLFHSM_CFG_COMM_DATA_LEN,
                                      (uint8_t*)dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
 
@@ -3762,6 +3779,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -3902,6 +3920,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -4042,6 +4061,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -4189,6 +4209,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -4414,7 +4435,8 @@ static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -4646,7 +4668,8 @@ int wh_Client_RsaFunctionResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -4841,7 +4864,8 @@ int wh_Client_RsaGetSizeResponse(whClientContext* ctx, int* out_size)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -5037,8 +5061,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         WH_DEBUG_CLIENT_VERBOSE("HKDF Res recv: ret:%d, res_len: %u\n", ret,
@@ -5205,7 +5229,8 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 
     uint16_t res_len = 0;
     do {
-        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
 
     if (ret == WH_ERROR_OK) {
@@ -5433,7 +5458,8 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -5554,7 +5580,8 @@ int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -5644,7 +5671,8 @@ int wh_Client_CmacFinalResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -5884,7 +5912,8 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6029,7 +6058,8 @@ int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6119,7 +6149,8 @@ int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -6362,7 +6393,8 @@ int wh_Client_Sha256UpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -6442,7 +6474,8 @@ int wh_Client_Sha256FinalResponse(whClientContext* ctx, wc_Sha256* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -6660,7 +6693,8 @@ int wh_Client_Sha256DmaUpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6764,7 +6798,8 @@ int wh_Client_Sha256DmaFinalResponse(whClientContext* ctx, wc_Sha256* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6959,7 +6994,8 @@ int wh_Client_Sha224UpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -7040,7 +7076,8 @@ int wh_Client_Sha224FinalResponse(whClientContext* ctx, wc_Sha224* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -7246,7 +7283,8 @@ int wh_Client_Sha224DmaUpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7346,7 +7384,8 @@ int wh_Client_Sha224DmaFinalResponse(whClientContext* ctx, wc_Sha224* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7541,7 +7580,8 @@ int wh_Client_Sha384UpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -7623,7 +7663,8 @@ int wh_Client_Sha384FinalResponse(whClientContext* ctx, wc_Sha384* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -7830,7 +7871,8 @@ int wh_Client_Sha384DmaUpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7931,7 +7973,8 @@ int wh_Client_Sha384DmaFinalResponse(whClientContext* ctx, wc_Sha384* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -8125,7 +8168,8 @@ int wh_Client_Sha512UpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -8213,7 +8257,8 @@ int wh_Client_Sha512FinalResponse(whClientContext* ctx, wc_Sha512* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -8443,7 +8488,8 @@ int wh_Client_Sha512DmaUpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -8550,7 +8596,8 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -8808,7 +8855,8 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -8887,7 +8935,8 @@ static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -9260,7 +9309,8 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -9356,7 +9406,8 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -9716,6 +9767,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                 uint16_t res_len;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -9947,6 +9999,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -10094,6 +10147,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
                 if (ret == 0) {
@@ -10294,6 +10348,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -10529,6 +10584,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -10672,6 +10728,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -10896,7 +10953,8 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
 
     do {
         ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                        (uint8_t*)dataPtr);
+                                     WOLFHSM_CFG_COMM_DATA_LEN,
+                                     (uint8_t*)dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -11079,6 +11137,7 @@ int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11207,6 +11266,7 @@ int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11406,6 +11466,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
     if (ret == WH_ERROR_OK) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
                                          (uint8_t*)dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
     }
@@ -11581,6 +11642,7 @@ int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11705,6 +11767,7 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11859,6 +11922,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11961,6 +12025,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12060,6 +12125,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12130,6 +12196,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12302,6 +12369,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12404,6 +12472,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12504,6 +12573,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12574,6 +12644,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }

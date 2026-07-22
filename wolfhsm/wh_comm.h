@@ -210,11 +210,15 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     uint16_t kind, uint16_t *out_seq, uint16_t data_size, const void* data);
 
 /* If a response packet has been buffered, get the header and copy the data out
- * of the buffer.
+ * of the buffer. data_size is the capacity of the caller-supplied data buffer;
+ * if the received payload exceeds it, returns WH_ERROR_BUFFER_SIZE with
+ * *out_size set to the required size. On success *out_size holds the actual
+ * payload size.
  */
-int wh_CommClient_RecvResponse(whCommClient* context,
-        uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
-        uint16_t* out_size, void* data);
+int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
+                               uint16_t* out_kind, uint16_t* out_seq,
+                               uint16_t* out_size, uint16_t data_size,
+                               void* data);
 
 /* Get a pointer to the data portion of the internal buffer that is
  * HW_COMM_DATA_LEN bytes.

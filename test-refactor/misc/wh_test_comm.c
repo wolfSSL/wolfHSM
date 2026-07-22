@@ -133,10 +133,11 @@ static int _whTest_CommMem(void)
 
     /* RecvResponse with no outstanding request short-circuits to NOTREADY
      * without touching the transport. */
-    WH_TEST_ASSERT_RETURN(
-        WH_ERROR_NOTREADY ==
-        wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                   &rx_resp_seq, &rx_resp_len, rx_resp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_CommClient_RecvResponse(client, &rx_resp_flags,
+                                                     &rx_resp_type,
+                                                     &rx_resp_seq, &rx_resp_len,
+                                                     sizeof(rx_resp), rx_resp));
 
     for (counter = 0; counter < REPEAT_COUNT; counter++) {
         (void)snprintf((char*)tx_req, sizeof(tx_req), "Request:%u", counter);
@@ -152,7 +153,8 @@ static int _whTest_CommMem(void)
             WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
                                   wh_CommClient_RecvResponse(
                                       client, &rx_resp_flags, &rx_resp_type,
-                                      &rx_resp_seq, &rx_resp_len, rx_resp));
+                                      &rx_resp_seq, &rx_resp_len,
+                                      sizeof(rx_resp), rx_resp));
 
             WH_TEST_ASSERT_RETURN(
                 WH_ERROR_REQUEST_PENDING ==
@@ -181,9 +183,9 @@ static int _whTest_CommMem(void)
             "Server SendResponse:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
             ret, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len, tx_resp);
 
-        WH_TEST_RETURN_ON_FAIL(
-            wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                       &rx_resp_seq, &rx_resp_len, rx_resp));
+        WH_TEST_RETURN_ON_FAIL(wh_CommClient_RecvResponse(
+            client, &rx_resp_flags, &rx_resp_type, &rx_resp_seq, &rx_resp_len,
+            sizeof(rx_resp), rx_resp));
 
         WH_TEST_DEBUG_PRINT(
             "Client RecvResponse:%d, flags %x, type:%x, seq:%d, len:%d, %s\n",
@@ -220,16 +222,17 @@ static int _whTest_CommMem(void)
         server, rx_req_flags, rx_req_type, rx_req_seq, tx_resp_len, tx_resp));
 
     /* Successful recv clears pending */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                   &rx_resp_seq, &rx_resp_len, rx_resp));
+    WH_TEST_RETURN_ON_FAIL(wh_CommClient_RecvResponse(
+        client, &rx_resp_flags, &rx_resp_type, &rx_resp_seq, &rx_resp_len,
+        sizeof(rx_resp), rx_resp));
     WH_TEST_ASSERT_RETURN(0 == wh_CommClient_IsRequestPending(client));
 
     /* Second Recv with no outstanding request again yields NOTREADY */
-    WH_TEST_ASSERT_RETURN(
-        WH_ERROR_NOTREADY ==
-        wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                   &rx_resp_seq, &rx_resp_len, rx_resp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_CommClient_RecvResponse(client, &rx_resp_flags,
+                                                     &rx_resp_type,
+                                                     &rx_resp_seq, &rx_resp_len,
+                                                     sizeof(rx_resp), rx_resp));
 
     /* Send, then manually abort. Seq must not advance. */
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_SendRequest(
@@ -250,10 +253,11 @@ static int _whTest_CommMem(void)
 
     /* After abort the late response is ignored - pending is 0 so
      * RecvResponse short-circuits before consulting the transport. */
-    WH_TEST_ASSERT_RETURN(
-        WH_ERROR_NOTREADY ==
-        wh_CommClient_RecvResponse(client, &rx_resp_flags, &rx_resp_type,
-                                   &rx_resp_seq, &rx_resp_len, rx_resp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
+                          wh_CommClient_RecvResponse(client, &rx_resp_flags,
+                                                     &rx_resp_type,
+                                                     &rx_resp_seq, &rx_resp_len,
+                                                     sizeof(rx_resp), rx_resp));
     WH_TEST_ASSERT_RETURN(0 == wh_CommClient_IsRequestPending(client));
 
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_Cleanup(server));
