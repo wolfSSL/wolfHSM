@@ -94,12 +94,12 @@ enum {
 #define TEST_ADMIN_PIN "1234"
 #endif
 
-#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+#if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
 /* Id of the trusted KEK the server task provisions for the SHE<->keywrap
- * interop tests. Defined here so the server task can use it too. */
+ * interop tests. Defined here so both the client section and the server task
+ * can use it. */
 #define WH_SHE_INTEROP_KEK_ID 0x20
-#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM */
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 /* Helper function to destroy a SHE key so the unit tests don't
@@ -482,9 +482,11 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
 
     /* Needs the trusted KEK the server task provisions in NVM, so this only
-     * runs in the in-process (client+server) build. */
+     * runs in the in-process (client+server) build, guarded the same way as
+     * whTest_SheClientConfigBoundarySecureBoot below. */
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM) && \
-    !defined(WOLFHSM_CFG_TEST_CLIENT_ONLY)
+    defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
     /* SHE <-> keywrap interop: wrap-export a SHE key, prime an unused SHE slot
      * via unwrap-and-cache and use it, and verify the SHE counter rollback
      * guard on unwrap-and-cache. */
@@ -761,7 +763,8 @@ int whTest_SheClientConfig(whClientConfig* config)
 
         WH_TEST_PRINT("SHE <-> keywrap interop SUCCESS\n");
     }
-#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && !TEST_CLIENT_ONLY */
+#endif /* WOLFHSM_CFG_KEYWRAP && HAVE_AESGCM && WOLFHSM_CFG_TEST_POSIX &&
+          WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
     /* destroy "pre-programmed" keys so we don't leak NVM */
     if ((ret = _destroySheKey(client, WH_SHE_BOOT_MAC_KEY_ID)) != 0) {
