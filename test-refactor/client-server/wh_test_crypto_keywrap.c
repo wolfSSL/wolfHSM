@@ -75,9 +75,11 @@ static int _whTest_CryptoKeyWrapSameOwner(whClientContext* client)
         sizeof("WrapKeySameOwner"), wrapKey, sizeof(wrapKey), &wrapKeyId));
 
     /* Wrap a local key owned by this client */
-    meta.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
-                                                 KEYWRAP_TEST_PLAINKEY_ID);
-    meta.len = sizeof(plainKey);
+    meta.id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
+                                                   KEYWRAP_TEST_PLAINKEY_ID);
+    meta.len   = sizeof(plainKey);
+    meta.flags = WH_NVM_FLAGS_USAGE_ANY;
+    memcpy(meta.label, "SameOwner Label", sizeof("SameOwner Label"));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM,
                                              wrapKeyId, plainKey,
                                              sizeof(plainKey), &meta,
@@ -88,9 +90,10 @@ static int _whTest_CryptoKeyWrapSameOwner(whClientContext* client)
         client, WC_CIPHER_AES_GCM, wrapKeyId, wrappedKey, sizeof(wrappedKey),
         &exportMeta, unwrappedKey, &unwrappedKeySz));
 
-    /* Recovered key matches the original */
+    /* Recovered key and metadata match the originals */
     WH_TEST_ASSERT_RETURN(0 ==
                           memcmp(unwrappedKey, plainKey, sizeof(plainKey)));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(&meta, &exportMeta, sizeof(meta)));
 
     /* Evict the wrapping key */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, wrapKeyId));
