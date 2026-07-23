@@ -51,6 +51,7 @@
 
 /* Server API's */
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_server_nvm.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
@@ -190,7 +191,7 @@ int wh_Server_Cleanup(whServerContext* server)
     (void)wh_Log_Cleanup(&server->log);
 #endif /* WOLFHSM_CFG_LOGGING */
 
-    memset(server, 0, sizeof(*server));
+    wh_Utils_ForceZero(server, sizeof(*server));
 
     return WH_ERROR_OK;
 }
