@@ -4,6 +4,7 @@ on:
   push:
     branches: [ 'master', 'main', 'release/**' ]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ '*' ]
 
 permissions:
@@ -17,6 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
 
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ matrix.os }}
 
     steps:
