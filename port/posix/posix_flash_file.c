@@ -179,7 +179,8 @@ int posixFlashFile_Read(   void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            (offset > MAX_OFFSET(context)) ||
+            (size > MAX_OFFSET(context) - offset)){
         return WH_ERROR_BADARGS;
     }
 
@@ -205,7 +206,8 @@ int posixFlashFile_Program(void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            (offset > MAX_OFFSET(context)) ||
+            (size > MAX_OFFSET(context) - offset)){
         return WH_ERROR_BADARGS;
     }
 
@@ -242,7 +244,8 @@ int posixFlashFile_Verify( void* c,
     uint32_t data_offset = 0;
 
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            (offset > MAX_OFFSET(context)) ||
+            (size > MAX_OFFSET(context) - offset)){
         return WH_ERROR_BADARGS;
     }
 
@@ -278,7 +281,8 @@ int posixFlashFile_Erase(void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            (offset > MAX_OFFSET(context)) ||
+            (size > MAX_OFFSET(context) - offset)){
         return WH_ERROR_BADARGS;
     }
 
@@ -314,7 +318,8 @@ int posixFlashFile_BlankCheck(void* c,
     uint32_t this_size = 0;
 
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            (offset > MAX_OFFSET(context)) ||
+            (size > MAX_OFFSET(context) - offset)){
         return WH_ERROR_BADARGS;
     }
 
