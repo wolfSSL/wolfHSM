@@ -58,16 +58,18 @@ jobs:
       run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
+    # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
     - name: Build and test ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
-      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 WOLFSSL_DIR=../wolfssl && make run
+      run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test ASAN DEBUG NOCRYPTO
       run: cd test && make clean && make -j DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test debug build with ASAN and DMA
+    # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
     - name: Build and test ASAN DEBUG DMA
-      run: cd test && make clean && make -j DEBUG=1 ASAN=1 DMA=1 WOLFSSL_DIR=../wolfssl && make run
+      run: cd test && make clean && make -j DEBUG=1 ASAN=1 DMA=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test with SHE and ASAN
     - name: Build and test ASAN SHE
@@ -79,8 +81,9 @@ jobs:
       run: cd test && make clean && make -j CRYPTO_AFFINITY=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test crypto affinity alongside DMA (exercises HW-devId path)
+    # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
     - name: Build and test CRYPTO_AFFINITY DMA ASAN
-      run: cd test && make clean && make -j CRYPTO_AFFINITY=1 DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+      run: cd test && make clean && make -j CRYPTO_AFFINITY=1 DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test with DEBUG=1
     - name: Build and test with DEBUG
@@ -95,12 +98,14 @@ jobs:
       run: cd test && make clean && make -j THREADSAFE=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests
+    # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
     - name: Build and test with THREADSAFE and TESTWOLFCRYPT and everything
-      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 DMA=1 SHE=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests with dma
+    # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
     - name: Build and test with THREADSAFE and TESTWOLFCRYPT with DMA
-      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+      run: cd test && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
     # Build and test with AUTH=1
     - name: Build and test with AUTH
