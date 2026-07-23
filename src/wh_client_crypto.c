@@ -3051,6 +3051,12 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
         return WH_ERROR_BADARGS;
     }
 
+    /* check_order/check_priv mirror wolfCrypt's cryptocb request shape but
+     * are not carried on the wire: the server always performs the full
+     * validation, a strict superset of any partial check. */
+    (void)check_order;
+    (void)check_priv;
+
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
@@ -3095,12 +3101,10 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
             }
 
             memset(req, 0, sizeof(*req));
-            req->options    = options;
-            req->keyId      = key_id;
-            req->curveId    = (uint32_t)wc_ecc_get_curve_id(key->idx);
-            req->checkOrder = (uint32_t)(check_order != 0);
-            req->checkPriv  = (uint32_t)(check_priv != 0);
-            req->pubSz      = pub_key_len;
+            req->options = options;
+            req->keyId   = key_id;
+            req->curveId = (uint32_t)wc_ecc_get_curve_id(key->idx);
+            req->pubSz   = pub_key_len;
             if ((pub_key != NULL) && (pub_key_len > 0)) {
                 memcpy((uint8_t*)(req + 1), pub_key, pub_key_len);
             }

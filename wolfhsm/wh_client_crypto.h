@@ -746,11 +746,13 @@ int wh_Client_EccMakePub(whClientContext* ctx, ecc_key* key, uint8_t* pubOut,
  *                    (0x04 || X || Y), or NULL if the caller holds none.
  * @param[in] pub_key_len Length of pub_key in bytes, or 0 when pub_key is NULL.
  * @param[in] check_order Requests validation that the point has the order of
- *                        the curve. Carried to the server but not honored: the
- *                        server always performs the full validation.
+ *                        the curve. Accepted for wolfCrypt cryptocb parity but
+ *                        not sent to the server: the server always performs
+ *                        the full validation, a superset of the partial check.
  * @param[in] check_priv Requests validation of the private part of the key.
- *                       Carried to the server but not honored: the server
- *                       always performs the full validation.
+ *                       Accepted for wolfCrypt cryptocb parity but not sent to
+ *                       the server: the server always performs the full
+ *                       validation, a superset of the partial check.
  * @return int Returns 0 if the key is valid, or a negative error code if the
  *             key is invalid or the operation failed. A wolfHSM error code
  *             (transport or keystore failure) is likewise returned as a

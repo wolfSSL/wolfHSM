@@ -499,8 +499,6 @@ int wh_MessageCrypto_TranslateEccCheckRequest(
     WH_T32(magic, dest, src, options);
     WH_T32(magic, dest, src, keyId);
     WH_T32(magic, dest, src, curveId);
-    WH_T32(magic, dest, src, checkOrder);
-    WH_T32(magic, dest, src, checkPriv);
     WH_T32(magic, dest, src, pubSz);
     return 0;
 }

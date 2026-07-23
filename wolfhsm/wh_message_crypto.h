@@ -619,10 +619,6 @@ typedef struct {
     uint32_t curveId;    /* wolfCrypt curve id, carried as int32:
                           * ECC_CURVE_INVALID (-1) for a custom curve. The curve
                           * travels with the key, so the server ignores this */
-    uint32_t checkOrder; /* Validate the point has the curve order. Reserved:
-                          * the server always validates in full */
-    uint32_t checkPriv;  /* Validate the private part as well. Reserved: the
-                          * server always validates in full */
     uint32_t pubSz;      /* 0 when the caller holds no public point */
     /* Data follows:
      * uint8_t pub[pubSz];   X9.63 uncompressed point: 0x04 || X || Y

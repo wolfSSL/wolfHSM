@@ -1739,16 +1739,13 @@ static int _HandleEccCheckPubKey(whServerContext* ctx, uint16_t magic,
     int evict = !!(req.options & WH_MESSAGE_CRYPTO_ECCCHECK_OPTIONS_EVICT);
 
     /* The curve travels with the key's DER encoding, so curveId is redundant.
-     * checkOrder and checkPriv are carried on the wire but clamped to a full
-     * wc_ecc_check_key() here rather than honored, because:
-     *  - wc_ecc_check_key() is wolfCrypt's only public validation entry point;
-     *    partial validation lives in a static
-     *    function reachable only from the import APIs. It is also the only
-     *    route to this server's own crypto callback (the key is bound to the
-     *    server devId). */
+     * The request deliberately carries no partial-validation knobs:
+     * wc_ecc_check_key() is wolfCrypt's only public validation entry point
+     * (partial validation lives in a static function reachable only from the
+     * import APIs) and the only route to this server's own crypto callback
+     * (the key is bound to the server devId), so validation always runs in
+     * full. */
     (void)req.curveId;
-    (void)req.checkOrder;
-    (void)req.checkPriv;
 
     /* no need to enforce flags for pub key operation */
     ret = wc_ecc_init_ex(key, NULL, devId);
