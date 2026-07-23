@@ -382,8 +382,9 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             if (out_pub_len != NULL) {
                 /* Clamp rather than truncate: an oversized capacity must not
                  * wrap to a small one and provoke a spurious BUFFER_E. */
-                pub_len = (*out_pub_len > 0xFFFFU) ? 0xFFFFU
-                                                   : (uint16_t)(*out_pub_len);
+                pub_len = (*out_pub_len > UINT16_MAX)
+                              ? UINT16_MAX
+                              : (uint16_t)(*out_pub_len);
             }
 
             ret = wh_Client_EccMakePub(ctx, key, pub_out, &pub_len);
@@ -411,7 +412,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             int    check_order = info->pk.ecc_check_pub.checkOrder;
             int    check_priv  = info->pk.ecc_check_pub.checkPriv;
 
-            if (pub_key_len > 0xFFFFU) {
+            if (pub_key_len > UINT16_MAX) {
                 ret = BAD_FUNC_ARG;
             }
             else {

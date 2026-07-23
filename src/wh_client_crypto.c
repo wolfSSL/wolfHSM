@@ -2927,7 +2927,7 @@ int wh_Client_EccMakePub(whClientContext* ctx, ecc_key* key, uint8_t* pubOut,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccMakePub";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_ANY;
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
 
         ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
@@ -3056,7 +3056,7 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
     if (WH_KEYID_ISERASED(key_id)) {
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempEccCheck";
-        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_ANY;
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
 
         ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
                                      keyLabel);
