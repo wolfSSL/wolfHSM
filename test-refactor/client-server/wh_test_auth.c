@@ -568,8 +568,12 @@ static int _whTest_AuthSetPermissions_impl(whClientContext* client)
     whUserId          user_id;
     whAuthPermissions perms, new_perms;
     whAuthPermissions fetched_perms;
+    whAuthPermissions full_perms, demoted_perms;
     whUserId          fetched_user_id = WH_USER_ID_INVALID;
+    whUserId          probe_id        = WH_USER_ID_INVALID;
     int32_t           get_rc          = 0;
+    int32_t           probe_server_rc = 0;
+    int               probe_rc        = 0;
 
     /* Login as admin first */
     whAuthPermissions admin_perms;
@@ -642,6 +646,83 @@ static int _whTest_AuthSetPermissions_impl(whClientContext* client)
         }
         WH_TEST_ASSERT_RETURN(permissions_match);
     }
+
+    /* Test 2c: self-demote must bind the live session. Admin clears its own
+     * USER_ADD bit (keeping admin + SET_PERMISSIONS so it can restore). */
+    WH_TEST_PRINT("  Test: Self-demote binds live session\n");
+    memset(&full_perms, 0, sizeof(full_perms));
+    fetched_user_id = WH_USER_ID_INVALID;
+    get_rc          = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, TEST_ADMIN_USERNAME,
+                                                  &get_rc, &fetched_user_id,
+                                                  &full_perms));
+    WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(fetched_user_id == admin_id);
+
+    demoted_perms = full_perms;
+    WH_AUTH_CLEAR_ALLOWED_ACTION(demoted_perms, WH_MESSAGE_GROUP_AUTH,
+                                 WH_MESSAGE_AUTH_ACTION_USER_ADD);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, admin_id, demoted_perms,
+                                    &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* The revoked bit must now deny the admin's own UserAdd. Capture the
+     * probe result, restore, and only then assert -- a failing assert here
+     * must not leave the stored admin record demoted for later tests. */
+    memset(&perms, 0, sizeof(perms));
+    probe_server_rc = 0;
+    probe_id        = WH_USER_ID_INVALID;
+    probe_rc = _whTest_Auth_UserAddOp(client, "selfdemote_probe", perms,
+                                      WH_AUTH_METHOD_PIN, "pass", 4,
+                                      &probe_server_rc, &probe_id);
+
+    /* Restore full perms before asserting the probe outcome. */
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, admin_id, full_perms, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* If the probe wrongly succeeded it consumed a user slot, so drop it
+     * before asserting to keep the 5-slot table clean for later tests. */
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe");
+
+    /* A denial is a well-formed response, so the client call itself is OK */
+    WH_TEST_ASSERT_RETURN(probe_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id == WH_USER_ID_INVALID);
+
+    /* The same session can add again after the restore. */
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    probe_id  = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "selfdemote_probe",
+                                                  perms, WH_AUTH_METHOD_PIN,
+                                                  "pass", 4, &server_rc,
+                                                  &probe_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id != WH_USER_ID_INVALID);
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe");
+
+    /* Changing a different user's permissions leaves the caller's own
+     * session untouched: admin can still add after demoting testuser3. */
+    memset(&new_perms, 0, sizeof(new_perms));
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    probe_id  = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "selfdemote_probe2",
+                                                  perms, WH_AUTH_METHOD_PIN,
+                                                  "pass", 4, &server_rc,
+                                                  &probe_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id != WH_USER_ID_INVALID);
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe2");
 
     /* Test 3: Set user permissions for non-existent user */
     WH_TEST_PRINT("  Test: Set user permissions for non-existent user\n");
@@ -927,6 +1008,263 @@ static int _whTest_AuthRequestAuthorization_impl(whClientContext* client)
 
 
 /* ============================================================================
+ * Session-cache sync unit test (mock backend; no live server needed)
+ * ============================================================================
+ */
+
+/* Mock backend driving wh_Auth_UserSetPermissions with a controllable return
+ * code, so the session-cache sync can be checked in isolation. Mock state is
+ * carried through the auth context's opaque context pointer. */
+typedef struct {
+    whAuthPermissions login_perms;  /* permissions handed back by Login */
+    whAuthPermissions stored_perms; /* permissions the backend last received */
+    whUserId          login_id;     /* user id handed back by Login */
+    int               forced_rc;    /* rc returned by UserSetPermissions */
+    int               set_calls;    /* UserSetPermissions invocation count */
+} whTestAuthMock;
+
+static int _whTest_Auth_MockCleanup(void* context)
+{
+    (void)context;
+    return WH_ERROR_OK;
+}
+
+static int _whTest_Auth_MockLogin(void* context, uint8_t client_id,
+                                  whAuthMethod method, const char* username,
+                                  const void* auth_data, uint16_t auth_data_len,
+                                  whUserId*          out_user_id,
+                                  whAuthPermissions* out_permissions,
+                                  int*               loggedIn)
+{
+    whTestAuthMock* mock = (whTestAuthMock*)context;
+
+    (void)client_id;
+    (void)method;
+    (void)username;
+    (void)auth_data;
+    (void)auth_data_len;
+
+    if ((mock == NULL) || (out_user_id == NULL) || (out_permissions == NULL) ||
+        (loggedIn == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *out_user_id     = mock->login_id;
+    *out_permissions = mock->login_perms;
+    *loggedIn        = 1;
+    return WH_ERROR_OK;
+}
+
+static int _whTest_Auth_MockUserSetPermissions(void* ctx, uint16_t caller_id,
+                                               uint16_t          user_id,
+                                               whAuthPermissions permissions)
+{
+    whTestAuthMock* mock = (whTestAuthMock*)ctx;
+
+    (void)caller_id;
+    (void)user_id;
+
+    if (mock == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Record what the frontend forwarded so the test can check fidelity */
+    mock->stored_perms = permissions;
+    mock->set_calls++;
+    return mock->forced_rc;
+}
+
+/* Field-wise compare so the result does not depend on struct padding.
+ * Returns 1 when the two permission sets match. */
+static int _whTest_Auth_PermsEqual(const whAuthPermissions* a,
+                                   const whAuthPermissions* b)
+{
+    int g;
+    int w;
+    int k;
+
+    for (g = 0; g < WH_NUMBER_OF_GROUPS + 1; g++) {
+        if (a->groupPermissions[g] != b->groupPermissions[g]) {
+            return 0;
+        }
+    }
+    for (g = 0; g < WH_NUMBER_OF_GROUPS; g++) {
+        for (w = 0; w < (int)WH_AUTH_ACTION_WORDS; w++) {
+            if (a->actionPermissions[g][w] != b->actionPermissions[g][w]) {
+                return 0;
+            }
+        }
+    }
+    if (a->keyIdCount != b->keyIdCount) {
+        return 0;
+    }
+    for (k = 0; k < WH_AUTH_MAX_KEY_IDS; k++) {
+        if (a->keyIds[k] != b->keyIds[k]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Covers the session-cache refresh: a self-targeted change is cached verbatim,
+ * while a backend failure, a different target, a logged-out session, and a
+ * non-admin admin grant leave it untouched. Also covers the admin branch. */
+static int _whTest_Auth_SetPermsCacheSync(void)
+{
+    int               rc;
+    int               loggedIn = 0;
+    whTestAuthMock    mock;
+    whAuthCb          cb;
+    whAuthConfig      config;
+    whAuthContext     ctx;
+    whAuthPermissions seed_perms;
+    whAuthPermissions new_perms;
+    whAuthPermissions over_perms;
+    whAuthPermissions admin_seed;
+    whAuthPermissions admin_perms;
+    whAuthPermissions zero_perms;
+    whUserId          self_id  = 1;
+    whUserId          other_id = 2;
+
+    WH_TEST_PRINT("  Test: Set permissions session-cache sync\n");
+
+    memset(&mock, 0, sizeof(mock));
+    memset(&cb, 0, sizeof(cb));
+    memset(&config, 0, sizeof(config));
+    memset(&ctx, 0, sizeof(ctx));
+
+    /* Session starts with only the AUTH group allowed. */
+    memset(&seed_perms, 0, sizeof(seed_perms));
+    WH_AUTH_SET_ALLOWED_GROUP(seed_perms, WH_MESSAGE_GROUP_AUTH);
+
+    mock.login_id         = self_id;
+    mock.login_perms      = seed_perms;
+    cb.Cleanup            = _whTest_Auth_MockCleanup;
+    cb.Login              = _whTest_Auth_MockLogin;
+    cb.UserSetPermissions = _whTest_Auth_MockUserSetPermissions;
+    config.cb             = &cb;
+    config.context        = &mock;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&ctx, &config));
+
+    /* Establish the live session through the normal login path. */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Login(&ctx, 0, WH_AUTH_METHOD_PIN, "user",
+                                         "pin", 3, &loggedIn));
+    WH_TEST_ASSERT_RETURN(loggedIn == 1);
+    WH_TEST_ASSERT_RETURN(ctx.user.user_id == self_id);
+    WH_TEST_ASSERT_RETURN(_whTest_Auth_PermsEqual(&ctx.user.permissions,
+                                                  &seed_perms));
+
+    /* New permission set that differs from the seed. */
+    memset(&new_perms, 0, sizeof(new_perms));
+    WH_AUTH_SET_ALLOWED_ACTION(new_perms, WH_MESSAGE_GROUP_AUTH,
+                               WH_MESSAGE_AUTH_ACTION_USER_ADD);
+
+    /* Case 1: backend OK + self target -> cache updated. */
+    mock.forced_rc = WH_ERROR_OK;
+    rc             = wh_Auth_UserSetPermissions(&ctx, self_id, new_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &new_perms));
+    /* The backend must have been handed exactly what the caller supplied. */
+    WH_TEST_ASSERT_RETURN(mock.set_calls == 1);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&mock.stored_perms, &new_perms));
+    /* The rest of the session record must survive the refresh. */
+    WH_TEST_ASSERT_RETURN(ctx.user.user_id == self_id);
+    WH_TEST_ASSERT_RETURN(ctx.user.is_active);
+
+    /* Case 2: backend failure + self target -> cache unchanged. */
+    ctx.user.permissions = seed_perms;
+    mock.forced_rc       = WH_ERROR_ACCESS;
+    rc                   = wh_Auth_UserSetPermissions(&ctx, self_id, new_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &seed_perms));
+    WH_TEST_ASSERT_RETURN(ctx.user.user_id == self_id);
+    WH_TEST_ASSERT_RETURN(ctx.user.is_active);
+
+    /* Case 3: backend OK + different target -> caller cache unchanged. */
+    ctx.user.permissions = seed_perms;
+    mock.forced_rc       = WH_ERROR_OK;
+    rc = wh_Auth_UserSetPermissions(&ctx, other_id, new_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &seed_perms));
+    WH_TEST_ASSERT_RETURN(ctx.user.user_id == self_id);
+    WH_TEST_ASSERT_RETURN(ctx.user.is_active);
+
+    /* Case 4: the cache mirrors the supplied values verbatim, including a
+     * keyIdCount the backend would clamp when storing. */
+    ctx.user.permissions = seed_perms;
+    over_perms           = new_perms;
+    over_perms.keyIdCount = WH_AUTH_MAX_KEY_IDS + 1;
+    mock.forced_rc        = WH_ERROR_OK;
+    rc = wh_Auth_UserSetPermissions(&ctx, self_id, over_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(ctx.user.permissions.keyIdCount ==
+                          WH_AUTH_MAX_KEY_IDS + 1);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &over_perms));
+
+    /* Case 5: a non-admin session can not grant the admin flag; the request
+     * is refused in the core, so the backend is never consulted. */
+    ctx.user.permissions = seed_perms;
+    admin_perms          = new_perms;
+    WH_AUTH_SET_IS_ADMIN(admin_perms, 1);
+    mock.forced_rc = WH_ERROR_OK;
+    mock.set_calls = 0;
+    rc             = wh_Auth_UserSetPermissions(&ctx, self_id, admin_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_AUTH_PERMISSION_ERROR);
+    WH_TEST_ASSERT_RETURN(mock.set_calls == 0);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &seed_perms));
+
+    /* The refusal is target-independent: promoting another user is refused
+     * on the same terms as self-promotion. */
+    rc = wh_Auth_UserSetPermissions(&ctx, other_id, admin_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_AUTH_PERMISSION_ERROR);
+    WH_TEST_ASSERT_RETURN(mock.set_calls == 0);
+
+    /* Case 6: an admin session is allowed to grant the admin flag. */
+    admin_seed = seed_perms;
+    WH_AUTH_SET_IS_ADMIN(admin_seed, 1);
+    ctx.user.permissions = admin_seed;
+    mock.forced_rc       = WH_ERROR_OK;
+    mock.set_calls       = 0;
+    rc = wh_Auth_UserSetPermissions(&ctx, self_id, admin_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(mock.set_calls == 1);
+    WH_TEST_ASSERT_RETURN(WH_AUTH_IS_ADMIN(ctx.user.permissions));
+
+    /* Case 7: an admin that clears its own admin bit loses it on the spot and
+     * can no longer promote itself back -- the self-locking hazard. */
+    ctx.user.permissions = admin_seed;
+    rc = wh_Auth_UserSetPermissions(&ctx, self_id, new_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(!WH_AUTH_IS_ADMIN(ctx.user.permissions));
+
+    mock.set_calls = 0;
+    rc = wh_Auth_UserSetPermissions(&ctx, self_id, admin_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_AUTH_PERMISSION_ERROR);
+    WH_TEST_ASSERT_RETURN(mock.set_calls == 0);
+
+    /* Case 8: a logged-out session must never be refreshed, even though its
+     * zeroed user_id equals WH_USER_ID_INVALID passed as the target. */
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Reset(&ctx));
+    memset(&zero_perms, 0, sizeof(zero_perms));
+    mock.forced_rc = WH_ERROR_OK;
+    rc = wh_Auth_UserSetPermissions(&ctx, WH_USER_ID_INVALID, new_perms);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(
+        _whTest_Auth_PermsEqual(&ctx.user.permissions, &zero_perms));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
+    return WH_TEST_SUCCESS;
+}
+
+
+/* ============================================================================
  * Bad-args tests (no live session needed; do not disturb the baseline)
  * ============================================================================
  */
@@ -1104,6 +1442,14 @@ int whTest_AuthDeleteUser(whClientContext* client)
 int whTest_AuthSetPermissions(whClientContext* client)
 {
     return _whTest_Auth_RunBracketed(client, _whTest_AuthSetPermissions_impl);
+}
+
+/* Core-only coverage; drives wh_Auth_* against a mock backend and does not
+ * touch the client or the running server. */
+int whTest_AuthSetPermsCacheSync(whClientContext* client)
+{
+    (void)client;
+    return _whTest_Auth_SetPermsCacheSync();
 }
 
 int whTest_AuthSetCredentials(whClientContext* client)

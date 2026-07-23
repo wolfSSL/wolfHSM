@@ -97,6 +97,7 @@ WH_TEST_DECL(whTest_AuthLogout);
 WH_TEST_DECL(whTest_AuthAddUser);
 WH_TEST_DECL(whTest_AuthDeleteUser);
 WH_TEST_DECL(whTest_AuthSetPermissions);
+WH_TEST_DECL(whTest_AuthSetPermsCacheSync);
 WH_TEST_DECL(whTest_AuthSetCredentials);
 WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
@@ -166,6 +167,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_AuthAddUser", whTest_AuthAddUser},
     {"whTest_AuthDeleteUser", whTest_AuthDeleteUser},
     {"whTest_AuthSetPermissions", whTest_AuthSetPermissions},
+    {"whTest_AuthSetPermsCacheSync", whTest_AuthSetPermsCacheSync},
     {"whTest_AuthSetCredentials", whTest_AuthSetCredentials},
     {"whTest_AuthRequestAuthorization", whTest_AuthRequestAuthorization},
 };
