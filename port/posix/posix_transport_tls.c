@@ -136,6 +136,9 @@ int posixTransportTls_InitConnect(void* context, const void* config,
 
     memset(ctx, 0, sizeof(posixTransportTlsClientContext));
 
+    ctx->connectcb     = connectcb;
+    ctx->connectcb_arg = connectcb_arg;
+
     /* Create SSL context using static memory if heap_hint is provided */
 #ifdef WOLFSSL_STATIC_MEMORY
     if (cfg->heap_hint != NULL) {
