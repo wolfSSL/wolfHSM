@@ -41,6 +41,7 @@
 
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_ClientDevId);
+WH_TEST_DECL(whTest_ClientRespBounds);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_Dma);
@@ -102,6 +103,7 @@ WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
 const whTestCase whTestsMisc[] = {
     { "whTest_ClientDevId",      whTest_ClientDevId },
+    { "whTest_ClientRespBounds", whTest_ClientRespBounds },
     { "whTest_Comm",             whTest_Comm },
     { "whTest_Dma",              whTest_Dma },
     { "whTest_CryptoAffinity",   whTest_CryptoAffinity },
