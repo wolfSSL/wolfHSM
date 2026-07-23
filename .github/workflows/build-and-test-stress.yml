@@ -3,6 +3,9 @@ name: Multi-threaded Stress Test
 on:
   push:
     branches: [ 'master', 'main', 'release/**' ]
+  schedule:
+    # Weekly ccache reseed; also keeps caches from 7-day eviction
+    - cron: '0 6 * * 1'
   pull_request:
     branches: [ '*' ]
 
@@ -32,6 +35,13 @@ jobs:
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
+
+    # Compiler cache; PR runs restore without saving
+    - name: Set up ccache
+      uses: ./.github/actions/ccache-setup
+      with:
+        workflow-id: build-and-test-stress
+        read-only: ${{ github.event_name == 'pull_request' }}
 
     # Build and run stress tests with TSAN
     - name: Build and run stress tests with TSAN

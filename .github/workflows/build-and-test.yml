@@ -3,6 +3,9 @@ name: Build and Test
 on:
   push:
     branches: [ 'master', 'main', 'release/**' ]
+  schedule:
+    # Weekly ccache reseed; also keeps caches from 7-day eviction
+    - cron: '0 6 * * 1'
   pull_request:
     branches: [ '*' ]
 
@@ -36,6 +39,13 @@ jobs:
       with:
         repository: wolfssl/wolfssl
         path: wolfssl
+
+    # Compiler cache; PR runs restore without saving
+    - name: Set up ccache
+      uses: ./.github/actions/ccache-setup
+      with:
+        workflow-id: build-and-test
+        read-only: ${{ github.event_name == 'pull_request' }}
 
     # Build and test standard build
     - name: Build and test
@@ -125,3 +135,6 @@ jobs:
     # Build and test the global (cross-client) trusted certificate verify cache
     - name: Build and test with CERT_VERIFY_CACHE_GLOBAL ASAN
       run: cd test && make clean && make -j CERT_VERIFY_CACHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    - name: Show ccache stats
+      run: ccache -s
