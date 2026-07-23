@@ -338,6 +338,9 @@ int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id);
 /**
  * @brief Set user permissions.
  *
+ * On success, a change targeting this context's logged-in user also refreshes
+ * its cached session permissions, so it binds immediately.
+ *
  * @param[in] context Pointer to the auth context.
  * @param[in] user_id The user ID to set permissions for.
  * @param[in] permissions The new permissions to set.

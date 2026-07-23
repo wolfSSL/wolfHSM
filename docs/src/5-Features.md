@@ -1201,6 +1201,15 @@ Credential updates through `wh_Auth_UserSetCredentials` add a further check on t
 
 `wh_Auth_UserDelete` and `wh_Auth_UserSetPermissions` remain admin-only operations in the base backend.
 
+### Permission Changes and Live Sessions
+
+A permission change made through `wh_Auth_UserSetPermissions` takes effect on the calling session immediately: when the target `user_id` is the user logged in on that context, the cached session permissions are refreshed with the supplied values, so a revoked group or action bit is enforced on the very next request rather than at the next login. The cache mirrors what the caller supplied, so a backend that stores something other than the permissions it was handed leaves the session cache diverged from its own record.
+
+Two consequences are worth planning for:
+
+- **Self-demotion is immediate and can be self-locking.** A session that clears its own group or action bits loses those capabilities at once. If it clears the `USER_SET_PERMISSIONS` action, it can no longer restore itself and must log out and back in as a sufficiently privileged user.
+- **Other sessions are not affected.** Permissions are cached per `whAuthContext`, and there is no cross-context notification. A user logged in on another connection keeps its existing permissions until it logs in again.
+
 ### Pluggable Backend
 
 The authentication manager does not own the user database itself. All operations that read or modify user state — login, user add/delete, permission updates, credential updates — are dispatched through a `whAuthCb` callback table that the application supplies at server initialization. The storage backend is therefore a port-time decision: an in-memory table for development, an NVM-backed store for production, or a connector to an external identity service.

@@ -568,8 +568,20 @@ static int _whTest_AuthSetPermissions_impl(whClientContext* client)
     whUserId          user_id;
     whAuthPermissions perms, new_perms;
     whAuthPermissions fetched_perms;
+    whAuthPermissions full_perms, demoted_perms;
+    whAuthPermissions nonadmin_perms, escalate_perms;
     whUserId          fetched_user_id = WH_USER_ID_INVALID;
+    whUserId          probe_id        = WH_USER_ID_INVALID;
+    whUserId          nonadmin_id     = WH_USER_ID_INVALID;
     int32_t           get_rc          = 0;
+    int32_t           probe_server_rc = 0;
+    int32_t           plain_set_rc    = 0;
+    int32_t           self_grant_rc   = 0;
+    int32_t           other_grant_rc  = 0;
+    int32_t           target_get_rc   = 0;
+    int               probe_rc        = 0;
+    int               nonadmin_admin  = 0;
+    int               target_admin    = 0;
 
     /* Login as admin first */
     whAuthPermissions admin_perms;
@@ -642,6 +654,151 @@ static int _whTest_AuthSetPermissions_impl(whClientContext* client)
         }
         WH_TEST_ASSERT_RETURN(permissions_match);
     }
+
+    /* Test 2c: self-demote must bind the live session. Admin clears its own
+     * USER_ADD bit (keeping admin + SET_PERMISSIONS so it can restore). */
+    WH_TEST_PRINT("  Test: Self-demote binds live session\n");
+    memset(&full_perms, 0, sizeof(full_perms));
+    fetched_user_id = WH_USER_ID_INVALID;
+    get_rc          = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, TEST_ADMIN_USERNAME,
+                                                  &get_rc, &fetched_user_id,
+                                                  &full_perms));
+    WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(fetched_user_id == admin_id);
+
+    demoted_perms = full_perms;
+    WH_AUTH_CLEAR_ALLOWED_ACTION(demoted_perms, WH_MESSAGE_GROUP_AUTH,
+                                 WH_MESSAGE_AUTH_ACTION_USER_ADD);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, admin_id, demoted_perms,
+                                    &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* The revoked bit must now deny the admin's own UserAdd. Capture the
+     * probe result, restore, and only then assert -- a failing assert here
+     * must not leave the stored admin record demoted for later tests. */
+    memset(&perms, 0, sizeof(perms));
+    probe_server_rc = 0;
+    probe_id        = WH_USER_ID_INVALID;
+    probe_rc = _whTest_Auth_UserAddOp(client, "selfdemote_probe", perms,
+                                      WH_AUTH_METHOD_PIN, "pass", 4,
+                                      &probe_server_rc, &probe_id);
+
+    /* Restore full perms before asserting the probe outcome. */
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, admin_id, full_perms, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* If the probe wrongly succeeded it consumed a user slot, so drop it
+     * before asserting to keep the 5-slot table clean for later tests. */
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe");
+
+    /* A denial is a well-formed response, so the client call itself is OK */
+    WH_TEST_ASSERT_RETURN(probe_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_server_rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id == WH_USER_ID_INVALID);
+
+    /* The same session can add again after the restore. */
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    probe_id  = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "selfdemote_probe",
+                                                  perms, WH_AUTH_METHOD_PIN,
+                                                  "pass", 4, &server_rc,
+                                                  &probe_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id != WH_USER_ID_INVALID);
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe");
+
+    /* Changing a different user's permissions leaves the caller's own
+     * session untouched: admin can still add after demoting testuser3. */
+    memset(&new_perms, 0, sizeof(new_perms));
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_UserSetPermsOp(client, user_id, new_perms, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    probe_id  = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "selfdemote_probe2",
+                                                  perms, WH_AUTH_METHOD_PIN,
+                                                  "pass", 4, &server_rc,
+                                                  &probe_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(probe_id != WH_USER_ID_INVALID);
+    _whTest_Auth_DeleteUserByName(client, "selfdemote_probe2");
+
+    /* Test 2d: a non-admin session can not hand out the admin flag. */
+    WH_TEST_PRINT("  Test: Non-admin cannot grant admin permissions\n");
+    memset(&nonadmin_perms, 0, sizeof(nonadmin_perms));
+    WH_AUTH_SET_ALLOWED_ACTION(nonadmin_perms, WH_MESSAGE_GROUP_AUTH,
+                               WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS);
+    WH_AUTH_SET_IS_ADMIN(nonadmin_perms, 0);
+    server_rc   = 0;
+    nonadmin_id = WH_USER_ID_INVALID;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+        client, "setperms_nonadmin", nonadmin_perms, WH_AUTH_METHOD_PIN, "pass",
+        4, &server_rc, &nonadmin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(nonadmin_id != WH_USER_ID_INVALID);
+
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                "setperms_nonadmin", "pass", 4,
+                                                &server_rc, &nonadmin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Capture the outcomes first; asserting here would return with the
+     * non-admin session still live. */
+    escalate_perms = nonadmin_perms;
+    WH_AUTH_SET_IS_ADMIN(escalate_perms, 1);
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(
+        client, nonadmin_id, nonadmin_perms, &plain_set_rc));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(
+        client, nonadmin_id, escalate_perms, &self_grant_rc));
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserSetPermsOp(
+        client, user_id, escalate_perms, &other_grant_rc));
+
+    _whTest_Auth_LogoutOp(client, nonadmin_id, &server_rc);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             TEST_ADMIN_PIN, 4, &server_rc, &admin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* The backend is admin-only for set permissions, so all three are
+     * refused whether or not the admin flag is in the payload. */
+    WH_TEST_ASSERT_RETURN(plain_set_rc == WH_ERROR_ACCESS);
+    WH_TEST_ASSERT_RETURN(self_grant_rc == WH_ERROR_ACCESS);
+    WH_TEST_ASSERT_RETURN(other_grant_rc == WH_ERROR_ACCESS);
+
+    /* Neither stored record may have picked up the admin flag. */
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_user_id = WH_USER_ID_INVALID;
+    get_rc          = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(client, "setperms_nonadmin",
+                                                  &get_rc, &fetched_user_id,
+                                                  &fetched_perms));
+    nonadmin_admin = WH_AUTH_IS_ADMIN(fetched_perms) ? 1 : 0;
+
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_user_id = WH_USER_ID_INVALID;
+    target_get_rc   = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "testuser3", &target_get_rc, &fetched_user_id, &fetched_perms));
+    target_admin = WH_AUTH_IS_ADMIN(fetched_perms) ? 1 : 0;
+
+    _whTest_Auth_DeleteUserByName(client, "setperms_nonadmin");
+
+    WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(target_get_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(!nonadmin_admin);
+    WH_TEST_ASSERT_RETURN(!target_admin);
 
     /* Test 3: Set user permissions for non-existent user */
     WH_TEST_PRINT("  Test: Set user permissions for non-existent user\n");
