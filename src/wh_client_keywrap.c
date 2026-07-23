@@ -9,6 +9,7 @@
 #include <wolfhsm/wh_error.h>
 #include <wolfhsm/wh_message.h>
 #include <wolfhsm/wh_message_keystore.h>
+#include <wolfhsm/wh_utils.h>
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/wolfcrypt/types.h>
 
@@ -17,6 +18,7 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
                              uint16_t serverKeyId, void* key, uint16_t keySz,
                              whNvmMetadata* metadata)
 {
+    int                               ret;
     uint16_t                          group  = WH_MESSAGE_GROUP_KEY;
     uint16_t                          action = WH_KEY_KEYWRAP;
     whMessageKeystore_KeyWrapRequest* req    = NULL;
@@ -27,6 +29,10 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
     }
 
     if (keySz == 0 || keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (sizeof(*req) + sizeof(*metadata) + keySz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -47,9 +53,11 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
     memcpy(reqData, metadata, sizeof(*metadata));
     memcpy(reqData + sizeof(*metadata), key, keySz);
 
-    return wh_Client_SendRequest(ctx, group, action,
-                                 sizeof(*req) + sizeof(*metadata) + keySz,
-                                 (uint8_t*)req);
+    ret = wh_Client_SendRequest(ctx, group, action,
+                                sizeof(*req) + sizeof(*metadata) + keySz,
+                                (uint8_t*)req);
+    wh_Utils_ForceZero(reqData + sizeof(*metadata), keySz);
+    return ret;
 }
 
 int wh_Client_KeyWrapResponse(whClientContext*   ctx,
@@ -327,6 +335,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
     *keyInOutSz = resp->keySz;
 
+    wh_Utils_ForceZero(respData + sizeof(*metadataOut), resp->keySz);
     return WH_ERROR_OK;
 }
 

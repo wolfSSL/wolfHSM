@@ -1540,15 +1540,15 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
             }
 
+            /* Propagate any server-side error before serializing the response */
+            if (rc != WH_ERROR_OK) {
+                resp.rc = rc;
+            }
+
             /* Convert the response struct */
             wh_MessageCert_TranslateSimpleResponse(
                 magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
-
-            /* If there was an error, return it in the response */
-            if (rc != WH_ERROR_OK) {
-                resp.rc = rc;
-            }
         } break;
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */

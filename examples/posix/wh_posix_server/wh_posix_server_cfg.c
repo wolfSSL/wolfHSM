@@ -493,8 +493,15 @@ static void parseNvmInitFile(const char* filePath)
 
         /* Parse the file path */
         token = strtok(NULL, " ");
-        if (!token || sscanf(token, "%s", filePath) != 1) {
+        if (!token) {
             WOLFHSM_CFG_PRINTF("Error on line %d: Malformed entry - missing file path\n",
+                    lineNumber);
+            fclose(file);
+            exit(EXIT_FAILURE);
+        }
+        if (snprintf(filePath, sizeof(filePath), "%s", token) >=
+            (int)sizeof(filePath)) {
+            WOLFHSM_CFG_PRINTF("Error on line %d: File path too long\n",
                     lineNumber);
             fclose(file);
             exit(EXIT_FAILURE);
