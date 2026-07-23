@@ -108,7 +108,8 @@ typedef whDmaCopyOper whServerDmaCopyOper;
 #endif /* WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY */
 
 /* DMA callbacks invoked internally by wolfHSM before and after every client
- * memory operation. */
+ * memory operation. Any operation may be invoked with the server NVM lock
+ * held, so the callback must not call into any wolfHSM NVM API. */
 typedef int (*whServerDmaClientMemCb)(struct whServerContext_t* server,
                                       uintptr_t clientAddr, void** serverPtr,
                                       size_t len, whServerDmaOper oper,
