@@ -472,8 +472,24 @@ int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
         return rc;
     }
 
-    rc = context->cb->UserSetPermissions(
-        context->context, context->user.user_id, user_id, permissions);
+    /* A non-admin session can not set the admin flag, no matter what the
+     * backend policy allows. Absolute check; the target's current flag is
+     * not visible here. */
+    if (!WH_AUTH_IS_ADMIN(context->user.permissions) &&
+        WH_AUTH_IS_ADMIN(permissions)) {
+        rc = WH_AUTH_PERMISSION_ERROR;
+    }
+    else {
+        rc = context->cb->UserSetPermissions(
+            context->context, context->user.user_id, user_id, permissions);
+
+        /* Keep the live session cache in sync when a logged-in user changes
+         * its own permissions; authorization reads only this cache. */
+        if ((rc == WH_ERROR_OK) && (user_id == context->user.user_id) &&
+            (context->user.user_id != WH_USER_ID_INVALID)) {
+            context->user.permissions = permissions;
+        }
+    }
 
     (void)WH_AUTH_UNLOCK(context);
     return rc;
