@@ -4,6 +4,7 @@ on:
   push:
     branches: [ 'master', 'main', 'release/**' ]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ '*' ]
 
 permissions:
@@ -15,7 +16,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Exclude macOS for draft PRs due to its small pool
+        os: >-
+          ${{ (github.event_name == 'pull_request' &&
+          github.event.pull_request.draft) &&
+          fromJSON('["ubuntu-latest"]') ||
+          fromJSON('["ubuntu-latest", "macos-latest"]') }}
 
     runs-on: ${{ matrix.os }}
 
