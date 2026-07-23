@@ -84,6 +84,10 @@
  *  WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE - Size of each key in RAM
  *      Default: 1200
  *
+ *  WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE - Largest cached key usable as a KDF
+ *      input (HKDF IKM, CMAC-KDF Z)
+ *      Default: 256
+ *
  *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
  *      Default: 8
  *
@@ -465,6 +469,15 @@
 #endif
 
 #endif /* WOLFHSM_CFG_KEYWRAP */
+
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
+
+/* Largest cached key the server accepts as a KDF input supplied by key ID */
+#ifndef WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE
+#define WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE 256
+#endif
+
+#endif /* HAVE_HKDF || HAVE_CMAC_KDF */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 #if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)

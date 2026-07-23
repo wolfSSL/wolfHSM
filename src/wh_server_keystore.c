@@ -1133,6 +1133,43 @@ int wh_Server_KeystoreReadKeyChecked(whServerContext* server, whKeyId keyId,
     return wh_Server_KeystoreReadKey(server, keyId, outMeta, out, outSz);
 }
 
+int wh_Server_KeystoreReadKeyEnforce(whServerContext* server, whKeyId keyId,
+                                     whNvmFlags     requiredUsage,
+                                     whNvmMetadata* outMeta, uint8_t* out,
+                                     uint32_t* outSz)
+{
+    int           ret;
+    whNvmMetadata meta[1];
+
+    if ((server == NULL) || (outSz == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Copy the key and check its usage flags under one hold of the NVM lock
+     * so the policy verdict and the key material come from the same snapshot:
+     * another server context cannot erase/re-cache the key between the check
+     * and the read. */
+    ret = WH_SERVER_NVM_LOCK(server);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreReadKey(server, keyId, meta, out, outSz);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
+            if (ret == WH_ERROR_OK) {
+                if (outMeta != NULL) {
+                    memcpy((uint8_t*)outMeta, (uint8_t*)meta,
+                           sizeof(whNvmMetadata));
+                }
+            }
+            else if (out != NULL) {
+                /* Don't hand back key material that failed the policy check */
+                wh_Utils_ForceZero(out, *outSz);
+            }
+        }
+        (void)WH_SERVER_NVM_UNLOCK(server);
+    } /* WH_SERVER_NVM_LOCK() */
+    return ret;
+}
+
 int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId)
 {
     int                ret = 0;
@@ -3601,28 +3638,6 @@ int wh_Server_KeystoreEnforceKeyUsage(const whNvmMetadata* meta,
 
     /* Key does not have ALL the required usage flags */
     return WH_ERROR_USAGE;
-}
-
-int wh_Server_KeystoreFindEnforceKeyUsage(whServerContext* server,
-                                          whKeyId          keyId,
-                                          whNvmFlags       requiredUsage)
-{
-    int            ret;
-    whNvmMetadata* meta = NULL;
-
-    /* Validate input parameters */
-    if (server == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* Freshen the key to obtain the metadata */
-    ret = wh_Server_KeystoreFreshenKey(server, keyId, NULL, &meta);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    /* Enforce the usage policy with the obtained metadata */
-    return wh_Server_KeystoreEnforceKeyUsage(meta, requiredUsage);
 }
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_SERVER */

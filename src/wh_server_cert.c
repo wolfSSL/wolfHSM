@@ -359,6 +359,8 @@ static int DerNextSequence(const uint8_t* input, uint32_t maxIdx,
 }
 
 
+/* Caller (the cert request dispatch) holds the non-recursive
+ * WH_SERVER_NVM_LOCK, so only unlocked keystore primitives may be used here. */
 static int _verifyChainAgainstCmStore(
     whServerContext* server, WOLFSSL_CERT_MANAGER* cm, const uint8_t* chain,
     uint32_t chain_len, const whNvmId* trustedRootNvmIds, uint16_t numRoots,
@@ -486,6 +488,7 @@ static int _verifyChainAgainstCmStore(
                 if (WH_KEYID_ISERASED(*inout_keyId)) {
                     rc = wh_Server_KeystoreGetUniqueId(server, inout_keyId);
                     if (rc != WH_ERROR_OK) {
+                        wc_FreeDecodedCert(&dc);
                         return rc;
                     }
                 }
@@ -1165,7 +1168,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             if (rc == WH_ERROR_OK) {
                 rc = wh_Server_CertVerifyCache_Clear(server);
                 (void)WH_SERVER_NVM_UNLOCK(server);
-            }
+            } /* WH_SERVER_NVM_LOCK() */
 #else
             rc = wh_Server_CertVerifyCache_Clear(server);
 #endif
@@ -1193,7 +1196,7 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     rc = wh_Server_CertVerifyCache_SetEnabled(server,
                                                               req.enable);
                     (void)WH_SERVER_NVM_UNLOCK(server);
-                }
+                } /* WH_SERVER_NVM_LOCK() */
 #else
                 rc = wh_Server_CertVerifyCache_SetEnabled(server, req.enable);
 #endif
