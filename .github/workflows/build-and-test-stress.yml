@@ -7,6 +7,7 @@ on:
     # Weekly ccache reseed; also keeps caches from 7-day eviction
     - cron: '0 6 * * 1'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ '*' ]
 
 concurrency:
@@ -19,6 +20,7 @@ permissions:
 jobs:
   build:
 
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
