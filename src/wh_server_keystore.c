@@ -1275,16 +1275,20 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
     }
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
 
-    /* remove the key from the cache if present, enforcing policy */
+    /* NOTFOUND means the key was not cached, whether it is absent entirely or
+     * lives only in NVM; both are fine. Any other error must not be masked by
+     * the destroy below. */
     ret = wh_Server_KeystoreEvictKeyChecked(server, keyId);
-
-    /* With no NVM, the cache eviction above is the whole erase; return its
-     * result so policy and not-found errors still propagate. */
-    if (server->nvm == NULL) {
+    if ((ret != WH_ERROR_OK) && (ret != WH_ERROR_NOTFOUND)) {
         return ret;
     }
 
-    /* destroy the object */
+    /* Nothing left to destroy is a successful erase, matching
+     * wh_Server_KeystoreEraseKey */
+    if (server->nvm == NULL) {
+        return WH_ERROR_OK;
+    }
+
     return wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
 }
 

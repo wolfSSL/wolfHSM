@@ -349,7 +349,8 @@ int wh_Nvm_DestroyObjectsChecked(whNvmContext* context, whNvmId list_count,
 
     for (i = 0; i < list_count; i++) {
         ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_DESTROY, id_list[i], NULL);
-        if (ret != WH_ERROR_OK) {
+        /* An absent id has no policy to enforce and is not an error */
+        if ((ret != WH_ERROR_OK) && (ret != WH_ERROR_NOTFOUND)) {
             return ret;
         }
     }

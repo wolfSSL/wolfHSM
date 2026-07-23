@@ -391,12 +391,17 @@ int wh_Nvm_DestroyObjects(whNvmContext* context, whNvmId list_count,
  * or is a server-only key (WH_NVM_FLAGS_TRUSTED). If so, returns an access
  * error without destroying any objects.
  *
+ * As with wh_Nvm_DestroyObjects(), IDs in the list that are not present do not
+ * cause an error: an absent object carries no flags to enforce and is skipped.
+ *
  * @param[in] context Pointer to the NVM context. Must not be NULL.
  * @param[in] list_count Number of IDs in the list.
  * @param[in] id_list Array of object IDs to destroy.
- * @return int WH_ERROR_OK on success.
+ * @return int WH_ERROR_OK on success, including when some or all IDs are
+ *             not present.
  *             WH_ERROR_ACCESS if any object is non-modifiable,
- *                             non-destroyable, or a server-only key.
+ *                             non-destroyable, or a server-only key. No
+ *                             objects are destroyed.
  *             WH_ERROR_BADARGS if context is NULL, not initialized, or
  *                              id_list is NULL with non-zero list_count.
  *             Other negative error codes on backend failure.
