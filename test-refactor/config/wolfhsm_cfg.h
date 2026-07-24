@@ -56,7 +56,8 @@
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
 
 /* WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS is intentionally NOT
- * defined here. Not implemented yet. */
+ * defined here: one NVM is shared by every test in a run. The persistent
+ * NVM artifacts CI job defines it on the command line instead. */
 
 #define WOLFHSM_CFG_ENABLE_TIMEOUT
 

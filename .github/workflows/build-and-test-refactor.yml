@@ -35,10 +35,12 @@ jobs:
           fromJSON('[{"os":"ubuntu-latest","group":"pq-dma"},
           {"os":"ubuntu-latest","group":"wolfcrypt"},
           {"os":"ubuntu-latest","group":"threadsafe"},
+          {"os":"ubuntu-latest","group":"nvm-persist"},
           {"os":"ubuntu-latest","group":"base"}]') ||
           fromJSON('[{"os":"ubuntu-latest","group":"pq-dma"},
           {"os":"ubuntu-latest","group":"wolfcrypt"},
           {"os":"ubuntu-latest","group":"threadsafe"},
+          {"os":"ubuntu-latest","group":"nvm-persist"},
           {"os":"ubuntu-latest","group":"base"},
           {"os":"macos-latest","group":"base"}]') }}
 
@@ -190,6 +192,17 @@ jobs:
     - name: Build and test refactor with AUTH NOCRYPTO
       if: matrix.group == 'base'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Suites that leave undeletable NVM objects. The NVM is RAM-backed and
+    # fresh per process, so they only occupy slots within one `make run`.
+    - name: Build and test refactor with persistent NVM artifacts
+      if: matrix.group == 'nvm-persist'
+      run: cd test-refactor/posix && make clean && make -j ASAN=1 PERSISTENT_NVM_ARTIFACTS=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Same with DMA, so the gated suites also cover the DMA dispatch path
+    - name: Build and test refactor with persistent NVM artifacts and DMA
+      if: matrix.group == 'nvm-persist'
+      run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 PERSISTENT_NVM_ARTIFACTS=1 WOLFSSL_DIR=../../wolfssl && make run
 
     - name: Show ccache stats
       run: ccache -s

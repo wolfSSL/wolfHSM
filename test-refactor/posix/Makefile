@@ -152,6 +152,13 @@ ifeq ($(CRYPTO_AFFINITY),1)
     DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
 endif
 
+# Enable the test suites that leave undeletable NVM objects behind. One NVM is
+# shared by every test in a run, so those objects occupy slots for the rest of
+# the run.
+ifeq ($(PERSISTENT_NVM_ARTIFACTS),1)
+    DEF += -DWOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS
+endif
+
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST

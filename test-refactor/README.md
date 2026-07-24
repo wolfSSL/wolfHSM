@@ -25,6 +25,8 @@ The top-level `make` forwards to the POSIX port; `cd test-refactor/posix && make
 
 Results are printed via `WOLFHSM_CFG_PRINTF` from the wolfHSM build. `test-suite.log` contains the detailed output.
 
+Some sub-tests are opt-in because they leave NVM objects that cannot be erased, so they occupy slots for the rest of the run. Build with `make PERSISTENT_NVM_ARTIFACTS=1` to define `WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS` and include them.
+
 ## Running the tests from an embedded target
 To run the tests on a target device, create an application running on the client or server that runs the tests from `main()`. See sections on adding ports and tests.
 
@@ -87,7 +89,7 @@ Translated tests:
 | `wh_test_crypto.c::whTest_CryptoKeyUsagePolicies` (AES CTR/ECB/GCM subset) | `client-server/wh_test_crypto_aes.c::whTest_CryptoAesKeyUsagePolicies` | Client | AES-CTR/ECB/GCM key usage enforcement (non-DMA and DMA variants) |
 | `wh_test_crypto.c::whTestCrypto_LmsCryptoCb` | `client-server/wh_test_crypto_lms.c::whTest_Crypto_Lms` | Client | DMA-only LMS generate/durability/sign/verify, public-key export+import, private export/import rejection, and the server-only `WH_NVM_FLAGS_TRUSTED` keygen strip regression. Gated by `WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY`; reports SKIPPED otherwise |
 | `wh_test_crypto.c::whTestCrypto_XmssCryptoCb` | `client-server/wh_test_crypto_xmss.c::whTest_Crypto_Xmss` | Client | DMA-only XMSS generate/durability/sign/verify, public-key export+import, private export/import rejection, and the server-only `WH_NVM_FLAGS_TRUSTED` keygen strip regression. Gated by `WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY`; reports SKIPPED otherwise |
-| `wh_test_crypto.c::{whTest_KeyCache, whTest_NonExportableKeystore}` | `client-server/wh_test_crypto_keystore.c::whTest_Crypto_Keystore` | Client | Key-cache lifecycle (cache/export, evict, commit/erase, cross-cache eviction/replacement, NVM-backed eviction) and non-exportable-flag enforcement; std and DMA export paths. The `WOLFHSM_CFG_IS_TEST_SERVER` multi-client user-exclusion path is dropped (needs two client contexts) |
+| `wh_test_crypto.c::{whTest_KeyCache, whTest_NonExportableKeystore}` | `client-server/wh_test_crypto_keystore.c::whTest_Crypto_Keystore` | Client | Key-cache lifecycle (cache/export, evict, commit/erase, cross-cache eviction/replacement, NVM-backed eviction) and non-exportable-flag enforcement; std and DMA export paths. The `WOLFHSM_CFG_IS_TEST_SERVER` multi-client user-exclusion path is dropped (needs two client contexts). Adds `_whTest_NonModifiableCommit` (re-commit over a stored `WH_NVM_FLAGS_NONMODIFIABLE` object is denied whether or not the slot is still cached; gated by `WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS` since the committed object cannot be erased) and the ungated `_whTest_ModifiableRecommit` |
 | `wh_test_clientserver.c` (echo and server-info paths) | `client-server/wh_test_echo.c::whTest_Echo`, `client-server/wh_test_server_info.c::whTest_ServerInfo` | Client | pthread test ported, sequential test dropped |
 | `wh_test_clientserver.c` (NVM CRUD + OOB read clamping paths) | `client-server/wh_test_nvm_ops.c::{whTest_NvmCrud, whTest_NvmReadOob}` | Client | each test cleans up its own slots; OOB test covers UINT16_MAX overflow regression |
 | `wh_test_clientserver.c` (NVM DMA CRUD path) | `client-server/wh_test_nvm_dma.c::whTest_NvmCrudDma` | Client | gated on `WOLFHSM_CFG_DMA` |
