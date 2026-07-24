@@ -789,11 +789,16 @@ int wh_Server_CacheExportCurve25519Key(whServerContext* server, whKeyId keyId,
 #endif /* HAVE_CURVE25519 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
-/* The big key cache buffer must be able to hold a full ML-DSA keypair DER,
- * otherwise wh_Server_MlDsaKeyCacheImport() can never succeed. */
+/* When verify-only, the server caches only the public key DER. Otherwise it
+ * must be able to hold a full keypair DER (public + private). */
+#if defined(WOLFSSL_DILITHIUM_VERIFY_ONLY) || defined(WOLFSSL_MLDSA_VERIFY_ONLY)
+#define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_PUB_KEY_DER_SIZE
+#else
+#define WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE MLDSA_MAX_BOTH_KEY_DER_SIZE
+#endif
 WH_UTILS_STATIC_ASSERT(
-    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= MLDSA_MAX_BOTH_KEY_DER_SIZE,
-    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA keypair DER");
+    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE,
+    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-DSA key DER");
 
 int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
                                   whKeyId keyId, whNvmFlags flags,
@@ -809,14 +814,12 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
         return WH_ERROR_BADARGS;
     }
 
-    /* The key may hold a full keypair, in which case
-     * wh_Crypto_MlDsaSerializeKeyDer() encodes both the public and private key
-     * (wc_MlDsaKey_KeyToDer()), so size for both keys, not just the private key. */
     ret = wh_Server_KeystoreGetCacheSlotChecked(
-        ctx, keyId, MLDSA_MAX_BOTH_KEY_DER_SIZE, &cacheBuf, &cacheMeta);
+        ctx, keyId, WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
-        ret = wh_Crypto_MlDsaSerializeKeyDer(key, MLDSA_MAX_BOTH_KEY_DER_SIZE,
-                                             cacheBuf, &der_size);
+        ret = wh_Crypto_MlDsaSerializeKeyDer(key,
+                                WH_SERVER_MLDSA_MAX_CACHE_DER_SIZE,
+                                cacheBuf, &der_size);
         WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
     }
 
@@ -4792,6 +4795,7 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -4923,6 +4927,7 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -5030,6 +5035,7 @@ static int _HandleMlDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6485,6 +6491,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
 #ifdef WOLFSSL_MLDSA_NO_MAKE_KEY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6644,6 +6651,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
 #ifdef WOLFSSL_MLDSA_NO_SIGN
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
@@ -6778,6 +6786,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 #ifdef WOLFSSL_MLDSA_NO_VERIFY
     (void)ctx;
     (void)magic;
+    (void)devId;
     (void)cryptoDataIn;
     (void)inSize;
     (void)cryptoDataOut;
