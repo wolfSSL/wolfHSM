@@ -1,10 +1,12 @@
 name: Code Coverage
 
 on:
-  push:
-    branches: [ 'master', 'main', 'release/**' ]
-  pull_request:
-    branches: [ '*' ]
+  # Coverage is an on-demand, information-only report, not a PR gate.
+  # Run it manually from the Actions tab against any branch (including a
+  # PR branch); the weekly run keeps a fresh artifact and catches rot.
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -15,7 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        tree: [legacy, refactor]
+        config:
           - name: base
             flags: ""
           - name: dma
@@ -43,20 +46,29 @@ jobs:
           repository: wolfssl/wolfssl
           path: wolfssl
 
-      - name: Build, run, and emit tracefile (${{ matrix.name }})
+      - name: Build, run, and emit tracefile (${{ matrix.tree }} ${{ matrix.config.name }})
+        # legacy and refactor trees differ only in the test dir and the
+        # relative path back to the wolfssl checkout; both emit paths
+        # rooted at the repo, so their tracefiles compare apples-to-apples.
         run: |
-          cd test && make coverage-json \
-            OUT=$GITHUB_WORKSPACE/cov-json/legacy-${{ matrix.name }}.json \
-            WOLFSSL_DIR=../wolfssl ${{ matrix.flags }}
+          if [ "${{ matrix.tree }}" = "legacy" ]; then
+            dir=test; wolfssl=../wolfssl
+          else
+            dir=test-refactor/posix; wolfssl=../../wolfssl
+          fi
+          cd "$dir"
+          make coverage-json \
+            OUT=$GITHUB_WORKSPACE/cov-json/${{ matrix.tree }}-${{ matrix.config.name }}.json \
+            WOLFSSL_DIR=$wolfssl ${{ matrix.config.flags }}
 
       - name: Upload tracefile
         uses: actions/upload-artifact@v4
         with:
-          name: legacy-tracefile-${{ matrix.name }}
-          path: cov-json/legacy-${{ matrix.name }}.json
+          name: tracefile-${{ matrix.tree }}-${{ matrix.config.name }}
+          path: cov-json/${{ matrix.tree }}-${{ matrix.config.name }}.json
           retention-days: 7
 
-  merge:
+  report:
     needs: coverage
     runs-on: ubuntu-latest
     steps:
@@ -65,36 +77,69 @@ jobs:
       - name: Install gcovr
         run: pipx install 'gcovr==8.6'
 
-      - name: Download legacy tracefiles
+      - name: Download tracefiles
         uses: actions/download-artifact@v4
         with:
-          pattern: legacy-tracefile-*
+          pattern: tracefile-*
           path: cov-json
           merge-multiple: true
 
-      - name: Merge tracefiles into HTML report
+      - name: Build HTML reports
         run: |
           # nullglob so an empty match returns 0 files instead of the
           # literal pattern, which would slip past the guard below.
           shopt -s nullglob
-          files=(cov-json/legacy-*.json)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No tracefiles found to merge" >&2
-            exit 1
-          fi
-          # Build "--add-tracefile <path>" pairs for each tracefile.
-          args=()
-          for f in "${files[@]}"; do
-            args+=(--add-tracefile "$f")
+          for tree in legacy refactor; do
+            files=(cov-json/$tree-*.json)
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "No $tree tracefiles found to merge" >&2
+              exit 1
+            fi
+            args=()
+            for f in "${files[@]}"; do
+              args+=(--add-tracefile "$f")
+            done
+            mkdir -p coverage-$tree
+            gcovr "${args[@]}" \
+              --html-details coverage-$tree/index.html \
+              --print-summary
           done
-          mkdir -p coverage-merged
-          gcovr "${args[@]}" \
-            --html-details coverage-merged/index.html \
-            --print-summary
 
-      - name: Upload merged coverage report
+      - name: Upload legacy coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage-merged/
+          path: coverage-legacy/
+          retention-days: 30
+
+      - name: Upload refactor coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-refactor-report
+          path: coverage-refactor/
+          retention-days: 30
+
+  compare:
+    needs: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download tracefiles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tracefile-*
+          path: cov-json
+          merge-multiple: true
+
+      - name: Compare legacy vs refactor coverage
+        run: |
+          python3 tools/coverage-compare/compare_tracefiles.py cov-json compare
+          cat compare/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-comparison
+          path: compare/
           retention-days: 30
