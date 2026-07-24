@@ -2858,57 +2858,288 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     return ret;
 }
 
-#if 0
-int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
-        const uint8_t* pub_key, uint16_t pub_key_len)
+/* Response half for ECC make-public.  Single-shot receive: returns
+ * WH_ERROR_NOTREADY if the reply has not arrived yet. */
+static int _EccMakePubResponse(whClientContext* ctx, uint8_t* pubOut,
+                               uint16_t* inout_pubOutSz)
 {
-/* TODO: Check if keyid is set on incoming key.
- *      if not, import private key to server
- *      send request with pub key der
- *      server creates new key with private and public.  check
- *      evict temp key
- */
-    int ret;
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            res_len = 0;
+    uint8_t*                            dataPtr;
+    whMessageCrypto_EccMakePubResponse* res = NULL;
 
-    if (    (ctx == NULL) ||
-            (key == NULL) ||
-            (pub_key == NULL) ||
-            (pub_key_len == 0) ) {
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
         return WH_ERROR_BADARGS;
     }
-    int curve_id = wc_ecc_get_curve_id(key->idx);
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-    /* Request packet */
-    wh_Packet_pk_ecc_check_req* req = &packet->pkEccCheckReq;
-    uint8_t* req_pub_key = (uint8_t*)(req + 1);
-
-    req->type = WC_PK_TYPE_EC_CHECK_PRIV_KEY;
-    req->keyId = key_id;
-    req->curveId = curve_id;
-
-    /* Response packet */
-    wh_Packet_pk_ecc_check_res* res = &packet->pkEccCheckRes;
-
-
-    /* write request */
-    ret = wh_Client_SendRequest(ctx, group,
-        WC_ALGO_TYPE_PK,
-        WH_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
-        (uint8_t*)packet);
-    /* read response */
-    if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)packet);
-        } while (ret == WH_ERROR_NOTREADY);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
     }
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_MAKE_PUB, (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Defensive bound: res->pubSz must fit within the actual received
+         * frame */
+        if (res_len < hdr_sz || res->pubSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+        if (res->pubSz > (uint32_t)(*inout_pubOutSz)) {
+            /* Report the size the caller needs so it can re-call */
+            *inout_pubOutSz = (uint16_t)res->pubSz;
+            return WH_ERROR_BUFFER_SIZE;
+        }
+        memcpy(pubOut, (uint8_t*)(res + 1), res->pubSz);
+        *inout_pubOutSz = (uint16_t)res->pubSz;
     }
+    return ret;
 }
-#endif /* 0 */
+
+int wh_Client_EccMakePub(whClientContext* ctx, ecc_key* key, uint8_t* pubOut,
+                         uint16_t* inout_pubOutSz)
+{
+    int                                ret     = WH_ERROR_OK;
+    whMessageCrypto_EccMakePubRequest* req     = NULL;
+    uint8_t*                           dataPtr = NULL;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p pubOut:%p inout_pubOutSz:%p\n", ctx,
+                            key, pubOut, inout_pubOutSz);
+
+    /* Validate response-side args upfront so we never send a request that the
+     * matching *Response would then reject without consuming the reply. */
+    if ((ctx == NULL) || (key == NULL) || (pubOut == NULL) ||
+        (inout_pubOutSz == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempEccMakePub";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                           sizeof(whMessageCrypto_EccMakePubRequest);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* Setup generic header and get pointer to request data */
+            req = (whMessageCrypto_EccMakePubRequest*)_createCryptoRequest(
+                dataPtr, WC_PK_TYPE_EC_MAKE_PUB, ctx->cryptoAffinity);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_ECCMAKEPUB_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+
+            WH_DEBUG_CLIENT_VERBOSE("EccMakePub req: key_id=%x options=%u\n",
+                                    key_id, (unsigned int)options);
+
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                do {
+                    ret = _EccMakePubResponse(ctx, pubOut, inout_pubOutSz);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+        }
+        else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
+    return ret;
+}
+
+#ifdef HAVE_ECC_CHECK_KEY
+/* Response half for ECC key validation.  The verdict is the response code
+ * itself: 0 when the key is valid, a wolfCrypt error when it is not. */
+static int _EccCheckPubKeyResponse(whClientContext* ctx)
+{
+    int                               ret;
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          res_len = 0;
+    uint8_t*                          dataPtr;
+    whMessageCrypto_EccCheckResponse* res = NULL;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* A negative rc here is the verdict on an invalid key rather than a
+     * transport failure, and is handed back to wolfCrypt verbatim. */
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_CHECK_PUB_KEY,
+                             (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* A success rc must be accompanied by an affirmative body */
+        if ((res_len < hdr_sz) || (res->ok == 0)) {
+            return WH_ERROR_ABORTED;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
+                             const uint8_t* pub_key, uint16_t pub_key_len,
+                             int check_order, int check_priv)
+{
+    int                              ret     = WH_ERROR_OK;
+    whMessageCrypto_EccCheckRequest* req     = NULL;
+    uint8_t*                         dataPtr = NULL;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p pub_key:%p pub_key_len:%u\n", ctx,
+                            key, pub_key, pub_key_len);
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((pub_key == NULL) && (pub_key_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* check_order/check_priv mirror wolfCrypt's cryptocb request shape but
+     * are not carried on the wire: the server always performs the full
+     * validation, a strict superset of any partial check. */
+    (void)check_order;
+    (void)check_priv;
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempEccCheck";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        /* Compute the total length in a wide type so a large pub_key_len
+         * cannot wrap the sum before the bounds check below. Narrowing to
+         * the uint16_t wire length is safe once the check has passed. */
+        uint32_t req_len = (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                           (uint32_t)sizeof(whMessageCrypto_EccCheckRequest) +
+                           pub_key_len;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* Setup generic header and get pointer to request data */
+            req = (whMessageCrypto_EccCheckRequest*)_createCryptoRequest(
+                dataPtr, WC_PK_TYPE_EC_CHECK_PUB_KEY, ctx->cryptoAffinity);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_ECCCHECK_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+            req->curveId = (uint32_t)wc_ecc_get_curve_id(key->idx);
+            req->pubSz   = pub_key_len;
+            if ((pub_key != NULL) && (pub_key_len > 0)) {
+                memcpy((uint8_t*)(req + 1), pub_key, pub_key_len);
+            }
+
+            WH_DEBUG_CLIENT_VERBOSE("EccCheckPubKey req: key_id=%x, "
+                                    "pub_key_len=%u, options=%u\n",
+                                    key_id, (unsigned int)pub_key_len,
+                                    (unsigned int)options);
+
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
+                                        dataPtr);
+
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                do {
+                    ret = _EccCheckPubKeyResponse(ctx);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+        }
+        else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
+    return ret;
+}
+#endif /* HAVE_ECC_CHECK_KEY */
 
 #endif /* HAVE_ECC */
 

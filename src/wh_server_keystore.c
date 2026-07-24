@@ -466,8 +466,9 @@ static int _ExportRsaPublicKey(whServerContext* server, whKeyId keyId,
     int    ret = WH_ERROR_OK;
     RsaKey key[1];
     int    pub_ret;
+    int    devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
 
-    ret = wc_InitRsaKey_ex(key, NULL, INVALID_DEVID);
+    ret = wc_InitRsaKey_ex(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportRsaKey(server, keyId, key);
         if (ret == 0) {
@@ -493,10 +494,21 @@ static int _ExportEccPublicKey(whServerContext* server, whKeyId keyId,
     int     ret = WH_ERROR_OK;
     ecc_key key[1];
     int     pub_ret;
+    int     devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
 
-    ret = wc_ecc_init_ex(key, NULL, INVALID_DEVID);
+    ret = wc_ecc_init_ex(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_EccKeyCacheExport(server, keyId, key);
+        if (ret == 0 && key->type == ECC_PRIVATEKEY_ONLY) {
+            /* A private-only key has no public point to encode yet. Derive it,
+             * as the public half is not sensitive material. The RNG blinds the
+             * multiply on the multi-precision path (SP builds ignore it), but
+             * a keystore-only server has no crypto context: pass NULL so
+             * wolfCrypt skips the blinding instead of dereferencing NULL. */
+            WC_RNG* rng = (server->crypto != NULL) ? server->crypto->rng
+                                                   : NULL;
+            ret = wc_ecc_make_pub_ex(key, NULL, rng);
+        }
         if (ret == 0) {
             pub_ret = wc_EccPublicKeyToDer(key, out, (word32)*outSz, 1);
             if (pub_ret > 0) {
@@ -519,8 +531,10 @@ static int _ExportEd25519PublicKey(whServerContext* server, whKeyId keyId,
     int         ret = WH_ERROR_OK;
     ed25519_key key[1];
     int         pub_ret;
+    int         devId = (server->crypto != NULL) ? server->devId
+                                                 : INVALID_DEVID;
 
-    ret = wc_ed25519_init_ex(key, NULL, INVALID_DEVID);
+    ret = wc_ed25519_init_ex(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportEd25519Key(server, keyId, key);
         if (ret == 0) {
@@ -545,8 +559,10 @@ static int _ExportMldsaPublicKey(whServerContext* server, whKeyId keyId,
     int         ret = WH_ERROR_OK;
     wc_MlDsaKey key[1];
     int         pub_ret;
+    int         devId = (server->crypto != NULL) ? server->devId
+                                                 : INVALID_DEVID;
 
-    ret = wc_MlDsaKey_Init(key, NULL, INVALID_DEVID);
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_MlDsaKeyCacheExport(server, keyId, key);
         if (ret == 0) {
@@ -571,8 +587,10 @@ static int _ExportCurve25519PublicKey(whServerContext* server, whKeyId keyId,
     int            ret = WH_ERROR_OK;
     curve25519_key key[1];
     int            pub_ret;
+    int            devId = (server->crypto != NULL) ? server->devId
+                                                    : INVALID_DEVID;
 
-    ret = wc_curve25519_init_ex(key, NULL, INVALID_DEVID);
+    ret = wc_curve25519_init_ex(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_CacheExportCurve25519Key(server, keyId, key);
         if (ret == 0) {
@@ -597,6 +615,7 @@ static int _ExportMlkemPublicKey(whServerContext* server, whKeyId keyId,
     int      ret = WH_ERROR_OK;
     MlKemKey key[1];
     word32   pubSize;
+    int      devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
     /* Pick the lowest compiled-in level as the initial hint;
      * wh_Crypto_MlKemDeserializeKey (called via
      * wh_Server_MlKemKeyCacheExport) probes the remaining enabled levels. */
@@ -608,7 +627,7 @@ static int _ExportMlkemPublicKey(whServerContext* server, whKeyId keyId,
     const int initLevel = WC_ML_KEM_1024;
 #endif
 
-    ret = wc_MlKemKey_Init(key, initLevel, NULL, INVALID_DEVID);
+    ret = wc_MlKemKey_Init(key, initLevel, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_MlKemKeyCacheExport(server, keyId, key);
         if (ret == 0) {
@@ -640,8 +659,9 @@ static int _ExportLmsPublicKey(whServerContext* server, whKeyId keyId,
     int    ret;
     LmsKey key[1];
     word32 pubLen = 0;
+    int    devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
 
-    ret = wc_LmsKey_Init(key, NULL, INVALID_DEVID);
+    ret = wc_LmsKey_Init(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_LmsKeyCacheExport(server, keyId, key);
         if (ret == WH_ERROR_OK) {
@@ -669,8 +689,9 @@ static int _ExportXmssPublicKey(whServerContext* server, whKeyId keyId,
     int     ret;
     XmssKey key[1];
     word32  pubLen = 0;
+    int     devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
 
-    ret = wc_XmssKey_Init(key, NULL, INVALID_DEVID);
+    ret = wc_XmssKey_Init(key, NULL, devId);
     if (ret == 0) {
         ret = wh_Server_XmssKeyCacheExport(server, keyId, key);
         if (ret == WH_ERROR_OK) {
