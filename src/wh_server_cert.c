@@ -688,6 +688,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
                               uint8_t* cert, uint32_t* inout_cert_len)
 {
     int           rc;
+    uint32_t      buf_len;
     whNvmMetadata meta;
 
     if ((server == NULL) || (cert == NULL) || (inout_cert_len == NULL) ||
@@ -695,6 +696,7 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
         return WH_ERROR_BADARGS;
     }
 
+    buf_len = *inout_cert_len;
 
     /* Get metadata to check the certificate size */
     rc = wh_Nvm_GetMetadata(server->nvm, id, &meta);
@@ -702,14 +704,14 @@ int wh_Server_CertReadTrusted(whServerContext* server, whNvmId id,
         return rc;
     }
 
+    /* Report the actual length even when the buffer is too small, so the
+     * caller learns the size it could not receive */
+    *inout_cert_len = meta.len;
+
     /* Check if the provided buffer is large enough */
-    if (meta.len > *inout_cert_len) {
+    if (meta.len > buf_len) {
         return WH_ERROR_BUFFER_SIZE;
     }
-
-    /* Clamp the input length to the actual length of the certificate. This will
-     * be reflected back to the user on length mismatch failure */
-    *inout_cert_len = meta.len;
 
     return wh_Nvm_Read(server->nvm, id, 0, meta.len, cert);
 }
@@ -1007,7 +1009,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     else {
                         rc = wh_Server_CertReadTrusted(server, req.id,
                                                        cert_data, &cert_len);
-                        resp.cert_len = cert_len;
+                        /* These are the only outcomes that resolve a length.
+                         * Any other error staged no certificate, so there is
+                         * no length to describe it with */
+                        if ((rc == WH_ERROR_OK) ||
+                            (rc == WH_ERROR_BUFFER_SIZE)) {
+                            resp.cert_len = cert_len;
+                        }
                     }
                 }
 
@@ -1018,7 +1026,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
             /* Convert the response struct */
             wh_MessageCert_TranslateReadTrustedResponse(
                 magic, &resp, (whMessageCert_ReadTrustedResponse*)resp_packet);
-            *out_resp_size = sizeof(resp) + resp.cert_len;
+            /* Certificate data is only staged on success. Sizing the response
+             * to cert_len otherwise would transmit unwritten packet bytes */
+            *out_resp_size = sizeof(resp);
+            if (rc == WH_ERROR_OK) {
+                *out_resp_size += resp.cert_len;
+            }
         }; break;
 
         case WH_MESSAGE_CERT_ACTION_VERIFY: {
@@ -1294,7 +1307,9 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                             resp.rc = WH_ERROR_ACCESS;
                         }
                         else {
-                            /* Clamp cert_len to actual stored length */
+                            /* The callee reports the stored length back into
+                             * cert_len, but SimpleResponse has no field to
+                             * return it, so the client cannot learn it here */
                             cert_len = req.cert_len;
                             resp.rc  = wh_Server_CertReadTrusted(
                                 server, req.id, cert_data, &cert_len);
