@@ -4211,6 +4211,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     WH_DEBUG_SERVER_VERBOSE("cmac end ret:%d\n", ret);
+    /* Scrub tmpKey and the Cmac context (AES schedule + k1/k2). Full struct
+     * zero avoids a wc_CmacFree double free. */
+    wh_Utils_ForceZero(tmpKey, sizeof(tmpKey));
+    wh_Utils_ForceZero(cmac, sizeof(cmac));
     return ret;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
@@ -8718,6 +8722,10 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     WH_DEBUG_SERVER_VERBOSE("dma cmac end ret:%d\n", ret);
+    /* Scrub tmpKey and the Cmac context (AES schedule + k1/k2). Full struct
+     * zero avoids a wc_CmacFree double free. */
+    wh_Utils_ForceZero(tmpKey, sizeof(tmpKey));
+    wh_Utils_ForceZero(cmac, sizeof(cmac));
     return ret;
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */

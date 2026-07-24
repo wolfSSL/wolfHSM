@@ -678,6 +678,25 @@ static int _testClientCounter(whClientContext* client)
             wh_Client_CounterRead(client, (whNvmId)i, &counter));
     }
 
+    /* Invalid counter action: the default case reports a zero length
+     * response, not the stale request sized buffer. */
+    {
+        uint8_t  reqbuf[8]   = {0};
+        uint8_t  respbuf[64] = {0};
+        uint16_t respGroup   = 0;
+        uint16_t respAction  = 0;
+        uint16_t respSz      = 0xFFFF;
+
+        WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+            client, WH_MESSAGE_GROUP_COUNTER, 0x7F, sizeof(reqbuf), reqbuf));
+        do {
+            rc = wh_Client_RecvResponse(client, &respGroup, &respAction,
+                                        &respSz, respbuf);
+        } while (rc == WH_ERROR_NOTREADY);
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(respSz == 0);
+    }
+
     /* Ensure NVM is empty */
     WH_TEST_RETURN_ON_FAIL(rc = wh_Client_NvmGetAvailable(
                                client, &server_rc, &avail_size, &avail_objects,
