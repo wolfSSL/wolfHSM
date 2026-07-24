@@ -1273,18 +1273,8 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 wh_MessageCert_TranslateReadTrustedDmaRequest(
                     magic, (whMessageCert_ReadTrustedDmaRequest*)req_packet,
                     &req);
-
-                /* Process client address */
-                resp.rc = wh_Server_DmaProcessClientAddress(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-                if (resp.rc == WH_ERROR_OK) {
-                    cert_dma_pre_ok = 1;
-                }
             }
             if (resp.rc == WH_ERROR_OK) {
-                /* Deny reading non-exportable or server-only (trusted KEK)
-                 * objects; see the non-DMA path above. */
                 resp.rc = WH_SERVER_NVM_LOCK(server);
                 if (resp.rc == WH_ERROR_OK) {
                     resp.rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
@@ -1293,23 +1283,53 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                                            WH_NVM_FLAGS_SERVER_ONLY)) != 0) {
                             resp.rc = WH_ERROR_ACCESS;
                         }
-                        else {
-                            /* Clamp cert_len to actual stored length */
-                            cert_len = req.cert_len;
-                            resp.rc  = wh_Server_CertReadTrusted(
-                                server, req.id, cert_data, &cert_len);
+                    }
+                    /* wh_Server_CertReadTrusted() calls the unchecked
+                     * wh_Nvm_Read(), so the check above is the only gate, and
+                     * it precedes the bound and the map. */
+                    if (resp.rc == WH_ERROR_OK &&
+                        req.cert_len > WOLFHSM_CFG_MAX_CERT_SIZE) {
+                        resp.rc = WH_ERROR_BADARGS;
+                    }
+                    if (resp.rc == WH_ERROR_OK) {
+                        resp.rc = wh_Server_DmaProcessClientAddress(
+                            server, req.cert_addr, &cert_data, req.cert_len,
+                            WH_DMA_OPER_CLIENT_WRITE_PRE,
+                            (whServerDmaFlags){0});
+                        /* Zero length is a no-op. A NULL mapping cannot be
+                         * zeroed, so fail before pairing a POST. */
+                        if (resp.rc == WH_ERROR_OK && req.cert_len > 0) {
+                            if (cert_data == NULL) {
+                                resp.rc = WH_ERROR_BADARGS;
+                            }
+                            else {
+                                cert_dma_pre_ok = 1;
+                                /* The read fills only meta.len, so zero
+                                 * first. */
+                                memset(cert_data, 0, req.cert_len);
+                            }
                         }
+                        else if (resp.rc == WH_ERROR_OK) {
+                            cert_dma_pre_ok = 1;
+                        }
+                    }
+                    if (resp.rc == WH_ERROR_OK) {
+                        cert_len = req.cert_len;
+                        resp.rc  = wh_Server_CertReadTrusted(
+                            server, req.id, cert_data, &cert_len);
                     }
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
-            }
-            /* Always call POST for successful PRE, regardless of operation
-             * result */
-            if (cert_dma_pre_ok) {
-                (void)wh_Server_DmaProcessClientAddress(
-                    server, req.cert_addr, &cert_data, req.cert_len,
-                    WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+
+                /* Always call POST for successful PRE, regardless of
+                 * operation result. Runs outside the lock: only the PRE has
+                 * to be ordered against the deny check. */
+                if (cert_dma_pre_ok) {
+                    (void)wh_Server_DmaProcessClientAddress(
+                        server, req.cert_addr, &cert_data, req.cert_len,
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                }
             }
 
             /* Convert the response struct */

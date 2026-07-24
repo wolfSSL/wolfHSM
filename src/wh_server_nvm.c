@@ -458,6 +458,16 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                 rc = wh_Nvm_GetMetadata(server->nvm, req.id, &meta);
 
                 if (rc == 0) {
+                    /* Refuse before the bound and the map: ACCESS whatever the
+                     * offset, so the length cannot be probed. The non-DMA READ
+                     * deliberately keeps its original ordering. */
+                    if ((meta.flags & (WH_NVM_FLAGS_NONEXPORTABLE |
+                                       WH_NVM_FLAGS_SERVER_ONLY)) != 0) {
+                        rc = WH_ERROR_ACCESS;
+                    }
+                }
+
+                if (rc == 0) {
                     if (req.offset >= meta.len) {
                         rc = WH_ERROR_BADARGS;
                     }
@@ -472,14 +482,25 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                     }
                 }
 
-                /* use unclamped length for DMA address processing in case DMA
-                 * callbacks are sensible to alignment and/or size */
+                /* Map the full requested length (callbacks may depend on it);
+                 * the allowlist, not the object size, bounds the extent. */
                 if (rc == 0) {
-                    /* perform platform-specific host address processing */
                     rc = wh_Server_DmaProcessClientAddress(
                         server, req.data_hostaddr, &data, req.data_len,
                         WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-                    if (rc == 0) {
+                    /* Zero it since the read fills only read_len. A NULL
+                     * mapping cannot be zeroed, so fail rather than POST
+                     * un-zeroed bytes; zero length is a no-op. */
+                    if (rc == 0 && req.data_len > 0) {
+                        if (data == NULL) {
+                            rc = WH_ERROR_BADARGS;
+                        }
+                        else {
+                            data_dma_pre_ok = 1;
+                            memset(data, 0, req.data_len);
+                        }
+                    }
+                    else if (rc == 0) {
                         data_dma_pre_ok = 1;
                     }
                 }
@@ -488,8 +509,8 @@ int wh_Server_HandleNvmRequest(whServerContext* server,
                     rc = wh_Nvm_ReadChecked(server->nvm, req.id, req.offset,
                                             read_len, (uint8_t*)data);
                 }
-                /* Always call POST for successful PRE, regardless of read
-                 * result */
+                /* POST inside the lock, matching this handler's original
+                 * bracket. */
                 if (data_dma_pre_ok) {
                     (void)wh_Server_DmaProcessClientAddress(
                         server, req.data_hostaddr, &data, req.data_len,

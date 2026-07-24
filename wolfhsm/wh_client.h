@@ -2199,6 +2199,8 @@ int wh_Client_NvmAddObjectDma(whClientContext* c, whNvmMetadata* metadata,
  * the data client address. This function does not block; it returns immediately
  * after sending the request.
  *
+ * See wh_Client_NvmReadDma() for the destination-buffer contract.
+ *
  * @param[in] c Pointer to the client context.
  * @param[in] id The NVM ID of the object to read.
  * @param[in] offset The offset within the object to start reading from.
@@ -2238,6 +2240,12 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc);
  * address width (32-bit or 64-bit) is automatically detected. It sends the
  * request and repeatedly attempts to receive a valid response. This function
  * blocks until the entire operation is complete or an error occurs.
+ *
+ * Once the server maps the buffer it writes all @p data_len bytes: the object
+ * bytes followed by zeros, or all zeros if the read fails. A request the
+ * server refuses outright leaves the buffer untouched. The full @p data_len is
+ * written regardless of object size, so the server DMA allowlist is what bounds
+ * the destination extent.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] id The NVM ID of the object to read.
@@ -3318,6 +3326,8 @@ int wh_Client_CertAddTrustedDma(whClientContext* c, whNvmId id,
  * NVM storage using DMA. This function does not block; it returns immediately
  * after sending the request.
  *
+ * See wh_Client_CertReadTrustedDma() for the destination-buffer contract.
+ *
  * @param[in] c Pointer to the client context.
  * @param[in] id NVM ID of the trusted certificate to get.
  * @param[in] cert Pointer to buffer to store the certificate data.
@@ -3349,6 +3359,10 @@ int wh_Client_CertReadTrustedDmaResponse(whClientContext* c, int32_t* out_rc);
  * This function handles the complete process of sending a request to read a
  * trusted certificate using DMA and receiving the response. It blocks until the
  * entire operation is complete or an error occurs.
+ *
+ * Once the server maps the buffer it writes all @p cert_len bytes: the
+ * certificate followed by zeros, or all zeros if the read fails. A request the
+ * server refuses outright leaves the buffer untouched.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] id NVM ID of the trusted certificate to get.
