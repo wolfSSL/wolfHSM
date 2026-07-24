@@ -15,7 +15,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # ubuntu runs the configs as parallel groups to shorten the
+        # critical path; macos stays a single job running everything
+        # because its org-wide runner pool is much smaller
+        include:
+          - os: ubuntu-latest
+            group: pq-dma
+          - os: ubuntu-latest
+            group: wolfcrypt
+          - os: ubuntu-latest
+            group: threadsafe
+          - os: ubuntu-latest
+            group: light
+          - os: macos-latest
+            group: all
 
     runs-on: ${{ matrix.os }}
 
@@ -39,81 +52,101 @@ jobs:
 
     # Build and test standard build
     - name: Build and test refactor
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test standard build, with DMA and ASAN enabled
     - name: Build and test refactor DMA ASAN
+      if: matrix.group == 'pq-dma' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with LMS and XMSS both in verify-only mode
     - name: Build and test refactor DMA ASAN LMS/XMSS verify-only
+      if: matrix.group == 'pq-dma' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test mixed: LMS verify-only, XMSS full (exercises shared gating)
     - name: Build and test refactor DMA ASAN LMS verify-only XMSS full
+      if: matrix.group == 'pq-dma' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test refactor ASAN TESTWOLFCRYPT
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test ASAN build, with wolfCrypt tests enabled and using the DMA devId.
     - name: Build and test refactor ASAN TESTWOLFCRYPT TESTWOLFCRYPT_DMA
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test debug build with ASAN and NOCRYPTO
     - name: Build and test refactor ASAN DEBUG NOCRYPTO
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DEBUG=1 ASAN=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test debug build with ASAN and DMA
     - name: Build and test refactor ASAN DEBUG DMA
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DEBUG=1 ASAN=1 DMA=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with SHE and ASAN
     - name: Build and test refactor ASAN SHE
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with per-client crypto affinity enabled (runs the crypto
     # affinity unit test, gated behind WOLFHSM_CFG_CRYPTO_AFFINITY)
     - name: Build and test refactor CRYPTO_AFFINITY ASAN
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j CRYPTO_AFFINITY=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test crypto affinity alongside DMA (exercises HW-devId path)
     - name: Build and test refactor CRYPTO_AFFINITY DMA ASAN
+      if: matrix.group == 'wolfcrypt' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j CRYPTO_AFFINITY=1 DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with DEBUG=1
     - name: Build and test refactor with DEBUG
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DEBUG=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with DEBUG_VERBOSE=1 (includes DEBUG)
     - name: Build and test refactor with DEBUG_VERBOSE
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled
     - name: Build and test refactor with THREADSAFE and everything
+      if: matrix.group == 'threadsafe' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests
     - name: Build and test refactor with THREADSAFE and TESTWOLFCRYPT and everything
+      if: matrix.group == 'threadsafe' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests with dma
     - name: Build and test refactor with THREADSAFE and TESTWOLFCRYPT with DMA
+      if: matrix.group == 'threadsafe' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 TESTWOLFCRYPT=1 TESTWOLFCRYPT_DMA=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with AUTH=1
     - name: Build and test refactor with AUTH
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with AUTH=1 and ASAN
     - name: Build and test refactor with AUTH ASAN
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with AUTH=1 and THREADSAFE
     - name: Build and test refactor with AUTH THREADSAFE ASAN
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 THREADSAFE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with AUTH=1 and NOCRYPTO=1 (auth on, crypto off)
     - name: Build and test refactor with AUTH NOCRYPTO
+      if: matrix.group == 'light' || matrix.group == 'all'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run
