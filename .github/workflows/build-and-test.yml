@@ -45,7 +45,7 @@ jobs:
       uses: ./.github/actions/ccache-setup
       with:
         workflow-id: build-and-test
-        read-only: ${{ github.event_name == 'pull_request' }}
+        read-only: false
 
     # Build and test standard build
     - name: Build and test
