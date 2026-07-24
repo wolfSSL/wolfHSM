@@ -28,6 +28,8 @@
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_message_cert.h"
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
@@ -1656,6 +1658,32 @@ int whTest_CertClientAcertDma_ClientServerTestInternal(whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(wh_Client_CertVerifyAcertDma(
         client, attrCert_der, attrCert_der_len, rootCertB_id, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_CERT_VERIFY);
+
+    /* Regression test for finding 4235. A malformed (undersized) ACERT_DMA
+     * request must report an error on the wire, not a false success. Send a
+     * raw 1 byte request with the low level API and confirm resp.rc is not OK.
+     */
+    WH_TEST_PRINT("Sending malformed ACERT_DMA request...\n");
+    {
+        uint8_t                      badReq = 0;
+        uint16_t                     rgroup, raction, rsize;
+        whMessageCert_SimpleResponse badResp = {0};
+
+        do {
+            rc = wh_Client_SendRequest(
+                client, WH_MESSAGE_GROUP_CERT,
+                WH_MESSAGE_CERT_ACTION_VERIFY_ACERT_DMA, sizeof(badReq),
+                &badReq);
+        } while (rc == WH_ERROR_NOTREADY);
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+        do {
+            rc = wh_Client_RecvResponse(client, &rgroup, &raction, &rsize,
+                                        &badResp);
+        } while (rc == WH_ERROR_NOTREADY);
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(badResp.rc != WH_ERROR_OK);
+    }
 
     /* Clean up - delete the trusted certificates */
     WH_TEST_PRINT("Deleting trusted certificates...\n");

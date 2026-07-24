@@ -1471,40 +1471,35 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
 
             if (req_size != sizeof(req)) {
                 /* Request is malformed */
-                rc = WH_ERROR_ABORTED;
+                resp.rc = WH_ERROR_ABORTED;
             }
-            if (rc == WH_ERROR_OK) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Convert request struct */
                 wh_MessageCert_TranslateVerifyDmaRequest(
                     magic, (whMessageCert_VerifyDmaRequest*)req_packet, &req);
 
                 /* Process client address */
-                rc = wh_Server_DmaProcessClientAddress(
+                resp.rc = wh_Server_DmaProcessClientAddress(
                     server, req.cert_addr, &cert_data, req.cert_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-                if (rc == WH_ERROR_OK) {
+                if (resp.rc == WH_ERROR_OK) {
                     cert_dma_pre_ok = 1;
                 }
             }
-            if (rc == WH_ERROR_OK) {
+            if (resp.rc == WH_ERROR_OK) {
                 /* Process the verify action */
-                rc = WH_SERVER_NVM_LOCK(server);
-                if (rc == WH_ERROR_OK) {
-                    rc = wh_Server_CertVerifyAcert(
+                resp.rc = WH_SERVER_NVM_LOCK(server);
+                if (resp.rc == WH_ERROR_OK) {
+                    resp.rc = wh_Server_CertVerifyAcert(
                         server, cert_data, req.cert_len, req.trustedRootNvmId);
 
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
 
-                /* Signature verification error is not an error for the server,
-                 * so propagate this error to the client in the response,
-                 * otherwise return the error code from the verify action */
-                if (rc == ASN_SIG_CONFIRM_E || rc == ASN_SIG_OID_E) {
+                /* A signature verification failure is reported to the client,
+                 * not treated as a server error */
+                if (resp.rc == ASN_SIG_CONFIRM_E || resp.rc == ASN_SIG_OID_E) {
                     resp.rc = WH_ERROR_CERT_VERIFY;
-                    rc      = WH_ERROR_OK;
-                }
-                else {
-                    resp.rc = rc;
                 }
             }
             /* Always call POST for successful PRE, regardless of operation
@@ -1515,15 +1510,11 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
             }
 
-            /* Convert the response struct */
+            /* Convert the response struct. resp.rc now holds the final status
+             * on every path, so translate last with no post fixup */
             wh_MessageCert_TranslateSimpleResponse(
                 magic, &resp, (whMessageCert_SimpleResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
-
-            /* If there was an error, return it in the response */
-            if (rc != WH_ERROR_OK) {
-                resp.rc = rc;
-            }
         } break;
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
