@@ -14,12 +14,8 @@ jobs:
     strategy:
         matrix:
             transport: [ 'tcp', 'shm', 'dma', 'tls', 'psk' ]
-            asan: [ 'ASAN=1', 'ASAN=0' ]
-            debug: [ '', 'DEBUG_VERBOSE=1' ]
-            test: [ '', '--test' ]
-            auth: [ '', 'AUTH=1' ]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v4
@@ -31,56 +27,61 @@ jobs:
         repository: wolfssl/wolfssl
         path: wolfssl
 
-    - name: Set TLS Environment Variable
+    # One job per transport; the flag combos run as a loop because a
+    # matrix job per combo spends about half its time on runner setup.
+    # The --test variants reuse the same binaries, so each of the 8
+    # flag builds serves two client runs.
+    - name: Build and run examples (all flag combos)
       run: |
-        if [ "${{ matrix.transport }}" = "tls" ] || [ "${{ matrix.transport }}" = "psk" ]; then
-          echo "TLS=1" >> $GITHUB_ENV
+        WS="$(pwd)"
+        SERVER_DIR="$WS/examples/posix/wh_posix_server"
+        CLIENT_DIR="$WS/examples/posix/wh_posix_client"
+        TRANSPORT="${{ matrix.transport }}"
+        if [ "$TRANSPORT" = "tls" ] || [ "$TRANSPORT" = "psk" ]; then
+          TLS=1
         else
-          echo "TLS=0" >> $GITHUB_ENV
+          TLS=0
         fi
-
-    # Build examples
-    - name: Build POSIX server
-      run: |
-        if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 DEMO_KEK=1 make -j WOLFSSL_DIR=../../../wolfssl
-        else
-          cd examples/posix/wh_posix_server && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} DEMO_KEK=1 make -j WOLFSSL_DIR=../../../wolfssl
-        fi
-
-    - name: Build POSIX client
-      run: |
-        if [ "${{ matrix.transport }}" = "dma" ]; then
-          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} DMA=1 make -j WOLFSSL_DIR=../../../wolfssl
-        else
-          cd examples/posix/wh_posix_client && ${{ matrix.asan }} ${{ matrix.debug }} ${{ matrix.auth }} TLS=${{ env.TLS }} make -j WOLFSSL_DIR=../../../wolfssl
-        fi
-
-    # Start the server in the background
-    - name: Run POSIX server
-      run: |
-        cd examples/posix/wh_posix_server
-        if [ "${{ matrix.transport }}" = "psk" ]; then
-          echo "test_password" | ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
-        else
-          ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &
-        fi
-        POSIX_SERVER_PID=$!
-        echo "POSIX_SERVER_PID=$POSIX_SERVER_PID" >> $GITHUB_ENV
-
-    # Run the client that connects to the server
-    - name: Run POSIX client
-      run: |
-        cd examples/posix/wh_posix_client
-        if [ "${{ matrix.transport }}" = "psk" ]; then
-          echo "test_password" | ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
-        else
-          ./Build/wh_posix_client.elf --type ${{ matrix.transport }} ${{ matrix.test }}
-        fi
-
-    # Optional: Kill the server process if it doesn't exit on its own
-    - name: Cleanup POSIX server
-      if: always()
-      run: kill $POSIX_SERVER_PID || true
-
-
+        for ASAN in ASAN=1 ASAN=0; do
+        for DEBUG in "" DEBUG_VERBOSE=1; do
+        for AUTH in "" AUTH=1; do
+          echo "::group::build $TRANSPORT $ASAN $DEBUG $AUTH"
+          make -C "$SERVER_DIR" clean
+          make -C "$CLIENT_DIR" clean
+          if [ "$TRANSPORT" = "dma" ]; then
+            env $ASAN $DEBUG $AUTH DMA=1 DEMO_KEK=1 \
+              make -C "$SERVER_DIR" -j WOLFSSL_DIR=../../../wolfssl
+            env $ASAN $DEBUG $AUTH DMA=1 \
+              make -C "$CLIENT_DIR" -j WOLFSSL_DIR=../../../wolfssl
+          else
+            env $ASAN $DEBUG $AUTH TLS=$TLS DEMO_KEK=1 \
+              make -C "$SERVER_DIR" -j WOLFSSL_DIR=../../../wolfssl
+            env $ASAN $DEBUG $AUTH TLS=$TLS \
+              make -C "$CLIENT_DIR" -j WOLFSSL_DIR=../../../wolfssl
+          fi
+          echo "::endgroup::"
+          for TEST in "" --test; do
+            echo "::group::run $TRANSPORT $ASAN $DEBUG $AUTH test='$TEST'"
+            rm -f "$SERVER_DIR"/*.bin
+            cd "$SERVER_DIR"
+            if [ "$TRANSPORT" = "psk" ]; then
+              echo "test_password" | ./Build/wh_posix_server.elf --type "$TRANSPORT" &
+            else
+              ./Build/wh_posix_server.elf --type "$TRANSPORT" &
+            fi
+            SERVER_PID=$!
+            sleep 1
+            cd "$CLIENT_DIR"
+            if [ "$TRANSPORT" = "psk" ]; then
+              echo "test_password" | ./Build/wh_posix_client.elf --type "$TRANSPORT" $TEST
+            else
+              ./Build/wh_posix_client.elf --type "$TRANSPORT" $TEST
+            fi
+            kill $SERVER_PID 2>/dev/null || true
+            wait $SERVER_PID 2>/dev/null || true
+            cd "$WS"
+            echo "::endgroup::"
+          done
+        done
+        done
+        done
