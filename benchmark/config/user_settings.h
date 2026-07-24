@@ -154,6 +154,17 @@ extern "C" {
 #define WOLFSSL_MLDSA_NO_MAKE_KEY
 #endif
 
+/* The following options can be individually disabled ML-DSA levels */
+#if 0
+#define WOLFSSL_NO_ML_DSA_44
+#endif
+#if 0
+#define WOLFSSL_NO_ML_DSA_65
+#endif
+#if 0
+#define WOLFSSL_NO_ML_DSA_87
+#endif
+
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
 

@@ -32,7 +32,28 @@
 #define WOLFHSM_CFG_ENABLE_CLIENT
 #define WOLFHSM_CFG_ENABLE_SERVER
 
+/* wh_settings.h includes this file before user_settings.h, so the
+ * WOLFSSL_NO_ML_DSA_xx feature gates below would not be visible yet at this
+ * point in the translation unit. Pull user_settings.h in early so
+ * WOLFHSM_CFG_COMM_DATA_LEN can be sized to the largest enabled ML-DSA level.
+ * user_settings.h is just a flat set of #define statements guarded by its
+ * own include guard, so wh_settings.h's later #include is a no-op. */
+#ifdef WOLFSSL_USER_SETTINGS
+#include "user_settings.h"
+#endif
+
+/* Non-DMA client/server messages carry the full request/response body
+ * (signature, key material, etc.) in this buffer, so it must be large
+ * enough for the biggest enabled ML-DSA security level's KeyGen/Verify
+ * payload. Smaller devices that disable the larger levels can shrink this
+ * buffer accordingly. */
+#if !defined(WOLFSSL_NO_ML_DSA_87)
+#define WOLFHSM_CFG_COMM_DATA_LEN (1280 * 8)
+#elif !defined(WOLFSSL_NO_ML_DSA_65)
+#define WOLFHSM_CFG_COMM_DATA_LEN (1280 * 5)
+#else
 #define WOLFHSM_CFG_COMM_DATA_LEN (1280 * 4)
+#endif
 
 #define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 9
