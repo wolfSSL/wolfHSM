@@ -250,11 +250,10 @@ static int _SecureBootInit(whServerContext* server, uint16_t magic,
         server->she->blSize = req.sz;
         /* check if the boot mac key is empty */
         keySz = sizeof(macKey);
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_BOOT_MAC_KEY_ID),
-                                          NULL, macKey, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_BOOT_MAC_KEY_ID),
+            NULL, macKey, &keySz);
         if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
             ret = WH_SHE_ERC_KEY_INVALID;
         }
@@ -397,11 +396,9 @@ static int _SecureBootFinish(whServerContext* server, uint16_t magic,
     /* load the cmac to check */
     if (ret == 0) {
         keySz = sizeof(macDigest);
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_BOOT_MAC),
-                                          NULL, macDigest, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_BOOT_MAC),
+            NULL, macDigest, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -506,11 +503,11 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* read the auth key by AuthID */
     if (ret == 0) {
         keySz = sizeof(kdfInput);
-        ret = wh_Server_KeystoreReadKey(server,
-                                        WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                      server->comm->client_id,
-                                                      _PopAuthId(req.messageOne)),
-                                        NULL, kdfInput, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id,
+                                _PopAuthId(req.messageOne)),
+            NULL, kdfInput, &keySz);
     }
     /* make K2 using AES-MP(authKey | WH_SHE_KEY_UPDATE_MAC_C) */
     if (ret == 0) {
@@ -567,11 +564,10 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     wc_AesFree(server->she->sheAes);
     /* load the target key */
     if (ret == 0) {
-        ret = wh_Server_KeystoreReadKey(server,
-                                        WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                      server->comm->client_id,
-                                                      _PopId(req.messageOne)),
-                                        meta, kdfInput, &keySz);
+        ret = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, _PopId(req.messageOne)),
+            meta, kdfInput, &keySz);
         /* Extract count and flags from the label, even if it failed */
         wh_She_Label2Meta(meta->label, &she_meta_count, &she_meta_flags);
         /* if the keyslot is empty or write protection is not on continue */
@@ -604,8 +600,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     }
     /* write key with msg_counter_BE */
     if (ret == 0) {
-        meta->id       = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                       _PopId(req.messageOne));
+        meta->id =
+            WH_SHE_MAKE_KEYID(server->comm->client_id, _PopId(req.messageOne));
         she_meta_flags = _PopFlags(req.messageTwo);
         she_meta_count = wh_Utils_ntohl(msg_counter_val) >> 4;
         /* Update the meta label with new values */
@@ -741,8 +737,7 @@ static int _LoadPlainKey(whServerContext* server, uint16_t magic,
                                                          &req);
     }
 
-    meta->id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                              WH_SHE_RAM_KEY_ID);
+    meta->id  = WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_RAM_KEY_ID);
     meta->len = WH_SHE_KEY_SZ;
 
     /* cache if ram key, overwrite otherwise */
@@ -789,11 +784,10 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
     /* read the auth key by AuthID */
     if (ret == 0) {
         keySz = WH_SHE_KEY_SZ;
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_SECRET_KEY_ID),
-                                          meta, kdfInput, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_SECRET_KEY_ID),
+            meta, kdfInput, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -819,10 +813,9 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
         memcpy(resp.messageTwo, &counter_val, sizeof(uint32_t));
         keySz    = WH_SHE_KEY_SZ;
         ret      = wh_Server_KeystoreReadKey(
-                 server,
-                 WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                               WH_SHE_RAM_KEY_ID),
-                 meta, resp.messageTwo + WH_SHE_KEY_SZ, &keySz);
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_RAM_KEY_ID), meta,
+            resp.messageTwo + WH_SHE_KEY_SZ, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -954,11 +947,10 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* read secret key */
     if (ret == 0) {
         keySz = WH_SHE_KEY_SZ;
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_SECRET_KEY_ID),
-                                          meta, kdfInput, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_SECRET_KEY_ID),
+            meta, kdfInput, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -974,11 +966,10 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     /* read the current PRNG_SEED, i - 1, to cmacOutput */
     if (ret == 0) {
         keySz = WH_SHE_KEY_SZ;
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_PRNG_SEED_ID),
-                                          meta, cmacOutput, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_PRNG_SEED_ID),
+            meta, cmacOutput, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -1000,8 +991,8 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
     wc_AesFree(server->she->sheAes);
     /* save PRNG_SEED, i */
     if (ret == 0) {
-        meta->id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  WH_SHE_PRNG_SEED_ID);
+        meta->id =
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_PRNG_SEED_ID);
         meta->len = WH_SHE_KEY_SZ;
         /* Persist the PRNG seed to NVM, or cache it when there is no NVM to
          * persist to. wh_Server_KeystoreCacheKey evicts any existing entry for
@@ -1129,11 +1120,10 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
     /* read the PRNG_SEED into kdfInput */
     if (ret == 0) {
         keySz = WH_SHE_KEY_SZ;
-        ret   = wh_Server_KeystoreReadKey(server,
-                                          WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                        server->comm->client_id,
-                                                        WH_SHE_PRNG_SEED_ID),
-                                          meta, kdfInput, &keySz);
+        ret   = wh_Server_KeystoreReadKey(
+            server,
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_PRNG_SEED_ID),
+            meta, kdfInput, &keySz);
         if (ret != 0) {
             ret = WH_SHE_ERC_KEY_NOT_AVAILABLE;
         }
@@ -1145,8 +1135,8 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
     }
     /* save PRNG_SEED */
     if (ret == 0) {
-        meta->id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  WH_SHE_PRNG_SEED_ID);
+        meta->id =
+            WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_PRNG_SEED_ID);
         meta->len = WH_SHE_KEY_SZ;
         /* Persist to NVM, or cache when there is no NVM.
          * wh_Server_KeystoreCacheKey evicts any existing entry for this id. */
@@ -1212,9 +1202,8 @@ static int _EncEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
     if (ret == 0) {
         /* load the key */
         ret = wh_Server_KeystoreReadKey(
-            server, WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  req.keyId),
-            NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0) {
             ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
         }
@@ -1290,9 +1279,8 @@ static int _EncCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
     if (ret == 0) {
         /* load the key */
         ret = wh_Server_KeystoreReadKey(
-            server, WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  req.keyId),
-            NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0) {
             ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
         }
@@ -1374,9 +1362,8 @@ static int _DecEcb(whServerContext* server, uint16_t magic, uint16_t req_size,
     if (ret == 0) {
         /* load the key */
         ret = wh_Server_KeystoreReadKey(
-            server, WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  req.keyId),
-            NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0) {
             ret = wc_AesInit(server->she->sheAes, NULL, server->devId);
         }
@@ -1456,9 +1443,8 @@ static int _DecCbc(whServerContext* server, uint16_t magic, uint16_t req_size,
     if (ret == 0) {
         /* load the key */
         ret = wh_Server_KeystoreReadKey(
-            server, WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                  req.keyId),
-            NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
             ret = WH_SHE_ERC_KEY_INVALID;
         }
@@ -1532,10 +1518,8 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
         /* load the key */
         keySz = WH_SHE_KEY_SZ;
         ret   = wh_Server_KeystoreReadKey(
-              server,
-              WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                            req.keyId),
-              NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
             ret = WH_SHE_ERC_KEY_INVALID;
         }
@@ -1600,10 +1584,8 @@ static int _VerifyMac(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         keySz = WH_SHE_KEY_SZ;
         ret   = wh_Server_KeystoreReadKey(
-              server,
-              WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                            req.keyId),
-              NULL, tmpKey, &keySz);
+            server, WH_SHE_MAKE_KEYID(server->comm->client_id, req.keyId), NULL,
+            tmpKey, &keySz);
         if (ret == 0 && keySz != WH_SHE_KEY_SZ) {
             ret = WH_SHE_ERC_KEY_INVALID;
         }

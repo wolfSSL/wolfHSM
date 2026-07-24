@@ -78,6 +78,7 @@ These macros enable or tune optional cryptographic subsystems built on top of wo
 | `WOLFHSM_CFG_HWKEYSTORE` | Undefined | If defined, compile the hardware keystore front-end (`wh_HwKeystore_*`) and hardware-only key support (`WH_KEYTYPE_HW`, `WH_CLIENT_KEYID_MAKE_HW()`). Hardware-only keys are served on demand by a user-supplied callback and are usable only as keywrap KEKs; they never enter the key cache or NVM and are never exported. See [Hardware-Only Keys](5-Features.md#hardware-only-keys). |
 | `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE` | `32` | Maximum size, in bytes, of a key served by the hardware keystore backend; sizes the local buffer that holds a hardware KEK for the duration of a keywrap operation. Only consulted when `WOLFHSM_CFG_HWKEYSTORE` is defined. |
 | `WOLFHSM_CFG_GLOBAL_KEYS` | Undefined | If defined, enable the global-keys feature, allowing keys to be cached so that they are visible to every client rather than scoped to the caching client. See [Global Keys](5-Features.md#global-keys) for a full discussion of the API and security implications. |
+| `WOLFHSM_CFG_SHE_GLOBAL_KEYS` | Undefined | If defined, all sixteen AUTOSAR SHE key slots live in the global-keys namespace (USER=0) so every connected client shares a single SHE device view, matching AUTOSAR's one-physical-SHE model rather than wolfHSM's default per-client SHE slots. Requires `WOLFHSM_CFG_GLOBAL_KEYS` and `WOLFHSM_CFG_SHE_EXTENSION` (enforced by `#error`). See [Global SHE Keys](5-Features.md#global-she-keys). |
 | `WH_DEV_ID` | `0x5748534D` (`"WHSM"`) | Value of the process-global crypto device ID registered by every `wh_Client_Init()` with the unified client crypto callback. Also the device ID bound to a client whose `whClientConfig.devId` is left `0`. Override it if the default collides with another crypto-callback device ID in the application. See [Transparent Offload via Crypto Callbacks](5-Features.md#transparent-offload-via-crypto-callbacks) for registration lifetime, multi-client rules, and wolfCrypt callback-table sizing (`MAX_CRYPTO_DEVID_CALLBACKS`, default 8). |
 | `WH_DEV_ID_DMA` | `0x57444D41` (`"WDMA"`) | Value of the process-global DMA-only crypto device ID, registered by every `wh_Client_Init()` when `WOLFHSM_CFG_DMA` is defined. Reserved: not valid as a `whClientConfig.devId`. Override it if the default collides with another crypto-callback device ID in the application. |
 
@@ -87,7 +88,7 @@ These macros size the server-side key cache. The cache is split into "regular" s
 
 | Macro | Default | Description |
 |---|---|---|
-| `WOLFHSM_CFG_SERVER_KEYCACHE_COUNT` | `8` | Number of regular RAM key-cache slots on the server. |
+| `WOLFHSM_CFG_SERVER_KEYCACHE_COUNT` | `8` (`16` with `WOLFHSM_CFG_SHE_EXTENSION`) | Number of regular RAM key-cache slots on the server. The SHE default holds all sixteen SHE slots at once. |
 | `WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE` | `256` | Size, in bytes, of each regular key-cache slot. |
 | `WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT` | `1` | Number of "big" RAM key-cache slots on the server, used for large keys (e.g. RSA, ML-DSA). |
 | `WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE` | `1200` | Size, in bytes, of each big key-cache slot. Should be at least the largest key the server is expected to hold (e.g. ~1024 bytes for an RSA-4096 private key). |

@@ -82,6 +82,10 @@ jobs:
     - name: Build and test refactor CRYPTO_AFFINITY DMA ASAN
       run: cd test-refactor/posix && make clean && make -j CRYPTO_AFFINITY=1 DMA=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Build and test with global SHE keys (all SHE slots shared across clients)
+    - name: Build and test refactor ASAN SHE_GLOBAL
+      run: cd test-refactor/posix && make clean && make -j SHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test with DEBUG=1
     - name: Build and test refactor with DEBUG
       run: cd test-refactor/posix && make clean && make -j DEBUG=1 WOLFSSL_DIR=../../wolfssl && make run
@@ -93,6 +97,10 @@ jobs:
     # Build and test in multithreaded mode with everything enabled
     - name: Build and test refactor with THREADSAFE and everything
       run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 SHE=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    # Same, with global SHE keys
+    - name: Build and test refactor with THREADSAFE and everything and SHE_GLOBAL
+      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 SHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test in multithreaded mode with everything enabled and wolfCrypt tests
     - name: Build and test refactor with THREADSAFE and TESTWOLFCRYPT and everything

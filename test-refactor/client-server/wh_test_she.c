@@ -65,8 +65,7 @@ static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 {
     int     rc       = 0;
     int32_t serverRc = 0;
-    whNvmId id        = WH_MAKE_KEYID(WH_KEYTYPE_SHE, client->comm->client_id,
-                                      clientSheKeyId);
+    whNvmId id = WH_SHE_MAKE_KEYID(client->comm->client_id, clientSheKeyId);
 
     rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
     if (rc == WH_ERROR_OK) {

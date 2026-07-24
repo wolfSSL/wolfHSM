@@ -1945,6 +1945,16 @@ _HandleKeyWrapExportRequest(whServerContext*                        server,
             return WH_ERROR_BADARGS;
     }
 
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    /* Route SHE targets to the global namespace so wrap-export names slots
+     * the same way the SHE commands do, whether or not the client passed the
+     * global flag. */
+    if (targetKeyType == WH_KEYTYPE_SHE) {
+        targetKeyId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_KEYUSER_GLOBAL,
+                                    WH_KEYID_ID(targetKeyId));
+    }
+#endif
+
     /* Read the key and its real metadata, enforcing export policy
      * (NONEXPORTABLE). For wrapped keys this is a cache-only probe. */
     ret = wh_Server_KeystoreReadKeyChecked(server, targetKeyId, &metadata, key,
@@ -2255,6 +2265,26 @@ static int _HandleKeyUnwrapAndCacheRequest(
         goto out;
     }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+    /* Move the blob's id to the global namespace where the SHE commands look;
+     * blobs minted by per-client builds would otherwise cache under an id no
+     * SHE command uses and no client request can evict. Do this before the
+     * in-cache check and counter guard below so both see the final id. */
+    if (wrappedKeyType == WH_KEYTYPE_SHE) {
+        metadata.id = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_KEYUSER_GLOBAL,
+                                    WH_KEYID_ID(metadata.id));
+    }
+#elif defined(WOLFHSM_CFG_SHE_EXTENSION) && defined(WOLFHSM_CFG_GLOBAL_KEYS)
+    /* SHE slots are per-client on this build, so a blob minted by a global-SHE
+     * build would cache under an id no SHE command reads and no client request
+     * can evict, pinning the cache slot until reboot. Reject it instead. */
+    if (wrappedKeyType == WH_KEYTYPE_SHE &&
+        wrappedKeyUser == WH_KEYUSER_GLOBAL) {
+        ret = WH_ERROR_ACCESS;
+        goto out;
+    }
+#endif
 
     /* Ensure a key with the unwrapped ID does not already exist in cache */
     if (_ExistsInCache(server, metadata.id)) {
