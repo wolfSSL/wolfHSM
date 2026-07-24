@@ -49,6 +49,7 @@
 /* Values from the wh_server_she.c internal WH_SHE_SB_STATE enum.
  * Mirrored here since the enum is private to that translation unit. */
 #define TEST_SHE_SB_STATE_INIT 0
+#define TEST_SHE_SB_STATE_UPDATE 1
 #define TEST_SHE_SB_STATE_SUCCESS 3
 
 
@@ -469,6 +470,52 @@ int whTest_SheReqSizeChecking(whServerContext* server)
         WH_TEST_ASSERT_RETURN(ret == 0);
         WH_TEST_ASSERT_RETURN(resp_size == sizeof(*verifyMacResp));
         WH_TEST_ASSERT_RETURN(verifyMacResp->rc != WH_SHE_ERC_NO_ERROR);
+    }
+
+    /* Test 18: WH_SHE_GEN_MAC with req.sz = UINT32_MAX so sizeof(req)+req.sz
+     * wraps 32-bit size_t below req_size; the precise check would pass and the
+     * new req.sz magnitude guard must reject. */
+    {
+        whMessageShe_GenMacRequest* req =
+            (whMessageShe_GenMacRequest*)req_packet;
+        whMessageShe_GenMacResponse* genMacResp =
+            (whMessageShe_GenMacResponse*)resp_packet;
+        memset(genMacResp, 0, sizeof(*genMacResp));
+        req->keyId = WH_SHE_RAM_KEY_ID;
+        req->sz    = 0xFFFFFFFFu;
+        req_size   = sizeof(whMessageShe_GenMacRequest);
+        /* Width-independent proof the sum wraps: it drops below req.sz */
+        WH_TEST_ASSERT_RETURN(
+            (uint32_t)(sizeof(whMessageShe_GenMacRequest) + req->sz) < req->sz);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                                         WH_SHE_GEN_MAC, req_size, req_packet,
+                                         &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(*genMacResp));
+        WH_TEST_ASSERT_RETURN(genMacResp->rc != WH_SHE_ERC_NO_ERROR);
+    }
+
+    /* Test 19: WH_SHE_SECURE_BOOT_UPDATE with the same wrap-crafted chunk
+     * size; needs UPDATE state to reach the guard after the header check. */
+    server->she->sbState = TEST_SHE_SB_STATE_UPDATE;
+    {
+        whMessageShe_SecureBootUpdateRequest* req =
+            (whMessageShe_SecureBootUpdateRequest*)req_packet;
+        whMessageShe_SecureBootUpdateResponse* secureBootUpdateResp =
+            (whMessageShe_SecureBootUpdateResponse*)resp_packet;
+        memset(secureBootUpdateResp, 0, sizeof(*secureBootUpdateResp));
+        req->sz  = 0xFFFFFFFFu;
+        req_size = sizeof(whMessageShe_SecureBootUpdateRequest);
+        /* Width-independent proof the sum wraps: it drops below req.sz */
+        WH_TEST_ASSERT_RETURN(
+            (uint32_t)(sizeof(whMessageShe_SecureBootUpdateRequest) + req->sz) <
+            req->sz);
+        ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                                         WH_SHE_SECURE_BOOT_UPDATE, req_size,
+                                         req_packet, &resp_size, resp_packet);
+        WH_TEST_ASSERT_RETURN(ret == 0);
+        WH_TEST_ASSERT_RETURN(resp_size == sizeof(*secureBootUpdateResp));
+        WH_TEST_ASSERT_RETURN(secureBootUpdateResp->rc != WH_SHE_ERC_NO_ERROR);
     }
 
     /* Restore a clean SHE context so the poked uidSet/sbState don't

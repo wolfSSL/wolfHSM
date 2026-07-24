@@ -331,7 +331,9 @@ static int _SecureBootUpdate(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         /* the bootloader chunk is after the fixed fields */
         in = (uint8_t*)req_packet + sizeof(req);
-        if (req_size < (sizeof(req) + req.sz)) {
+        /* Guard against 32-bit size_t overflow: check req.sz alone first */
+        if (req.sz > WOLFHSM_CFG_COMM_DATA_LEN ||
+            req_size < (sizeof(req) + req.sz)) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
     }
@@ -1523,7 +1525,9 @@ static int _GenerateMac(whServerContext* server, uint16_t magic,
     }
 
     if (ret == 0) {
-        if (req_size < (sizeof(req) + req.sz)) {
+        /* Guard against 32-bit size_t overflow: check req.sz alone first */
+        if (req.sz > WOLFHSM_CFG_COMM_DATA_LEN ||
+            req_size < (sizeof(req) + req.sz)) {
             ret = WH_ERROR_BUFFER_SIZE;
         }
     }
