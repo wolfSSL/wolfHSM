@@ -717,6 +717,27 @@ int whTest_NvmFlash_PosixFileSim(void)
     return 0;
 }
 
+/* Exercise the guard that rejects a partition whose doubled size cannot be
+ * addressed by the uint32_t flash interface. MAX_OFFSET here is 0x100000000,
+ * which exceeds UINT32_MAX on every platform, so the rejection is portable. */
+static int whTest_NvmFlash_PosixOversizedPartition(void)
+{
+    const whFlashCb       myCb[1]              = {POSIX_FLASH_FILE_CB};
+    posixFlashFileContext myHalFlashContext[1] = {0};
+    posixFlashFileConfig  myHalFlashConfig[1]  = {{
+          .filename       = "myNvmOversized.bin",
+          .partition_size = 0x80000000u, /* doubled = 0x100000000 */
+          .erased_byte    = (~(uint8_t)0),
+    }};
+
+    /* Init must reject the partition; nothing is left open to clean up */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+            myCb->Init(myHalFlashContext, myHalFlashConfig));
+
+    unlink(myHalFlashConfig[0].filename);
+    return 0;
+}
+
 #endif
 
 
@@ -731,6 +752,9 @@ int whTest_NvmFlash(void)
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     WH_TEST_PRINT("Testing NVM flash with POSIX file sim...\n");
     WH_TEST_ASSERT(0 == whTest_NvmFlash_PosixFileSim());
+
+    WH_TEST_PRINT("Testing POSIX oversized-partition rejection...\n");
+    WH_TEST_ASSERT(0 == whTest_NvmFlash_PosixOversizedPartition());
 #endif
 
     return 0;
