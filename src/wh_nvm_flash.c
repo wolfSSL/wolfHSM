@@ -1145,6 +1145,7 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     int entry = 0;
     int src_part = 0;
     int dest_part = 0;
+    int any_marked = 0;
     uint32_t dest_object = 0;
     uint32_t dest_data = 0;
 
@@ -1173,8 +1174,16 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
                     &entry);
             if ((ret == 0) && (entry >= 0)) {
                 d->objects[entry].state.status = NF_STATUS_DATA_BAD;
+                any_marked = 1;
             }
         } while (entry >= 0);
+    }
+
+    /* Nothing matched a non-empty list: replicating would just rewrite the
+     * partition unchanged, so skip the flash wear.  A zero list_count is a
+     * compaction request and must still replicate. */
+    if ((list_count > 0) && (any_marked == 0)) {
+        return WH_ERROR_OK;
     }
 
     /* Blank check the inactive partition and erase if not blank */

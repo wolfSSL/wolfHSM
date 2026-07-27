@@ -266,10 +266,10 @@ static int _RunNvmOptionalChecks(whServerContext* server)
         WH_ERROR_NOTFOUND ==
         wh_Server_KeystoreReadKey(server, localId, outMeta, outKey, &outSz));
 
-    /* EraseKeyChecked enforces policy and, with no NVM, returns the cache
-     * eviction's status. A missing key reports NOTFOUND -- unlike the
-     * non-checked EraseKey above, which treats "nothing to destroy" as OK. */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+    /* EraseKeyChecked enforces policy but, like the non-checked EraseKey
+     * above, treats "nothing to erase" as OK. This holds whether or not NVM
+     * is attached. */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
                           wh_Server_KeystoreEraseKeyChecked(server, missingId));
 
     /* On a primed, policy-permissive key, EraseKeyChecked succeeds cache-only

@@ -180,7 +180,14 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId);
 /**
  * @brief Erase a key with policy enforcement
  *
- * Runs keystore policy checks before evicting/destroying.
+ * Runs keystore policy checks before evicting/destroying. An absent key is a
+ * successful erase, whether or not NVM is configured.
+ *
+ * @param[in] server  Server context
+ * @param[in] keyId   Key ID to erase
+ * @return 0 on success, including when the key does not exist. WH_ERROR_ACCESS
+ *         if policy denies the erase (the persisted key stays; a cached copy
+ *         may still be evicted). Other error codes on failure.
  */
 int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
 
