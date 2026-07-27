@@ -130,6 +130,11 @@ ifeq ($(NOCRYPTO),1)
 	DEF += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
+# Build without Curve25519, leaving Ed25519 enabled
+ifeq ($(NOCURVE25519),1)
+	DEF += -DWOLFHSM_CFG_TEST_NO_CURVE25519
+endif
+
 # Enable scan-build
 ifeq ($(SCAN),1)
 	SCAN_LOG = scan_test.log

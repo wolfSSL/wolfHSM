@@ -107,7 +107,11 @@
 #define ECC_SHAMIR
 
 /** Curve25519 Options */
+/* Curve25519 and Ed25519 are independent options. Allow a build that omits
+ * Curve25519 so the Ed25519-only configuration stays exercised. */
+#ifndef WOLFHSM_CFG_TEST_NO_CURVE25519
 #define HAVE_CURVE25519
+#endif
 
 /** DH and DHE Options */
 #define NO_DH

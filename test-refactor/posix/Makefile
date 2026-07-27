@@ -100,6 +100,11 @@ ifeq ($(DMA),1)
     DEF += -DWOLFHSM_CFG_DMA
 endif
 
+# Build without Curve25519, leaving Ed25519 enabled
+ifeq ($(NOCURVE25519),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_CURVE25519
+endif
+
 # Build LMS/XMSS in verify-only mode (omits private-key, sign, and keygen
 # paths). May be combined to exercise the mixed (one verify-only) case.
 ifeq ($(LMS_VERIFY_ONLY),1)

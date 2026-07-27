@@ -24,6 +24,10 @@
  *   _whTest_CryptoEd25519Inline    - pure wolfCrypt (sign+verify locally,
  *                                    plus negative case for tampered sig)
  *   _whTest_CryptoEd25519ServerKey - server-cached sign and verify keyIds
+ *   _whTest_CryptoEd25519CryptoCbHsmKey
+ *                                  - server-only keyIds driven through the
+ *                                    wolfCrypt API, so the cryptocb must
+ *                                    dispatch the operation
  *   _whTest_CryptoEd25519Dma       - same, via the DMA messaging path
  */
 
@@ -353,6 +357,99 @@ static int _whTest_CryptoEd25519ServerKey(whClientContext* ctx)
 
     if (ret == 0) {
         WH_TEST_PRINT("Ed25519 SERVER KEY DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+
+/* Signs and verifies through the wolfCrypt API on a key whose private material
+ * lives only in the server, so the crypto callback must handle the operation.
+ * A software fallback has no private scalar and returns BAD_FUNC_ARG. */
+static int _whTest_CryptoEd25519CryptoCbHsmKey(whClientContext* ctx)
+{
+    int         devId       = WH_CLIENT_DEVID(ctx);
+    int         ret         = 0;
+    WC_RNG      rng[1];
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 cryptocb dispatch message";
+    byte        sig[ED25519_SIG_SIZE];
+    word32      sigSz    = sizeof(sig);
+    int         verified = 0;
+    uint8_t     label[]  = "Ed25519 CryptoCb Key";
+
+    /* Pin the standard (non-DMA) callback. This test exists to prove the
+     * WC_PK_TYPE_ED25519_* cases in wh_Client_CryptoCbStd are compiled in, so
+     * it must not depend on the ambient DMA mode left by an earlier suite. */
+    (void)wh_Client_SetDmaMode(ctx, 0);
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, devId, key, pubKey, label,
+                                           sizeof(label), &signKeyId,
+                                           &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wc_ed25519_sign_msg(msg, (word32)sizeof(msg), sig, &sigSz, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wc_ed25519_sign_msg on server key failed: %d\n",
+                           ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, (word32)sizeof(msg),
+                                    &verified, pubKey);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wc_ed25519_verify_msg on server key failed: %d\n",
+                           ret);
+        }
+        else if (verified != 1) {
+            WH_ERROR_PRINT("Server key Ed25519 signature did not verify\n");
+            ret = -1;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 CRYPTOCB DEVID=0x%X SUCCESS\n", devId);
     }
 
     wc_ed25519_free(pubKey);
@@ -731,6 +828,7 @@ int whTest_Crypto_Ed25519(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Inline(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ServerKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519CryptoCbHsmKey(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Dma(ctx));
 #endif
