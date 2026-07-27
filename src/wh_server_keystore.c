@@ -2592,6 +2592,8 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                     WH_KEYTYPE_CRYPTO, server->comm->client_id, req.id);
                 meta->access = WH_NVM_ACCESS_ANY;
                 meta->flags  = req.flags;
+                /* clients can't set server-only flags */
+                _SanitizeClientFlags(meta);
                 meta->len    = req.sz;
                 /* truncate label if it's too large */
                 if (req.labelSz > WH_NVM_LABEL_LEN) {

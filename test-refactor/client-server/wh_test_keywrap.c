@@ -25,7 +25,8 @@
  *   _whTest_KeywrapTrustedKekPolicy - wrap-export and unwrap-and-cache must
  *                                    refuse a plain client KEK, and a client
  *                                    cannot forge WH_NVM_FLAGS_TRUSTED via the
- *                                    NVM add, HKDF cache, or key cache paths
+ *                                    NVM add, HKDF cache, key cache, or key
+ *                                    cache-random paths
  *   _whTest_KeywrapDataWrapUsage   - data wrap requires USAGE_WRAP on the KEK
  *   _whTest_KeywrapKeyUnwrapUnderflow - undersized wrapped-key blobs must
  *                                    return WH_ERROR_BADARGS, not underflow
@@ -73,6 +74,7 @@
 #define WH_TEST_KW_NVM_FORGE_ID 0x63
 #define WH_TEST_KW_NOWRAP_ID 0x64
 #define WH_TEST_KW_META_ID 0x65
+#define WH_TEST_KW_RAND_FORGE_ID 0x66
 
 /* Cache a plain software KEK with wrap usage. It is an ordinary client key:
  * good enough for KeyWrap/KeyUnwrapAndExport, never for the trusted-KEK
@@ -98,14 +100,15 @@ static int _CacheSwKek(whClientContext* client, whKeyId* outKekId)
  * WH_NVM_FLAGS_TRUSTED). Prove that (a) a plain client-cached USAGE_WRAP key is
  * refused as their KEK, and that a client cannot forge a trusted KEK by
  * setting WH_NVM_FLAGS_TRUSTED itself through (b) the checked NVM add path, (c)
- * the HKDF cache-import path, or (d) the key cache path -- the server strips
- * the flag on each, so the key is still refused */
+ * the HKDF cache-import path, (d) the key cache path, or (e) the cache-random
+ * path -- the server strips the flag on each, so the key is still refused */
 static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
 {
     int           ret;
-    whKeyId       kekId    = WH_KEYID_ERASED;
-    whKeyId       srcKeyId = WH_TEST_KW_SRC_ID;
-    whKeyId       forgeId  = WH_TEST_KW_CACHE_FORGE_ID;
+    whKeyId       kekId       = WH_KEYID_ERASED;
+    whKeyId       srcKeyId    = WH_TEST_KW_SRC_ID;
+    whKeyId       forgeId     = WH_TEST_KW_CACHE_FORGE_ID;
+    whKeyId       randForgeId = WH_TEST_KW_RAND_FORGE_ID;
     uint8_t       srcKey[WH_TEST_KW_KEYSIZE];
     uint8_t       label[WH_NVM_LABEL_LEN] = "TrustedKek key";
     uint8_t       wrappedKey[WH_TEST_KW_WRAPPED_KEYSIZE];
@@ -261,6 +264,37 @@ static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
     if (ret != WH_ERROR_ACCESS) {
         WH_ERROR_PRINT("trusted-kek: wrap-export with client-flagged KEK "
                        "expected ACCESS, got %d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto cleanup;
+    }
+
+    /* (e) Same forgery through the cache-random path, where the server picks
+     * the key material. The evict must succeed too: an unstripped TRUSTED flag
+     * freezes the slot against every client op, evict included */
+    ret = wh_Client_KeyCacheRandom(
+        client, WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP, label,
+        (uint16_t)sizeof(label), WH_TEST_KW_KEYSIZE, &randForgeId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("trusted-kek: cache-random forged KEK failed %d\n", ret);
+        goto cleanup;
+    }
+    wrappedKeySz = sizeof(wrappedKey);
+    ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                  WH_KEYTYPE_CRYPTO, randForgeId, wrappedKey,
+                                  &wrappedKeySz);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("trusted-kek: wrap-export with cache-random KEK "
+                       "expected ACCESS, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, randForgeId);
+        ret = WH_ERROR_ABORTED;
+        goto cleanup;
+    }
+    ret = wh_Client_KeyEvict(client, randForgeId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("trusted-kek: evict cache-random KEK expected OK, got "
+                       "%d\n",
                        ret);
         ret = WH_ERROR_ABORTED;
         goto cleanup;
