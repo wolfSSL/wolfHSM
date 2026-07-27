@@ -89,6 +89,20 @@ endif
 
 include tools/sbom/build/sbom.mk
 
+# Keep only project configuration macros. A raw -dM dump also carries the host
+# compiler's own builtins, and gen-sbom's scrub drops __-prefixed names but not
+# system macros whose *values* name them (ATOMIC_BOOL_LOCK_FREE expands to
+# __GCC_ATOMIC_BOOL_LOCK_FREE under gcc, __CLANG_ATOMIC_BOOL_LOCK_FREE under
+# clang), which made the SBOM toolchain-dependent.
+#
+# Object-like macros only: the trailing [[:space:]] excludes function-like ones,
+# whose bodies differ cosmetically between the two preprocessors ("idx ##VAR"
+# vs "idx##VAR"). A macro body is an implementation detail, not build config.
+#
+# The \# is required: an unescaped # would start a Make comment and silently
+# truncate this pattern to "^", which matches every line and filters nothing.
+SBOM_DEFINE_RE := ^\#define (WOLFHSM|WOLFSSL|WOLFCRYPT|WOLF|WC_|HAVE_|NO_|OPENSSL|USE_|SIZEOF_|FP_|TFM_|SP_|ECC_|RSA_|AES_|SHA|CURVE|ED25519|ED448|HKDF|KEEP_|SMALL_|BIG_|NDEBUG|DEBUG)[A-Za-z0-9_]*[[:space:]]
+
 # Always re-capture: a stale dump would hide config changes. The driver's
 # --cflags path cannot do this — it drops -I/-include.
 .PHONY: sbom-defines
@@ -96,6 +110,16 @@ sbom-defines:
 	@echo "SBOM: capturing config via $(HOSTCC) -dM -E -include wolfhsm/wh_settings.h"
 	@$(HOSTCC) -dM -E -DWOLFHSM_CFG -DWOLFSSL_USER_SETTINGS \
 	    -I. -I$(WOLFHSM_CFG_DIR) -I$(WOLFSSL_DIR) \
-	    -include wolfhsm/wh_settings.h -x c /dev/null > $(SBOM_OPTIONS_H)
+	    -include wolfhsm/wh_settings.h -x c /dev/null \
+	  | LC_ALL=C grep -E '$(SBOM_DEFINE_RE)' \
+	  | LC_ALL=C sort > $(SBOM_OPTIONS_H)
+	@if [ ! -s $(SBOM_OPTIONS_H) ]; then \
+	    echo "ERROR: captured no configuration macros from" >&2; \
+	    echo "       WOLFHSM_CFG_DIR=$(WOLFHSM_CFG_DIR)" >&2; \
+	    echo "       Check that it holds the wolfhsm_cfg.h/user_settings.h" >&2; \
+	    echo "       your build uses." >&2; \
+	    rm -f $(SBOM_OPTIONS_H); \
+	    exit 1; \
+	fi
 
 sbom: sbom-defines

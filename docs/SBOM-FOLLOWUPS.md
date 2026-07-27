@@ -47,3 +47,25 @@ Ask port owners directly (do not infer from public stubs):
 Build files are not public. If a private port has a real build, it may
 still need an out-of-tree wolfGlass front end. Owners: reply yes/no +
 front end (Make / CMake / IAR / compdb / other) per port.
+
+---
+
+## 5. Replace the SBOM_DEFINE_RE prefix allowlist with a sourced macro list
+
+`SBOM_DEFINE_RE` in the root `Makefile` filters the `-dM` dump to macro
+names matching a hand-maintained prefix allowlist. This is what makes the
+SBOM toolchain-neutral (a raw dump embeds `__GCC_*` vs `__CLANG_*`), but it
+has two known costs:
+
+* A future configuration macro with a novel prefix is dropped silently.
+  The `--min-properties 50` canary threshold will not notice one missing
+  macro.
+* Alignment/codegen helpers that happen to match (`ALIGN16`,
+  `ASSERT_SAVED_VECTOR_REGISTERS`) are excluded by design — they are code
+  helpers, not build configuration — but that boundary is a judgement call
+  encoded in a regex rather than declared anywhere.
+
+Better: derive the recorded set from the settings headers themselves
+(the macros `wh_settings.h` and `user_settings.h` actually define), so the
+list tracks the configuration surface instead of a prefix guess. This
+likely belongs in the shared wolfGlass driver, not per-product Makefiles.

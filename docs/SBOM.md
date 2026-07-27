@@ -47,6 +47,14 @@ only `-D` tokens and drops `-I` / `-include`, which yields an empty config
 record (two raw defines) instead of the real `WOLFHSM_CFG_*` / wolfSSL option
 set.
 
+That dump is filtered to project configuration macros (`SBOM_DEFINE_RE` in the
+root `Makefile`) before it reaches the driver, and only object-like macros are
+kept. A raw `-dM` dump also carries the host compiler's own builtins, which
+makes the SBOM depend on whether you built with gcc or clang — the SBOM records
+*your build configuration*, not your compiler's internals. The
+`make sbom HOSTCC=gcc` vs `HOSTCC=clang` byte-identity check in
+`.github/workflows/test-sbom.yml` guards this.
+
 Version is parsed from `ChangeLog.md` (for example `# wolfHSM Release v1.4.0`).
 There is no product release version macro in the public headers today
 (`WOLFHSM_CFG_INFOVERSION` is a protocol info string). Relying on ChangeLog
