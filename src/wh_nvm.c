@@ -275,6 +275,10 @@ int wh_Nvm_AddObjectChecked(whNvmContext* context, const whNvmMetadata* meta,
     int           ret;
     whNvmMetadata sanitized;
 
+    if (meta == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
     ret = wh_Nvm_CheckPolicy(context, WH_NVM_OP_ADD, meta->id, NULL);
     if (ret != WH_ERROR_OK && ret != WH_ERROR_NOTFOUND) {
         return ret;
