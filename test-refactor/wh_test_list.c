@@ -52,6 +52,7 @@ WH_TEST_DECL(whTest_Log);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_CertNvmPolicy);
 WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
+WH_TEST_DECL(whTest_CertReadTrusted);
 WH_TEST_DECL(whTest_HwKeystoreServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
@@ -121,6 +122,7 @@ const whTestCase whTestsServer[] = {
     { "whTest_CertNvmPolicy", whTest_CertNvmPolicy },
     { "whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly },
     { "whTest_ServerImgMgr", whTest_ServerImgMgr },
+    { "whTest_CertReadTrusted", whTest_CertReadTrusted },
     { "whTest_NvmOptional", whTest_NvmOptional },
     { "whTest_NvmPolicyChecked", whTest_NvmPolicyChecked },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
