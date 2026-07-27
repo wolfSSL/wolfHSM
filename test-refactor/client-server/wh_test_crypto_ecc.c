@@ -24,6 +24,10 @@
  *   _whTest_CryptoEcc             - ECDH + ECDSA across ephemeral / export /
  *                                  cache key paths
  *   _whTest_CryptoEccCacheDuplicate - cache slot replacement semantics
+ *   _whTest_CryptoEccMakePub      - WC_PK_TYPE_EC_MAKE_PUB, client-held and
+ *                                  server-resident private-only keys
+ *   _whTest_CryptoEccCheckPubKey  - WC_PK_TYPE_EC_CHECK_PUB_KEY validation,
+ *                                  including mismatched/off-curve rejection
  *   _whTest_CryptoEccCrossVerify  - HSM<->SW signature interop, P-256/384/521
  *   _whTest_CryptoEccAsync        - async sign/verify, ECDH, server keygen
  */
@@ -647,6 +651,546 @@ static int _whTest_CryptoEccCacheKeyAndExportPublic(whClientContext* ctx)
     }
     return ret;
 }
+
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+
+/* Build a private-key-only ECC key bound to devId, along with a locally
+ * generated reference keypair holding the public point it must derive to. */
+static int whTest_MakePrivOnlyEccKey(int devId, WC_RNG* rng, ecc_key* refKey,
+                                     ecc_key* privOnlyKey)
+{
+    int     ret;
+    uint8_t d[ECC_MAXSIZE];
+    word32  dLen = sizeof(d);
+
+    ret = wc_ecc_init_ex(refKey, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to init reference ECC key %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, refKey, TEST_ECC_CURVE_ID);
+    if (ret == 0) {
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(privOnlyKey, NULL, devId);
+        if (ret == 0) {
+            ret = wc_ecc_import_private_key_ex(d, dLen, NULL, 0, privOnlyKey,
+                                               TEST_ECC_CURVE_ID);
+            if (ret != 0) {
+                wc_ecc_free(privOnlyKey);
+            }
+        }
+    }
+    if (ret != 0) {
+        wc_ecc_free(refKey);
+        WH_ERROR_PRINT("Failed to build private-only ECC key %d\n", ret);
+    }
+    return ret;
+}
+
+/* Compare an ecc_point against the public point of key */
+static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
+{
+    if (wc_ecc_cmp_point(point, &key->pubkey) != MP_EQ) {
+        WH_ERROR_PRINT("Derived ECC public point does not match\n");
+        return -1;
+    }
+    return 0;
+}
+
+/* Exercise WC_PK_TYPE_EC_MAKE_PUB, both for a key the client holds and for one
+ * resident on the server. Also covers exporting the public half of a resident
+ * private-only key, which requires the server to derive it. */
+static int _whTest_CryptoEccMakePub(whClientContext* ctx)
+{
+    int        devId = WH_CLIENT_DEVID(ctx);
+    int        ret;
+    WC_RNG     rng[1];
+    ecc_key    refKey[1];
+    ecc_key    privOnlyKey[1];
+    ecc_point* pub        = NULL;
+    whKeyId    keyId      = WH_KEYID_ERASED;
+    uint8_t    keyLabel[] = "EccMakePub";
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = whTest_MakePrivOnlyEccKey(devId, rng, refKey, privOnlyKey);
+    if (ret != 0) {
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    pub = wc_ecc_new_point();
+    if (pub == NULL) {
+        ret = MEMORY_E;
+    }
+
+    /* Client-held private-only key: the cryptoCb imports it, derives on the
+     * server, and evicts it again. */
+    if (ret == 0) {
+        ret = wc_ecc_make_pub(privOnlyKey, pub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wc_ecc_make_pub on client key failed %d\n", ret);
+        }
+        else {
+            ret = whTest_EccPointMatchesKey(pub, refKey);
+        }
+    }
+
+    /* Direct API with an undersized output buffer must report the required
+     * X9.63 size (0x04 || X || Y) in *inout_pubOutSz and return
+     * WH_ERROR_BUFFER_SIZE, after which a re-call with the reported size
+     * succeeds. */
+    if (ret == 0) {
+        uint8_t  smallPub[4]                      = {0};
+        uint8_t  pubOut[1 + 2 * TEST_ECC_KEYSIZE] = {0};
+        uint16_t pubOutSz                         = sizeof(smallPub);
+        int      rc;
+
+        rc = wh_Client_EccMakePub(ctx, privOnlyKey, smallPub, &pubOutSz);
+        if (rc != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("Undersized EccMakePub returned %d "
+                           "(want WH_ERROR_BUFFER_SIZE)\n",
+                           rc);
+            ret = -1;
+        }
+        else if (pubOutSz != (1 + 2 * TEST_ECC_KEYSIZE)) {
+            WH_ERROR_PRINT("Undersized EccMakePub required size %u "
+                           "(want %u)\n",
+                           (unsigned)pubOutSz,
+                           (unsigned)(1 + 2 * TEST_ECC_KEYSIZE));
+            ret = -1;
+        }
+        if (ret == 0) {
+            rc = wh_Client_EccMakePub(ctx, privOnlyKey, pubOut, &pubOutSz);
+            if (rc != 0) {
+                WH_ERROR_PRINT(
+                    "EccMakePub re-call with reported size failed %d\n", rc);
+                ret = rc;
+            }
+            else if (pubOutSz != (1 + 2 * TEST_ECC_KEYSIZE) ||
+                     pubOut[0] != 0x04) {
+                WH_ERROR_PRINT("EccMakePub re-call produced bad point "
+                               "(size=%u first=0x%02x)\n",
+                               (unsigned)pubOutSz, pubOut[0]);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Same derivation against a key that lives on the server */
+    if (ret == 0) {
+        ret = wh_Client_EccImportKey(ctx, privOnlyKey, &keyId,
+                                     WH_NVM_FLAGS_USAGE_ANY, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache private-only ECC key %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ecc_key    hsmKey[1];
+        ecc_point* cachedPub = wc_ecc_new_point();
+
+        if (cachedPub == NULL) {
+            ret = MEMORY_E;
+        }
+        else {
+            ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+            if (ret == 0) {
+                ret = wh_Client_EccSetKeyId(hsmKey, keyId);
+                if (ret == 0) {
+                    /* Curve parameters aren't carried by a cached key handle */
+                    ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                           TEST_ECC_CURVE_ID);
+                }
+                if (ret == 0) {
+                    ret = wc_ecc_make_pub(hsmKey, cachedPub);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "wc_ecc_make_pub on cached key failed %d\n", ret);
+                    }
+                    else {
+                        ret = whTest_EccPointMatchesKey(cachedPub, refKey);
+                    }
+                }
+                wc_ecc_free(hsmKey);
+            }
+            wc_ecc_del_point(cachedPub);
+        }
+    }
+
+    /* Exporting the public half of a resident private-only key requires the
+     * server to derive it first. */
+    if (ret == 0) {
+        ecc_key pubKey[1];
+        ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_EccExportPublicKey(ctx, keyId, pubKey, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Public export of private-only ECC key failed %d\n", ret);
+            }
+            else if (wc_ecc_cmp_point(&pubKey->pubkey, &refKey->pubkey) !=
+                     MP_EQ) {
+                WH_ERROR_PRINT("Exported ECC public key does not match\n");
+                ret = -1;
+            }
+            wc_ecc_free(pubKey);
+        }
+    }
+
+    /* A cached keypair whose stored public point does not belong to its private
+     * scalar must still derive the true point, not hand back the stored one. */
+    if (ret == 0) {
+        whKeyId poisonedId      = WH_KEYID_ERASED;
+        uint8_t poisonedLabel[] = "EccMakePubPoison";
+        uint8_t d[ECC_MAXSIZE];
+        word32  dLen = sizeof(d);
+        uint8_t qx[ECC_MAXSIZE];
+        word32  qxLen = sizeof(qx);
+        uint8_t qy[ECC_MAXSIZE];
+        word32  qyLen = sizeof(qy);
+
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+        if (ret == 0) {
+            ecc_key otherKey[1];
+            ret = wc_ecc_init_ex(otherKey, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, otherKey,
+                                         TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wc_ecc_export_public_raw(otherKey, qx, &qxLen, qy,
+                                                   &qyLen);
+                }
+                wc_ecc_free(otherKey);
+            }
+        }
+        if (ret == 0) {
+            ecc_key poisoned[1];
+            ret = wc_ecc_init_ex(poisoned, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                /* refKey's private scalar paired with a foreign public point */
+                ret = wc_ecc_import_unsigned(poisoned, qx, qy, d,
+                                             TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wh_Client_EccImportKey(
+                        ctx, poisoned, &poisonedId, WH_NVM_FLAGS_USAGE_ANY,
+                        sizeof(poisonedLabel), poisonedLabel);
+                }
+                wc_ecc_free(poisoned);
+            }
+        }
+        if (ret == 0) {
+            ecc_key    hsmKey[1];
+            ecc_point* derived = wc_ecc_new_point();
+
+            if (derived == NULL) {
+                ret = MEMORY_E;
+            }
+            else {
+                ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+                if (ret == 0) {
+                    ret = wh_Client_EccSetKeyId(hsmKey, poisonedId);
+                    if (ret == 0) {
+                        ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                               TEST_ECC_CURVE_ID);
+                    }
+                    if (ret == 0) {
+                        ret = wc_ecc_make_pub(hsmKey, derived);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "wc_ecc_make_pub on poisoned key failed %d\n",
+                                ret);
+                        }
+                        else {
+                            ret = whTest_EccPointMatchesKey(derived, refKey);
+                        }
+                    }
+                    wc_ecc_free(hsmKey);
+                }
+                wc_ecc_del_point(derived);
+            }
+        }
+        if (!WH_KEYID_ISERASED(poisonedId)) {
+            (void)wh_Client_KeyEvict(ctx, poisonedId);
+        }
+    }
+
+    /* Make-pub against a cached PUBLIC-only key must fail: there is no
+     * private scalar to derive from, matching software wc_ecc_make_pub(). */
+    if (ret == 0) {
+        whKeyId pubOnlyId      = WH_KEYID_ERASED;
+        uint8_t pubOnlyLabel[] = "EccMakePubPubOnly";
+        uint8_t qx[ECC_MAXSIZE];
+        word32  qxLen = sizeof(qx);
+        uint8_t qy[ECC_MAXSIZE];
+        word32  qyLen = sizeof(qy);
+
+        ret = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+        if (ret == 0) {
+            ecc_key pubOnly[1];
+            ret = wc_ecc_init_ex(pubOnly, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                ret = wc_ecc_import_unsigned(pubOnly, qx, qy, NULL,
+                                             TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wh_Client_EccImportKey(
+                        ctx, pubOnly, &pubOnlyId, WH_NVM_FLAGS_USAGE_ANY,
+                        sizeof(pubOnlyLabel), pubOnlyLabel);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to cache public-only ECC key %d\n", ret);
+                    }
+                }
+                wc_ecc_free(pubOnly);
+            }
+        }
+        if (ret == 0) {
+            ecc_key    hsmKey[1];
+            ecc_point* derived = wc_ecc_new_point();
+
+            if (derived == NULL) {
+                ret = MEMORY_E;
+            }
+            else {
+                ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+                if (ret == 0) {
+                    ret = wh_Client_EccSetKeyId(hsmKey, pubOnlyId);
+                    if (ret == 0) {
+                        ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                               TEST_ECC_CURVE_ID);
+                    }
+                    if (ret == 0) {
+                        int rc = wc_ecc_make_pub(hsmKey, derived);
+                        if (rc == 0) {
+                            WH_ERROR_PRINT("wc_ecc_make_pub on public-only "
+                                           "key was not rejected\n");
+                            ret = -1;
+                        }
+                    }
+                    wc_ecc_free(hsmKey);
+                }
+                wc_ecc_del_point(derived);
+            }
+        }
+        if (!WH_KEYID_ISERASED(pubOnlyId)) {
+            (void)wh_Client_KeyEvict(ctx, pubOnlyId);
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (pub != NULL) {
+        wc_ecc_del_point(pub);
+    }
+    wc_ecc_free(privOnlyKey);
+    wc_ecc_free(refKey);
+    (void)wc_FreeRng(rng);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC MAKE-PUB SUCCESS\n");
+    }
+    return ret;
+}
+
+#ifdef HAVE_ECC_CHECK_KEY
+/* Exercise WC_PK_TYPE_EC_CHECK_PUB_KEY: a private-only key, a full keypair, and
+ * a keypair whose public point does not belong to its private scalar. */
+static int _whTest_CryptoEccCheckPubKey(whClientContext* ctx)
+{
+    int     devId = WH_CLIENT_DEVID(ctx);
+    int     ret;
+    WC_RNG  rng[1];
+    ecc_key refKey[1];
+    ecc_key privOnlyKey[1];
+    whKeyId keyId      = WH_KEYID_ERASED;
+    uint8_t keyLabel[] = "EccCheckPub";
+    uint8_t d[ECC_MAXSIZE];
+    word32  dLen = sizeof(d);
+    uint8_t qx[ECC_MAXSIZE];
+    word32  qxLen = sizeof(qx);
+    uint8_t qy[ECC_MAXSIZE];
+    word32  qyLen = sizeof(qy);
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = whTest_MakePrivOnlyEccKey(devId, rng, refKey, privOnlyKey);
+    if (ret != 0) {
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    /* A private-only key carries no public point, so only the server can
+     * validate it. */
+    ret = wc_ecc_check_key(privOnlyKey);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Check of private-only ECC key failed %d\n", ret);
+    }
+
+    /* A full keypair validates, and its public point survives the server-side
+     * cross-check against the private scalar. */
+    if (ret == 0) {
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+    }
+    if (ret == 0) {
+        ecc_key fullKey[1];
+        byte    pub963[1 + 2 * TEST_ECC_KEYSIZE];
+        word32  pub963Len = sizeof(pub963);
+        ret = wc_ecc_init_ex(fullKey, NULL, devId);
+        if (ret == 0) {
+            ret = wc_ecc_import_unsigned(fullKey, qx, qy, d, TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                ret = wc_ecc_check_key(fullKey);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Check of full ECC keypair failed %d\n",
+                                   ret);
+                }
+            }
+            /* The partial-validation shape (check_order == 0) produced by
+             * wolfCrypt's import paths must offload and validate end-to-end:
+             * a callback-only client (WOLF_CRYPTO_CB_ONLY_ECC) has no
+             * software fallback for it. */
+            if (ret == 0) {
+                ret = wc_ecc_export_x963(fullKey, pub963, &pub963Len);
+            }
+            if (ret == 0) {
+                ret = wh_Client_EccCheckPubKey(ctx, fullKey, pub963,
+                                               (uint16_t)pub963Len, 0, 1);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Partial-shape ECC check (check_order=0) failed %d\n",
+                        ret);
+                }
+            }
+            wc_ecc_free(fullKey);
+        }
+    }
+
+    /* A public point that is valid in its own right, but belongs to a
+     * different private scalar than the one the server holds, must be
+     * rejected. */
+    if (ret == 0) {
+        ret = wh_Client_EccImportKey(ctx, privOnlyKey, &keyId,
+                                     WH_NVM_FLAGS_USAGE_ANY, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache private-only ECC key %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ecc_key otherKey[1];
+        ret = wc_ecc_init_ex(otherKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, otherKey,
+                                     TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                qxLen = sizeof(qx);
+                qyLen = sizeof(qy);
+                ret =
+                    wc_ecc_export_public_raw(otherKey, qx, &qxLen, qy, &qyLen);
+            }
+            wc_ecc_free(otherKey);
+        }
+    }
+    if (ret == 0) {
+        ecc_key mismatched[1];
+        ret = wc_ecc_init_ex(mismatched, NULL, devId);
+        if (ret == 0) {
+            /* Correct private scalar, wrong public point */
+            ret = wc_ecc_import_unsigned(mismatched, qx, qy, d,
+                                         TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                ret = wh_Client_EccSetKeyId(mismatched, keyId);
+            }
+            if (ret == 0) {
+                /* Must match software wc_ecc_check_key(), which returns
+                 * ECC_PRIV_KEY_E when the public point does not belong to
+                 * the private scalar. */
+                int checkRet = wc_ecc_check_key(mismatched);
+                if (checkRet != ECC_PRIV_KEY_E) {
+                    WH_ERROR_PRINT("Mismatched ECC public point check "
+                                   "returned %d (want ECC_PRIV_KEY_E)\n",
+                                   checkRet);
+                    ret = -1;
+                }
+                else {
+                    ret = 0;
+                }
+            }
+            wc_ecc_free(mismatched);
+        }
+    }
+
+    /* A structurally invalid point - one that is not on the curve at all -
+     * must be rejected by the server's own point validation. Flipping a low
+     * bit of Y provably leaves the curve: for a given X only the two +/-Y
+     * solutions satisfy the curve equation. */
+    if (ret == 0) {
+        qxLen = sizeof(qx);
+        qyLen = sizeof(qy);
+        ret   = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+    }
+    if (ret == 0) {
+        ecc_key offCurve[1];
+        ret = wc_ecc_init_ex(offCurve, NULL, devId);
+        if (ret == 0) {
+            /* Correct private scalar, off-curve public point */
+            qy[qyLen - 1] ^= 0x01;
+            ret = wc_ecc_import_unsigned(offCurve, qx, qy, d,
+                                         TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                int checkRet = wc_ecc_check_key(offCurve);
+                if (checkRet == 0) {
+                    WH_ERROR_PRINT(
+                        "Off-curve ECC public point was not rejected\n");
+                    ret = -1;
+                }
+            }
+            wc_ecc_free(offCurve);
+        }
+    }
+
+    /* A non-NULL pub_key length paired with a NULL pointer is a client-side
+     * argument error, rejected before any transport activity. */
+    if (ret == 0) {
+        int badret = wh_Client_EccCheckPubKey(ctx, refKey, NULL, 1, 0, 0);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("EccCheckPubKey with NULL pub_key and nonzero "
+                           "pub_key_len returned %d (want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    wc_ecc_free(privOnlyKey);
+    wc_ecc_free(refKey);
+    (void)wc_FreeRng(rng);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC CHECK-PUBKEY SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* HAVE_ECC_CHECK_KEY */
+
+#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 
@@ -1845,9 +2389,13 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheKeyAndExportPublic(ctx));
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccMakePub(ctx));
+#ifdef HAVE_ECC_CHECK_KEY
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCheckPubKey(ctx));
+#endif /* HAVE_ECC_CHECK_KEY */
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCrossVerify(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccAsync(ctx));
-#endif
+#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKeyDma(ctx));
 #endif

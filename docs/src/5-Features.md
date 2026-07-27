@@ -104,7 +104,7 @@ The wolfHSM server exposes the full set of wolfCrypt software algorithms, and th
 - **Symmetric ciphers**: AES in CBC, CTR, ECB, GCM, and CCM modes; AES key wrap
 - **Hashing**: SHA-1, SHA-2 (SHA-224, SHA-256, SHA-384, SHA-512), SHA-3
 - **Message authentication**: HMAC (over the supported hash functions) and CMAC
-- **Asymmetric**: RSA (encryption, signing, key generation), ECC (ECDSA, ECDH), Ed25519, Curve25519
+- **Asymmetric**: RSA (encryption, signing, key generation), ECC (ECDSA, ECDH, public key derivation, key validation), Ed25519, Curve25519
 - **Random number generation**: DRBG/RNG backed by the server's entropy source
 - **Post-quantum cryptography**: ML-DSA (FIPS 204) and ML-KEM (FIPS 203)
 

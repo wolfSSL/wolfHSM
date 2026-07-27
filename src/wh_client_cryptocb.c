@@ -372,20 +372,61 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
         } break;
 #endif /* HAVE_ECC_VERIFY */
 
-#ifdef HAVE_ECC_CHECK_KEY
-        case WC_PK_TYPE_EC_CHECK_PRIV_KEY:
-        {
-#if 0
-            /* TODO: Expose this and add wolfcrypt functions to test */
+        case WC_PK_TYPE_EC_MAKE_PUB: {
             /* Extract info parameters */
-            ecc_key* key            = info->pk.ecc_check.key;
-            const uint8_t* pub_key  = info->pk.ecc_check.pubKey;
-            uint32_t pub_key_len    = info->pk.ecc_check.pubKeySz;
+            ecc_key* key         = info->pk.ecc_make_pub.key;
+            uint8_t* pub_out     = (uint8_t*)info->pk.ecc_make_pub.pubOut;
+            word32*  out_pub_len = info->pk.ecc_make_pub.pubOutSz;
 
-            ret = wh_Client_EccCheckPubKey(ctx, key, pub_key, pub_key_len);
-#else
+            uint16_t pub_len = 0;
+            if (out_pub_len != NULL) {
+                /* Clamp rather than truncate: an oversized capacity must not
+                 * wrap to a small one and provoke a spurious BUFFER_E. */
+                pub_len = (*out_pub_len > UINT16_MAX)
+                              ? UINT16_MAX
+                              : (uint16_t)(*out_pub_len);
+            }
+
+            ret = wh_Client_EccMakePub(ctx, key, pub_out, &pub_len);
+            /* Propagate updated length on BUFFER_SIZE so callers can re-call
+             * with a sufficiently large output buffer. */
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (out_pub_len != NULL)) {
+                *out_pub_len = pub_len;
+            }
+            if (ret == WH_ERROR_BADARGS) {
+                ret = BAD_FUNC_ARG;
+            }
+            else if (ret == WH_ERROR_BUFFER_SIZE) {
+                ret = BUFFER_E;
+            }
+        } break;
+
+#ifdef HAVE_ECC_CHECK_KEY
+        case WC_PK_TYPE_EC_CHECK_PUB_KEY: {
+            /* Extract info parameters */
+            ecc_key*       key = info->pk.ecc_check_pub.key;
+            const uint8_t* pub_key =
+                (const uint8_t*)info->pk.ecc_check_pub.pubKey;
+            word32 pub_key_len = info->pk.ecc_check_pub.pubKeySz;
+            int    check_order = info->pk.ecc_check_pub.checkOrder;
+            int    check_priv  = info->pk.ecc_check_pub.checkPriv;
+
+            if (pub_key_len > UINT16_MAX) {
+                ret = BAD_FUNC_ARG;
+            }
+            else {
+                ret = wh_Client_EccCheckPubKey(ctx, key, pub_key,
+                                               (uint16_t)pub_key_len,
+                                               check_order, check_priv);
+                if (ret == WH_ERROR_BADARGS) {
+                    ret = BAD_FUNC_ARG;
+                }
+            }
+        } break;
+
+        case WC_PK_TYPE_EC_CHECK_PRIV_KEY: {
             ret = CRYPTOCB_UNAVAILABLE;
-#endif
         } break;
 #endif /* HAVE_ECC_CHECK_KEY */
 

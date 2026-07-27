@@ -145,6 +145,15 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize);
 #endif /* HAVE_ECC_VERIFY */
+static int _HandleEccMakePub(whServerContext* ctx, uint16_t magic, int devId,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize);
+#ifdef HAVE_ECC_CHECK_KEY
+static int _HandleEccCheckPubKey(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+#endif /* HAVE_ECC_CHECK_KEY */
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
@@ -1619,6 +1628,179 @@ cleanup:
     return ret;
 }
 #endif /* HAVE_ECC_VERIFY */
+
+static int _HandleEccMakePub(whServerContext* ctx, uint16_t magic, int devId,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                ret;
+    ecc_key                            key[1];
+    whMessageCrypto_EccMakePubRequest  req;
+    whMessageCrypto_EccMakePubResponse res;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_EccMakePubRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEccMakePubRequest(
+        magic, (const whMessageCrypto_EccMakePubRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Extract parameters from translated request */
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ECCMAKEPUB_OPTIONS_EVICT);
+
+    /* Response message */
+    byte* res_pub =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccMakePubResponse);
+    word32 pub_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                               sizeof(whMessageCrypto_GenericResponseHeader) -
+                               sizeof(whMessageCrypto_EccMakePubResponse));
+
+    /* Deliberately no wh_Server_KeystoreFindEnforceKeyUsage(): this operation
+     * only produces public material, which keystore policy treats as
+     * always-exportable (see _KeystoreCheckPolicy / WH_KS_OP_EXPORT_PUBLIC).
+     * The private scalar is used solely to derive the public point. */
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        /* load the private key */
+        ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            /* Always derive Q = d*G rather than returning whatever public point
+             * the cached key happens to carry, so the result cannot be steered
+             * by a cache entry whose stored point disagrees with its scalar.
+             * This also matches software wc_ecc_make_pub(), which fails on a
+             * key that holds no private scalar. The RNG blinds the multiply
+             * on the multi-precision path (SP builds ignore it). */
+            ret = wc_ecc_make_pub_ex(key, NULL, ctx->crypto->rng);
+            if (ret == 0) {
+                ret = wc_ecc_export_x963(key, res_pub, &pub_size);
+            }
+            WH_DEBUG_SERVER_VERBOSE("EccMakePub: key_id=%x, pub_size=%u, "
+                                    "ret=%d\n",
+                                    key_id, (unsigned)pub_size, ret);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+    if (ret == 0) {
+        res.pubSz = pub_size;
+
+        wh_MessageCrypto_TranslateEccMakePubResponse(
+            magic, &res, (whMessageCrypto_EccMakePubResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EccMakePubResponse) + pub_size;
+    }
+    return ret;
+}
+
+#ifdef HAVE_ECC_CHECK_KEY
+static int _HandleEccCheckPubKey(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+    int                              ret;
+    ecc_key                          key[1];
+    whMessageCrypto_EccCheckRequest  req;
+    whMessageCrypto_EccCheckResponse res;
+
+    /* Validate minimum size */
+    if (inSize < sizeof(whMessageCrypto_EccCheckRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate request */
+    ret = wh_MessageCrypto_TranslateEccCheckRequest(
+        magic, (const whMessageCrypto_EccCheckRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Validate variable-length fields fit within inSize */
+    if (req.pubSz > inSize - sizeof(whMessageCrypto_EccCheckRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Extract parameters from translated request */
+    whKeyId key_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+    const uint8_t* req_pub = (const uint8_t*)(cryptoDataIn) +
+                             sizeof(whMessageCrypto_EccCheckRequest);
+    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ECCCHECK_OPTIONS_EVICT);
+
+    /* The curve travels with the key's DER encoding, so curveId is redundant.
+     * The request deliberately carries no partial-validation knobs:
+     * wc_ecc_check_key() is wolfCrypt's only public validation entry point
+     * (partial validation lives in a static function reachable only from the
+     * import APIs) and the only route to this server's own crypto callback
+     * (the key is bound to the server devId), so validation always runs in
+     * full. */
+    (void)req.curveId;
+
+    /* no need to enforce flags for pub key operation */
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        /* load the key to validate */
+        ret = wh_Server_EccKeyCacheExport(ctx, key_id, key);
+        if (ret == WH_ERROR_OK) {
+            /* A private-only key has no point to validate yet. Unlike make-pub
+             * we derive only when one is missing: validating a key means
+             * checking the point it actually carries. The RNG blinds the
+             * multiply on the multi-precision path (SP builds ignore it). */
+            if (key->type == ECC_PRIVATEKEY_ONLY) {
+                ret = wc_ecc_make_pub_ex(key, NULL, ctx->crypto->rng);
+            }
+            if (ret == 0) {
+                ret = wc_ecc_check_key(key);
+            }
+            /* Reject a key whose caller-held public point disagrees with the
+             * point that actually belongs to the resident key. ECC_PRIV_KEY_E
+             * matches what software wc_ecc_check_key() returns for exactly
+             * this condition (ecc_check_privkey_gen: d*G != Q). */
+            if ((ret == 0) && (req.pubSz > 0)) {
+                byte   pub[1 + 2 * MAX_ECC_BYTES];
+                word32 pub_size = sizeof(pub);
+
+                ret = wc_ecc_export_x963(key, pub, &pub_size);
+                if ((ret == 0) && ((pub_size != req.pubSz) ||
+                                   (memcmp(pub, req_pub, pub_size) != 0))) {
+                    ret = ECC_PRIV_KEY_E;
+                }
+            }
+            WH_DEBUG_SERVER_VERBOSE("EccCheckPubKey: key_id=%x, pubSz=%u, "
+                                    "ret=%d\n",
+                                    key_id, (unsigned)req.pubSz, ret);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
+        (void)wh_Server_KeystoreEvictKey(ctx, key_id);
+    }
+    /* The validation verdict itself travels in the response header rc, which
+     * is what wolfCrypt's crypto callback contract expects. */
+    if (ret == 0) {
+        res.ok = 1;
+
+        wh_MessageCrypto_TranslateEccCheckResponse(
+            magic, &res, (whMessageCrypto_EccCheckResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_EccCheckResponse);
+    }
+    return ret;
+}
+#endif /* HAVE_ECC_CHECK_KEY */
 #endif /* HAVE_ECC */
 
 
@@ -5721,6 +5903,18 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                            &cryptoOutSize);
                     break;
 #endif /* HAVE_ECC_VERIFY */
+                case WC_PK_TYPE_EC_MAKE_PUB:
+                    ret = _HandleEccMakePub(ctx, magic, devId, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            &cryptoOutSize);
+                    break;
+#ifdef HAVE_ECC_CHECK_KEY
+                case WC_PK_TYPE_EC_CHECK_PUB_KEY:
+                    ret = _HandleEccCheckPubKey(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                &cryptoOutSize);
+                    break;
+#endif /* HAVE_ECC_CHECK_KEY */
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_CURVE25519
