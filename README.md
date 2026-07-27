@@ -25,10 +25,4 @@ please refer to the following resources.
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
 - [wolfHSM API Reference](https://www.wolfssl.com/documentation/manuals/wolfhsm/appendix01.html)
 - [wolfHSM Examples](https://github.com/wolfSSL/wolfHSM/tree/main/examples)
-
-## SBOM / EU CRA Compliance
-
-- Generate a CycloneDX 1.6 + SPDX 2.3 SBOM for the core library with
-  `make sbom WOLFSSL_DIR=../wolfssl WOLFHSM_CFG_DIR=/path/to/your/config`
-  (`WOLFHSM_CFG_DIR` is required). See [docs/SBOM.md](docs/SBOM.md) for
-  coverage, limitations, and CRA notes.
+- [wolfHSM SBOM Generation](docs/SBOM.md) — `make sbom`, CycloneDX/SPDX output, and EU CRA notes
