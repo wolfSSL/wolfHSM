@@ -1,0 +1,85 @@
+name: wolfHSM SBOM Canary
+
+# Core-target only for this pass. posix-server / posix-client / whnvmtool
+# SBOM targets are tracked as follow-up and are not exercised here.
+#
+# Guards:
+#   * make sbom with an explicit WOLFHSM_CFG_DIR
+#   * schema-valid CycloneDX 1.6 + SPDX 2.3 whose top-level component is wolfhsm
+#   * toolchain neutrality: HOSTCC=gcc vs HOSTCC=clang must be byte-identical
+#
+# No Make-vs-CMake step: wolfHSM has no CMake build.
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  sbom_canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trust workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout wolfssl (sibling for include path)
+        uses: actions/checkout@v4
+        with:
+          repository: wolfSSL/wolfssl
+          path: wolfssl
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 build-essential clang
+
+      - name: Verify vendored gen-sbom
+        run: test -f tools/sbom/gen-sbom
+
+      - name: make sbom (core)
+        run: |
+          WOLFSSL_DIR=./wolfssl WOLFHSM_CFG_DIR=test/config make sbom
+          python3 tools/sbom/validate_sbom.py --name-prefix wolfhsm \
+            --min-properties 50 --require-dep-version wolfssl \
+            wolfhsm-*.cdx.json wolfhsm-*.spdx.json
+
+      - name: Toolchain neutrality (gcc vs clang)
+        run: |
+          export SOURCE_DATE_EPOCH=1700000000
+          export WOLFSSL_DIR=./wolfssl
+          export WOLFHSM_CFG_DIR=test/config
+          rm -f wolfhsm-*.cdx.json wolfhsm-*.spdx.json .sbom-wolfhsm-defines.h
+          make sbom HOSTCC=gcc
+          cp wolfhsm-*.cdx.json /tmp/gcc.cdx.json
+          cp wolfhsm-*.spdx.json /tmp/gcc.spdx.json
+          rm -f wolfhsm-*.cdx.json wolfhsm-*.spdx.json .sbom-wolfhsm-defines.h
+          make sbom HOSTCC=clang
+          cp wolfhsm-*.cdx.json /tmp/clang.cdx.json
+          cp wolfhsm-*.spdx.json /tmp/clang.spdx.json
+          if ! diff -u /tmp/gcc.cdx.json /tmp/clang.cdx.json \
+             || ! diff -u /tmp/gcc.spdx.json /tmp/clang.spdx.json; then
+            echo "ERROR: gcc and clang produced different SBOMs." >&2
+            echo "The SBOM must not depend on the host toolchain." >&2
+            exit 1
+          fi
+          # Content sanity: empty --cflags captures also agree across
+          # toolchains; refuse to call that a pass.
+          python3 tools/sbom/validate_sbom.py --name-prefix wolfhsm \
+            --min-properties 50 --require-dep-version wolfssl \
+            /tmp/gcc.cdx.json /tmp/gcc.spdx.json
+          echo "neutrality OK: gcc and clang SBOMs are byte-identical"
+
+      - name: Upload SBOM artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolfhsm-sboms
+          path: |
+            wolfhsm-*.cdx.json
+            wolfhsm-*.spdx.json
+          if-no-files-found: warn
