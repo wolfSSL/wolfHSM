@@ -76,10 +76,15 @@ SBOM_LICENSE_FILE := $(CURDIR)/LICENSING
 SBOM_DEP_WOLFSSL  ?= yes
 SBOM_OPTIONS_H  := $(CURDIR)/.sbom-wolfhsm-defines.h
 
+# Enforce only when an SBOM goal was actually requested. A bare $(error) here
+# is evaluated while the Makefile is read, so it aborts every goal in the tree
+# — `make scan`, `make clean`, `make test` — not just the SBOM ones.
+ifneq (,$(filter sbom sbom-defines,$(MAKECMDGOALS)))
 ifeq ($(origin WOLFHSM_CFG_DIR),undefined)
 $(error WOLFHSM_CFG_DIR is required — point it at the directory \
 holding the wolfhsm_cfg.h/user_settings.h your build uses; do \
 not assume test/config is a release configuration)
+endif
 endif
 
 include tools/sbom/build/sbom.mk
