@@ -54,6 +54,13 @@ int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     int32_t outRc;
     uint8_t label[WH_NVM_LABEL_LEN] = { 0 };
 
+    /* SHE slots hold exactly one AES-128 key. The server appends a 16 byte
+     * constant after the slot contents when deriving key update keys, so a
+     * longer object would overrun its kdf input buffer. */
+    if ((c == NULL) || (key == NULL) || (keySz != WH_SHE_KEY_SZ)) {
+        return WH_ERROR_BADARGS;
+    }
+
     /* Create a key with 0 counter */
     wh_She_Meta2Label(0, flags, label);
     ret = wh_Client_NvmAddObject(

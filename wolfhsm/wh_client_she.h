@@ -88,8 +88,11 @@
  * @param[in] flags SHE key protection flags to store with the key
  *                  (WH_SHE_FLAG_WRITE_PROTECT, WH_SHE_FLAG_BOOT_PROTECT, etc.).
  * @param[in] key Pointer to the key material to store.
- * @param[in] keySz Length of the key material in bytes (WH_SHE_KEY_SZ, 16).
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @param[in] keySz Length of the key material in bytes. Must be exactly
+ *                  WH_SHE_KEY_SZ (16); any other length is rejected.
+ * @return int Returns 0 on success, WH_ERROR_BADARGS if @p c or @p key is NULL
+ *             or @p keySz is not WH_SHE_KEY_SZ, or a negative error code on
+ *             failure.
  */
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
     whNvmFlags flags, uint8_t* key, whNvmSize keySz);
