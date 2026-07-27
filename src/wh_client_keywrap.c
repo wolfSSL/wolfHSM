@@ -26,7 +26,10 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
         return WH_ERROR_BADARGS;
     }
 
-    if (keySz == 0 || keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
+    /* Bound the whole wire length before copying into the comm data buffer */
+    if (keySz == 0 || keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE ||
+        (size_t)sizeof(*req) + sizeof(*metadata) + keySz >
+            WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -249,7 +252,9 @@ int wh_Client_KeyUnwrapAndExportRequest(whClientContext*   ctx,
         return WH_ERROR_BADARGS;
     }
 
-    if (wrappedKeySz == 0 || wrappedKeySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
+    /* Bound the whole wire length before copying into the comm data buffer */
+    if (wrappedKeySz == 0 || wrappedKeySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE ||
+        (size_t)sizeof(*req) + wrappedKeySz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -371,7 +376,9 @@ int wh_Client_KeyUnwrapAndCacheRequest(whClientContext*   ctx,
     if (ctx == NULL || wrappedKeyIn == NULL)
         return WH_ERROR_BADARGS;
 
-    if (wrappedKeySz == 0 || wrappedKeySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
+    /* Bound the whole wire length before copying into the comm data buffer */
+    if (wrappedKeySz == 0 || wrappedKeySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE ||
+        (size_t)sizeof(*req) + wrappedKeySz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -477,7 +484,9 @@ int wh_Client_DataWrapRequest(whClientContext*   ctx,
         return WH_ERROR_BADARGS;
     }
 
-    if (dataInSz == 0 || dataInSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
+    /* Bound the whole wire length before copying into the comm data buffer */
+    if (dataInSz == 0 || dataInSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE ||
+        (size_t)sizeof(*req) + dataInSz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
@@ -590,8 +599,10 @@ int wh_Client_DataUnwrapRequest(whClientContext*   ctx,
         return WH_ERROR_BADARGS;
     }
 
+    /* Bound the whole wire length before copying into the comm data buffer */
     if (wrappedDataInSz == 0 ||
-        wrappedDataInSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
+        wrappedDataInSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE ||
+        (size_t)sizeof(*req) + wrappedDataInSz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
