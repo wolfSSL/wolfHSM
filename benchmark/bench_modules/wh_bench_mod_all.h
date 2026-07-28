@@ -187,10 +187,28 @@ int wh_Bench_Mod_Sha512Dma(whClientContext* client, whBenchOpContext* ctx,
 /*
  * SHA3 benchmark module prototypes (wh_bench_mod_sha3.c)
  */
+int wh_Bench_Mod_Sha3224(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params);
+
+int wh_Bench_Mod_Sha3224Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+
 int wh_Bench_Mod_Sha3256(whClientContext* client, whBenchOpContext* ctx, int id,
                          void* params);
 
 int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+
+int wh_Bench_Mod_Sha3384(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params);
+
+int wh_Bench_Mod_Sha3384Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params);
+
+int wh_Bench_Mod_Sha3512(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params);
+
+int wh_Bench_Mod_Sha3512Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params);
 
 /*

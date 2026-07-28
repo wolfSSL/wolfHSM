@@ -20,28 +20,181 @@
 #include "wolfhsm/wh_error.h"
 
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_BENCH_ENABLE)
+#include "wolfssl/wolfcrypt/hash.h"
+#include "wolfssl/wolfcrypt/sha3.h"
 
 #if defined(WOLFSSL_SHA3)
 
-int wh_Bench_Mod_Sha3256(whClientContext* client, whBenchOpContext* ctx, int id,
-                         void* params)
+/* All four SHA3 variants share the wc_Sha3 struct and differ only in digest
+ * size and the Init/Update/Final/Free entry points. They are dispatched
+ * through this table, mirroring _Sha3VariantOps in wh_server_crypto.c. Note
+ * that the variants also differ in Keccak rate (144/136/104/72 bytes), which
+ * is what drives the throughput differences between them. */
+typedef struct {
+    const char* name;
+    uint32_t    digestSize;
+    int (*initFn)(wc_Sha3* sha, void* heap, int devId);
+    int (*updateFn)(wc_Sha3* sha, const byte* data, word32 len);
+    int (*finalFn)(wc_Sha3* sha, byte* hash);
+    void (*freeFn)(wc_Sha3* sha);
+} whBenchSha3Variant;
+
+#ifndef WOLFSSL_NOSHA3_224
+static const whBenchSha3Variant benchSha3_224 = {
+    "SHA3-224",         WC_SHA3_224_DIGEST_SIZE, wc_InitSha3_224,
+    wc_Sha3_224_Update, wc_Sha3_224_Final,       wc_Sha3_224_Free};
+#endif
+#ifndef WOLFSSL_NOSHA3_256
+static const whBenchSha3Variant benchSha3_256 = {
+    "SHA3-256",         WC_SHA3_256_DIGEST_SIZE, wc_InitSha3_256,
+    wc_Sha3_256_Update, wc_Sha3_256_Final,       wc_Sha3_256_Free};
+#endif
+#ifndef WOLFSSL_NOSHA3_384
+static const whBenchSha3Variant benchSha3_384 = {
+    "SHA3-384",         WC_SHA3_384_DIGEST_SIZE, wc_InitSha3_384,
+    wc_Sha3_384_Update, wc_Sha3_384_Final,       wc_Sha3_384_Free};
+#endif
+#ifndef WOLFSSL_NOSHA3_512
+static const whBenchSha3Variant benchSha3_512 = {
+    "SHA3-512",         WC_SHA3_512_DIGEST_SIZE, wc_InitSha3_512,
+    wc_Sha3_512_Update, wc_Sha3_512_Final,       wc_Sha3_512_Free};
+#endif
+
+static int _benchSha3(whClientContext* client, whBenchOpContext* ctx, int id,
+                      int useDma, const whBenchSha3Variant* v)
 {
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
+    int            ret = 0;
+    wc_Sha3        sha3[1];
+    uint8_t        out[WC_SHA3_512_DIGEST_SIZE]; /* largest digest */
+    int            i               = 0;
+    int            sha3Initialized = 0;
+    const uint8_t* in;
+    size_t         inLen;
+
+    (void)wh_Client_SetDmaMode(client, useDma);
+
+#if defined(WOLFHSM_CFG_DMA)
+    if (useDma) {
+        in    = WH_BENCH_DMA_BUFFER;
+        inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
+    }
+    else
+#endif
+    {
+        in    = WH_BENCH_DATA_IN_BUFFER;
+        inLen = WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE;
+#if defined(WOLFHSM_CFG_BENCH_INIT_DATA_BUFFERS)
+        memset(WH_BENCH_DATA_IN_BUFFER, 0xAA, inLen);
+#endif
+    }
+
+    ret = wh_Bench_SetDataSize(ctx, id, inLen);
+    if (ret != 0) {
+        WH_BENCH_PRINTF("Failed to wh_Bench_SetDataSize %d\n", ret);
+        return ret;
+    }
+
+    for (i = 0; i < WOLFHSM_CFG_BENCH_CRYPT_ITERS; i++) {
+        int benchStartRet;
+        int benchStopRet;
+        int initRet;
+        int updateRet;
+        int finalRet;
+
+        /* Defer error checking until after all operations are complete */
+        benchStartRet = wh_Bench_StartOp(ctx, id);
+        initRet       = v->initFn(sha3, NULL, WH_CLIENT_DEVID(client));
+        updateRet     = v->updateFn(sha3, in, (word32)inLen);
+        finalRet      = v->finalFn(sha3, out);
+        benchStopRet  = wh_Bench_StopOp(ctx, id);
+
+        /* Check for errors after all operations are complete */
+        if (benchStartRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StartOp: %d\n", benchStartRet);
+            ret = benchStartRet;
+            break;
+        }
+        if (initRet != 0) {
+            WH_BENCH_PRINTF("Failed to init %s %d\n", v->name, initRet);
+            ret = initRet;
+            break;
+        }
+
+        sha3Initialized = 1;
+
+        if (updateRet != 0) {
+            WH_BENCH_PRINTF("Failed to update %s %d\n", v->name, updateRet);
+            ret = updateRet;
+            break;
+        }
+        if (finalRet != 0) {
+            WH_BENCH_PRINTF("Failed to final %s %d\n", v->name, finalRet);
+            ret = finalRet;
+            break;
+        }
+        if (benchStopRet != 0) {
+            WH_BENCH_PRINTF("Failed to wh_Bench_StopOp: %d\n", benchStopRet);
+            ret = benchStopRet;
+            break;
+        }
+    }
+
+    /* Only free SHA3 if it was initialized */
+    if (sha3Initialized) {
+        v->freeFn(sha3);
+    }
+
+    return ret;
 }
 
-int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
-                            int id, void* params)
-{
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-}
+#define WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(_Bits)                               \
+    int wh_Bench_Mod_Sha3##_Bits(whClientContext* client,                     \
+                                 whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchSha3(client, ctx, id, 0, &benchSha3_##_Bits);            \
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+#define WH_DEFINE_SHA3_BENCH_DMA_FNS(_Bits)                                   \
+    int wh_Bench_Mod_Sha3##_Bits##Dma(                                        \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)params;                                                         \
+        return _benchSha3(client, ctx, id, 1, &benchSha3_##_Bits);            \
+    }
+#else
+#define WH_DEFINE_SHA3_BENCH_DMA_FNS(_Bits)                                   \
+    int wh_Bench_Mod_Sha3##_Bits##Dma(                                        \
+        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
+    {                                                                         \
+        (void)client;                                                         \
+        (void)ctx;                                                            \
+        (void)id;                                                             \
+        (void)params;                                                         \
+        return WH_ERROR_NOTIMPL;                                              \
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+#ifndef WOLFSSL_NOSHA3_224
+WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(224)
+WH_DEFINE_SHA3_BENCH_DMA_FNS(224)
+#endif
+
+#ifndef WOLFSSL_NOSHA3_256
+WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(256)
+WH_DEFINE_SHA3_BENCH_DMA_FNS(256)
+#endif
+
+#ifndef WOLFSSL_NOSHA3_384
+WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(384)
+WH_DEFINE_SHA3_BENCH_DMA_FNS(384)
+#endif
+
+#ifndef WOLFSSL_NOSHA3_512
+WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(512)
+WH_DEFINE_SHA3_BENCH_DMA_FNS(512)
+#endif
 
 #endif /* WOLFSSL_SHA3 */
 
