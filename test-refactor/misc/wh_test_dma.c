@@ -56,6 +56,17 @@ static int _whTest_DmaAllowListBasic(void)
         (void*)((uintptr_t)0x10000), 0x1000);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
+    /* [addr, addr+size): exact fit is allowed, one more byte is not */
+    rc = wh_Dma_CheckMemOperAgainstAllowList(
+        &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
+        (void*)((uintptr_t)0x10000), 0x10000);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    rc = wh_Dma_CheckMemOperAgainstAllowList(
+        &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
+        (void*)((uintptr_t)0x10000), 0x10001);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
+
     rc = wh_Dma_CheckMemOperAgainstAllowList(
         &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
         (void*)((uintptr_t)0x30000), 0x1000);
