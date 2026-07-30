@@ -1430,6 +1430,155 @@ whTest_ServerImgMgrServerCfgWolfBootCertChainRsa4096(whServerConfig* serverCfg)
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
 #endif /* !NO_RSA */
 
+/* Key used to prove the verify callback gets a private copy */
+static const uint8_t testSnapshotKey[16] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+                                            0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
+                                            0xCC, 0xDD, 0xEE, 0xFF};
+
+/* Verify method that evicts and re-caches the same keyId the way a concurrent
+ * request would. The key passed in must be a private snapshot, so it stays
+ * intact for the rest of the callback. */
+static int _ImgMgrSnapshotVerifyMethod(whServerImgMgrContext*   context,
+                                       const whServerImgMgrImg* img,
+                                       const uint8_t* key, size_t keySz,
+                                       const uint8_t* sig, size_t sigSz)
+{
+    int           ret;
+    whNvmMetadata meta = {0};
+    uint8_t       attackerKey[sizeof(testSnapshotKey)];
+
+    (void)sig;
+    (void)sigSz;
+
+    if (context == NULL || context->server == NULL || img == NULL ||
+        key == NULL || keySz != sizeof(testSnapshotKey)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(attackerKey, 0xAA, sizeof(attackerKey));
+
+    ret = wh_Server_KeystoreEvictKey(context->server, img->keyId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to evict key during verify: %d\n", ret);
+        return ret;
+    }
+
+    meta.id     = img->keyId;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = sizeof(attackerKey);
+    ret = wh_Server_KeystoreCacheKey(context->server, &meta, attackerKey);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to cache substitute key during verify: %d\n",
+                       ret);
+        return ret;
+    }
+
+    if (memcmp(key, testSnapshotKey, keySz) != 0) {
+        WH_ERROR_PRINT("Verify key was substituted mid verification\n");
+        return WH_ERROR_ABORTED;
+    }
+
+    return WH_ERROR_OK;
+}
+
+static int whTest_ServerImgMgrKeySnapshot(whServerConfig* serverCfg)
+{
+    int                        ret          = 0;
+    whServerContext            server[1]    = {0};
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          testImage    = {0};
+    whServerImgMgrVerifyResult result       = {0};
+    whNvmMetadata              keyMeta      = {0};
+    whNvmMetadata              sigMeta      = {0};
+    const whNvmId              testKeyId    = 1;
+    const whNvmId              testSigNvmId = 2;
+    const uint8_t              dummySig[4]  = {0};
+
+    /* The callback ignores the signature, but the RAW path requires one */
+    sigMeta.id     = testSigNvmId;
+    sigMeta.access = WH_NVM_ACCESS_ANY;
+    sigMeta.flags  = WH_NVM_FLAGS_NONE;
+    sigMeta.len    = sizeof(dummySig);
+    snprintf((char*)sigMeta.label, WH_NVM_LABEL_LEN, "TestSnapshotSig");
+
+    ret =
+        wh_Nvm_AddObject(serverCfg->nvm, &sigMeta, sizeof(dummySig), dummySig);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to add snapshot signature to NVM: %d\n", ret);
+        return ret;
+    }
+
+    testImage.imgType      = WH_IMG_MGR_IMG_TYPE_RAW;
+    testImage.addr         = (uintptr_t)testData;
+    testImage.size         = sizeof(testData);
+    testImage.keyId        = testKeyId;
+    testImage.sigNvmId     = testSigNvmId;
+    testImage.verifyMethod = _ImgMgrSnapshotVerifyMethod;
+    testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = &testImage;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+
+    ret = wh_Server_Init(server, serverCfg);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    keyMeta.id     = testKeyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = sizeof(testSnapshotKey);
+    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "TestSnapshotKey");
+
+    ret =
+        wh_Server_KeystoreCacheKey(server, &keyMeta, (uint8_t*)testSnapshotKey);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to cache snapshot key: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Snapshot image verification failed: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    if (result.verifyMethodResult != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Snapshot verify method failed: %d\n",
+                       result.verifyMethodResult);
+        wh_Server_Cleanup(server);
+        return result.verifyMethodResult;
+    }
+
+    /* Drop the substitute key the callback left behind */
+    (void)wh_Server_KeystoreEvictKey(server, testKeyId);
+
+    ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &sigMeta.id);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to delete snapshot signature object: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    wh_Server_Cleanup(server);
+
+    WH_TEST_PRINT("IMG_MGR key snapshot Test completed successfully!\n");
+    return 0;
+}
+
 int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
 {
     int            rc          = 0;
@@ -1486,6 +1635,14 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
     rc = wh_Nvm_Init(nvm, n_conf);
     if (rc != 0) {
         WH_ERROR_PRINT("Failed to initialize NVM: %d\n", rc);
+        return rc;
+    }
+
+    /* Verify key material is snapshotted before the verify callback runs */
+    rc = whTest_ServerImgMgrKeySnapshot(s_conf);
+    if (rc != 0) {
+        WH_ERROR_PRINT("Image manager key snapshot test failed: %d\n", rc);
+        wh_Nvm_Cleanup(nvm);
         return rc;
     }
 

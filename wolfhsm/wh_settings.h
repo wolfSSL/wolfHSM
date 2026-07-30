@@ -113,6 +113,9 @@
  *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE - Maximum signature size for image
  * verification Default: 512 bytes (RSA4096)
  *
+ *  WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE - Maximum verification key size for
+ * image verification Default: 1200 bytes (ASN.1 RSA4096 public key)
+ *
  *  WOLFHSM_CFG_DMA_CUSTOM_CLIENT_COPY - if defined, allows to setup a custom
  * callback to handle client to server and/or server to client memory copy
  * operation in DMA requests.
@@ -304,6 +307,12 @@
 /* Image manager maximum signature size (RSA4096 = 512 bytes) */
 #ifndef WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE
 #define WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE 512
+#endif
+
+/* Image manager maximum verification key size. Sized to hold an ASN.1 RSA4096
+ * public key. Raise it for larger keys such as ML-DSA. */
+#ifndef WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE
+#define WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE 1200
 #endif
 
 /*  WOLFHSM_CFG_CUSTOMCB_LEN - Maximum size of a customcb message.
