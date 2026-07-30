@@ -603,6 +603,9 @@ int posixTransportShm_ClientStaticMemDmaCallback(
     else if (oper == WH_DMA_OPER_CLIENT_READ_POST) {
         if (isInDma == 0) {
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
+            /* Scrub key material before freeing. len is bounded by the temp
+             * buffer's XMALLOC, well within uint32_t for this transport. */
+            wh_Utils_ForceZero(ptr, (uint32_t)len);
             XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
         }
     }
@@ -611,6 +614,9 @@ int posixTransportShm_ClientStaticMemDmaCallback(
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
             memcpy((void*)clientAddr, ptr,
                    len); /* copy results of what server wrote */
+            /* Scrub key material before freeing. len is bounded by the temp
+             * buffer's XMALLOC, well within uint32_t for this transport. */
+            wh_Utils_ForceZero(ptr, (uint32_t)len);
             XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
         }
     }
