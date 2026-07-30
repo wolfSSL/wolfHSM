@@ -225,7 +225,8 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
         } break;
 
         default:
-            ret = WH_ERROR_BADARGS;
+            *out_resp_size = 0;
+            ret            = WH_ERROR_BADARGS;
             break;
     }
 
