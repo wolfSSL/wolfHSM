@@ -80,7 +80,8 @@
  * blank device (for example installing the MASTER_ECU_KEY or BOOT_MAC at
  * production) before any key-update authorization key exists; subsequent
  * in-field updates should use the spec-compliant wh_Client_SheLoadKey(). The
- * key is scoped to the calling client via the keyId USER field.
+ * key is scoped to the calling client via the keyId USER field, or to the
+ * shared global namespace when WOLFHSM_CFG_SHE_GLOBAL_KEYS is defined.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] keyId SHE key slot to write (0-15, e.g. WH_SHE_MASTER_ECU_KEY_ID).

@@ -508,12 +508,14 @@ static int _WrapSheKeys(TestCtx* t, SheNoNvmKey* keys, int n)
     int ret;
     int i;
 
+    /* t is unused when SHE key ids ignore the client id */
+    (void)t;
+
     for (i = 0; i < n; i++) {
         keys[i].blobSz = (uint16_t)sizeof(keys[i].blob);
         ret            = whTest_BuildSheKeyBlob(
             whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
-            WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id,
-                                     keys[i].slot),
+            WH_SHE_MAKE_KEYID(t->client->comm->client_id, keys[i].slot),
             keys[i].counter, keys[i].flags, keys[i].plain, keys[i].blob,
             &keys[i].blobSz);
         if (ret != 0) {

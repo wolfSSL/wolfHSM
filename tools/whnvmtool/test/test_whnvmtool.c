@@ -26,6 +26,7 @@
 #include <string.h>
 #include <limits.h>
 
+#include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_nvm.h"
@@ -191,6 +192,76 @@ static const char* getFilePathForId(whNvmId id)
     return NULL;
 }
 
+/* SHE entries pack the update counter and protection flags into the first 8
+ * label bytes as big-endian words. whnvmtool inlines this encoding (it builds
+ * without SHE support, so it cannot call wh_She_Meta2Label()); pin the exact
+ * bytes for the SHE entries in test.nvminit so the encodings cannot drift. */
+typedef struct {
+    whNvmId id;
+    uint8_t label[WH_NVM_LABEL_LEN];
+    int     seen;
+} SheLabelEntry;
+
+static SheLabelEntry gSheLabelEntries[] = {
+    /* she 0xC 4 0 0x00: counter 0, flags 0 */
+    {WH_MAKE_KEYID(WH_KEYTYPE_SHE, 0xC, 4), {0}, 0},
+    /* she 0 1 5 0x01: counter 5 in label[0..3], flags 1 in label[4..7] */
+    {WH_MAKE_KEYID(WH_KEYTYPE_SHE, 0, 1),
+     {0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01},
+     0},
+};
+#define SHE_LABEL_ENTRY_COUNT \
+    (sizeof(gSheLabelEntries) / sizeof(gSheLabelEntries[0]))
+
+static void resetSheLabelChecks(void)
+{
+    for (size_t i = 0; i < SHE_LABEL_ENTRY_COUNT; i++) {
+        gSheLabelEntries[i].seen = 0;
+    }
+}
+
+/* Compare the label of a known SHE object against its expected bytes;
+ * non-SHE ids pass through */
+static int checkSheLabelValid(const whNvmMetadata* meta)
+{
+    for (size_t i = 0; i < SHE_LABEL_ENTRY_COUNT; i++) {
+        SheLabelEntry* entry = &gSheLabelEntries[i];
+        if (entry->id != meta->id) {
+            continue;
+        }
+        if (memcmp(meta->label, entry->label, WH_NVM_LABEL_LEN) != 0) {
+            fprintf(stderr, "Error: SHE label mismatch for ID 0x%X\n",
+                    meta->id);
+            fprintf(stderr, "Expected label:\n");
+            for (size_t j = 0; j < WH_NVM_LABEL_LEN; j++) {
+                fprintf(stderr, "%02X ", entry->label[j]);
+            }
+            fprintf(stderr, "\nActual label:\n");
+            for (size_t j = 0; j < WH_NVM_LABEL_LEN; j++) {
+                fprintf(stderr, "%02X ", meta->label[j]);
+            }
+            fprintf(stderr, "\n");
+            return -1;
+        }
+        entry->seen = 1;
+    }
+    return 0;
+}
+
+/* Require every expected SHE object to have been enumerated, so the label
+ * checks cannot silently become vacuous if the fixture ids change */
+static int checkAllSheLabelsSeen(void)
+{
+    for (size_t i = 0; i < SHE_LABEL_ENTRY_COUNT; i++) {
+        if (!gSheLabelEntries[i].seen) {
+            fprintf(stderr, "Error: SHE object 0x%X not found in NVM\n",
+                    gSheLabelEntries[i].id);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* Compare the NVM data against the known good input file data for a given
  * object ID */
 static int checkNvmDataValid(whNvmId id, const uint8_t* nvmData,
@@ -276,6 +347,8 @@ int _checkNvm(whServerContext* server)
     whNvmAccess access    = WH_NVM_ACCESS_ANY;
     whNvmFlags  flags     = WH_NVM_FLAGS_ANY;
 
+    resetSheLabelChecks();
+
     do {
         rc = wh_Nvm_List(server->nvm, access, flags, startId, &count,
                          &currentId);
@@ -301,6 +374,10 @@ int _checkNvm(whServerContext* server)
             WOLFHSM_CFG_PRINTF("Flags: 0x%04x\n", meta.flags);
             WOLFHSM_CFG_PRINTF("Length: %u\n", meta.len);
             WOLFHSM_CFG_PRINTF("Label: %s\n", meta.label);
+
+            if (checkSheLabelValid(&meta) != 0) {
+                return WH_ERROR_ABORTED;
+            }
 
             uint8_t* data = malloc(meta.len);
             if (data == NULL) {
@@ -328,6 +405,10 @@ int _checkNvm(whServerContext* server)
         startId = currentId;
 
     } while (count > 0);
+
+    if (checkAllSheLabelsSeen() != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     return WH_ERROR_OK;
 }
