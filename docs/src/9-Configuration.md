@@ -54,6 +54,7 @@ These macros control the over-the-wire sizing of the request/response protocol s
 | Macro | Default | Description |
 |---|---|---|
 | `WOLFHSM_CFG_COMM_DATA_LEN` | `1280` | Maximum length, in bytes, of the data payload portion of a single request or response message. This sets the upper bound on how much data a single non-DMA request (key cache, certificate verify, large block crypto, etc.) can carry; messages larger than this must be split or use a DMA variant. Larger values raise per-context RAM usage and the size of any transport-side buffers. |
+| `WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE` | Undefined | If defined, disable client communication buffer zeroization. By default, stale request bytes are cleared after a response is received and the full client packet is cleared when a request is aborted or the transport is cleaned up. Server buffers are unaffected because transports may map requests read-only. Define this only when the performance cost outweighs the defense-in-depth benefit. |
 | `WOLFHSM_CFG_CUSTOMCB_LEN` | `256` | Maximum size, in bytes, of a single custom-callback message payload (see [Custom Server Callbacks](#custom-server-callbacks)). Independent of `WOLFHSM_CFG_COMM_DATA_LEN`. |
 
 ## Time and System Services

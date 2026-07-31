@@ -61,6 +61,15 @@ uint64_t wh_Translate64(uint16_t magic, uint64_t val)
 
 /** Client functions */
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT)
+
+static void _wh_CommClient_ResetPacket(whCommClient* context)
+{
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    wh_Utils_ForceZero(context->packet, sizeof(context->packet));
+#endif
+    context->size = 0;
+}
+
 int wh_CommClient_Init(whCommClient* context, const whCommClientConfig* config)
 {
     int rc = 0;
@@ -140,6 +149,9 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
     if (rc == 0) {
         context->seq++;
         context->pending = 1;
+        if (context->size < data_size) {
+            context->size = data_size;
+        }
         if (out_seq != NULL) *out_seq = context->seq;
     }
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
@@ -193,6 +205,7 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
              * clamps its copy, but reports the true peer-controlled length, so
              * an oversized value here means a truncated/bogus message). Treat as
              * fatal and clear pending since the caller must tear down anyway. */
+            _wh_CommClient_ResetPacket(context);
             context->pending = 0;
             rc = WH_ERROR_ABORTED;
         }
@@ -214,6 +227,8 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
                 if (out_seq != NULL) {
                     *out_seq = 0;
                 }
+                _wh_CommClient_ResetPacket(context);
+                context->pending = 0;
                 return WH_ERROR_ABORTED;
             }
 
@@ -225,6 +240,7 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
              * message silently so caller can keep polling for new messages in
              * a loop. */
             if (seq != context->seq) {
+                _wh_CommClient_ResetPacket(context);
                 return WH_ERROR_NOTREADY;
             }
 
@@ -242,12 +258,20 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
             if (out_seq != NULL) *out_seq = seq;
             if (out_size != NULL)
                 *out_size = payload_size;
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+            if (context->size > payload_size) {
+                wh_Utils_ForceZero(context->data + payload_size,
+                                   context->size - payload_size);
+            }
+#endif
+            context->size    = payload_size;
             context->pending = 0;
         }
     }
     else if (rc == WH_ERROR_ABORTED) {
         /* Transport fatal error - caller must Cleanup/Init, so clear pending
          * to avoid trapping between incompatible recovery paths. */
+        _wh_CommClient_ResetPacket(context);
         context->pending = 0;
     }
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
@@ -257,6 +281,7 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
             /* Clear pending so sync client APIs that surface TIMEOUT to their
              * caller leave the context usable. If the server eventually
              * replies the stale seq will be dropped by the check above. */
+            _wh_CommClient_ResetPacket(context);
             context->pending = 0;
             (void)wh_Timeout_Stop(&context->respTimeout);
             rc = WH_ERROR_TIMEOUT;
@@ -302,6 +327,8 @@ int wh_CommClient_Cleanup(whCommClient* context)
         rc = context->transport_cb->Cleanup(context->transport_context);
     }
 
+    _wh_CommClient_ResetPacket(context);
+
     /* Mark as not initialized regardless of cleanup return */
     context->initialized = 0;
     context->pending     = 0;
@@ -321,6 +348,7 @@ int wh_CommClient_AbortPending(whCommClient* context)
     if ((context == NULL) || (context->initialized == 0)) {
         return WH_ERROR_BADARGS;
     }
+    _wh_CommClient_ResetPacket(context);
     context->pending = 0;
 #ifdef WOLFHSM_CFG_ENABLE_TIMEOUT
     (void)wh_Timeout_Stop(&context->respTimeout);

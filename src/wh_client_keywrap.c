@@ -56,7 +56,11 @@ int wh_Client_KeyWrapRequest(whClientContext*   ctx,
     ret = wh_Client_SendRequest(ctx, group, action,
                                 sizeof(*req) + sizeof(*metadata) + keySz,
                                 (uint8_t*)req);
-    wh_Utils_ForceZero(reqData + sizeof(*metadata), keySz);
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (ret != 0) {
+        wh_Utils_ForceZero(reqData + sizeof(*metadata), keySz);
+    }
+#endif
     return ret;
 }
 
@@ -306,6 +310,7 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     if (resp == NULL) {
         return WH_ERROR_BADARGS;
     }
+    respData = (uint8_t*)(resp + 1);
 
     /* Receive the response */
     ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
@@ -325,18 +330,22 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
         return resp->rc;
     }
     else if (resp->keySz > *keyInOutSz) {
-        return WH_ERROR_BUFFER_SIZE;
+        ret = WH_ERROR_BUFFER_SIZE;
+        goto cleanup;
     }
 
     /* Copy the metadata and key from the response data into metadataOut and
      * keyOut */
-    respData = (uint8_t*)(resp + 1);
     memcpy(metadataOut, respData, sizeof(*metadataOut));
     memcpy(keyOut, respData + sizeof(*metadataOut), resp->keySz);
     *keyInOutSz = resp->keySz;
+    ret = WH_ERROR_OK;
 
+cleanup:
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
     wh_Utils_ForceZero(respData + sizeof(*metadataOut), resp->keySz);
-    return WH_ERROR_OK;
+#endif
+    return ret;
 }
 
 int wh_Client_KeyUnwrapAndExport(whClientContext*   ctx,

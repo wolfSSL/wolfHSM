@@ -354,9 +354,14 @@ int wh_Client_SheLoadPlainKeyRequest(whClientContext* c, uint8_t* key,
 
     memcpy(req->key, key, WH_SHE_KEY_SZ);
 
-    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_LOAD_PLAIN_KEY,
-                                sizeof(*req), (uint8_t*)req);
-    wh_Utils_ForceZero(req->key, WH_SHE_KEY_SZ);
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE,
+                                WH_SHE_LOAD_PLAIN_KEY, sizeof(*req),
+                                (uint8_t*)req);
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (ret != 0) {
+        wh_Utils_ForceZero(req->key, WH_SHE_KEY_SZ);
+    }
+#endif
     return ret;
 }
 

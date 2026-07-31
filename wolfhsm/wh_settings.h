@@ -24,6 +24,10 @@
  *  WOLFHSM_CFG_COMM_DATA_LEN - Maximum length of data payload
  *      Default: 1280 bytes
  *
+ *  WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE - If defined, disable client
+ *  communication buffer zeroization
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_INFOVERSION Reported version string
  *      Default: "01.01.01"
  *

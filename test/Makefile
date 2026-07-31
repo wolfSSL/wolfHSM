@@ -130,6 +130,10 @@ ifeq ($(NOCRYPTO),1)
 	DEF += -DWOLFHSM_CFG_NO_CRYPTO
 endif
 
+ifeq ($(DISABLE_CLIENT_COMM_ZEROIZE),1)
+	DEF += -DWOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+endif
+
 # Enable scan-build
 ifeq ($(SCAN),1)
 	SCAN_LOG = scan_test.log

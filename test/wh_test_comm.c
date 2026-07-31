@@ -32,6 +32,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
+#include "wolfhsm/wh_utils.h"
 
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
@@ -57,7 +58,6 @@ const struct timespec ONE_MS = {.tv_sec = 0, .tv_nsec = 1000000};
 #define REQ_SIZE 32
 #define RESP_SIZE 64
 #define REPEAT_COUNT 10
-
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 int whTest_CommMem(void)
@@ -170,7 +170,6 @@ int whTest_CommMem(void)
                                       client, &rx_resp_flags, &rx_resp_type,
                                       &rx_resp_seq, &rx_resp_len,
                                       sizeof(rx_resp), rx_resp));
-
             WH_TEST_ASSERT_RETURN(
                 WH_ERROR_REQUEST_PENDING ==
                 wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
@@ -218,7 +217,6 @@ int whTest_CommMem(void)
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_SendRequest(
         client, tx_req_flags, tx_req_type, &tx_req_seq, tx_req_len, tx_req));
     WH_TEST_ASSERT_RETURN(1 == wh_CommClient_IsRequestPending(client));
-
     /* Stacking guard: second send rejected without touching seq or transport */
     seq_snapshot = client->seq;
     rc           = wh_CommClient_SendRequest(client, tx_req_flags, tx_req_type,
@@ -241,6 +239,15 @@ int whTest_CommMem(void)
         client, &rx_resp_flags, &rx_resp_type, &rx_resp_seq, &rx_resp_len,
         sizeof(rx_resp), rx_resp));
     WH_TEST_ASSERT_RETURN(0 == wh_CommClient_IsRequestPending(client));
+    WH_TEST_ASSERT_RETURN(memcmp(client->data, tx_resp, tx_resp_len) == 0);
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    WH_TEST_ASSERT_RETURN(wh_Utils_memeqzero(
+        client->data + tx_resp_len, tx_req_len - tx_resp_len));
+#else
+    WH_TEST_ASSERT_RETURN(
+        memcmp(client->data + tx_resp_len, tx_req + tx_resp_len,
+               tx_req_len - tx_resp_len) == 0);
+#endif
 
     /* Second Recv with no outstanding request again yields NOTREADY */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTREADY ==
@@ -257,6 +264,10 @@ int whTest_CommMem(void)
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_AbortPending(client));
     WH_TEST_ASSERT_RETURN(0 == wh_CommClient_IsRequestPending(client));
     WH_TEST_ASSERT_RETURN(seq_snapshot == client->seq);
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    WH_TEST_ASSERT_RETURN(wh_Utils_memeqzero(
+        (uint8_t*)client->packet, sizeof(client->packet)));
+#endif
 
     /* Drain the abandoned exchange on the server side so the transport state
      * doesn't linger across tests. */
@@ -277,6 +288,11 @@ int whTest_CommMem(void)
 
     WH_TEST_RETURN_ON_FAIL(wh_CommServer_Cleanup(server));
     WH_TEST_RETURN_ON_FAIL(wh_CommClient_Cleanup(client));
+
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    WH_TEST_ASSERT_RETURN(wh_Utils_memeqzero(
+        (uint8_t*)client->packet, sizeof(client->packet)));
+#endif
 
     /* After Cleanup the context is no longer initialized; API reports BADARGS
      */

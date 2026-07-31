@@ -840,7 +840,11 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     /* write request */
     ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_CACHE,
                                 sizeof(*req) + inSz, (uint8_t*)req);
-    wh_Utils_ForceZero(packIn, inSz);
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (ret != 0) {
+        wh_Utils_ForceZero(packIn, inSz);
+    }
+#endif
     return ret;
 }
 
@@ -1137,7 +1141,9 @@ int wh_Client_KeyExportResponse(whClientContext* c, uint8_t* label,
                 else
                     memcpy(label, resp->label, labelSz);
             }
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
             wh_Utils_ForceZero(packOut, resp->len);
+#endif
         }
     }
     return ret;

@@ -108,9 +108,11 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
                                WH_MESSAGE_AUTH_ACTION_LOGIN, (uint16_t)msg_size,
                                msg);
 
-    /* Zeroize sensitive credential data before returning */
-    wh_Utils_ForceZero(msg, msg_size);
-
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (rc != 0) {
+        wh_Utils_ForceZero(msg, msg_size);
+    }
+#endif
     return rc;
 }
 
@@ -315,9 +317,11 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
                                    (uint16_t)msg_size, msg);
     }
 
-    /* Zeroize sensitive credential data before returning */
-    wh_Utils_ForceZero(msg, msg_size);
-
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (rc != 0) {
+        wh_Utils_ForceZero(msg, msg_size);
+    }
+#endif
     return rc;
 }
 
@@ -680,9 +684,11 @@ int wh_Client_AuthUserSetCredentialsRequest(
                                WH_MESSAGE_AUTH_ACTION_USER_SET_CREDENTIALS,
                                total_size, msg);
 
-    /* Zeroize sensitive credential data before returning */
-    wh_Utils_ForceZero(msg, total_size);
-
+#ifndef WOLFHSM_CFG_DISABLE_CLIENT_COMM_ZEROIZE
+    if (rc != 0) {
+        wh_Utils_ForceZero(msg, total_size);
+    }
+#endif
     return rc;
 }
 
