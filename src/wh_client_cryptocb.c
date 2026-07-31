@@ -467,6 +467,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 *out_len = len;
             }
         } break;
+#endif /* HAVE_CURVE25519 */
 
 #ifdef HAVE_ED25519
         case WC_PK_TYPE_ED25519_KEYGEN: {
@@ -529,7 +530,6 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             }
         } break;
 #endif /* HAVE_ED25519 */
-#endif /* HAVE_CURVE25519 */
 
 #if defined(WOLFSSL_HAVE_MLKEM)
         case WC_PK_TYPE_PQC_KEM_KEYGEN:

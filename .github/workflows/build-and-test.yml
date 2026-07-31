@@ -57,6 +57,10 @@ jobs:
     - name: Build and test DMA ASAN MLDSA verify-only
       run: cd test && make clean && make -j DMA=1 ASAN=1 MLDSA_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test with Ed25519 enabled but Curve25519 disabled
+    - name: Build and test DMA ASAN NOCURVE25519
+      run: cd test && make clean && make -j DMA=1 ASAN=1 NOCURVE25519=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test ASAN TESTWOLFCRYPT
       run: cd test && make clean && make -j ASAN=1 TESTWOLFCRYPT=1 WOLFSSL_DIR=../wolfssl && make run
