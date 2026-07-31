@@ -202,10 +202,28 @@ int wh_Bench_Mod_HmacSha256(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_HmacSha256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params);
 
+int wh_Bench_Mod_HmacSha3224(whClientContext* client, whBenchOpContext* ctx,
+                             int id, void* params);
+
+int wh_Bench_Mod_HmacSha3224Dma(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+
 int wh_Bench_Mod_HmacSha3256(whClientContext* client, whBenchOpContext* ctx,
                              int id, void* params);
 
 int wh_Bench_Mod_HmacSha3256Dma(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+
+int wh_Bench_Mod_HmacSha3384(whClientContext* client, whBenchOpContext* ctx,
+                             int id, void* params);
+
+int wh_Bench_Mod_HmacSha3384Dma(whClientContext* client, whBenchOpContext* ctx,
+                                int id, void* params);
+
+int wh_Bench_Mod_HmacSha3512(whClientContext* client, whBenchOpContext* ctx,
+                             int id, void* params);
+
+int wh_Bench_Mod_HmacSha3512Dma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params);
 
 /*
