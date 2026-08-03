@@ -75,7 +75,8 @@ int wh_Client_KeyWrapResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -181,7 +182,8 @@ int wh_Client_KeyWrapExportResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -298,7 +300,8 @@ int wh_Client_KeyUnwrapAndExportResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -414,7 +417,8 @@ int wh_Client_KeyUnwrapAndCacheResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -519,7 +523,8 @@ int wh_Client_DataWrapResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -632,7 +637,8 @@ int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
     }
 
     /* Receive the response */
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &size, (uint8_t*)resp);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
     if (ret != WH_ERROR_OK) {
         return ret;
     }

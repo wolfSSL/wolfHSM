@@ -37,6 +37,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
+#include "wolfssl/wolfcrypt/asn.h"
 #include "wolfssl/wolfcrypt/random.h"
 
 #include "wolfhsm/wh_error.h"
@@ -561,6 +562,96 @@ static int _whTest_CryptoEd25519ExportPublicKey(whClientContext* ctx)
     return ret;
 }
 
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_Ed25519ExportPublicKey and
+ * that it verifies a signature made by the cached private key. */
+static int _whTest_CryptoEd25519CacheKeyAndExportPublic(whClientContext* ctx)
+{
+    int         devId    = WH_CLIENT_DEVID(ctx);
+    int         ret      = 0;
+    ed25519_key genPub[1] = {0};
+    ed25519_key refPub[1] = {0};
+    whKeyId     keyId     = WH_KEYID_ERASED;
+    byte        msg[]     = "Ed25519 cache-export-public message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz     = sizeof(sig);
+    int         verified  = 0;
+    byte        genDer[128];
+    byte        refDer[128];
+    int         genDerSz  = 0;
+    int         refDerSz  = 0;
+
+    ret = wc_ed25519_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_ed25519_init_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+        ctx, &keyId, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+        NULL, genPub);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Ed25519MakeCacheKeyAndExportPublic failed %d\n", ret);
+    }
+
+    /* Cross-check against a separate public export of the same keyId. */
+    if (ret == 0) {
+        ret = wc_ed25519_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_Ed25519ExportPublicKey(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_Ed25519ExportPublicKey failed %d\n",
+                               ret);
+            }
+            else {
+                genDerSz =
+                    wc_Ed25519PublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+                refDerSz =
+                    wc_Ed25519PublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+                if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                    (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                    WH_ERROR_PRINT("keygen pubkey mismatch vs export\n");
+                    ret = -1;
+                }
+            }
+        }
+    }
+
+    /* Sign on the server using genPub directly as the HSM private-key handle
+     * (no separate key object), then verify locally with the independently
+     * exported public key (refPub) the client holds. */
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, genPub, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM Ed25519 sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, (word32)sizeof(msg),
+                                    &verified, refPub);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("verify with keygen pub failed ret=%d verify=%d\n",
+                           ret, verified);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_ed25519_free(refPub);
+    wc_ed25519_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 CACHE-AND-EXPORT-PUBLIC DEVID=0x%X SUCCESS\n",
+                      devId);
+    }
+    return ret;
+}
+
 
 /* Exercises wh_Client_Ed25519Sign with an undersized output buffer: must
  * return WH_ERROR_BUFFER_SIZE and report the required signature length. */
@@ -644,6 +735,7 @@ int whTest_Crypto_Ed25519(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Dma(ctx));
 #endif
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ExportPublicKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519CacheKeyAndExportPublic(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519BufferTooSmall(ctx));
     return 0;
 }

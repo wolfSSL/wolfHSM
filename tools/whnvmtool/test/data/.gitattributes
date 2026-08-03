@@ -1,0 +1,2 @@
+# Key fixtures are raw bytes; never diff or EOL-convert them as text
+*.bin binary

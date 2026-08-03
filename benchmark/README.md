@@ -192,5 +192,4 @@ typedef enum BenchModuleIdx {
 
 ## Notes
 
-- Ensure the `MAX_BENCH_OPS` value in `wh_bench_ops.h` is large enough to accommodate all benchmark modules
 - For throughput calculations, you need to specify the data size using `wh_Bench_SetDataSize()`

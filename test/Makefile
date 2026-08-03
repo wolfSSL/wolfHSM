@@ -152,9 +152,24 @@ ifeq ($(XMSS_VERIFY_ONLY),1)
 	DEF += -DWOLFSSL_XMSS_VERIFY_ONLY
 endif
 
+ifeq ($(MLDSA_VERIFY_ONLY),1)
+	DEF += -DWOLFSSL_MLDSA_VERIFY_ONLY
+endif
+
+ifneq ($(KEYCACHE_BIG_BUFSIZE),)
+	DEF += -DWOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE=$(KEYCACHE_BIG_BUFSIZE)
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
 	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
+endif
+
+# Share all SHE key slots across clients (global SHE device view). Implies
+# SHE=1. WOLFHSM_CFG_GLOBAL_KEYS comes from the test config.
+ifeq ($(SHE_GLOBAL),1)
+	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
+	DEF += -DWOLFHSM_CFG_SHE_GLOBAL_KEYS
 endif
 
 # Enable per-client crypto affinity (HW/SW devId selection) and its unit test

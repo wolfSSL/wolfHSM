@@ -40,6 +40,12 @@
  *  keys to be shared across multiple clients
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_SHE_GLOBAL_KEYS - If defined, all AutoSAR SHE key slots live in
+ *  the global-keys namespace instead of being scoped per client, so every
+ *  client shares a single SHE device view. Requires WOLFHSM_CFG_GLOBAL_KEYS
+ *  and WOLFHSM_CFG_SHE_EXTENSION.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_CRYPTO_AFFINITY - If defined, enable per-client crypto affinity,
  *  allowing a client to request that crypto operations run on the server's
  *  hardware device (WH_CRYPTO_AFFINITY_HW) or in software
@@ -75,6 +81,17 @@
  *  WOLFHSM_CFG_ENABLE_TIMEOUT - If defined, include client-side support for
  *  blocking request timeouts
  *
+ *  WOLFHSM_CFG_ENABLE_AUTHENTICATION - EXPERIMENTAL. If defined, include the
+ *  Auth Manager (wh_auth*), which adds per-client user authentication and
+ *  per-user authorization to the server. Clients log in with a credential
+ *  (PIN or certificate) to establish a session, and the server checks the
+ *  resulting per-user permissions (per message group/action, plus key ID
+ *  access) before dispatching a request. Checks are only applied if the
+ *  server is configured with an auth context; without one all requests are
+ *  processed unchecked. The API and wire format are subject to change and
+ *  are not covered by compatibility guarantees.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
  *      Default: 32
  *
@@ -83,6 +100,10 @@
  *
  *  WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE - Size of each key in RAM
  *      Default: 1200
+ *
+ *  WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE - Largest cached key usable as a KDF
+ *      input (HKDF IKM, CMAC-KDF Z)
+ *      Default: 256
  *
  *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
  *      Default: 8
@@ -440,6 +461,20 @@
 #error "wolfHSM requires wolfCrypt built without NO_RNG"
 #endif
 
+/* Client response parsing calls wc_ecc_import_* on devId-bound keys (e.g.
+ * wh_Crypto_EccUpdatePrivateOnlyKeyDer from wh_Client_EccVerifyResponse)
+ * while the response still sits in the client's comm packet buffer. With
+ * WOLFSSL_VALIDATE_ECC_IMPORT those imports re-enter the crypto callback and
+ * run a nested HSM transaction that reuses that buffer. The wire protocol
+ * tolerates nesting (transactions are strictly sequential), but correctness
+ * would rest on every response parser having copied out all data it needs
+ * before any import — an invariant that is not enforced or audited. Server
+ * builds are unaffected: their import validation dispatches to the server's
+ * local crypto provider, not the transport. */
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFSSL_VALIDATE_ECC_IMPORT)
+#error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
+#endif
+
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \
@@ -465,6 +500,15 @@
 #endif
 
 #endif /* WOLFHSM_CFG_KEYWRAP */
+
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
+
+/* Largest cached key the server accepts as a KDF input supplied by key ID */
+#ifndef WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE
+#define WOLFHSM_CFG_SERVER_KDF_MAX_KEY_SIZE 256
+#endif
+
+#endif /* HAVE_HKDF || HAVE_CMAC_KDF */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 #if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)
@@ -514,6 +558,16 @@
     !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE)
 #error \
     "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL requires WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE"
+#endif
+
+/* Enforce both dependencies so downstream code can gate on
+ * WOLFHSM_CFG_SHE_GLOBAL_KEYS alone. */
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_SHE_EXTENSION)
+#error "WOLFHSM_CFG_SHE_GLOBAL_KEYS requires WOLFHSM_CFG_SHE_EXTENSION"
+#endif
+
+#if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_GLOBAL_KEYS)
+#error "WOLFHSM_CFG_SHE_GLOBAL_KEYS requires WOLFHSM_CFG_GLOBAL_KEYS"
 #endif
 
 /** Cache flushing and memory fencing synchronization primitives */

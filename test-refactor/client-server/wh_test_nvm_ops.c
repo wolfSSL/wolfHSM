@@ -457,9 +457,44 @@ static const WhNvmTestObjectOps g_dmaTestOps = {
 };
 
 
+/* A zero DMA address passes through the permit-all DMA config untouched,
+ * so the server must reject it, not dereference it. */
+static int _whTest_NvmDmaNullAddrs(whClientContext* ctx)
+{
+    whNvmMetadata meta      = {0};
+    int32_t       server_rc = 0;
+    uint32_t      client_id = 0;
+    uint32_t      server_id = 0;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmInit(
+        ctx, &server_rc, &client_id, &server_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Zero metadata address */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectDma(
+        ctx, NULL, 0, NULL, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BADARGS);
+
+    /* Valid metadata, but a zero data address with a non-zero length.
+     * The NVM backend rejects this rather than reading through it. */
+    meta.id     = NVM_TEST_DMA_ID_BASE;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectDma(
+        ctx, &meta, sizeof(meta), NULL, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BADARGS);
+
+    return WH_ERROR_OK;
+}
+
+
 int whTest_NvmDma(whClientContext* ctx)
 {
-    return _runNvmObjectTest(ctx, &g_dmaTestOps, NVM_TEST_DMA_ID_BASE);
+    WH_TEST_RETURN_ON_FAIL(
+        _runNvmObjectTest(ctx, &g_dmaTestOps, NVM_TEST_DMA_ID_BASE));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmDmaNullAddrs(ctx));
+
+    return WH_ERROR_OK;
 }
 
 #endif /* WOLFHSM_CFG_DMA */

@@ -31,12 +31,27 @@
 
 #include <stdint.h>
 
+#include "wolfhsm/wh_keyid.h"
+
 #define WH_SHE_SECRET_KEY_ID 0
 #define WH_SHE_MASTER_ECU_KEY_ID 1
 #define WH_SHE_BOOT_MAC_KEY_ID 2
 #define WH_SHE_BOOT_MAC 3
 #define WH_SHE_RAM_KEY_ID 14
 #define WH_SHE_PRNG_SEED_ID 15
+
+/* USER field for SHE key ids. With WOLFHSM_CFG_SHE_GLOBAL_KEYS all clients
+ * share one set of SHE slots, as on one physical SHE device, so the client
+ * id is ignored. Otherwise each client gets its own slots. */
+#ifdef WOLFHSM_CFG_SHE_GLOBAL_KEYS
+#define WH_SHE_KEY_USER(_clientId) (WH_KEYUSER_GLOBAL)
+#else
+#define WH_SHE_KEY_USER(_clientId) (_clientId)
+#endif
+
+/* Build the keystore id for a SHE slot as seen by the given client */
+#define WH_SHE_MAKE_KEYID(_clientId, _sheSlot) \
+    WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_SHE_KEY_USER(_clientId), (_sheSlot))
 
 #define WH_SHE_KEY_SZ 16
 #define WH_SHE_UID_SZ 15

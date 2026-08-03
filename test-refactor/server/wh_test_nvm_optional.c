@@ -129,7 +129,7 @@ static int _SheKeystoreChecks(whServerContext* server)
         sheKey[i] = (uint8_t)(0xF0 ^ i);
     }
 
-    sheId = WH_MAKE_KEYID(WH_KEYTYPE_SHE, WH_TEST_DEFAULT_CLIENT_ID, 0x05);
+    sheId = WH_SHE_MAKE_KEYID(WH_TEST_DEFAULT_CLIENT_ID, 0x05);
     memset(meta, 0, sizeof(meta));
     meta->id     = sheId;
     meta->len    = (whNvmSize)WH_SHE_KEY_SZ;
@@ -151,9 +151,8 @@ static int _SheKeystoreChecks(whServerContext* server)
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_OK ==
         wh_Server_KeystoreReadKey(server,
-                                  WH_MAKE_KEYID(WH_KEYTYPE_SHE,
-                                                WH_TEST_DEFAULT_CLIENT_ID,
-                                                WH_SHE_MASTER_ECU_KEY_ID),
+                                  WH_SHE_MAKE_KEYID(WH_TEST_DEFAULT_CLIENT_ID,
+                                                    WH_SHE_MASTER_ECU_KEY_ID),
                                   outMeta, outKey, &outSz));
     WH_TEST_ASSERT_RETURN(outSz == (uint32_t)WH_SHE_KEY_SZ);
     allZero = 1;
@@ -266,10 +265,10 @@ static int _RunNvmOptionalChecks(whServerContext* server)
         WH_ERROR_NOTFOUND ==
         wh_Server_KeystoreReadKey(server, localId, outMeta, outKey, &outSz));
 
-    /* EraseKeyChecked enforces policy and, with no NVM, returns the cache
-     * eviction's status. A missing key reports NOTFOUND -- unlike the
-     * non-checked EraseKey above, which treats "nothing to destroy" as OK. */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+    /* EraseKeyChecked enforces policy but, like the non-checked EraseKey
+     * above, treats "nothing to erase" as OK. This holds whether or not NVM
+     * is attached. */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
                           wh_Server_KeystoreEraseKeyChecked(server, missingId));
 
     /* On a primed, policy-permissive key, EraseKeyChecked succeeds cache-only

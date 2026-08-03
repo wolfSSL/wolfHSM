@@ -85,6 +85,18 @@ ifeq ($(ASAN),1)
     LDFLAGS += -fsanitize=address
 endif
 
+# ThreadSanitizer. Enables the acquire/release transport shims in the
+# concurrent tests (WOLFHSM_CFG_TEST_STRESS_TSAN) so TSAN's analysis stays on
+# keystore/NVM locking rather than transport false positives.
+ifeq ($(TSAN),1)
+    ifeq ($(ASAN),1)
+        $(error TSAN and ASAN cannot be used together)
+    endif
+    CFLAGS += -fsanitize=thread -fPIE
+    LDFLAGS += -fsanitize=thread -pie
+    DEF += -DWOLFSSL_NO_FENCE -DWOLFHSM_CFG_TEST_STRESS_TSAN
+endif
+
 # Enable threadsafe mode, adding lock protection to shared structures
 ifeq ($(THREADSAFE),1)
     DEF += -DWOLFHSM_CFG_THREADSAFE
@@ -110,14 +122,34 @@ ifeq ($(XMSS_VERIFY_ONLY),1)
     DEF += -DWOLFSSL_XMSS_VERIFY_ONLY
 endif
 
+ifeq ($(MLDSA_VERIFY_ONLY),1)
+    DEF += -DWOLFSSL_MLDSA_VERIFY_ONLY
+endif
+
+ifneq ($(KEYCACHE_BIG_BUFSIZE),)
+    DEF += -DWOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE=$(KEYCACHE_BIG_BUFSIZE)
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Share all SHE key slots across clients (global SHE device view). Implies
+# SHE=1. WOLFHSM_CFG_GLOBAL_KEYS comes from the test config.
+ifeq ($(SHE_GLOBAL),1)
+    DEF += -DWOLFHSM_CFG_SHE_EXTENSION
+    DEF += -DWOLFHSM_CFG_SHE_GLOBAL_KEYS
+endif
+
 # Support an authentication-capable build
 ifeq ($(AUTH),1)
     DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
+endif
+
+# Enable per-client crypto affinity (HW/SW devId selection) and its unit test
+ifeq ($(CRYPTO_AFFINITY),1)
+    DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
 endif
 
 # Build the wolfCrypt test suite as a wolfHSM client
@@ -289,10 +321,18 @@ coverage-json:
 		--filter '\.\./\.\./wolfhsm/.*' \
 		--json $(OUT)
 
+# Under TSAN: fail fast and non-zero on any detected race, using the shared
+# suppressions (wolfCrypt internals + SHM transport).
+ifeq ($(TSAN),1)
+    RUN_ENV = TSAN_OPTIONS="halt_on_error=1:exitcode=66:suppressions=$(TEST_DIR)/tsan.supp"
+else
+    RUN_ENV =
+endif
+
 # Send the full test output to test-suite.log, not just the summary
 check run: build_app
 	@rm -f test-suite.log
-	@$(BUILD_DIR)/$(BIN).elf 2>&1 \
+	@$(RUN_ENV) $(BUILD_DIR)/$(BIN).elf 2>&1 \
 	    | tee test-suite.log \
 	    | grep --line-buffered -E \
 	        '^whTest_|^All [0-9]+ tests passed|^[0-9]+ passed, [0-9]+ skipped'; \

@@ -19,21 +19,24 @@
 /*
  * test-refactor/client-server/wh_test_keywrap.c
  *
- * Keywrap policy coverage that runs against any server (no trusted KEK
- * needed on the positive paths, and the negatives prove a client cannot
- * mint one):
- *   _whTest_KeywrapSwKekRoundTrip  - wrap a plaintext key under a plain
- *                                    client-cached KEK and unwrap-and-export
- *                                    it back (only unwrap-and-cache and
- *                                    wrap-export require a trusted KEK)
+ * Keywrap policy and input-validation coverage that runs against any server:
+ * the negatives prove a client cannot mint a trusted KEK or slip an
+ * undersized blob past the size checks.
  *   _whTest_KeywrapTrustedKekPolicy - wrap-export and unwrap-and-cache must
  *                                    refuse a plain client KEK, and a client
  *                                    cannot forge WH_NVM_FLAGS_TRUSTED via the
- *                                    NVM add, HKDF cache, or key cache paths
+ *                                    NVM add, HKDF cache, key cache, or key
+ *                                    cache-random paths
  *   _whTest_KeywrapDataWrapUsage   - data wrap requires USAGE_WRAP on the KEK
+ *   _whTest_KeywrapKeyUnwrapUnderflow - undersized wrapped-key blobs must
+ *                                    return WH_ERROR_BADARGS, not underflow
+ *   _whTest_KeywrapDataUnwrapUnderflow - undersized wrapped-data blobs must
+ *                                    return WH_ERROR_BADARGS, not underflow
  *
- * The trusted-KEK positive paths (wrap-export round-trip, unwrap-and-cache)
- * live in misc/wh_test_hwkeystore.c against the hardware KEK, and in
+ * The positive wrap/unwrap-and-export round trip under a plain client KEK
+ * lives in wh_test_crypto_keywrap.c. The trusted-KEK positive paths
+ * (wrap-export round-trip, unwrap-and-cache) live in
+ * misc/wh_test_hwkeystore.c against the hardware KEK, and in
  * misc/wh_test_multiclient.c against an NVM-provisioned KEK.
  */
 
@@ -71,6 +74,7 @@
 #define WH_TEST_KW_NVM_FORGE_ID 0x63
 #define WH_TEST_KW_NOWRAP_ID 0x64
 #define WH_TEST_KW_META_ID 0x65
+#define WH_TEST_KW_RAND_FORGE_ID 0x66
 
 /* Cache a plain software KEK with wrap usage. It is an ordinary client key:
  * good enough for KeyWrap/KeyUnwrapAndExport, never for the trusted-KEK
@@ -92,80 +96,19 @@ static int _CacheSwKek(whClientContext* client, whKeyId* outKekId)
     return WH_ERROR_OK;
 }
 
-/* Positive software-KEK round trip; needs no trusted KEK. Wrap a plaintext key
- * under the plain KEK, unwrap-and-export the blob, and confirm the key
- * material and metadata come back unchanged */
-static int _whTest_KeywrapSwKekRoundTrip(whClientContext* client)
-{
-    int           ret;
-    whKeyId       kekId = WH_KEYID_ERASED;
-    uint8_t       plainKey[WH_TEST_KW_KEYSIZE];
-    uint8_t       tmpPlainKey[WH_TEST_KW_KEYSIZE];
-    uint16_t      tmpPlainKeySz = sizeof(tmpPlainKey);
-    uint8_t       wrappedKey[WH_TEST_KW_WRAPPED_KEYSIZE];
-    uint16_t      wrappedKeySz = sizeof(wrappedKey);
-    whNvmMetadata metadata     = {0};
-    whNvmMetadata tmpMetadata  = {0};
-    size_t        i;
-
-    metadata.id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
-                                                       WH_TEST_KW_META_ID);
-    metadata.len   = WH_TEST_KW_KEYSIZE;
-    metadata.flags = WH_NVM_FLAGS_USAGE_ANY;
-    memcpy(metadata.label, "SwKek Key Label", sizeof("SwKek Key Label"));
-
-    for (i = 0; i < sizeof(plainKey); i++) {
-        plainKey[i] = (uint8_t)(0x7B ^ i);
-    }
-
-    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
-
-    /* Wrap the plaintext key under the plain software KEK */
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId, plainKey,
-                            sizeof(plainKey), &metadata, wrappedKey,
-                            &wrappedKeySz);
-    if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("sw-kek: KeyWrap failed %d\n", ret);
-        (void)wh_Client_KeyEvict(client, kekId);
-        return ret;
-    }
-
-    /* Unwrap-and-export the blob and confirm the material round-trips */
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
-                                       wrappedKey, wrappedKeySz, &tmpMetadata,
-                                       tmpPlainKey, &tmpPlainKeySz);
-    (void)wh_Client_KeyEvict(client, kekId);
-    if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("sw-kek: KeyUnwrapAndExport failed %d\n", ret);
-        return ret;
-    }
-
-    if (tmpPlainKeySz != sizeof(plainKey) ||
-        memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
-        WH_ERROR_PRINT("sw-kek: unwrapped key material mismatch\n");
-        return WH_ERROR_ABORTED;
-    }
-
-    if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
-        WH_ERROR_PRINT("sw-kek: unwrapped metadata mismatch\n");
-        return WH_ERROR_ABORTED;
-    }
-
-    return WH_ERROR_OK;
-}
-
 /* The wrap-export and unwrap-and-cache operations require a trusted KEK (HW or
  * WH_NVM_FLAGS_TRUSTED). Prove that (a) a plain client-cached USAGE_WRAP key is
  * refused as their KEK, and that a client cannot forge a trusted KEK by
  * setting WH_NVM_FLAGS_TRUSTED itself through (b) the checked NVM add path, (c)
- * the HKDF cache-import path, or (d) the key cache path -- the server strips
- * the flag on each, so the key is still refused */
+ * the HKDF cache-import path, (d) the key cache path, or (e) the cache-random
+ * path -- the server strips the flag on each, so the key is still refused */
 static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
 {
     int           ret;
-    whKeyId       kekId    = WH_KEYID_ERASED;
-    whKeyId       srcKeyId = WH_TEST_KW_SRC_ID;
-    whKeyId       forgeId  = WH_TEST_KW_CACHE_FORGE_ID;
+    whKeyId       kekId       = WH_KEYID_ERASED;
+    whKeyId       srcKeyId    = WH_TEST_KW_SRC_ID;
+    whKeyId       forgeId     = WH_TEST_KW_CACHE_FORGE_ID;
+    whKeyId       randForgeId = WH_TEST_KW_RAND_FORGE_ID;
     uint8_t       srcKey[WH_TEST_KW_KEYSIZE];
     uint8_t       label[WH_NVM_LABEL_LEN] = "TrustedKek key";
     uint8_t       wrappedKey[WH_TEST_KW_WRAPPED_KEYSIZE];
@@ -325,6 +268,37 @@ static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto cleanup;
     }
+
+    /* (e) Same forgery through the cache-random path, where the server picks
+     * the key material. The evict must succeed too: an unstripped TRUSTED flag
+     * freezes the slot against every client op, evict included */
+    ret = wh_Client_KeyCacheRandom(
+        client, WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP, label,
+        (uint16_t)sizeof(label), WH_TEST_KW_KEYSIZE, &randForgeId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("trusted-kek: cache-random forged KEK failed %d\n", ret);
+        goto cleanup;
+    }
+    wrappedKeySz = sizeof(wrappedKey);
+    ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
+                                  WH_KEYTYPE_CRYPTO, randForgeId, wrappedKey,
+                                  &wrappedKeySz);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("trusted-kek: wrap-export with cache-random KEK "
+                       "expected ACCESS, got %d\n",
+                       ret);
+        (void)wh_Client_KeyEvict(client, randForgeId);
+        ret = WH_ERROR_ABORTED;
+        goto cleanup;
+    }
+    ret = wh_Client_KeyEvict(client, randForgeId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("trusted-kek: evict cache-random KEK expected OK, got "
+                       "%d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto cleanup;
+    }
     ret = WH_ERROR_OK;
 
 cleanup:
@@ -397,11 +371,89 @@ static int _whTest_KeywrapDataWrapUsage(whClientContext* client)
     return WH_ERROR_OK;
 }
 
+/* A wrapped blob smaller than its own header must be refused with
+ * WH_ERROR_BADARGS rather than underflowing the payload length. A usable KEK
+ * is cached first so the rejection can only come from the size check, not
+ * from KEK resolution */
+static int _whTest_KeywrapKeyUnwrapUnderflow(whClientContext* client)
+{
+    const uint16_t shortSizes[] = {0, 1};
+    int            ret          = WH_ERROR_OK;
+    whKeyId        kekId        = WH_KEYID_ERASED;
+    uint8_t        blob[1]      = {0};
+    size_t         i;
+
+    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
+
+    for (i = 0; i < sizeof(shortSizes) / sizeof(shortSizes[0]); i++) {
+        whNvmMetadata meta                       = {0};
+        uint8_t       keyOut[WH_TEST_KW_KEYSIZE] = {0};
+        uint16_t      keyOutSz                   = sizeof(keyOut);
+        uint16_t      cachedId                   = WH_KEYID_ERASED;
+
+        ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId,
+                                           blob, shortSizes[i], &meta, keyOut,
+                                           &keyOutSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("KeyUnwrapAndExport(sz=%u) expected BADARGS, "
+                           "got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+
+        ret = wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, kekId,
+                                          blob, shortSizes[i], &cachedId);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("KeyUnwrapAndCache(sz=%u) expected BADARGS, "
+                           "got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+        ret = WH_ERROR_OK;
+    }
+
+    (void)wh_Client_KeyEvict(client, kekId);
+    return ret;
+}
+
+/* Same underflow guard on the opaque data path */
+static int _whTest_KeywrapDataUnwrapUnderflow(whClientContext* client)
+{
+    const uint32_t shortSizes[] = {0, 1};
+    int            ret          = WH_ERROR_OK;
+    whKeyId        kekId        = WH_KEYID_ERASED;
+    uint8_t        blob[1]      = {0};
+    size_t         i;
+
+    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
+
+    for (i = 0; i < sizeof(shortSizes) / sizeof(shortSizes[0]); i++) {
+        uint8_t  dataOut[WH_TEST_KW_KEYSIZE] = {0};
+        uint32_t dataOutSz                   = sizeof(dataOut);
+
+        ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, kekId, blob,
+                                   shortSizes[i], dataOut, &dataOutSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("DataUnwrap(sz=%u) expected BADARGS, got %d\n",
+                           (unsigned)shortSizes[i], ret);
+            ret = WH_ERROR_ABORTED;
+            break;
+        }
+        ret = WH_ERROR_OK;
+    }
+
+    (void)wh_Client_KeyEvict(client, kekId);
+    return ret;
+}
+
 int whTest_KeyWrap(whClientContext* ctx)
 {
-    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapSwKekRoundTrip(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapTrustedKekPolicy(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataWrapUsage(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapKeyUnwrapUnderflow(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataUnwrapUnderflow(ctx));
 
     WH_TEST_PRINT("KEYWRAP POLICY SUCCESS\n");
     return 0;

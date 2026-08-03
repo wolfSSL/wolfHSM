@@ -1253,6 +1253,98 @@ int whTest_AuthSetPermissions(whClientContext* client)
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND ||
                           server_rc != WH_ERROR_OK);
 
+    /* Test 3b: Non-admin user trying to change another user's permissions */
+    WH_TEST_PRINT("  Test: Non-admin user setting another user's perms\n");
+    {
+        whUserId          nonadmin_id = WH_USER_ID_INVALID;
+        whUserId          target_id   = WH_USER_ID_INVALID;
+        whAuthPermissions nonadmin_perms;
+        whAuthPermissions target_perms;
+
+        /* non-admin user allowed the set permissions action */
+        memset(&nonadmin_perms, 0, sizeof(nonadmin_perms));
+        WH_AUTH_SET_ALLOWED_GROUP(nonadmin_perms, WH_MESSAGE_GROUP_AUTH);
+        WH_AUTH_SET_ALLOWED_ACTION(nonadmin_perms, WH_MESSAGE_GROUP_AUTH,
+                                   WH_MESSAGE_AUTH_ACTION_USER_SET_PERMISSIONS);
+        WH_AUTH_SET_IS_ADMIN(nonadmin_perms, 0);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "sp_nonadmin", nonadmin_perms, WH_AUTH_METHOD_PIN, "pass",
+            4, &server_rc, &nonadmin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(nonadmin_id != WH_USER_ID_INVALID);
+
+        /* Target user with no permissions */
+        memset(&target_perms, 0, sizeof(target_perms));
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(
+            client, "sp_target", target_perms, WH_AUTH_METHOD_PIN, "pass", 4,
+            &server_rc, &target_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(target_id != WH_USER_ID_INVALID);
+
+        /* Logout admin and login as the non-admin user */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                    "sp_nonadmin", "pass", 4,
+                                                    &server_rc, &nonadmin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Attempt to grant the target user admin - should be denied */
+        memset(&new_perms, 0, sizeof(new_perms));
+        WH_AUTH_SET_IS_ADMIN(new_perms, 1);
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_Auth_UserSetPermsOp(client, target_id, new_perms,
+                                        &server_rc));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+
+        /* Attempt to grant self admin - should also be denied */
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_Auth_UserSetPermsOp(client, nonadmin_id, new_perms,
+                                        &server_rc));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+        WH_TEST_PRINT("    Non-admin set permissions attempt correctly denied\n");
+
+        /* Logout non-admin and login as admin to verify and cleanup */
+        server_rc = 0;
+        _whTest_Auth_LogoutOp(client, nonadmin_id, &server_rc);
+
+        server_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                    "admin", "1234", 4,
+                                                    &server_rc, &admin_id));
+        WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+        /* Target permissions must be unchanged */
+        memset(&fetched_perms, 0, sizeof(fetched_perms));
+        fetched_user_id = WH_USER_ID_INVALID;
+        get_rc          = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+            client, "sp_target", &get_rc, &fetched_user_id, &fetched_perms));
+        WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(fetched_user_id == target_id);
+        WH_TEST_ASSERT_RETURN(!WH_AUTH_IS_ADMIN(fetched_perms));
+
+        /* Non-admin's own permissions must be unchanged as well */
+        memset(&fetched_perms, 0, sizeof(fetched_perms));
+        fetched_user_id = WH_USER_ID_INVALID;
+        get_rc          = 0;
+        WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+            client, "sp_nonadmin", &get_rc, &fetched_user_id, &fetched_perms));
+        WH_TEST_ASSERT_RETURN(get_rc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(!WH_AUTH_IS_ADMIN(fetched_perms));
+
+        server_rc = 0;
+        _whTest_Auth_UserDeleteOp(client, nonadmin_id, &server_rc);
+        _whTest_Auth_UserDeleteOp(client, target_id, &server_rc);
+    }
+
     /* Test 4: Set user permissions when not logged in */
     WH_TEST_PRINT("  Test: Set user permissions when not logged in\n");
     /* Logout */

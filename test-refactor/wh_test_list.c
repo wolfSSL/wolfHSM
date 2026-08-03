@@ -42,18 +42,23 @@
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_ClientDevId);
 WH_TEST_DECL(whTest_Comm);
+WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_HwKeystore);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MessageCryptoTranslate);
+WH_TEST_DECL(whTest_MessageNvmTranslate);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_Lock);
+WH_TEST_DECL(whTest_Log);
 WH_TEST_DECL(whTest_CertVerify);
 WH_TEST_DECL(whTest_CertNvmPolicy);
 WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
+WH_TEST_DECL(whTest_CertReadTrusted);
 WH_TEST_DECL(whTest_HwKeystoreServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
+WH_TEST_DECL(whTest_NvmPolicyChecked);
 WH_TEST_DECL(whTest_ClientCerts);
 WH_TEST_DECL(whTest_Counter);
 WH_TEST_DECL(whTest_Crypto_Aes);
@@ -65,6 +70,7 @@ WH_TEST_DECL(whTest_Crypto_Ed25519);
 WH_TEST_DECL(whTest_Crypto_Kdf);
 WH_TEST_DECL(whTest_Crypto_KeyPolicy);
 WH_TEST_DECL(whTest_Crypto_KeyWrap);
+WH_TEST_DECL(whTest_Crypto_Keystore);
 WH_TEST_DECL(whTest_Crypto_Lms);
 WH_TEST_DECL(whTest_Crypto_MlDsa);
 WH_TEST_DECL(whTest_Crypto_Rng);
@@ -102,11 +108,14 @@ const whTestCase whTestsMisc[] = {
     { "whTest_ClientDevId",      whTest_ClientDevId },
     { "whTest_Comm",             whTest_Comm },
     { "whTest_Dma",              whTest_Dma },
+    { "whTest_CryptoAffinity",   whTest_CryptoAffinity },
     { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
     { "whTest_MessageCryptoTranslate", whTest_MessageCryptoTranslate },
+    { "whTest_MessageNvmTranslate", whTest_MessageNvmTranslate },
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
     { "whTest_Lock",             whTest_Lock },
+    { "whTest_Log",              whTest_Log },
     { "whTest_SheKeywrapInterop", whTest_SheKeywrapInterop },
     { "whTest_SheNoNvm",         whTest_SheNoNvm },
 };
@@ -117,7 +126,9 @@ const whTestCase whTestsServer[] = {
     { "whTest_CertNvmPolicy", whTest_CertNvmPolicy },
     { "whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly },
     { "whTest_ServerImgMgr", whTest_ServerImgMgr },
+    { "whTest_CertReadTrusted", whTest_CertReadTrusted },
     { "whTest_NvmOptional", whTest_NvmOptional },
+    { "whTest_NvmPolicyChecked", whTest_NvmPolicyChecked },
     { "whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback },
     { "whTest_SheReqSizeChecking", whTest_SheReqSizeChecking },
     { "whTest_HwKeystoreServer", whTest_HwKeystoreServer },
@@ -137,6 +148,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_Crypto_Kdf", whTest_Crypto_Kdf},
     {"whTest_Crypto_KeyPolicy", whTest_Crypto_KeyPolicy},
     {"whTest_Crypto_KeyWrap", whTest_Crypto_KeyWrap},
+    {"whTest_Crypto_Keystore", whTest_Crypto_Keystore},
     {"whTest_Crypto_Lms", whTest_Crypto_Lms},
     {"whTest_Crypto_MlDsa", whTest_Crypto_MlDsa},
     {"whTest_Crypto_Rng", whTest_Crypto_Rng},

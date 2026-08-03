@@ -25,8 +25,6 @@
 
 #include <stdint.h>
 
-/* Maximum number of operations that can be registered */
-#define MAX_BENCH_OPS 128
 /* Maximum length of operation name */
 #define MAX_OP_NAME 64
 
@@ -74,8 +72,9 @@ typedef struct whBenchOp {
 } whBenchOp;
 
 typedef struct whBenchOpContext {
-    whBenchOp ops[MAX_BENCH_OPS]; /* Array of operations */
-    int       opCount;            /* Number of registered operations */
+    whBenchOp*           ops;     /* Caller-supplied array of operations */
+    int                  maxOps;  /* Number of entries in ops */
+    int                  opCount; /* Number of registered operations */
     whBenchTransportType transportType;      /* Type of transport */
 } whBenchOpContext;
 
@@ -83,8 +82,9 @@ typedef struct whBenchOpContext {
  * Benchmark Timing API
  */
 
-/* Initialize benchmark context */
-int wh_Bench_Init(whBenchOpContext* ctx);
+/* Initialize benchmark context. The caller supplies the array used to hold the
+ * registered operations, which must stay valid until wh_Bench_Cleanup. */
+int wh_Bench_Init(whBenchOpContext* ctx, whBenchOp* ops, int maxOps);
 
 /* Register a new benchmark operation with a name, returns ID via pointer */
 int wh_Bench_RegisterOp(whBenchOpContext* ctx, const char* name,

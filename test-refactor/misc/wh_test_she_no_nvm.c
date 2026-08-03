@@ -456,7 +456,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_INIT,
         sizeof(*initReq), (uint8_t*)initReq));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -474,7 +475,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_UPDATE,
         (uint16_t)(sizeof(*updateReq) + bootloaderLen), (uint8_t*)updateReq));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -487,7 +489,8 @@ static int _SheSecureBoot(TestCtx* t, uint8_t* bootloader,
     WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
         t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_SECURE_BOOT_FINISH, 0, NULL));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz, respBuf);
+    ret = wh_Client_RecvResponse(t->client, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, respBuf);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -505,12 +508,14 @@ static int _WrapSheKeys(TestCtx* t, SheNoNvmKey* keys, int n)
     int ret;
     int i;
 
+    /* t is unused when SHE key ids ignore the client id */
+    (void)t;
+
     for (i = 0; i < n; i++) {
         keys[i].blobSz = (uint16_t)sizeof(keys[i].blob);
         ret            = whTest_BuildSheKeyBlob(
             whTest_KeywrapKek, sizeof(whTest_KeywrapKek),
-            WH_MAKE_KEYID(WH_KEYTYPE_SHE, t->client->comm->client_id,
-                                     keys[i].slot),
+            WH_SHE_MAKE_KEYID(t->client->comm->client_id, keys[i].slot),
             keys[i].counter, keys[i].flags, keys[i].plain, keys[i].blob,
             &keys[i].blobSz);
         if (ret != 0) {

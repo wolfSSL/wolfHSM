@@ -110,9 +110,15 @@ test-gen: $(OUT)
 	rm -f whNvmImage.bin whNvmImage.hex
 	./$(OUT) --test test/nvminit/test.nvminit --invert-erased-byte
 
+# Run the negative tests, where invalid configs and key files must fail the tool.
+# Order-only prereq on test-gen: every whnvmtool instance binds the same TCP
+# port, so the two tool-running targets must not overlap under make -j.
+test-invalid: $(OUT) | test-gen
+	./test/test_invalid_input.sh ./$(OUT)
+
 # Run the test suite, which requires first generating the test NVM image
 check: test
-test: $(OUT) test-gen
+test: $(OUT) test-gen test-invalid
 	$(MAKE) -C test/ CFLAGS_EXTRA="-DFLASH_ERASED_BYTE=0x00 $(CFLAGS_EXTRA)" WOLFSSL_DIR=$$(realpath $(WOLFSSL_DIR))
 	cd test && ./test_whnvmtool
 
@@ -140,4 +146,4 @@ clean-test:
 	$(MAKE) -C test clean
 
 # PHONY targets
-.PHONY: all clean test-gen test
+.PHONY: all clean test-gen test-invalid test

@@ -81,7 +81,7 @@
  * and the blocking wrappers wh_Client_EccMakeCacheKey/EccMakeExportKey. */
 static int _EccMakeKeyRequest(whClientContext* ctx, int size, int curveId,
                               whKeyId key_id, whNvmFlags flags,
-                              uint16_t label_len, uint8_t* label);
+                              uint16_t label_len, const uint8_t* label);
 static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                ecc_key* out_key);
 #endif /* HAVE_ECC */
@@ -98,7 +98,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 /* Shared async halves used by the RsaMakeCacheKey/RsaMakeExportKey wrappers. */
 static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId key_id, whNvmFlags flags,
-                              uint32_t label_len, uint8_t* label);
+                              uint32_t label_len, const uint8_t* label);
 static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                RsaKey* out_rsa);
 #endif
@@ -127,23 +127,23 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 /* Make a ML-DSA key on the server based on the flags */
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, wc_MlDsaKey* key);
+                         uint16_t label_len, const uint8_t* label, wc_MlDsaKey* key);
 
 #ifdef WOLFHSM_CFG_DMA
 static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, wc_MlDsaKey* key);
+                            uint16_t label_len, const uint8_t* label, wc_MlDsaKey* key);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 static int _MlKemMakeKey(whClientContext* ctx, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, MlKemKey* key);
+                         uint16_t label_len, const uint8_t* label, MlKemKey* key);
 #ifdef WOLFHSM_CFG_DMA
 static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, MlKemKey* key);
+                            uint16_t label_len, const uint8_t* label, MlKemKey* key);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_HAVE_MLKEM */
 
@@ -249,18 +249,21 @@ int wh_Client_RngGenerateResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&res);
     if (ret == WH_ERROR_OK) {
-        if (res->sz > WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ ||
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Reject a size the received message does not actually carry, or that
+         * exceeds the inline cap or the caller's buffer. */
+        if (res_len < hdr_sz || res->sz > (res_len - hdr_sz) ||
+            res->sz > WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ ||
             res->sz > *inout_size) {
-            /* Server returned more than the inline cap or the caller's buffer
-             * can hold. Guard the inline cap first to avoid reading past the
-             * comm buffer on a malformed response. */
             ret = WH_ERROR_ABORTED;
         }
         else {
@@ -390,7 +393,8 @@ int wh_Client_RngGenerateDmaResponse(whClientContext* ctx)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -399,6 +403,15 @@ int wh_Client_RngGenerateDmaResponse(whClientContext* ctx)
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, (uint8_t**)&resp);
         /* On success, server has written random bytes directly to client
          * memory — nothing else to copy. */
+        if (ret == WH_ERROR_OK) {
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp);
+            /* Nothing here is read inline; the bound just holds a success rc
+             * to a full response (an error reply carries only the header). */
+            if (respSz < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
     }
 
     /* POST DMA cleanup using stashed addresses (runs on every non-NOTREADY
@@ -516,7 +529,8 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -701,7 +715,8 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -709,14 +724,23 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            uint8_t* res_iv =
-                (uint8_t*)res + sizeof(whMessageCrypto_AesCtrDmaResponse);
-            uint8_t* res_tmp = res_iv + AES_IV_SIZE;
-            aes->left        = res->left;
-            memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
-            memcpy((uint8_t*)aes->tmp, res_tmp, AES_BLOCK_SIZE);
-            WH_DEBUG_CLIENT_VERBOSE("AesCtr DMA res: left=%u\n",
-                                    (unsigned int)res->left);
+            /* Trailing payload is: reg (AES_IV_SIZE) + tmp (AES_BLOCK_SIZE) */
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res) +
+                AES_IV_SIZE + AES_BLOCK_SIZE;
+            if (res_len < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                uint8_t* res_iv =
+                    (uint8_t*)res + sizeof(whMessageCrypto_AesCtrDmaResponse);
+                uint8_t* res_tmp = res_iv + AES_IV_SIZE;
+                aes->left        = res->left;
+                memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
+                memcpy((uint8_t*)aes->tmp, res_tmp, AES_BLOCK_SIZE);
+                WH_DEBUG_CLIENT_VERBOSE("AesCtr DMA res: left=%u\n",
+                                        (unsigned int)res->left);
+            }
         }
     }
 
@@ -847,7 +871,8 @@ int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1018,7 +1043,8 @@ int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1026,7 +1052,14 @@ int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes)
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            WH_DEBUG_CLIENT_VERBOSE("AesEcb DMA res: ok\n");
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            if (res_len < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                WH_DEBUG_CLIENT_VERBOSE("AesEcb DMA res: ok\n");
+            }
         }
     }
 
@@ -1171,7 +1204,8 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1354,7 +1388,8 @@ int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1362,10 +1397,19 @@ int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes)
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            uint8_t* res_iv =
-                (uint8_t*)res + sizeof(whMessageCrypto_AesCbcDmaResponse);
-            memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
-            WH_DEBUG_CLIENT_VERBOSE("AesCbc DMA res: ok\n");
+            /* Trailing payload is the updated IV (AES_IV_SIZE) */
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res) +
+                AES_IV_SIZE;
+            if (res_len < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                uint8_t* res_iv =
+                    (uint8_t*)res + sizeof(whMessageCrypto_AesCbcDmaResponse);
+                memcpy((uint8_t*)aes->reg, res_iv, AES_IV_SIZE);
+                WH_DEBUG_CLIENT_VERBOSE("AesCbc DMA res: ok\n");
+            }
         }
     }
 
@@ -1527,7 +1571,8 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
@@ -1751,7 +1796,8 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -1759,19 +1805,27 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, (uint8_t**)&res);
         if (ret == WH_ERROR_OK) {
-            if (enc_tag != NULL && res->authTagSz > 0) {
-                if (res->authTagSz > tag_len) {
-                    ret = WH_ERROR_ABORTED;
-                }
-                else {
-                    uint8_t* res_tag =
-                        (uint8_t*)res +
-                        sizeof(whMessageCrypto_AesGcmDmaResponse);
-                    memcpy(enc_tag, res_tag, res->authTagSz);
-                }
+            /* Trailing payload is the auth tag (res->authTagSz) */
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            if (res_len < hdr_sz || res->authTagSz > (res_len - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
             }
-            WH_DEBUG_CLIENT_VERBOSE("AesGcm DMA res: tagsz=%u\n",
-                                    (unsigned int)res->authTagSz);
+            else {
+                if (enc_tag != NULL && res->authTagSz > 0) {
+                    if (res->authTagSz > tag_len) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        uint8_t* res_tag =
+                            (uint8_t*)res +
+                            sizeof(whMessageCrypto_AesGcmDmaResponse);
+                        memcpy(enc_tag, res_tag, res->authTagSz);
+                    }
+                }
+                WH_DEBUG_CLIENT_VERBOSE("AesGcm DMA res: tagsz=%u\n",
+                                        (unsigned int)res->authTagSz);
+            }
         }
     }
 
@@ -1931,7 +1985,7 @@ int wh_Client_EccExportPublicKey(whClientContext* ctx, whKeyId keyId,
  * blocking poll) to consume the reply. */
 static int _EccMakeKeyRequest(whClientContext* ctx, int size, int curveId,
                               whKeyId key_id, whNvmFlags flags,
-                              uint16_t label_len, uint8_t* label)
+                              uint16_t label_len, const uint8_t* label)
 {
     whMessageCrypto_EccKeyGenRequest* req     = NULL;
     uint8_t*                          dataPtr = NULL;
@@ -1997,7 +2051,8 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2021,14 +2076,17 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
             *out_key_id = key_id;
         }
 
-        /* If a DER blob is present (ephemeral/export keygen), deserialize it
-         * into the supplied key context.  When called from the cache wrapper,
-         * out_key is NULL and the server returns an empty body. */
+        /* A DER blob is present for both ephemeral/export keygen and the
+         * cache-and-export path. When key material was requested (out_key !=
+         * NULL) but the server returned an empty body, treat it as an error so
+         * a caller of ...AndExportPublic never receives an unpopulated key. */
         if (out_key != NULL) {
             if (res->len > 0) {
                 uint8_t* key_der  = (uint8_t*)(res + 1);
                 uint16_t der_size = (uint16_t)(res->len);
-                /* Ephemeral key — leave devCtx ERASED */
+                /* Leave devCtx ERASED here: ephemeral keygen keeps it that way,
+                 * and the cache-and-export wrapper overwrites it with the cached
+                 * keyId after this returns. */
                 wh_Client_EccSetKeyId(out_key, WH_KEYID_ERASED);
                 ret =
                     wh_Crypto_EccDeserializeKeyDer(key_der, der_size, out_key);
@@ -2036,8 +2094,7 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
                                          der_size);
             }
             else {
-                /* Cached key — stamp the assigned keyId */
-                wh_Client_EccSetKeyId(out_key, key_id);
+                ret = WH_ERROR_ABORTED;
             }
         }
     }
@@ -2100,6 +2157,58 @@ int wh_Client_EccMakeCacheKey(whClientContext* ctx, int size, int curveId,
         } while (ret == WH_ERROR_NOTREADY);
         if (ret >= 0) {
             *inout_key_id = key_id;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_EccMakeCacheKeyAndExportPublic(whClientContext* ctx, int size,
+                                             int curveId,
+                                             whKeyId* inout_key_id,
+                                             whNvmFlags flags,
+                                             uint16_t label_len,
+                                             const uint8_t* label,
+                                             ecc_key* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+    whKeyId key_id = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export pair, not the cache pair. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret      = _EccMakeKeyRequest(ctx, size, curveId, in_keyId, flags,
+                                  label_len, label);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _EccMakeKeyResponse(ctx, &key_id, pub);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret >= 0) {
+            *inout_key_id = key_id;
+            /* Associate the returned key with the cached keyId and stamp the
+             * client's HSM devId so pub is immediately usable both as the
+             * exported public key and as a handle to the cached private key,
+             * without the caller re-initializing it. */
+            wh_Client_EccSetKeyId(pub, key_id);
+            pub->devId = WH_CLIENT_DEVID(ctx);
+        }
+        else if (!WH_KEYID_ISERASED(key_id)) {
+            /* The server committed a key but the best-effort export returned no
+             * usable public key (empty response body when it did not fit, or a
+             * client-side deserialize failure). Roll back so the operation is
+             * atomic and no cache slot is orphaned. key_id is only set from a
+             * parsed server response, so it is non-erased only when a key was
+             * actually committed - safe even when the caller supplied an
+             * explicit keyId. */
+            (void)wh_Client_KeyEvict(ctx, key_id);
+            *inout_key_id = WH_KEYID_ERASED;
         }
     }
     return ret;
@@ -2201,7 +2310,8 @@ static int _EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2436,7 +2546,8 @@ int wh_Client_EccSignResponse(whClientContext* ctx, uint8_t* sig,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2638,7 +2749,8 @@ int wh_Client_EccVerifyResponse(whClientContext* ctx, ecc_key* opt_key,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -2790,57 +2902,288 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     return ret;
 }
 
-#if 0
-int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
-        const uint8_t* pub_key, uint16_t pub_key_len)
+/* Response half for ECC make-public.  Single-shot receive: returns
+ * WH_ERROR_NOTREADY if the reply has not arrived yet. */
+static int _EccMakePubResponse(whClientContext* ctx, uint8_t* pubOut,
+                               uint16_t* inout_pubOutSz)
 {
-/* TODO: Check if keyid is set on incoming key.
- *      if not, import private key to server
- *      send request with pub key der
- *      server creates new key with private and public.  check
- *      evict temp key
- */
-    int ret;
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            res_len = 0;
+    uint8_t*                            dataPtr;
+    whMessageCrypto_EccMakePubResponse* res = NULL;
 
-    if (    (ctx == NULL) ||
-            (key == NULL) ||
-            (pub_key == NULL) ||
-            (pub_key_len == 0) ) {
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
         return WH_ERROR_BADARGS;
     }
-    int curve_id = wc_ecc_get_curve_id(key->idx);
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
-    /* Request packet */
-    wh_Packet_pk_ecc_check_req* req = &packet->pkEccCheckReq;
-    uint8_t* req_pub_key = (uint8_t*)(req + 1);
-
-    req->type = WC_PK_TYPE_EC_CHECK_PRIV_KEY;
-    req->keyId = key_id;
-    req->curveId = curve_id;
-
-    /* Response packet */
-    wh_Packet_pk_ecc_check_res* res = &packet->pkEccCheckRes;
-
-
-    /* write request */
-    ret = wh_Client_SendRequest(ctx, group,
-        WC_ALGO_TYPE_PK,
-        WH_PACKET_STUB_SIZE + sizeof(packet->pkEccCheckReq),
-        (uint8_t*)packet);
-    /* read response */
-    if (ret == 0) {
-        do {
-            ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                (uint8_t*)packet);
-        } while (ret == WH_ERROR_NOTREADY);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
     }
-    if (ret == 0) {
-        if (packet->rc != 0)
-            ret = packet->rc;
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_MAKE_PUB, (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Defensive bound: res->pubSz must fit within the actual received
+         * frame */
+        if (res_len < hdr_sz || res->pubSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+        if (res->pubSz > (uint32_t)(*inout_pubOutSz)) {
+            /* Report the size the caller needs so it can re-call */
+            *inout_pubOutSz = (uint16_t)res->pubSz;
+            return WH_ERROR_BUFFER_SIZE;
+        }
+        memcpy(pubOut, (uint8_t*)(res + 1), res->pubSz);
+        *inout_pubOutSz = (uint16_t)res->pubSz;
     }
+    return ret;
 }
-#endif /* 0 */
+
+int wh_Client_EccMakePub(whClientContext* ctx, ecc_key* key, uint8_t* pubOut,
+                         uint16_t* inout_pubOutSz)
+{
+    int                                ret     = WH_ERROR_OK;
+    whMessageCrypto_EccMakePubRequest* req     = NULL;
+    uint8_t*                           dataPtr = NULL;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p pubOut:%p inout_pubOutSz:%p\n", ctx,
+                            key, pubOut, inout_pubOutSz);
+
+    /* Validate response-side args upfront so we never send a request that the
+     * matching *Response would then reject without consuming the reply. */
+    if ((ctx == NULL) || (key == NULL) || (pubOut == NULL) ||
+        (inout_pubOutSz == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempEccMakePub";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+                           sizeof(whMessageCrypto_EccMakePubRequest);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* Setup generic header and get pointer to request data */
+            req = (whMessageCrypto_EccMakePubRequest*)_createCryptoRequest(
+                dataPtr, WC_PK_TYPE_EC_MAKE_PUB, ctx->cryptoAffinity);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_ECCMAKEPUB_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+
+            WH_DEBUG_CLIENT_VERBOSE("EccMakePub req: key_id=%x options=%u\n",
+                                    key_id, (unsigned int)options);
+
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                do {
+                    ret = _EccMakePubResponse(ctx, pubOut, inout_pubOutSz);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+        }
+        else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
+    return ret;
+}
+
+#ifdef HAVE_ECC_CHECK_KEY
+/* Response half for ECC key validation.  The verdict is the response code
+ * itself: 0 when the key is valid, a wolfCrypt error when it is not. */
+static int _EccCheckPubKeyResponse(whClientContext* ctx)
+{
+    int                               ret;
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          res_len = 0;
+    uint8_t*                          dataPtr;
+    whMessageCrypto_EccCheckResponse* res = NULL;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* A negative rc here is the verdict on an invalid key rather than a
+     * transport failure, and is handed back to wolfCrypt verbatim. */
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_CHECK_PUB_KEY,
+                             (uint8_t**)&res);
+    if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* A success rc must be accompanied by an affirmative body */
+        if ((res_len < hdr_sz) || (res->ok == 0)) {
+            return WH_ERROR_ABORTED;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
+                             const uint8_t* pub_key, uint16_t pub_key_len,
+                             int check_order, int check_priv)
+{
+    int                              ret     = WH_ERROR_OK;
+    whMessageCrypto_EccCheckRequest* req     = NULL;
+    uint8_t*                         dataPtr = NULL;
+
+    /* Transaction state */
+    whKeyId key_id;
+    int     evict = 0;
+
+    WH_DEBUG_CLIENT_VERBOSE("ctx:%p key:%p pub_key:%p pub_key_len:%u\n", ctx,
+                            key, pub_key, pub_key_len);
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((pub_key == NULL) && (pub_key_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* check_order/check_priv mirror wolfCrypt's cryptocb request shape but
+     * are not carried on the wire: the server always performs the full
+     * validation, a strict superset of any partial check. */
+    (void)check_order;
+    (void)check_priv;
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    /* Import key if necessary */
+    if (WH_KEYID_ISERASED(key_id)) {
+        /* Must import the key to the server and evict it afterwards */
+        uint8_t    keyLabel[] = "TempEccCheck";
+        whNvmFlags flags      = WH_NVM_FLAGS_NONE;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret == 0) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Request Message */
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+
+        /* Compute the total length in a wide type so a large pub_key_len
+         * cannot wrap the sum before the bounds check below. Narrowing to
+         * the uint16_t wire length is safe once the check has passed. */
+        uint32_t req_len = (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                           (uint32_t)sizeof(whMessageCrypto_EccCheckRequest) +
+                           pub_key_len;
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            /* Setup generic header and get pointer to request data */
+            req = (whMessageCrypto_EccCheckRequest*)_createCryptoRequest(
+                dataPtr, WC_PK_TYPE_EC_CHECK_PUB_KEY, ctx->cryptoAffinity);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_ECCCHECK_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+            req->curveId = (uint32_t)wc_ecc_get_curve_id(key->idx);
+            req->pubSz   = pub_key_len;
+            if ((pub_key != NULL) && (pub_key_len > 0)) {
+                memcpy((uint8_t*)(req + 1), pub_key, pub_key_len);
+            }
+
+            WH_DEBUG_CLIENT_VERBOSE("EccCheckPubKey req: key_id=%x, "
+                                    "pub_key_len=%u, options=%u\n",
+                                    key_id, (unsigned int)pub_key_len,
+                                    (unsigned int)options);
+
+            /* write request */
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
+                                        dataPtr);
+
+            if (ret == WH_ERROR_OK) {
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                do {
+                    ret = _EccCheckPubKeyResponse(ctx);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+        }
+        else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+    /* Evict the key manually on error */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("ret:%d\n", ret);
+    return ret;
+}
+#endif /* HAVE_ECC_CHECK_KEY */
 
 #endif /* HAVE_ECC */
 
@@ -2997,6 +3340,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
     if (ret == 0) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &data_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
                                          (uint8_t*)dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
     }
@@ -3021,13 +3365,26 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
 
             /* Update the context if provided */
             if (key != NULL) {
-                uint16_t der_size = (uint16_t)(res->len);
-                uint8_t* key_der  = (uint8_t*)(res + 1);
-                /* Set the key_id.  Should be ERASED if EPHEMERAL */
+                uint16_t     der_size = (uint16_t)(res->len);
+                uint8_t*     key_der  = (uint8_t*)(res + 1);
+                const size_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                /* Set the key_id.  ERASED for EPHEMERAL, cached id otherwise. */
                 wh_Client_Curve25519SetKeyId(key, key_id);
 
-                if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                    /* Response has the exported key */
+                /* Response carries the exported key (EPHEMERAL) or the public
+                 * key (cached keygen). An empty body means the caller requested
+                 * key material the server did not return; also reject a length
+                 * that does not fit the received frame before deserializing. */
+                if (der_size == 0) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else if ((data_len < hdr_sz) ||
+                         (res->len > (data_len - hdr_sz))) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
                     ret = wh_Crypto_Curve25519DeserializeKey(key_der, der_size,
                                                              key);
                     WH_DEBUG_VERBOSE_HEXDUMP("[client] KeyGen export:", key_der,
@@ -3049,6 +3406,49 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx, uint16_t size,
 
     return _Curve25519MakeKey(ctx, size, inout_key_id, flags, label, label_len,
                               NULL);
+}
+
+int wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+    whClientContext* ctx, uint16_t size, whKeyId* inout_key_id,
+    whNvmFlags flags, const uint8_t* label, uint16_t label_len,
+    curve25519_key* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _Curve25519MakeKey(ctx, size, inout_key_id, flags, label, label_len,
+                             pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _Curve25519MakeKey) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_Curve25519SetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the best-effort export returned no
+         * public key (empty response body when it did not fit). Roll back so the
+         * operation is atomic and no cache slot is orphaned. A non-DMA keygen
+         * only yields WH_ERROR_ABORTED after the server has committed and
+         * returned the keyId, so evicting is safe even when the caller supplied
+         * an explicit keyId. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_Curve25519MakeExportKey(whClientContext* ctx, uint16_t size,
@@ -3138,7 +3538,8 @@ static int _Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3404,8 +3805,8 @@ int wh_Client_Ed25519ExportPublicKey(whClientContext* ctx, whKeyId keyId,
 }
 
 static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
-                           whNvmFlags flags, uint16_t label_len, uint8_t* label,
-                           ed25519_key* key)
+                           whNvmFlags flags, uint16_t label_len,
+                           const uint8_t* label, ed25519_key* key)
 {
     int                                    ret     = WH_ERROR_OK;
     whKeyId                                key_id  = WH_KEYID_ERASED;
@@ -3456,6 +3857,7 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     uint16_t res_len = 0;
     do {
         ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     WOLFHSM_CFG_COMM_DATA_LEN,
                                      (uint8_t*)dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
 
@@ -3470,21 +3872,30 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     ret =
         _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_KEYGEN, (uint8_t**)&res);
     if (ret >= 0) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+        /* Defensive bound: res->outSz must fit within the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
         key_id = (whKeyId)res->keyId;
         if (inout_key_id != NULL) {
             *inout_key_id = key_id;
         }
         if (key != NULL) {
             wh_Client_Ed25519SetKeyId(key, key_id);
-            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+            /* Response carries the exported key (EPHEMERAL) or the public key
+             * (cached keygen). An empty body means the caller requested key
+             * material the server did not return. */
+            if (res->outSz > 0) {
                 uint8_t* out   = (uint8_t*)(res + 1);
                 uint16_t outSz = (uint16_t)res->outSz;
-                if (outSz + sizeof(whMessageCrypto_GenericResponseHeader) +
-                        sizeof(*res) >
-                    WOLFHSM_CFG_COMM_DATA_LEN) {
-                    return WH_ERROR_ABORTED;
-                }
                 ret = wh_Crypto_Ed25519DeserializeKeyDer(out, outSz, key);
+            }
+            else {
+                ret = WH_ERROR_ABORTED;
             }
         }
     }
@@ -3510,6 +3921,50 @@ int wh_Client_Ed25519MakeCacheKey(whClientContext* ctx, whKeyId* inout_key_id,
     }
 
     return _Ed25519MakeKey(ctx, inout_key_id, flags, label_len, label, NULL);
+}
+
+int wh_Client_Ed25519MakeCacheKeyAndExportPublic(whClientContext* ctx,
+                                                 whKeyId* inout_key_id,
+                                                 whNvmFlags flags,
+                                                 uint16_t label_len,
+                                                 const uint8_t* label,
+                                                 ed25519_key* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _Ed25519MakeKey(ctx, inout_key_id, flags, label_len, label, pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _Ed25519MakeKey) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_Ed25519SetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the best-effort export returned no
+         * public key (empty response body when it did not fit). Roll back so the
+         * operation is atomic and no cache slot is orphaned. A non-DMA keygen
+         * only yields WH_ERROR_ABORTED after the server has committed and
+         * returned the keyId, so evicting is safe even when the caller supplied
+         * an explicit keyId. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
@@ -3602,6 +4057,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -3742,6 +4198,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -3882,6 +4339,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -4029,6 +4487,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
             uint16_t res_len = 0;
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
 
@@ -4191,7 +4650,7 @@ int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
 
 static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
                               whKeyId key_id, whNvmFlags flags,
-                              uint32_t label_len, uint8_t* label)
+                              uint32_t label_len, const uint8_t* label)
 {
     whMessageCrypto_RsaKeyGenRequest* req     = NULL;
     uint8_t*                          dataPtr = NULL;
@@ -4254,7 +4713,8 @@ static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -4352,6 +4812,58 @@ int wh_Client_RsaMakeCacheKey(whClientContext* ctx, uint32_t size, uint32_t e,
     return ret;
 }
 
+int wh_Client_RsaMakeCacheKeyAndExportPublic(whClientContext* ctx,
+                                             uint32_t size, uint32_t e,
+                                             whKeyId* inout_key_id,
+                                             whNvmFlags flags,
+                                             uint32_t label_len,
+                                             const uint8_t* label,
+                                             RsaKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+    whKeyId key_id = WH_KEYID_ERASED;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export pair, not the cache pair. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret      = _RsaMakeKeyRequest(ctx, size, e, in_keyId, flags, label_len,
+                                  label);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _RsaMakeKeyResponse(ctx, &key_id, pub);
+        } while (ret == WH_ERROR_NOTREADY);
+        if (ret >= 0) {
+            *inout_key_id = key_id;
+            /* Associate the returned key with the cached keyId and stamp the
+             * client's HSM devId so pub is immediately usable both as the
+             * exported public key and as a handle to the cached private key,
+             * without the caller re-initializing it. */
+            wh_Client_RsaSetKeyId(pub, key_id);
+            pub->devId = WH_CLIENT_DEVID(ctx);
+        }
+        else if (!WH_KEYID_ISERASED(key_id)) {
+            /* The server committed a key but the best-effort export returned no
+             * usable public key (empty response body when it did not fit, or a
+             * client-side deserialize failure). Roll back so the operation is
+             * atomic and no cache slot is orphaned. key_id is only set from a
+             * parsed server response, so it is non-erased only when a key was
+             * actually committed - safe even when the caller supplied an
+             * explicit keyId. */
+            (void)wh_Client_KeyEvict(ctx, key_id);
+            *inout_key_id = WH_KEYID_ERASED;
+        }
+    }
+    return ret;
+}
+
 int wh_Client_RsaMakeExportKey(whClientContext* ctx, uint32_t size, uint32_t e,
                                RsaKey* rsa)
 {
@@ -4434,7 +4946,8 @@ int wh_Client_RsaFunctionResponse(whClientContext* ctx, uint8_t* out,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -4629,7 +5142,8 @@ int wh_Client_RsaGetSizeResponse(whClientContext* ctx, int* out_size)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -4825,8 +5339,8 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
     if (ret == 0) {
         uint16_t res_len = 0;
         do {
-            ret =
-                wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
 
         WH_DEBUG_CLIENT_VERBOSE("HKDF Res recv: ret:%d, res_len: %u\n", ret,
@@ -4839,6 +5353,14 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
         }
 
         if (ret == WH_ERROR_OK) {
+            const size_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            /* Defensive bound: res->outSz must fit within the actual received
+             * frame */
+            if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+                return WH_ERROR_ABORTED;
+            }
+
             /* Key is cached on server or is ephemeral */
             key_id = (whKeyId)(res->keyIdOut);
 
@@ -4993,7 +5515,8 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 
     uint16_t res_len = 0;
     do {
-        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
 
     if (ret == WH_ERROR_OK) {
@@ -5001,6 +5524,14 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
     }
 
     if (ret == WH_ERROR_OK) {
+        const size_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* Defensive bound: res->outSz must fit within the actual received
+         * frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            return WH_ERROR_ABORTED;
+        }
+
         key_id = (whKeyId)(res->keyIdOut);
 
         if (inout_key_id != NULL) {
@@ -5221,7 +5752,8 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -5229,9 +5761,17 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     /* wolfCrypt allows positive error codes on success */
     if (ret >= 0) {
-        /* Restore state from response (server has finalized; buffer/digest
-         * carry the post-finalization state). */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore state from response (server has finalized; buffer/digest
+             * carry the post-finalization state). */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
@@ -5342,17 +5882,25 @@ int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        /* Restore full state from server. The server may leave a partial
-         * (or whole) block in its buffer after wc_CmacUpdate (CMAC's last
-         * block has special handling), so we round-trip the whole state. */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        /* No trailing payload on update, but the state must be in the frame */
+        if (res_len < sizeof(whMessageCrypto_GenericResponseHeader) +
+                          sizeof(*res)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore full state from server. The server may leave a partial
+             * (or whole) block in its buffer after wc_CmacUpdate (CMAC's last
+             * block has special handling), so we round-trip the whole state. */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
     }
     return ret;
 }
@@ -5432,16 +5980,25 @@ int wh_Client_CmacFinalResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        /* Restore final state from response (server's bufferSz is 0 after
-         * Final). */
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            /* Restore final state from response (server's bufferSz is 0 after
+             * Final). */
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
@@ -5672,7 +6229,8 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -5680,7 +6238,18 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
         if (ret >= 0) {
-            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            /* The MAC bytes the response claims must be in the received
+             * frame. A failed server request replies with the generic header
+             * only, so this bound stays inside the success branch. */
+            if (respSz < hdr_sz || res->outSz > (respSz - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret >= 0) {
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
+            }
             if (ret >= 0) {
                 ret = _CmacValidateTagLen(*outMacLen);
             }
@@ -5817,7 +6386,8 @@ int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -5825,9 +6395,18 @@ int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac)
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
         if (ret >= 0) {
-            /* Restore full state from server (includes any partial/whole
-             * block left in the server's wc_CmacUpdate buffer). */
-            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+            /* No trailing payload on update, but the state must be in the
+             * frame */
+            if (respSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                             sizeof(*res)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret >= 0) {
+                /* Restore full state from server (includes any partial/whole
+                 * block left in the server's wc_CmacUpdate buffer). */
+                ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac,
+                                                           &res->resumeState);
+            }
         }
     }
 
@@ -5907,14 +6486,23 @@ int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
     ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, (uint8_t**)&res);
     if (ret >= 0) {
-        ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (respSz < hdr_sz || res->outSz > (respSz - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret >= 0) {
+            ret = wh_Crypto_CmacAesRestoreStateFromMsg(cmac, &res->resumeState);
+        }
         if (ret >= 0) {
             ret = _CmacValidateTagLen(*outMacLen);
         }
@@ -6150,7 +6738,8 @@ int wh_Client_Sha256UpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -6230,7 +6819,8 @@ int wh_Client_Sha256FinalResponse(whClientContext* ctx, wc_Sha256* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -6448,7 +7038,8 @@ int wh_Client_Sha256DmaUpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6552,7 +7143,8 @@ int wh_Client_Sha256DmaFinalResponse(whClientContext* ctx, wc_Sha256* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -6747,7 +7339,8 @@ int wh_Client_Sha224UpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -6828,7 +7421,8 @@ int wh_Client_Sha224FinalResponse(whClientContext* ctx, wc_Sha224* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -7034,7 +7628,8 @@ int wh_Client_Sha224DmaUpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7134,7 +7729,8 @@ int wh_Client_Sha224DmaFinalResponse(whClientContext* ctx, wc_Sha224* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7329,7 +7925,8 @@ int wh_Client_Sha384UpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -7411,7 +8008,8 @@ int wh_Client_Sha384FinalResponse(whClientContext* ctx, wc_Sha384* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -7618,7 +8216,8 @@ int wh_Client_Sha384DmaUpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7719,7 +8318,8 @@ int wh_Client_Sha384DmaFinalResponse(whClientContext* ctx, wc_Sha384* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -7913,7 +8513,8 @@ int wh_Client_Sha512UpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -8001,7 +8602,8 @@ int wh_Client_Sha512FinalResponse(whClientContext* ctx, wc_Sha512* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -8231,7 +8833,8 @@ int wh_Client_Sha512DmaUpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -8338,7 +8941,8 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -8596,7 +9200,8 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -8675,7 +9280,8 @@ static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret != 0) {
         return ret;
     }
@@ -9048,7 +9654,8 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -9144,7 +9751,8 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz, dataPtr);
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_NOTREADY) {
         return ret;
     }
@@ -9446,7 +10054,7 @@ int wh_Client_MlDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
 
 static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, wc_MlDsaKey* key)
+                         uint16_t label_len, const uint8_t* label, wc_MlDsaKey* key)
 {
     int                                  ret     = WH_ERROR_OK;
     whKeyId                              key_id  = WH_KEYID_ERASED;
@@ -9504,6 +10112,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                 uint16_t res_len;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -9529,13 +10138,28 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
 
                         /* Update the context if provided */
                         if (key != NULL) {
-                            uint16_t der_size = (uint16_t)(res->len);
-                            /* Set the key_id. Should be ERASED if EPHEMERAL */
+                            uint16_t     der_size = (uint16_t)(res->len);
+                            const size_t hdr_sz =
+                                sizeof(whMessageCrypto_GenericResponseHeader) +
+                                sizeof(*res);
+                            /* Set the key_id. ERASED for EPHEMERAL, cached id
+                             * otherwise. */
                             wh_Client_MlDsaSetKeyId(key, key_id);
 
-                            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                            /* Response carries the exported key (EPHEMERAL) or
+                             * the public key (cached keygen). An empty body
+                             * means the caller requested key material the server
+                             * did not return; also reject a length that does not
+                             * fit the received frame before deserializing. */
+                            if (der_size == 0) {
+                                ret = WH_ERROR_ABORTED;
+                            }
+                            else if ((res_len < hdr_sz) ||
+                                     (res->len > (res_len - hdr_sz))) {
+                                ret = WH_ERROR_ABORTED;
+                            }
+                            else {
                                 uint8_t* key_der = (uint8_t*)(res + 1);
-                                /* Response has the exported key */
                                 ret = wh_Crypto_MlDsaDeserializeKeyDer(
                                     key_der, der_size, key);
                     WH_DEBUG_VERBOSE_HEXDUMP(
@@ -9564,6 +10188,52 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
 
     return _MlDsaMakeKey(ctx, size, level, inout_key_id, flags, label_len,
                          label, NULL);
+}
+
+int wh_Client_MlDsaMakeCacheKeyAndExportPublic(whClientContext* ctx, int size,
+                                               int level,
+                                               whKeyId* inout_key_id,
+                                               whNvmFlags flags,
+                                               uint16_t label_len,
+                                               const uint8_t* label,
+                                               wc_MlDsaKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _MlDsaMakeKey(ctx, size, level, inout_key_id, flags, label_len, label,
+                        pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _MlDsaMakeKey) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_MlDsaSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the best-effort export returned no
+         * public key (empty response body when it did not fit). Roll back so the
+         * operation is atomic and no cache slot is orphaned. A non-DMA keygen
+         * only yields WH_ERROR_ABORTED after the server has committed and
+         * returned the keyId, so evicting is safe even when the caller supplied
+         * an explicit keyId. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_MlDsaMakeExportKey(whClientContext* ctx, int level, int size,
@@ -9674,6 +10344,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -9821,6 +10492,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
                 if (ret == 0) {
@@ -9952,7 +10624,7 @@ int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
 
 static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, wc_MlDsaKey* key)
+                            uint16_t label_len, const uint8_t* label, wc_MlDsaKey* key)
 {
     int                                     ret    = WH_ERROR_OK;
     whKeyId                                 key_id = WH_KEYID_ERASED;
@@ -10021,6 +10693,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -10057,20 +10730,25 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
 
                 /* Update the context if provided */
                 if (key != NULL) {
-                    /* Set the key_id. Should be ERASED if EPHEMERAL */
+                    /* Set the key_id. ERASED for EPHEMERAL, cached id
+                     * otherwise. */
                     wh_Client_MlDsaSetKeyId(key, key_id);
 
-                    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
-                        /* Bound the server-reported key size to the DMA
-                         * buffer capacity before deserializing */
-                        if (res->keySize > sizeof(buffer)) {
-                            ret = WH_ERROR_ABORTED;
-                        }
-                        else {
-                            /* Response has the exported key */
-                            ret = wh_Crypto_MlDsaDeserializeKeyDer(
-                                buffer, res->keySize, key);
-                        }
+                    /* buffer holds the exported key (EPHEMERAL) or the public
+                     * key (cached keygen); keySize bounds the DMA write. An
+                     * empty result means the caller requested key material the
+                     * server did not return. */
+                    if (res->keySize == 0) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    /* Bound the server-reported key size to the DMA buffer
+                     * capacity before deserializing */
+                    else if (res->keySize > sizeof(buffer)) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        ret = wh_Crypto_MlDsaDeserializeKeyDer(
+                            buffer, res->keySize, key);
                     }
                 }
             }
@@ -10092,6 +10770,51 @@ int wh_Client_MlDsaMakeExportKeyDma(whClientContext* ctx, int level,
 
     return _MlDsaMakeKeyDma(ctx, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
                             key);
+}
+
+int wh_Client_MlDsaMakeCacheKeyDma(whClientContext* ctx, int level,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, const uint8_t* label,
+                                   wc_MlDsaKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _MlDsaMakeKeyDma(ctx, level, inout_key_id, flags, label_len, label,
+                           pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _MlDsaMakeKeyDma) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_MlDsaSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (WH_KEYID_ISERASED(in_keyId) && !WH_KEYID_ISERASED(*inout_key_id)) {
+        /* The server auto-assigned and committed a key but the export failed.
+         * Roll back so the operation is atomic and no cache slot is orphaned.
+         * Unlike the non-DMA ...AndExportPublic wrapper, this deliberately does
+         * NOT also roll back a caller-supplied explicit keyId via a
+         * ret == WH_ERROR_ABORTED check: the DMA keygen handler can itself
+         * return WH_ERROR_ABORTED before committing a key, so that discriminator
+         * is not safe here. In practice the client DMA buffer is always sized
+         * >= the public key and the server self-evicts on its own serialize/DMA
+         * failures, so the explicit-keyId orphan case is not reachable. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 
@@ -10206,6 +10929,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -10349,6 +11073,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
 
@@ -10515,7 +11240,7 @@ int wh_Client_MlKemExportPublicKey(whClientContext* ctx, whKeyId keyId,
 
 static int _MlKemMakeKey(whClientContext* ctx, int level,
                          whKeyId* inout_key_id, whNvmFlags flags,
-                         uint16_t label_len, uint8_t* label, MlKemKey* key)
+                         uint16_t label_len, const uint8_t* label, MlKemKey* key)
 {
     int                                  ret     = WH_ERROR_OK;
     whKeyId                              key_id  = WH_KEYID_ERASED;
@@ -10573,7 +11298,8 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
 
     do {
         ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
-                                        (uint8_t*)dataPtr);
+                                     WOLFHSM_CFG_COMM_DATA_LEN,
+                                     (uint8_t*)dataPtr);
     } while (ret == WH_ERROR_NOTREADY);
     if (ret != WH_ERROR_OK) {
         return ret;
@@ -10592,7 +11318,10 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
         }
         if (key != NULL) {
             wh_Client_MlKemSetKeyId(key, key_id);
-            if ((flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+            /* Response carries the exported key (EPHEMERAL) or the public key
+             * (cached keygen). An empty body means the caller requested key
+             * material the server did not return. */
+            if (res->len > 0) {
                 uint8_t*     key_raw = (uint8_t*)(res + 1);
                 const size_t hdr_sz  =
                     sizeof(whMessageCrypto_GenericResponseHeader) +
@@ -10604,6 +11333,9 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
                     ret = wh_Crypto_MlKemDeserializeKey(
                         key_raw, (uint16_t)res->len, key);
                 }
+            }
+            else {
+                ret = WH_ERROR_ABORTED;
             }
         }
     }
@@ -10620,6 +11352,50 @@ int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
 
     return _MlKemMakeKey(ctx, level, inout_key_id, flags, label_len,
                          label, NULL);
+}
+
+int wh_Client_MlKemMakeCacheKeyAndExportPublic(whClientContext* ctx, int level,
+                                               whKeyId* inout_key_id,
+                                               whNvmFlags flags,
+                                               uint16_t label_len,
+                                               const uint8_t* label,
+                                               MlKemKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _MlKemMakeKey(ctx, level, inout_key_id, flags, label_len, label, pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _MlKemMakeKey) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_MlKemSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the best-effort export returned no
+         * public key (empty response body when it did not fit). Roll back so the
+         * operation is atomic and no cache slot is orphaned. A non-DMA keygen
+         * only yields WH_ERROR_ABORTED after the server has committed and
+         * returned the keyId, so evicting is safe even when the caller supplied
+         * an explicit keyId. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_MlKemMakeExportKey(whClientContext* ctx, int level,
@@ -10706,6 +11482,7 @@ int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -10834,6 +11611,7 @@ int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -10966,7 +11744,7 @@ int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
 
 static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
                             whKeyId* inout_key_id, whNvmFlags flags,
-                            uint16_t label_len, uint8_t* label, MlKemKey* key)
+                            uint16_t label_len, const uint8_t* label, MlKemKey* key)
 {
     int                                     ret = WH_ERROR_OK;
     whKeyId                                 key_id = WH_KEYID_ERASED;
@@ -11033,6 +11811,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
     if (ret == WH_ERROR_OK) {
         do {
             ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
                                          (uint8_t*)dataPtr);
         } while (ret == WH_ERROR_NOTREADY);
     }
@@ -11051,16 +11830,22 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
             }
             if (key != NULL) {
                 wh_Client_MlKemSetKeyId(key, key_id);
-                if ((flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
-                    if (res->keySize > buffer_len) {
-                        ret = WH_ERROR_BADARGS;
-                    }
-                    else {
-                        ret = wh_Crypto_MlKemDeserializeKey(
-                            buffer, (uint16_t)res->keySize, key);
-                    }
+                /* buffer holds the exported key (EPHEMERAL) or the public key
+                 * (cached keygen); keySize bounds the DMA write. An empty result
+                 * means the caller requested key material the server did not
+                 * return. */
+                if (res->keySize == 0) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else if (res->keySize > buffer_len) {
+                    ret = WH_ERROR_BADARGS;
+                }
+                else {
+                    ret = wh_Crypto_MlKemDeserializeKey(
+                        buffer, (uint16_t)res->keySize, key);
                 }
             }
+
         }
     }
 
@@ -11077,6 +11862,51 @@ int wh_Client_MlKemMakeExportKeyDma(whClientContext* ctx, int level,
 
     return _MlKemMakeKeyDma(ctx, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
                             key);
+}
+
+int wh_Client_MlKemMakeCacheKeyDma(whClientContext* ctx, int level,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, const uint8_t* label,
+                                   MlKemKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _MlKemMakeKeyDma(ctx, level, inout_key_id, flags, label_len, label,
+                           pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. The keyId
+         * is set here (not only inside _MlKemMakeKeyDma) because a public-key
+         * deserialize that retries parameter sets can re-init pub and clear
+         * it. */
+        wh_Client_MlKemSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (WH_KEYID_ISERASED(in_keyId) && !WH_KEYID_ISERASED(*inout_key_id)) {
+        /* The server auto-assigned and committed a key but the export failed.
+         * Roll back so the operation is atomic and no cache slot is orphaned.
+         * Unlike the non-DMA ...AndExportPublic wrapper, this deliberately does
+         * NOT also roll back a caller-supplied explicit keyId via a
+         * ret == WH_ERROR_ABORTED check: the DMA keygen handler can itself
+         * return WH_ERROR_ABORTED before committing a key, so that discriminator
+         * is not safe here. In practice the client DMA buffer is always sized
+         * >= the public key and the server self-evicts on its own serialize/DMA
+         * failures, so the explicit-keyId orphan case is not reachable. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
@@ -11157,6 +11987,7 @@ int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11281,6 +12112,7 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
                 evict = 0;
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
             }
@@ -11435,6 +12267,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11537,6 +12370,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11636,6 +12470,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11706,6 +12541,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11878,6 +12714,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -11980,6 +12817,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12080,6 +12918,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }
@@ -12150,6 +12989,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         if (ret == WH_ERROR_OK) {
             do {
                 ret = wh_Client_RecvResponse(ctx, &group, &action, &req_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
                                              (uint8_t*)dataPtr);
             } while (ret == WH_ERROR_NOTREADY);
         }

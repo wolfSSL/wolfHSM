@@ -38,6 +38,8 @@ whMessageCustomCb_Request  whMessageCustomCb_Request_test;
 whMessageCustomCb_Response whMessageCustomCb_Response_test;
 
 #include "wolfhsm/wh_message_nvm.h"
+/* Raw wire struct: the key wrap trailers memcpy it across the boundary */
+whNvmMetadata                      whNvmMetadata_test;
 whMessageNvm_SimpleResponse        whMessageNvm_SimpleResponse_test;
 whMessageNvm_InitRequest           whMessageNvm_InitRequest_test;
 whMessageNvm_InitResponse          whMessageNvm_InitResponse_test;
@@ -105,6 +107,7 @@ whMessageCrypto_EcdhRequest           pkEcdhReq;
 whMessageCrypto_Curve25519Request     pkCurve25519Req;
 whMessageCrypto_EccSignRequest        pkEccSignReq;
 whMessageCrypto_EccVerifyRequest      pkEccVerifyReq;
+whMessageCrypto_EccMakePubRequest     pkEccMakePubReq;
 whMessageCrypto_EccCheckRequest       pkEccCheckReq;
 whMessageCrypto_RngRequest            rngReq;
 whMessageCrypto_CmacAesRequest        cmacReq;
@@ -118,6 +121,7 @@ whMessageCrypto_EcdhResponse          pkEcdhRes;
 whMessageCrypto_Curve25519Response    pkCurve25519Res;
 whMessageCrypto_EccSignResponse       pkEccSignRes;
 whMessageCrypto_EccVerifyResponse     pkEccVerifyRes;
+whMessageCrypto_EccMakePubResponse    pkEccMakePubRes;
 whMessageCrypto_EccCheckResponse      pkEccCheckRes;
 whMessageCrypto_RngResponse           rngRes;
 whMessageCrypto_CmacAesResponse       cmacRes;

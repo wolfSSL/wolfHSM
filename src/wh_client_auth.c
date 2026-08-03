@@ -134,7 +134,7 @@ int wh_Client_AuthLoginResponse(whClientContext* c, int32_t* out_rc,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -219,7 +219,7 @@ int wh_Client_AuthLogoutResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -338,7 +338,7 @@ int wh_Client_AuthUserAddResponse(whClientContext* c, int32_t* out_rc,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -413,7 +413,7 @@ int wh_Client_AuthUserDeleteResponse(whClientContext* c, int32_t* out_rc)
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -489,7 +489,7 @@ int wh_Client_AuthUserGetResponse(whClientContext* c, int32_t* out_rc,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -576,7 +576,7 @@ int wh_Client_AuthUserSetPermissionsResponse(whClientContext* c,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||
@@ -702,7 +702,7 @@ int wh_Client_AuthUserSetCredentialsResponse(whClientContext* c,
     }
 
     rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
-                                buffer);
+                                sizeof(buffer), buffer);
     if (rc == WH_ERROR_OK) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_AUTH) ||

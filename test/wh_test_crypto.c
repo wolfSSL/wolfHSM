@@ -721,6 +721,100 @@ static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Cache-and-export-public: a single keygen call returns the public key */
+    if (ret == 0) {
+        RsaKey   genPub[1];
+        RsaKey   refPub[1];
+        whKeyId  cacheId  = WH_KEYID_ERASED;
+        byte     genDer[2048];
+        byte     refDer[2048];
+        int      genDerSz = 0;
+        int      refDerSz = 0;
+        int      genInit  = 0;
+        int      refInit  = 0;
+
+        memset(cipherText, 0, sizeof(cipherText));
+        memset(finalText, 0, sizeof(finalText));
+
+        ret = wc_InitRsaKey_ex(genPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInit = 1;
+            ret     = wh_Client_RsaMakeCacheKeyAndExportPublic(
+                ctx, RSA_KEY_BITS, RSA_EXPONENT, &cacheId,
+                WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 0,
+                NULL, genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("RsaMakeCacheKeyAndExportPublic failed %d\n",
+                               ret);
+            }
+        }
+
+        /* Cross-check the keygen-returned public key against a separate
+         * ExportPublicKey call on the same cached keyId. */
+        if (ret == 0) {
+            ret = wc_InitRsaKey_ex(refPub, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInit = 1;
+                ret     = wh_Client_RsaExportPublicKey(ctx, cacheId, refPub, 0,
+                                                       NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("RsaExportPublicKey failed %d\n", ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            genDerSz = wc_RsaKeyToPublicDer(genPub, genDer, sizeof(genDer));
+            refDerSz = wc_RsaKeyToPublicDer(refPub, refDer, sizeof(refDer));
+            if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+                ret = -1;
+            }
+        }
+
+        /* Prove the returned public key is usable: encrypt locally with the
+         * exported public key (refPub) the client holds, then decrypt on the
+         * HSM using genPub directly as the private-key handle (no separate key
+         * object). */
+        if (ret == 0) {
+            int encLen = wc_RsaPublicEncrypt(
+                (byte*)plainText, sizeof(plainText), (byte*)cipherText,
+                sizeof(cipherText), refPub, rng);
+            if (encLen < 0) {
+                WH_ERROR_PRINT("PublicEncrypt with keygen pub failed %d\n",
+                               encLen);
+                ret = encLen;
+            }
+            else {
+                int decLen = wc_RsaPrivateDecrypt(
+                    (byte*)cipherText, encLen, (byte*)finalText,
+                    sizeof(finalText), genPub);
+                if (decLen < 0) {
+                    WH_ERROR_PRINT("HSM PrivateDecrypt failed %d\n", decLen);
+                    ret = decLen;
+                }
+                else if (memcmp(plainText, finalText, sizeof(plainText)) != 0) {
+                    WH_ERROR_PRINT("keygen-pub round-trip mismatch\n");
+                    ret = -1;
+                }
+            }
+        }
+
+        if (genInit != 0) {
+            (void)wc_FreeRsaKey(genPub);
+        }
+        if (refInit != 0) {
+            (void)wc_FreeRsaKey(refPub);
+        }
+        if (!WH_KEYID_ISERASED(cacheId)) {
+            (void)wh_Client_KeyEvict(ctx, cacheId);
+        }
+
+        if (ret == 0) {
+            WH_TEST_PRINT("RSA CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+        }
+    }
+
     if (ret == 0) {
         WH_TEST_PRINT("RSA SUCCESS\n");
     }
@@ -1482,11 +1576,631 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
         }
     }
 
+    /* Cache-and-export-public: a single keygen call returns the public key */
+    if (ret == 0) {
+        whKeyId  cacheId  = WH_KEYID_ERASED;
+        ecc_key  genPub[1];
+        ecc_key  refPub[1];
+        byte     genDer[256];
+        byte     refDer[256];
+        int      genDerSz = 0;
+        int      refDerSz = 0;
+        int      genInit  = 0;
+        int      refInit  = 0;
+        uint8_t  sig[ECC_MAX_SIG_SIZE];
+        word32   sigLen   = sizeof(sig);
+        int      verify   = 0;
+        uint8_t  label[]  = "ecc-cache-export";
+        uint8_t  readLabel[WH_NVM_LABEL_LEN] = {0};
+
+        ret = wc_ecc_init_ex(genPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInit = 1;
+            /* Exercise label forwarding on the cache-and-export path. */
+            ret     = wh_Client_EccMakeCacheKeyAndExportPublic(
+                ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &cacheId,
+                WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+                sizeof(label), label, genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("EccMakeCacheKeyAndExportPublic failed %d\n",
+                               ret);
+            }
+        }
+
+        /* Cross-check the keygen-returned public key against ExportPublicKey,
+         * and confirm the label was stored with the cached key. */
+        if (ret == 0) {
+            ret = wc_ecc_init_ex(refPub, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInit = 1;
+                ret     = wh_Client_EccExportPublicKey(
+                    ctx, cacheId, refPub, sizeof(readLabel), readLabel);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("wh_Client_EccExportPublicKey failed %d\n",
+                                   ret);
+                }
+                else if (memcmp(readLabel, label, sizeof(label)) != 0) {
+                    WH_ERROR_PRINT("keygen label not stored with cached key\n");
+                    ret = -1;
+                }
+            }
+        }
+        if (ret == 0) {
+            genDerSz = wc_EccPublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+            refDerSz = wc_EccPublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+            if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+                (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+                WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+                ret = -1;
+            }
+        }
+
+        /* Prove usability: sign on the HSM using genPub directly as the
+         * private-key handle (no separate key object), then verify locally with
+         * the exported public key (refPub) the client holds. */
+        if (ret == 0) {
+            ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng,
+                                   genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("HSM ECC sign failed %d\n", ret);
+            }
+        }
+        if (ret == 0) {
+            ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash), &verify,
+                                     refPub);
+            if ((ret != 0) || (verify != 1)) {
+                WH_ERROR_PRINT(
+                    "verify with keygen pub failed ret=%d verify=%d\n", ret,
+                    verify);
+                if (ret == 0) {
+                    ret = -1;
+                }
+            }
+        }
+
+        if (genInit != 0) {
+            wc_ecc_free(genPub);
+        }
+        if (refInit != 0) {
+            wc_ecc_free(refPub);
+        }
+        if (!WH_KEYID_ISERASED(cacheId)) {
+            (void)wh_Client_KeyEvict(ctx, cacheId);
+        }
+
+        if (ret == 0) {
+            WH_TEST_PRINT("ECC CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+        }
+    }
+
     if (ret == 0) {
         WH_TEST_PRINT("ECC SUCCESS\n");
     }
     return ret;
 }
+
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+
+/* Build a private-key-only ECC key bound to devId, along with a locally
+ * generated reference keypair holding the public point it must derive to.
+ * This is the shape that cannot be resolved client-side: the caller holds a
+ * private scalar and no public point. */
+static int whTest_MakePrivOnlyEccKey(int devId, WC_RNG* rng, ecc_key* refKey,
+                                     ecc_key* privOnlyKey)
+{
+    int     ret;
+    uint8_t d[ECC_MAXSIZE];
+    word32  dLen = sizeof(d);
+
+    ret = wc_ecc_init_ex(refKey, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to init reference ECC key %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, refKey, TEST_ECC_CURVE_ID);
+    if (ret == 0) {
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(privOnlyKey, NULL, devId);
+        if (ret == 0) {
+            ret = wc_ecc_import_private_key_ex(d, dLen, NULL, 0, privOnlyKey,
+                                               TEST_ECC_CURVE_ID);
+            if (ret != 0) {
+                wc_ecc_free(privOnlyKey);
+            }
+        }
+    }
+    if (ret != 0) {
+        wc_ecc_free(refKey);
+        WH_ERROR_PRINT("Failed to build private-only ECC key %d\n", ret);
+    }
+    return ret;
+}
+
+/* Compare an ecc_point against the public point of key */
+static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
+{
+    if (wc_ecc_cmp_point(point, &key->pubkey) != MP_EQ) {
+        WH_ERROR_PRINT("Derived ECC public point does not match\n");
+        return -1;
+    }
+    return 0;
+}
+
+/* Exercise WC_PK_TYPE_EC_MAKE_PUB, both for a key the client holds and for one
+ * resident on the server.  Also covers exporting the public half of a resident
+ * private-only key, which requires the server to derive it. */
+static int whTest_CryptoEccMakePub(whClientContext* ctx, int devId, WC_RNG* rng)
+{
+    int        ret;
+    ecc_key    refKey[1];
+    ecc_key    privOnlyKey[1];
+    ecc_point* pub        = NULL;
+    whKeyId    keyId      = WH_KEYID_ERASED;
+    uint8_t    keyLabel[] = "EccMakePub";
+
+    ret = whTest_MakePrivOnlyEccKey(devId, rng, refKey, privOnlyKey);
+    if (ret != 0) {
+        return ret;
+    }
+
+    pub = wc_ecc_new_point();
+    if (pub == NULL) {
+        ret = MEMORY_E;
+    }
+
+    /* Client-held private-only key: the cryptoCb imports it, derives on the
+     * server, and evicts it again. */
+    if (ret == 0) {
+        ret = wc_ecc_make_pub(privOnlyKey, pub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("wc_ecc_make_pub on client key failed %d\n", ret);
+        }
+        else {
+            ret = whTest_EccPointMatchesKey(pub, refKey);
+        }
+    }
+
+    /* Direct API with an undersized output buffer must report the required
+     * X9.63 size (0x04 || X || Y) in *inout_pubOutSz and return
+     * WH_ERROR_BUFFER_SIZE, after which a re-call with the reported size
+     * succeeds. */
+    if (ret == 0) {
+        uint8_t  smallPub[4]                      = {0};
+        uint8_t  pubOut[1 + 2 * TEST_ECC_KEYSIZE] = {0};
+        uint16_t pubOutSz                         = sizeof(smallPub);
+        int      rc;
+
+        rc = wh_Client_EccMakePub(ctx, privOnlyKey, smallPub, &pubOutSz);
+        if (rc != WH_ERROR_BUFFER_SIZE) {
+            WH_ERROR_PRINT("Undersized EccMakePub returned %d "
+                           "(want WH_ERROR_BUFFER_SIZE)\n",
+                           rc);
+            ret = -1;
+        }
+        else if (pubOutSz != (1 + 2 * TEST_ECC_KEYSIZE)) {
+            WH_ERROR_PRINT("Undersized EccMakePub required size %u "
+                           "(want %u)\n",
+                           (unsigned)pubOutSz,
+                           (unsigned)(1 + 2 * TEST_ECC_KEYSIZE));
+            ret = -1;
+        }
+        if (ret == 0) {
+            rc = wh_Client_EccMakePub(ctx, privOnlyKey, pubOut, &pubOutSz);
+            if (rc != 0) {
+                WH_ERROR_PRINT(
+                    "EccMakePub re-call with reported size failed %d\n", rc);
+                ret = rc;
+            }
+            else if (pubOutSz != (1 + 2 * TEST_ECC_KEYSIZE) ||
+                     pubOut[0] != 0x04) {
+                WH_ERROR_PRINT("EccMakePub re-call produced bad point "
+                               "(size=%u first=0x%02x)\n",
+                               (unsigned)pubOutSz, pubOut[0]);
+                ret = -1;
+            }
+        }
+    }
+
+    /* Same derivation against a key that lives on the server */
+    if (ret == 0) {
+        ret = wh_Client_EccImportKey(ctx, privOnlyKey, &keyId,
+                                     WH_NVM_FLAGS_USAGE_ANY, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache private-only ECC key %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ecc_key    hsmKey[1];
+        ecc_point* cachedPub = wc_ecc_new_point();
+
+        if (cachedPub == NULL) {
+            ret = MEMORY_E;
+        }
+        else {
+            ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+            if (ret == 0) {
+                ret = wh_Client_EccSetKeyId(hsmKey, keyId);
+                if (ret == 0) {
+                    /* Curve parameters aren't carried by a cached key handle */
+                    ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                           TEST_ECC_CURVE_ID);
+                }
+                if (ret == 0) {
+                    ret = wc_ecc_make_pub(hsmKey, cachedPub);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "wc_ecc_make_pub on cached key failed %d\n", ret);
+                    }
+                    else {
+                        ret = whTest_EccPointMatchesKey(cachedPub, refKey);
+                    }
+                }
+                wc_ecc_free(hsmKey);
+            }
+            wc_ecc_del_point(cachedPub);
+        }
+    }
+
+    /* Exporting the public half of a resident private-only key requires the
+     * server to derive it first. */
+    if (ret == 0) {
+        ecc_key pubKey[1];
+        ret = wc_ecc_init_ex(pubKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_EccExportPublicKey(ctx, keyId, pubKey, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Public export of private-only ECC key failed %d\n", ret);
+            }
+            else if (wc_ecc_cmp_point(&pubKey->pubkey, &refKey->pubkey) !=
+                     MP_EQ) {
+                WH_ERROR_PRINT("Exported ECC public key does not match\n");
+                ret = -1;
+            }
+            wc_ecc_free(pubKey);
+        }
+    }
+
+    /* A cached keypair whose stored public point does not belong to its private
+     * scalar must still derive the true point, not hand back the stored one. */
+    if (ret == 0) {
+        whKeyId poisonedId      = WH_KEYID_ERASED;
+        uint8_t poisonedLabel[] = "EccMakePubPoison";
+        uint8_t d[ECC_MAXSIZE];
+        word32  dLen = sizeof(d);
+        uint8_t qx[ECC_MAXSIZE];
+        word32  qxLen = sizeof(qx);
+        uint8_t qy[ECC_MAXSIZE];
+        word32  qyLen = sizeof(qy);
+
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+        if (ret == 0) {
+            ecc_key otherKey[1];
+            ret = wc_ecc_init_ex(otherKey, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, otherKey,
+                                         TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wc_ecc_export_public_raw(otherKey, qx, &qxLen, qy,
+                                                   &qyLen);
+                }
+                wc_ecc_free(otherKey);
+            }
+        }
+        if (ret == 0) {
+            ecc_key poisoned[1];
+            ret = wc_ecc_init_ex(poisoned, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                /* refKey's private scalar paired with a foreign public point */
+                ret = wc_ecc_import_unsigned(poisoned, qx, qy, d,
+                                             TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wh_Client_EccImportKey(
+                        ctx, poisoned, &poisonedId, WH_NVM_FLAGS_USAGE_ANY,
+                        sizeof(poisonedLabel), poisonedLabel);
+                }
+                wc_ecc_free(poisoned);
+            }
+        }
+        if (ret == 0) {
+            ecc_key    hsmKey[1];
+            ecc_point* derived = wc_ecc_new_point();
+
+            if (derived == NULL) {
+                ret = MEMORY_E;
+            }
+            else {
+                ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+                if (ret == 0) {
+                    ret = wh_Client_EccSetKeyId(hsmKey, poisonedId);
+                    if (ret == 0) {
+                        ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                               TEST_ECC_CURVE_ID);
+                    }
+                    if (ret == 0) {
+                        ret = wc_ecc_make_pub(hsmKey, derived);
+                        if (ret != 0) {
+                            WH_ERROR_PRINT(
+                                "wc_ecc_make_pub on poisoned key failed %d\n",
+                                ret);
+                        }
+                        else {
+                            ret = whTest_EccPointMatchesKey(derived, refKey);
+                        }
+                    }
+                    wc_ecc_free(hsmKey);
+                }
+                wc_ecc_del_point(derived);
+            }
+        }
+        if (!WH_KEYID_ISERASED(poisonedId)) {
+            (void)wh_Client_KeyEvict(ctx, poisonedId);
+        }
+    }
+
+    /* Make-pub against a cached PUBLIC-only key must fail: there is no
+     * private scalar to derive from, matching software wc_ecc_make_pub(). */
+    if (ret == 0) {
+        whKeyId pubOnlyId      = WH_KEYID_ERASED;
+        uint8_t pubOnlyLabel[] = "EccMakePubPubOnly";
+        uint8_t qx[ECC_MAXSIZE];
+        word32  qxLen = sizeof(qx);
+        uint8_t qy[ECC_MAXSIZE];
+        word32  qyLen = sizeof(qy);
+
+        ret = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+        if (ret == 0) {
+            ecc_key pubOnly[1];
+            ret = wc_ecc_init_ex(pubOnly, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                ret = wc_ecc_import_unsigned(pubOnly, qx, qy, NULL,
+                                             TEST_ECC_CURVE_ID);
+                if (ret == 0) {
+                    ret = wh_Client_EccImportKey(
+                        ctx, pubOnly, &pubOnlyId, WH_NVM_FLAGS_USAGE_ANY,
+                        sizeof(pubOnlyLabel), pubOnlyLabel);
+                    if (ret != 0) {
+                        WH_ERROR_PRINT(
+                            "Failed to cache public-only ECC key %d\n", ret);
+                    }
+                }
+                wc_ecc_free(pubOnly);
+            }
+        }
+        if (ret == 0) {
+            ecc_key    hsmKey[1];
+            ecc_point* derived = wc_ecc_new_point();
+
+            if (derived == NULL) {
+                ret = MEMORY_E;
+            }
+            else {
+                ret = wc_ecc_init_ex(hsmKey, NULL, devId);
+                if (ret == 0) {
+                    ret = wh_Client_EccSetKeyId(hsmKey, pubOnlyId);
+                    if (ret == 0) {
+                        ret = wc_ecc_set_curve(hsmKey, TEST_ECC_KEYSIZE,
+                                               TEST_ECC_CURVE_ID);
+                    }
+                    if (ret == 0) {
+                        int rc = wc_ecc_make_pub(hsmKey, derived);
+                        if (rc == 0) {
+                            WH_ERROR_PRINT("wc_ecc_make_pub on public-only "
+                                           "key was not rejected\n");
+                            ret = -1;
+                        }
+                    }
+                    wc_ecc_free(hsmKey);
+                }
+                wc_ecc_del_point(derived);
+            }
+        }
+        if (!WH_KEYID_ISERASED(pubOnlyId)) {
+            (void)wh_Client_KeyEvict(ctx, pubOnlyId);
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (pub != NULL) {
+        wc_ecc_del_point(pub);
+    }
+    wc_ecc_free(privOnlyKey);
+    wc_ecc_free(refKey);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC MAKE-PUB SUCCESS\n");
+    }
+    return ret;
+}
+
+#ifdef HAVE_ECC_CHECK_KEY
+/* Exercise WC_PK_TYPE_EC_CHECK_PUB_KEY: a private-only key, a full keypair, and
+ * a keypair whose public point does not belong to its private scalar. */
+static int whTest_CryptoEccCheckPubKey(whClientContext* ctx, int devId,
+                                       WC_RNG* rng)
+{
+    int     ret;
+    ecc_key refKey[1];
+    ecc_key privOnlyKey[1];
+    whKeyId keyId      = WH_KEYID_ERASED;
+    uint8_t keyLabel[] = "EccCheckPub";
+    uint8_t d[ECC_MAXSIZE];
+    word32  dLen = sizeof(d);
+    uint8_t qx[ECC_MAXSIZE];
+    word32  qxLen = sizeof(qx);
+    uint8_t qy[ECC_MAXSIZE];
+    word32  qyLen = sizeof(qy);
+
+    ret = whTest_MakePrivOnlyEccKey(devId, rng, refKey, privOnlyKey);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* A private-only key carries no public point, so only the server can
+     * validate it. */
+    ret = wc_ecc_check_key(privOnlyKey);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Check of private-only ECC key failed %d\n", ret);
+    }
+
+    /* A full keypair validates, and its public point survives the server-side
+     * cross-check against the private scalar. */
+    if (ret == 0) {
+        ret = wc_ecc_export_private_only(refKey, d, &dLen);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+    }
+    if (ret == 0) {
+        ecc_key fullKey[1];
+        byte    pub963[1 + 2 * TEST_ECC_KEYSIZE];
+        word32  pub963Len = sizeof(pub963);
+        ret = wc_ecc_init_ex(fullKey, NULL, devId);
+        if (ret == 0) {
+            ret = wc_ecc_import_unsigned(fullKey, qx, qy, d, TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                ret = wc_ecc_check_key(fullKey);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Check of full ECC keypair failed %d\n",
+                                   ret);
+                }
+            }
+            /* The partial-validation shape (check_order == 0) produced by
+             * wolfCrypt's import paths must offload and validate end-to-end:
+             * a callback-only client (WOLF_CRYPTO_CB_ONLY_ECC) has no
+             * software fallback for it. */
+            if (ret == 0) {
+                ret = wc_ecc_export_x963(fullKey, pub963, &pub963Len);
+            }
+            if (ret == 0) {
+                ret = wh_Client_EccCheckPubKey(ctx, fullKey, pub963,
+                                               (uint16_t)pub963Len, 0, 1);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Partial-shape ECC check (check_order=0) failed %d\n",
+                        ret);
+                }
+            }
+            wc_ecc_free(fullKey);
+        }
+    }
+
+    /* A public point that is valid in its own right, but belongs to a
+     * different private scalar than the one the server holds, must be
+     * rejected. */
+    if (ret == 0) {
+        ret = wh_Client_EccImportKey(ctx, privOnlyKey, &keyId,
+                                     WH_NVM_FLAGS_USAGE_ANY, sizeof(keyLabel),
+                                     keyLabel);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to cache private-only ECC key %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ecc_key otherKey[1];
+        ret = wc_ecc_init_ex(otherKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_ecc_make_key_ex(rng, TEST_ECC_KEYSIZE, otherKey,
+                                     TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                qxLen = sizeof(qx);
+                qyLen = sizeof(qy);
+                ret =
+                    wc_ecc_export_public_raw(otherKey, qx, &qxLen, qy, &qyLen);
+            }
+            wc_ecc_free(otherKey);
+        }
+    }
+    if (ret == 0) {
+        ecc_key mismatched[1];
+        ret = wc_ecc_init_ex(mismatched, NULL, devId);
+        if (ret == 0) {
+            /* Correct private scalar, wrong public point */
+            ret = wc_ecc_import_unsigned(mismatched, qx, qy, d,
+                                         TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                ret = wh_Client_EccSetKeyId(mismatched, keyId);
+            }
+            if (ret == 0) {
+                /* Must match software wc_ecc_check_key(), which returns
+                 * ECC_PRIV_KEY_E when the public point does not belong to
+                 * the private scalar. */
+                int checkRet = wc_ecc_check_key(mismatched);
+                if (checkRet != ECC_PRIV_KEY_E) {
+                    WH_ERROR_PRINT("Mismatched ECC public point check "
+                                   "returned %d (want ECC_PRIV_KEY_E)\n",
+                                   checkRet);
+                    ret = -1;
+                }
+                else {
+                    ret = 0;
+                }
+            }
+            wc_ecc_free(mismatched);
+        }
+    }
+
+    /* A structurally invalid point - one that is not on the curve at all -
+     * must be rejected by the server's own point validation. Flipping a low
+     * bit of Y provably leaves the curve: for a given X only the two +/-Y
+     * solutions satisfy the curve equation. */
+    if (ret == 0) {
+        qxLen = sizeof(qx);
+        qyLen = sizeof(qy);
+        ret   = wc_ecc_export_public_raw(refKey, qx, &qxLen, qy, &qyLen);
+    }
+    if (ret == 0) {
+        ecc_key offCurve[1];
+        ret = wc_ecc_init_ex(offCurve, NULL, devId);
+        if (ret == 0) {
+            /* Correct private scalar, off-curve public point */
+            qy[qyLen - 1] ^= 0x01;
+            ret = wc_ecc_import_unsigned(offCurve, qx, qy, d,
+                                         TEST_ECC_CURVE_ID);
+            if (ret == 0) {
+                int checkRet = wc_ecc_check_key(offCurve);
+                if (checkRet == 0) {
+                    WH_ERROR_PRINT(
+                        "Off-curve ECC public point was not rejected\n");
+                    ret = -1;
+                }
+            }
+            wc_ecc_free(offCurve);
+        }
+    }
+
+    /* A non-NULL pub_key length paired with a NULL pointer is a client-side
+     * argument error, rejected before any transport activity. */
+    if (ret == 0) {
+        int badret = wh_Client_EccCheckPubKey(ctx, refKey, NULL, 1, 0, 0);
+        if (badret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("EccCheckPubKey with NULL pub_key and nonzero "
+                           "pub_key_len returned %d (want BADARGS)\n",
+                           badret);
+            ret = -1;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    wc_ecc_free(privOnlyKey);
+    wc_ecc_free(refKey);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC CHECK-PUBKEY SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* HAVE_ECC_CHECK_KEY */
+
+#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 
 #ifdef WOLFHSM_CFG_DMA
 /* Generic-transport DMA smoke test: cache an ECC keypair, export the
@@ -1510,7 +2224,6 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
     byte    derBuf[ECC_BUFSIZE];
     uint16_t derSz            = sizeof(derBuf);
     word32   i;
-    (void)devId;
 
     for (i = 0; i < sizeof(hash); i++) {
         hash[i] = (uint8_t)(i + 1);
@@ -1577,6 +2290,65 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
         }
         wc_ecc_free(pubKey);
     }
+
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+    /* A resident PRIVATE-only key carries no public half, so the DMA public
+     * export must derive it on the server first. Mirrors the non-DMA
+     * private-only export covered by whTest_CryptoEccMakePub. Skipped in
+     * CB_ONLY builds along with the software reference-key helper. */
+    if (ret == 0) {
+        ecc_key refKey[1];
+        ecc_key privOnlyKey[1];
+        whKeyId privKeyId   = WH_KEYID_ERASED;
+        uint8_t privLabel[] = "EccExportPubDmaPriv";
+
+        ret = whTest_MakePrivOnlyEccKey(devId, rng, refKey, privOnlyKey);
+        if (ret == 0) {
+            ret = wh_Client_EccImportKey(ctx, privOnlyKey, &privKeyId,
+                                         WH_NVM_FLAGS_USAGE_ANY,
+                                         sizeof(privLabel), privLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "Failed to cache private-only ECC key (DMA) %d\n", ret);
+            }
+            if (ret == 0) {
+                derSz = sizeof(derBuf);
+                ret   = wh_Client_KeyExportPublicDma(ctx, privKeyId,
+                                                     WH_KEY_ALGO_ECC, derBuf,
+                                                     derSz, NULL, 0, &derSz);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("wh_Client_KeyExportPublicDma(ECC "
+                                   "private-only) failed %d\n",
+                                   ret);
+                }
+            }
+            if (ret == 0) {
+                ecc_key derivedPub[1];
+                ret = wc_ecc_init_ex(derivedPub, NULL, INVALID_DEVID);
+                if (ret == 0) {
+                    ret = wh_Crypto_EccDeserializeKeyDer(derBuf, derSz,
+                                                         derivedPub);
+                    if (ret == 0 &&
+                        wc_ecc_cmp_point(&derivedPub->pubkey,
+                                         &refKey->pubkey) != MP_EQ) {
+                        WH_ERROR_PRINT(
+                            "Derived ECC public key (DMA) does not match\n");
+                        ret = -1;
+                    }
+                    wc_ecc_free(derivedPub);
+                }
+            }
+            if (!WH_KEYID_ISERASED(privKeyId)) {
+                (void)wh_Client_KeyEvict(ctx, privKeyId);
+            }
+            wc_ecc_free(privOnlyKey);
+            wc_ecc_free(refKey);
+        }
+    }
+#else
+    /* devId is only consumed by the private-only sub-test above */
+    (void)devId;
+#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 
     if (!WH_KEYID_ISERASED(keyId)) {
         (void)wh_Client_KeyEvict(ctx, keyId);
@@ -3519,6 +4291,93 @@ static int whTest_CryptoEd25519ExportPublic(whClientContext* ctx, int devId,
     return ret;
 }
 
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_Ed25519ExportPublicKey and
+ * that it verifies a signature made by the cached private key. */
+static int whTest_CryptoEd25519CacheKeyAndExportPublic(whClientContext* ctx,
+                                                       int devId, WC_RNG* rng)
+{
+    int         ret       = 0;
+    whKeyId     keyId     = WH_KEYID_ERASED;
+    ed25519_key genPub[1] = {0};
+    ed25519_key refPub[1] = {0};
+    byte        msg[]     = "Ed25519 cache-export-public message";
+    byte        sig[ED25519_SIG_SIZE];
+    uint32_t    sigSz     = sizeof(sig);
+    int         verified  = 0;
+    byte        genDer[128];
+    byte        refDer[128];
+    int         genDerSz  = 0;
+    int         refDerSz  = 0;
+    (void)devId;
+
+    ret = wc_ed25519_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+            ctx, &keyId, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+            NULL, genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519MakeCacheKeyAndExportPublic failed %d\n",
+                           ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKey. */
+    if (ret == 0) {
+        ret = wc_ed25519_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_Ed25519ExportPublicKey(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_Ed25519ExportPublicKey failed %d\n",
+                               ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        genDerSz = wc_Ed25519PublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+        refDerSz = wc_Ed25519PublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+        if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+            (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+            ret = -1;
+        }
+    }
+
+    /* Prove usability: sign on the HSM using genPub directly as the private-key
+     * handle (no separate key object), then verify locally with the exported
+     * public key (refPub) the client holds. */
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, genPub, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM Ed25519 sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, (word32)sizeof(msg),
+                                    &verified, refPub);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("verify with keygen pub failed ret=%d verify=%d\n",
+                           ret, verified);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_ed25519_free(refPub);
+    wc_ed25519_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    (void)rng;
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
 {
@@ -4215,6 +5074,109 @@ static int whTest_CryptoCurve25519ExportPublic(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         WH_TEST_PRINT("CURVE25519 EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
+
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_Curve25519ExportPublicKey and
+ * that an X25519 shared secret round-trips against the cached private key. */
+static int whTest_CryptoCurve25519CacheKeyAndExportPublic(whClientContext* ctx,
+                                                          int devId,
+                                                          WC_RNG* rng)
+{
+    int            ret        = 0;
+    whKeyId        keyId      = WH_KEYID_ERASED;
+    curve25519_key genPub[1]  = {0};
+    curve25519_key refPub[1]  = {0};
+    curve25519_key localKey[1] = {0};
+    uint8_t        genRaw[CURVE25519_KEYSIZE] = {0};
+    uint8_t        refRaw[CURVE25519_KEYSIZE] = {0};
+    word32         genRawLen  = sizeof(genRaw);
+    word32         refRawLen  = sizeof(refRaw);
+    uint8_t        shared_hsm[CURVE25519_KEYSIZE]   = {0};
+    uint8_t        shared_local[CURVE25519_KEYSIZE] = {0};
+    word32         len        = 0;
+    (void)devId;
+
+    ret = wc_curve25519_init_ex(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+            ctx, (uint16_t)CURVE25519_KEYSIZE, &keyId,
+            WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0, genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Curve25519MakeCacheKeyAndExportPublic failed %d\n", ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKey. */
+    if (ret == 0) {
+        ret = wc_curve25519_init_ex(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_Curve25519ExportPublicKey(ctx, keyId, refPub, 0,
+                                                      NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "wh_Client_Curve25519ExportPublicKey failed %d\n", ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        ret = wc_curve25519_export_public(genPub, genRaw, &genRawLen);
+        if (ret == 0) {
+            ret = wc_curve25519_export_public(refPub, refRaw, &refRawLen);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Curve25519 export_public failed %d\n", ret);
+        }
+        else if ((genRawLen != refRawLen) ||
+                 (memcmp(genRaw, refRaw, genRawLen) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+            ret = -1;
+        }
+    }
+
+    /* Shared-secret round-trip using genPub directly as the HSM private-key
+     * handle (no separate key object): our local private key * genPub's
+     * exported public key (computed locally) must equal genPub's HSM private
+     * key * our local public key (computed on the server). */
+    if (ret == 0) {
+        ret = wc_curve25519_init_ex(localKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_curve25519_make_key(rng, CURVE25519_KEYSIZE, localKey);
+        }
+    }
+    if (ret == 0) {
+        len = sizeof(shared_local);
+        ret = wc_curve25519_shared_secret(localKey, genPub, shared_local, &len);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Local Curve25519 shared secret failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        len = sizeof(shared_hsm);
+        ret = wc_curve25519_shared_secret(genPub, localKey, shared_hsm, &len);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM Curve25519 shared secret failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        if (memcmp(shared_hsm, shared_local, len) != 0) {
+            WH_ERROR_PRINT("Curve25519 keygen-pub shared secret mismatch\n");
+            ret = -1;
+        }
+    }
+
+    wc_curve25519_free(localKey);
+    wc_curve25519_free(refPub);
+    wc_curve25519_free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("CURVE25519 CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
     }
     return ret;
 }
@@ -12211,6 +13173,101 @@ static int whTestCrypto_MlDsaExportPublic(whClientContext* ctx, int devId,
     }
     return ret;
 }
+
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_MlDsaExportPublicKey and that
+ * it verifies a signature made by the cached private key. */
+static int whTestCrypto_MlDsaCacheKeyAndExportPublic(whClientContext* ctx,
+                                                     int devId, WC_RNG* rng,
+                                                     int level)
+{
+    int         ret       = 0;
+    whKeyId     keyId     = WH_KEYID_ERASED;
+    wc_MlDsaKey genPub[1] = {0};
+    wc_MlDsaKey refPub[1] = {0};
+    byte        msg[]     = "ML-DSA cache-export-public message";
+    byte        sig[MLDSA_MAX_SIG_SIZE];
+    word32      sigLen    = sizeof(sig);
+    int         verified  = 0;
+    byte        genDer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
+    byte        refDer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
+    int         genDerSz  = 0;
+    int         refDerSz  = 0;
+    (void)devId;
+    (void)rng;
+
+    ret = wc_MlDsaKey_Init(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_MlDsaKey_SetParams(genPub, level);
+    }
+    if (ret == 0) {
+        ret = wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+            ctx, 0, level, &keyId,
+            WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL,
+            genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("MlDsaMakeCacheKeyAndExportPublic failed %d\n", ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKey. */
+    if (ret == 0) {
+        ret = wc_MlDsaKey_Init(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_MlDsaKey_SetParams(refPub, level);
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlDsaExportPublicKey(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_MlDsaExportPublicKey failed %d\n",
+                               ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        genDerSz = wc_MlDsaKey_PublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+        refDerSz = wc_MlDsaKey_PublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+        if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+            (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey mismatch vs ExportPublicKey\n");
+            ret = -1;
+        }
+    }
+
+    /* Prove usability: sign on the HSM using genPub directly as the private-key
+     * handle (no separate key object), then verify with its exported public
+     * key. */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaSign(ctx, msg, sizeof(msg), sig, &sigLen, genPub,
+                                  NULL, 0, WC_HASH_TYPE_NONE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM ML-DSA sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_MlDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
+                                    &verified, genPub, NULL, 0,
+                                    WC_HASH_TYPE_NONE);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("verify with keygen pub failed ret=%d verify=%d\n",
+                           ret, verified);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_MlDsaKey_Free(refPub);
+    wc_MlDsaKey_Free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
 #endif /* WOLFSSL_MLDSA_PUBLIC_KEY && ML_DSA_44 available */
 
 #ifdef WOLFHSM_CFG_DMA
@@ -12548,6 +13605,102 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         WH_TEST_PRINT("ML-DSA EXPORT-PUBLIC DMA SUCCESS\n");
+    }
+    return ret;
+}
+
+/* DMA variant: one keygen call caches the private key and streams the public
+ * key back through the client's DMA buffer. Verify it byte-matches
+ * wh_Client_MlDsaExportPublicKeyDma and that it verifies an HSM signature. */
+static int whTestCrypto_MlDsaCacheKeyAndExportPublicDma(whClientContext* ctx,
+                                                        int devId, WC_RNG* rng,
+                                                        int level)
+{
+    int         ret       = 0;
+    whKeyId     keyId     = WH_KEYID_ERASED;
+    wc_MlDsaKey genPub[1] = {0};
+    wc_MlDsaKey refPub[1] = {0};
+    byte        msg[]     = "ML-DSA DMA cache-export-public message";
+    byte        sig[MLDSA_MAX_SIG_SIZE];
+    word32      sigLen    = sizeof(sig);
+    int         verified  = 0;
+    byte        genDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
+    byte        refDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
+    int         genDerSz  = 0;
+    int         refDerSz  = 0;
+    (void)devId;
+    (void)rng;
+
+    ret = wc_MlDsaKey_Init(genPub, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_MlDsaKey_SetParams(genPub, level);
+    }
+    if (ret == 0) {
+        ret = wh_Client_MlDsaMakeCacheKeyDma(
+            ctx, level, &keyId,
+            WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL,
+            genPub);
+        if (ret != 0) {
+            WH_ERROR_PRINT("MlDsaMakeCacheKeyDma failed %d\n", ret);
+        }
+    }
+
+    /* Cross-check the keygen-returned public key against ExportPublicKeyDma. */
+    if (ret == 0) {
+        ret = wc_MlDsaKey_Init(refPub, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_MlDsaKey_SetParams(refPub, level);
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlDsaExportPublicKeyDma(ctx, keyId, refPub, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("wh_Client_MlDsaExportPublicKeyDma failed %d\n",
+                               ret);
+            }
+        }
+    }
+    if (ret == 0) {
+        genDerSz = wc_MlDsaKey_PublicKeyToDer(genPub, genDer, sizeof(genDer), 1);
+        refDerSz = wc_MlDsaKey_PublicKeyToDer(refPub, refDer, sizeof(refDer), 1);
+        if ((genDerSz <= 0) || (genDerSz != refDerSz) ||
+            (memcmp(genDer, refDer, (size_t)genDerSz) != 0)) {
+            WH_ERROR_PRINT("keygen pubkey (DMA) mismatch vs export\n");
+            ret = -1;
+        }
+    }
+
+    /* Prove usability: sign on the HSM (DMA) using genPub directly as the
+     * private-key handle (no separate key object), then verify with its
+     * exported public key. */
+    if (ret == 0) {
+        ret = wh_Client_MlDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen,
+                                     genPub, NULL, 0, WC_HASH_TYPE_NONE);
+        if (ret != 0) {
+            WH_ERROR_PRINT("HSM ML-DSA DMA sign failed %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg),
+                                       &verified, genPub, NULL, 0,
+                                       WC_HASH_TYPE_NONE);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT(
+                "DMA verify with keygen pub failed ret=%d verify=%d\n", ret,
+                verified);
+            if (ret == 0) {
+                ret = -1;
+            }
+        }
+    }
+
+    wc_MlDsaKey_Free(refPub);
+    wc_MlDsaKey_Free(genPub);
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA CACHE-AND-EXPORT-PUBLIC DMA SUCCESS\n");
     }
     return ret;
 }
@@ -12960,9 +14113,11 @@ int whTestCrypto_MlDsaVerifyOnlyDma(whClientContext* ctx, int devId,
         }
     }
     /* Import the key into wolfHSM via the wolfCrypt structure. This is the
-     * DMA-only verify test, so always import via the DMA path. */
+     * DMA-only verify test, so always import via the DMA path. The verify
+     * usage flag is required: the DMA verify handler enforces it. */
     if (ret == 0) {
-        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId, 0, 0, NULL);
+        ret = wh_Client_MlDsaImportKeyDma(ctx, key, &keyId,
+                                          WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL);
         if (ret == WH_ERROR_OK) {
             evictKey = 1;
         }
@@ -13567,6 +14722,136 @@ static int whTestCrypto_MlKemExportPublic(whClientContext* ctx, int devId,
     return ret;
 }
 
+/* One keygen call caches the private key and returns the public key. Verify
+ * the returned public key byte-matches wh_Client_MlKemExportPublicKey and that
+ * a KEM encapsulate/decapsulate round-trips against the cached private key. */
+static int whTestCrypto_MlKemCacheKeyAndExportPublic(whClientContext* ctx,
+                                                     int devId, WC_RNG* rng)
+{
+    int      ret      = 0;
+    int      levels[3];
+    int      levelCnt = 0;
+    int      i;
+
+    levelCnt = whTestCrypto_MlKemGetLevels(
+        levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        whKeyId  keyId        = WH_KEYID_ERASED;
+        MlKemKey genPub[1]    = {0};
+        MlKemKey refPub[1]    = {0};
+        int      genInited    = 0;
+        int      refInited    = 0;
+        byte     genRaw[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+        byte     refRaw[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+        word32   genRawSz     = 0;
+        word32   refRawSz     = 0;
+        byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+        byte     ssEnc[WC_ML_KEM_SS_SZ];
+        byte     ssDec[WC_ML_KEM_SS_SZ];
+        word32   ctLen    = sizeof(ct);
+        word32   ssEncLen = sizeof(ssEnc);
+        word32   ssDecLen = sizeof(ssDec);
+        (void)devId;
+
+        ret = wc_MlKemKey_Init(genPub, levels[i], NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInited = 1;
+            ret       = wh_Client_MlKemMakeCacheKeyAndExportPublic(
+                ctx, levels[i], &keyId, WH_NVM_FLAGS_USAGE_DERIVE, 0, NULL,
+                genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT(
+                    "MlKemMakeCacheKeyAndExportPublic failed level=%d %d\n",
+                    levels[i], ret);
+            }
+        }
+
+        /* Cross-check the keygen-returned public key against ExportPublicKey. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(refPub, levels[i], NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInited = 1;
+                ret = wh_Client_MlKemExportPublicKey(ctx, keyId, refPub, 0,
+                                                     NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "wh_Client_MlKemExportPublicKey failed level=%d %d\n",
+                        levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_PublicKeySize(genPub, &genRawSz);
+            if (ret == 0) {
+                ret = wc_MlKemKey_EncodePublicKey(genPub, genRaw, genRawSz);
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_PublicKeySize(refPub, &refRawSz);
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_EncodePublicKey(refPub, refRaw, refRawSz);
+            }
+            if ((ret == 0) && ((genRawSz != refRawSz) ||
+                               (memcmp(genRaw, refRaw, genRawSz) != 0))) {
+                WH_ERROR_PRINT(
+                    "keygen pubkey mismatch vs ExportPublicKey level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        /* Roundtrip: encapsulate locally with the exported public key (refPub)
+         * the client holds, decapsulate on the HSM using genPub directly as the
+         * private-key handle (no separate key object). */
+        if (ret == 0) {
+            ret = wc_MlKemKey_CipherTextSize(refPub, &ctLen);
+            if (ret == 0) {
+                ret = wc_MlKemKey_SharedSecretSize(refPub, &ssEncLen);
+            }
+            if (ret == 0) {
+                ssDecLen = ssEncLen;
+                ret      = wc_MlKemKey_Encapsulate(refPub, ct, ssEnc, rng);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Encapsulate against keygen pub failed level=%d %d\n",
+                        levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, genPub, ct, ctLen, ssDec,
+                                             &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Server decapsulate failed level=%d %d\n",
+                               levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT(
+                    "ML-KEM keygen-pub roundtrip ss mismatch level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (refInited) {
+            wc_MlKemKey_Free(refPub);
+        }
+        if (genInited) {
+            wc_MlKemKey_Free(genPub);
+        }
+        if (!WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM CACHE-AND-EXPORT-PUBLIC SUCCESS\n");
+    }
+    return ret;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
                                              WC_RNG* rng)
@@ -13743,6 +15028,136 @@ static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         WH_TEST_PRINT("ML-KEM EXPORT-PUBLIC DMA SUCCESS\n");
+    }
+    return ret;
+}
+
+/* DMA variant: one keygen call caches the private key and streams the public
+ * key back through the client's DMA buffer. Verify it byte-matches
+ * wh_Client_MlKemExportPublicKeyDma and that a KEM round-trips against the
+ * cached private key. */
+static int whTestCrypto_MlKemCacheKeyAndExportPublicDma(whClientContext* ctx,
+                                                        int devId, WC_RNG* rng)
+{
+    int      ret      = 0;
+    int      levels[3];
+    int      levelCnt = 0;
+    int      i;
+
+    levelCnt = whTestCrypto_MlKemGetLevels(
+        levels, (int)(sizeof(levels) / sizeof(levels[0])));
+
+    for (i = 0; (ret == 0) && (i < levelCnt); i++) {
+        whKeyId  keyId        = WH_KEYID_ERASED;
+        MlKemKey genPub[1]    = {0};
+        MlKemKey refPub[1]    = {0};
+        int      genInited    = 0;
+        int      refInited    = 0;
+        byte     genRaw[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+        byte     refRaw[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+        word32   genRawSz     = 0;
+        word32   refRawSz     = 0;
+        byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+        byte     ssEnc[WC_ML_KEM_SS_SZ];
+        byte     ssDec[WC_ML_KEM_SS_SZ];
+        word32   ctLen    = sizeof(ct);
+        word32   ssEncLen = sizeof(ssEnc);
+        word32   ssDecLen = sizeof(ssDec);
+        (void)devId;
+
+        ret = wc_MlKemKey_Init(genPub, levels[i], NULL, INVALID_DEVID);
+        if (ret == 0) {
+            genInited = 1;
+            ret       = wh_Client_MlKemMakeCacheKeyDma(
+                ctx, levels[i], &keyId, WH_NVM_FLAGS_USAGE_DERIVE, 0, NULL,
+                genPub);
+            if (ret != 0) {
+                WH_ERROR_PRINT("MlKemMakeCacheKeyDma failed level=%d %d\n",
+                               levels[i], ret);
+            }
+        }
+
+        /* Cross-check against a separate public DMA export of the same keyId. */
+        if (ret == 0) {
+            ret = wc_MlKemKey_Init(refPub, levels[i], NULL, INVALID_DEVID);
+            if (ret == 0) {
+                refInited = 1;
+                ret = wh_Client_MlKemExportPublicKeyDma(ctx, keyId, refPub, 0,
+                                                        NULL);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "wh_Client_MlKemExportPublicKeyDma failed level=%d %d\n",
+                        levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wc_MlKemKey_PublicKeySize(genPub, &genRawSz);
+            if (ret == 0) {
+                ret = wc_MlKemKey_EncodePublicKey(genPub, genRaw, genRawSz);
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_PublicKeySize(refPub, &refRawSz);
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_EncodePublicKey(refPub, refRaw, refRawSz);
+            }
+            if ((ret == 0) && ((genRawSz != refRawSz) ||
+                               (memcmp(genRaw, refRaw, genRawSz) != 0))) {
+                WH_ERROR_PRINT(
+                    "keygen pubkey (DMA) mismatch vs export level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        /* Roundtrip: encapsulate locally with the exported public key (refPub)
+         * the client holds, decapsulate on the HSM using genPub directly as the
+         * private-key handle (no separate key object). */
+        if (ret == 0) {
+            ret = wc_MlKemKey_CipherTextSize(refPub, &ctLen);
+            if (ret == 0) {
+                ret = wc_MlKemKey_SharedSecretSize(refPub, &ssEncLen);
+            }
+            if (ret == 0) {
+                ssDecLen = ssEncLen;
+                ret      = wc_MlKemKey_Encapsulate(refPub, ct, ssEnc, rng);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "Encapsulate against keygen pub (DMA) failed level=%d "
+                        "%d\n", levels[i], ret);
+                }
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_MlKemDecapsulate(ctx, genPub, ct, ctLen, ssDec,
+                                             &ssDecLen);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Server decapsulate (DMA) failed level=%d %d\n",
+                               levels[i], ret);
+            }
+            else if ((ssEncLen != ssDecLen) ||
+                     (memcmp(ssEnc, ssDec, ssEncLen) != 0)) {
+                WH_ERROR_PRINT(
+                    "ML-KEM DMA keygen-pub roundtrip ss mismatch level=%d\n",
+                    levels[i]);
+                ret = -1;
+            }
+        }
+
+        if (refInited) {
+            wc_MlKemKey_Free(refPub);
+        }
+        if (genInited) {
+            wc_MlKemKey_Free(genPub);
+        }
+        if (!WH_KEYID_ISERASED(keyId)) {
+            (void)wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-KEM CACHE-AND-EXPORT-PUBLIC DMA SUCCESS\n");
     }
     return ret;
 }
@@ -16095,6 +17510,159 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
 #endif /* !NO_AES && HAVE_AES_CBC && \
           WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS */
 
+/* Negative tests: every cache-and-export keygen function must reject
+ * WH_NVM_FLAGS_EPHEMERAL, a NULL inout_key_id, and a NULL pub with
+ * WH_ERROR_BADARGS, before contacting the server. level is passed as 0 for the
+ * PQC calls since the argument guards run before any level validation. */
+static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
+{
+    int     ret   = 0;
+    whKeyId keyId = WH_KEYID_ERASED;
+
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
+    {
+        RsaKey rsa[1] = {0};
+        if (wh_Client_RsaMakeCacheKeyAndExportPublic(
+                ctx, 2048, WC_RSA_EXPONENT, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0,
+                NULL, rsa) != WH_ERROR_BADARGS ||
+            wh_Client_RsaMakeCacheKeyAndExportPublic(
+                NULL, 2048, WC_RSA_EXPONENT, &keyId, WH_NVM_FLAGS_NONE, 0, NULL,
+                rsa) != WH_ERROR_BADARGS ||
+            wh_Client_RsaMakeCacheKeyAndExportPublic(
+                ctx, 2048, WC_RSA_EXPONENT, NULL, WH_NVM_FLAGS_NONE, 0, NULL,
+                rsa) != WH_ERROR_BADARGS ||
+            wh_Client_RsaMakeCacheKeyAndExportPublic(
+                ctx, 2048, WC_RSA_EXPONENT, &keyId, WH_NVM_FLAGS_NONE, 0, NULL,
+                NULL) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("RSA cache-export arg validation failed\n");
+            ret = -1;
+        }
+    }
+#endif
+#ifdef HAVE_ECC
+    if (ret == 0) {
+        ecc_key ecc[1] = {0};
+        if (wh_Client_EccMakeCacheKeyAndExportPublic(
+                ctx, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                ecc) != WH_ERROR_BADARGS ||
+            wh_Client_EccMakeCacheKeyAndExportPublic(
+                NULL, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_NONE, 0, NULL,
+                ecc) != WH_ERROR_BADARGS ||
+            wh_Client_EccMakeCacheKeyAndExportPublic(
+                ctx, 32, ECC_SECP256R1, NULL, WH_NVM_FLAGS_NONE, 0, NULL,
+                ecc) != WH_ERROR_BADARGS ||
+            wh_Client_EccMakeCacheKeyAndExportPublic(
+                ctx, 32, ECC_SECP256R1, &keyId, WH_NVM_FLAGS_NONE, 0, NULL,
+                NULL) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("ECC cache-export arg validation failed\n");
+            ret = -1;
+        }
+    }
+#endif
+#ifdef HAVE_CURVE25519
+    if (ret == 0) {
+        curve25519_key cv[1] = {0};
+        if (wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+                ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_EPHEMERAL, NULL, 0,
+                cv) != WH_ERROR_BADARGS ||
+            wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+                ctx, CURVE25519_KEYSIZE, NULL, WH_NVM_FLAGS_NONE, NULL, 0,
+                cv) != WH_ERROR_BADARGS ||
+            wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+                ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_NONE, NULL, 0,
+                NULL) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Curve25519 cache-export arg validation failed\n");
+            ret = -1;
+        }
+    }
+#endif
+#ifdef HAVE_ED25519
+    if (ret == 0) {
+        ed25519_key ed[1] = {0};
+        if (wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+                ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, ed) !=
+                WH_ERROR_BADARGS ||
+            wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+                ctx, NULL, WH_NVM_FLAGS_NONE, 0, NULL, ed) != WH_ERROR_BADARGS ||
+            wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+                ctx, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+                WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Ed25519 cache-export arg validation failed\n");
+            ret = -1;
+        }
+    }
+#endif
+#ifdef WOLFSSL_MLDSA_PUBLIC_KEY
+    if (ret == 0) {
+        wc_MlDsaKey mldsa[1] = {0};
+        if (wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+                ctx, 0, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mldsa) !=
+                WH_ERROR_BADARGS ||
+            wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+                ctx, 0, 0, NULL, WH_NVM_FLAGS_NONE, 0, NULL, mldsa) !=
+                WH_ERROR_BADARGS ||
+            wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+                ctx, 0, 0, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+                WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("ML-DSA cache-export arg validation failed\n");
+            ret = -1;
+        }
+#ifdef WOLFHSM_CFG_DMA
+        if (ret == 0 &&
+            (wh_Client_MlDsaMakeCacheKeyDma(
+                 ctx, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mldsa) !=
+                 WH_ERROR_BADARGS ||
+             wh_Client_MlDsaMakeCacheKeyDma(
+                 ctx, 0, NULL, WH_NVM_FLAGS_NONE, 0, NULL, mldsa) !=
+                 WH_ERROR_BADARGS ||
+             wh_Client_MlDsaMakeCacheKeyDma(
+                 ctx, 0, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+                 WH_ERROR_BADARGS)) {
+            WH_ERROR_PRINT("ML-DSA DMA cache-export arg validation failed\n");
+            ret = -1;
+        }
+#endif /* WOLFHSM_CFG_DMA */
+    }
+#endif /* WOLFSSL_MLDSA_PUBLIC_KEY */
+#ifdef WOLFSSL_HAVE_MLKEM
+    if (ret == 0) {
+        MlKemKey mlkem[1] = {0};
+        if (wh_Client_MlKemMakeCacheKeyAndExportPublic(
+                ctx, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mlkem) !=
+                WH_ERROR_BADARGS ||
+            wh_Client_MlKemMakeCacheKeyAndExportPublic(
+                ctx, 0, NULL, WH_NVM_FLAGS_NONE, 0, NULL, mlkem) !=
+                WH_ERROR_BADARGS ||
+            wh_Client_MlKemMakeCacheKeyAndExportPublic(
+                ctx, 0, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+                WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("ML-KEM cache-export arg validation failed\n");
+            ret = -1;
+        }
+#ifdef WOLFHSM_CFG_DMA
+        if (ret == 0 &&
+            (wh_Client_MlKemMakeCacheKeyDma(
+                 ctx, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mlkem) !=
+                 WH_ERROR_BADARGS ||
+             wh_Client_MlKemMakeCacheKeyDma(
+                 ctx, 0, NULL, WH_NVM_FLAGS_NONE, 0, NULL, mlkem) !=
+                 WH_ERROR_BADARGS ||
+             wh_Client_MlKemMakeCacheKeyDma(
+                 ctx, 0, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+                 WH_ERROR_BADARGS)) {
+            WH_ERROR_PRINT("ML-KEM DMA cache-export arg validation failed\n");
+            ret = -1;
+        }
+#endif /* WOLFHSM_CFG_DMA */
+    }
+#endif /* WOLFSSL_HAVE_MLKEM */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("KEYGEN-EXPORT-PUBLIC ARG VALIDATION SUCCESS\n");
+    }
+    return ret;
+}
+
 /* WH_TEST_DMA_MODE_CNT (number of cryptoCb dispatch modes to exercise) is
  * provided by wh_test_common.h */
 
@@ -16271,9 +17839,13 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
-#ifndef NO_RSA
     /* Once-run public-key tests use the std (non-DMA) dispatch mode. */
     (void)wh_Client_SetDmaMode(client, 0);
+    if (ret == 0) {
+        ret = whTest_CryptoMakeCacheKeyExportPublicArgs(client);
+    }
+
+#ifndef NO_RSA
     if (ret == 0) {
         ret = whTest_CryptoRsa(client, WH_CLIENT_DEVID(client), rng);
     }
@@ -16290,6 +17862,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_CryptoEccCacheDuplicate(client);
     }
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+    if (ret == 0) {
+        ret = whTest_CryptoEccMakePub(client, WH_CLIENT_DEVID(client), rng);
+    }
+#ifdef HAVE_ECC_CHECK_KEY
+    if (ret == 0) {
+        ret = whTest_CryptoEccCheckPubKey(client, WH_CLIENT_DEVID(client), rng);
+    }
+#endif /* HAVE_ECC_CHECK_KEY */
+#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
 #if defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY) && \
     !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     if (ret == 0) {
@@ -16338,6 +17920,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             WH_ERROR_PRINT("Ed25519 export-public test failed: %d\n", ret);
         }
     }
+    if (ret == 0) {
+        ret = whTest_CryptoEd25519CacheKeyAndExportPublic(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Ed25519 cache-and-export-public test failed: %d\n", ret);
+        }
+    }
 #ifdef WOLFHSM_CFG_DMA
     (void)wh_Client_SetDmaMode(client, 1);
     if (ret == 0) {
@@ -16368,6 +17958,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                                                   WH_CLIENT_DEVID(client), rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Curve25519 export-public test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoCurve25519CacheKeyAndExportPublic(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "Curve25519 cache-and-export-public test failed: %d\n", ret);
         }
     }
 #endif /* HAVE_CURVE25519 */
@@ -16563,6 +18161,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                         level, ret);
                 }
             }
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaCacheKeyAndExportPublic(
+                    client, WH_CLIENT_DEVID(client), rng, level);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "ML-DSA cache-and-export-public test failed "
+                        "(level %d): %d\n",
+                        level, ret);
+                }
+            }
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
@@ -16579,6 +18187,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                     WH_ERROR_PRINT(
                         "ML-DSA export-public DMA test failed (level %d): "
                         "%d\n",
+                        level, ret);
+                }
+            }
+            if (ret == 0) {
+                ret = whTestCrypto_MlDsaCacheKeyAndExportPublicDma(
+                    client, WH_CLIENT_DEVID(client), rng, level);
+                if (ret != 0) {
+                    WH_ERROR_PRINT(
+                        "ML-DSA cache-and-export-public DMA test failed "
+                        "(level %d): %d\n",
                         level, ret);
                 }
             }
@@ -16637,6 +18255,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             WH_ERROR_PRINT("ML-KEM export-public test failed: %d\n", ret);
         }
     }
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemCacheKeyAndExportPublic(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "ML-KEM cache-and-export-public test failed: %d\n", ret);
+        }
+    }
 
 #ifdef WOLFHSM_CFG_DMA
     (void)wh_Client_SetDmaMode(client, 1);
@@ -16648,6 +18274,14 @@ int whTest_CryptoClientConfig(whClientConfig* config)
                                                 rng);
         if (ret != 0) {
             WH_ERROR_PRINT("ML-KEM export-public DMA test failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = whTestCrypto_MlKemCacheKeyAndExportPublicDma(
+            client, WH_CLIENT_DEVID(client), rng);
+        if (ret != 0) {
+            WH_ERROR_PRINT(
+                "ML-KEM cache-and-export-public DMA test failed: %d\n", ret);
         }
     }
 #endif /* WOLFHSM_CFG_DMA */

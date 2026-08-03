@@ -69,9 +69,8 @@ int wh_Client_NvmInitResponse(whClientContext* c, int32_t *out_rc,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -141,9 +140,8 @@ int wh_Client_NvmCleanupResponse(whClientContext* c, int32_t *out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -207,9 +205,8 @@ int wh_Client_NvmGetAvailableResponse(whClientContext* c, int32_t *out_rc,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -311,9 +308,8 @@ int wh_Client_NvmAddObjectResponse(whClientContext* c, int32_t *out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -388,9 +384,8 @@ int wh_Client_NvmListResponse(whClientContext* c, int32_t *out_rc,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -467,9 +462,8 @@ int wh_Client_NvmGetMetadataResponse(whClientContext* c, int32_t *out_rc,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -563,9 +557,8 @@ int wh_Client_NvmDestroyObjectsResponse(whClientContext* c, int32_t *out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     if (rc == 0) {
         /* Validate response */
         if (    (resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -640,9 +633,8 @@ int wh_Client_NvmReadResponse(whClientContext* c, int32_t *out_rc,
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c,
-            &resp_group, &resp_action,
-            &resp_size, buffer);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(buffer), buffer);
     if (rc == 0) {
         /* Validate response */
         if ((resp_group != WH_MESSAGE_GROUP_NVM) ||
@@ -760,7 +752,8 @@ int wh_Client_NvmAddObjectDmaResponse(whClientContext* c, int32_t* out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     /* NOTREADY: response not in yet - return without POST so the pending
      * request keeps its mappings; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
@@ -866,7 +859,8 @@ int wh_Client_NvmReadDmaResponse(whClientContext* c, int32_t* out_rc)
         return WH_ERROR_BADARGS;
     }
 
-    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size, &msg);
+    rc = wh_Client_RecvResponse(c, &resp_group, &resp_action, &resp_size,
+                                sizeof(msg), &msg);
     /* NOTREADY: response not in yet - return without POST so the pending
      * request keeps its mapping; POST runs once the response arrives. */
     if (rc == WH_ERROR_NOTREADY) {
