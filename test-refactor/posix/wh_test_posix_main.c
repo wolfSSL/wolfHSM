@@ -47,6 +47,8 @@
 
 #include "wh_test_posix_client.h"
 #include "wh_test_posix_server.h"
+#include "wh_test_keygen_unique_id.h"
+#include "wh_test_keyread_race.h"
 
 /* POSIX-only thread-safety stress test. Called directly rather
  * than through the suite runner: the legacy test owns its own
@@ -314,6 +316,20 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_LogClientServerMemTransport",
             whTest_LogClientServerMemTransport, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        /* Concurrent keygen and cached-key read tests. Both are
+         * self-contained (own shared NVM + client/server pairs), so they run
+         * in this pre-server slot rather than against the live
+         * _server/_client, and both skip themselves unless THREADSAFE +
+         * GLOBAL_KEYS + crypto are compiled in. */
+        rc = whTestGroup_RunOne("whTest_KeygenUniqueIdConcurrent",
+                                whTest_KeygenUniqueIdConcurrent, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_KeyReadRace", whTest_KeyReadRace, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
