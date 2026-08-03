@@ -88,7 +88,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
     ret = wh_Bench_SetDataSize(ctx, id, inLen);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wh_Bench_SetDataSize %d\n", ret);
-        return ret;
+        goto exit;
     }
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_CRYPT_ITERS; i++) {
@@ -136,6 +136,7 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
         }
     }
 
+exit:
     /* Only free SHA256 if it was initialized */
     if (sha256Initialized) {
         (void)wc_Sha256Free(sha256);
@@ -156,16 +157,8 @@ int _benchSha256(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha256(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
     (void)params;
     return _benchSha256(client, ctx, id, 0);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
 }
 
 int wh_Bench_Mod_Sha256Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -278,16 +271,8 @@ int _benchSha224(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha224(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
     (void)params;
     return _benchSha224(client, ctx, id, 0);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
 }
 
 int wh_Bench_Mod_Sha224Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -399,16 +384,8 @@ int _benchSha384(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha384(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
     (void)params;
     return _benchSha384(client, ctx, id, 0);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
 }
 
 int wh_Bench_Mod_Sha384Dma(whClientContext* client, whBenchOpContext* ctx,
@@ -519,16 +496,8 @@ int _benchSha512(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha512(whClientContext* client, whBenchOpContext* ctx, int id,
                         void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
     (void)params;
     return _benchSha512(client, ctx, id, 0);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
 }
 
 int wh_Bench_Mod_Sha512Dma(whClientContext* client, whBenchOpContext* ctx,
