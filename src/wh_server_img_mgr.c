@@ -80,15 +80,55 @@ int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
     return ret;
 }
 
+/* Copy key material out of the keystore cache while holding the NVM lock, so
+ * the caller works from a private snapshot instead of a live cache slot that a
+ * concurrent evict or cache request could rewrite. */
+static int _ImgMgrCopyKeyFromKeystore(whServerContext* server, whKeyId keyId,
+                                      uint8_t* dst, size_t dstMax,
+                                      size_t* outLen)
+{
+    int            ret;
+    uint8_t*       keyBuf  = NULL;
+    whNvmMetadata* keyMeta = NULL;
+
+    if ((server == NULL) || (dst == NULL) || (outLen == NULL) ||
+        (dstMax == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = WH_SERVER_NVM_LOCK(server);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(server, keyId, &keyBuf, &keyMeta);
+    if (ret == WH_ERROR_OK) {
+        if ((keyBuf == NULL) || (keyMeta == NULL)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if ((size_t)keyMeta->len > dstMax) {
+            ret = WH_ERROR_BUFFER_SIZE;
+        }
+        else {
+            memcpy(dst, keyBuf, keyMeta->len);
+            *outLen = (size_t)keyMeta->len;
+        }
+    }
+
+    (void)WH_SERVER_NVM_UNLOCK(server);
+
+    return ret;
+}
+
 int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
                               const whServerImgMgrImg*    img,
                               whServerImgMgrVerifyResult* result)
 {
-    int              ret     = WH_ERROR_OK;
-    whServerContext* server  = NULL;
-    uint8_t*         keyBuf  = NULL;
-    whNvmMetadata*   keyMeta = NULL;
-    size_t           keySz   = 0;
+    int              ret    = WH_ERROR_OK;
+    whServerContext* server = NULL;
+    uint8_t          keyBuf[WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE];
+    const uint8_t*   keyPtr = NULL; /* stays NULL for paths with no key */
+    size_t           keySz  = 0;
     uint8_t sigBuf[WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE]; /* Buffer for
                                                                 signature */
     whNvmMetadata sigMeta       = {0};
@@ -112,12 +152,12 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
     switch (img->imgType) {
         case WH_IMG_MGR_IMG_TYPE_WOLFBOOT:
             /* Load key from keystore, skip sig loading (sig is in header) */
-            ret = wh_Server_KeystoreFreshenKey(server, img->keyId, &keyBuf,
-                                               &keyMeta);
+            ret = _ImgMgrCopyKeyFromKeystore(server, img->keyId, keyBuf,
+                                             sizeof(keyBuf), &keySz);
             if (ret != WH_ERROR_OK) {
                 return ret;
             }
-            keySz = keyMeta->len;
+            keyPtr = keyBuf;
             /* sig/sigSz passed as NULL/0 to callback */
             break;
 
@@ -127,15 +167,8 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
             break;
 
         case WH_IMG_MGR_IMG_TYPE_RAW:
-            /* Existing behavior: load key from keystore + sig from NVM */
-            ret = wh_Server_KeystoreFreshenKey(server, img->keyId, &keyBuf,
-                                               &keyMeta);
-            if (ret != WH_ERROR_OK) {
-                return ret;
-            }
-            keySz = keyMeta->len;
-
-            /* Load the signature from NVM */
+            /* Load the signature from NVM first so the key snapshot is the
+             * last thing taken before verification */
             ret = wh_Nvm_GetMetadata(server->nvm, img->sigNvmId, &sigMeta);
             if (ret != WH_ERROR_OK) {
                 return ret;
@@ -153,6 +186,14 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
             }
             actualSigSize = sigMeta.len;
             sigPtr        = sigBuf;
+
+            /* Load key from keystore */
+            ret = _ImgMgrCopyKeyFromKeystore(server, img->keyId, keyBuf,
+                                             sizeof(keyBuf), &keySz);
+            if (ret != WH_ERROR_OK) {
+                return ret;
+            }
+            keyPtr = keyBuf;
             break;
 
         default:
@@ -162,7 +203,7 @@ int wh_Server_ImgMgrVerifyImg(whServerImgMgrContext*      context,
     /* Invoke verify method callback */
     if (img->verifyMethod != NULL) {
         result->verifyMethodResult = img->verifyMethod(
-            context, img, keyBuf, keySz, sigPtr, actualSigSize);
+            context, img, keyPtr, keySz, sigPtr, actualSigSize);
     }
     else {
         result->verifyMethodResult = WH_ERROR_NOHANDLER;
