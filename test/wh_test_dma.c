@@ -277,6 +277,20 @@ static int whTest_DmaAllowListBasic(void)
         (void*)((uintptr_t)0x10000), 0x1000);
     WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
 
+    /* An allow list entry covers [addr, addr + size). A request that fills the
+     * entry exactly is therefore allowed, and one more byte is not. */
+    WH_TEST_PRINT("  Testing exact-fit allow list acceptance...\n");
+    rc = wh_Dma_CheckMemOperAgainstAllowList(
+        &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
+        (void*)((uintptr_t)0x10000), 0x10000);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  Testing one-byte overrun rejection...\n");
+    rc = wh_Dma_CheckMemOperAgainstAllowList(
+        &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
+        (void*)((uintptr_t)0x10000), 0x10001);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_ACCESS);
+
     WH_TEST_PRINT("  Testing basic allow list rejection...\n");
     rc = wh_Dma_CheckMemOperAgainstAllowList(
         &allowList, WH_DMA_OPER_CLIENT_READ_PRE,
