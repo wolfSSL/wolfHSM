@@ -3181,8 +3181,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t key_len     = req.keyLen;
     uint32_t len         = req.sz;
     uint32_t left        = req.left;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCtrRequest) + len +
-                           key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesCtrRequest) +
+                           (uint64_t)len + (uint64_t)key_len +
+                           (uint64_t)AES_IV_SIZE + (uint64_t)AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3326,8 +3327,9 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t keyLen      = req.keySz;
     uint32_t len         = req.input.sz;
     uint32_t left        = req.left;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCtrDmaRequest) + keyLen +
-                           AES_IV_SIZE + AES_BLOCK_SIZE;
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesCtrDmaRequest) +
+                           (uint64_t)keyLen + (uint64_t)AES_IV_SIZE +
+                           (uint64_t)AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3515,8 +3517,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t enc     = req.enc;
     uint32_t key_len = req.keyLen;
     uint32_t len     = req.sz;
-    uint64_t needed_size =
-        sizeof(whMessageCrypto_AesEcbRequest) + len + key_len;
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesEcbRequest) +
+                           (uint64_t)len + (uint64_t)key_len;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3636,7 +3638,8 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
 
     uint32_t keyLen      = req.keySz;
     uint32_t len         = req.input.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesEcbDmaRequest) + keyLen;
+    uint64_t needed_size =
+        (uint64_t)sizeof(whMessageCrypto_AesEcbDmaRequest) + (uint64_t)keyLen;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3801,8 +3804,9 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t enc         = req.enc;
     uint32_t key_len     = req.keyLen;
     uint32_t len         = req.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcRequest) + len +
-                           key_len + AES_BLOCK_SIZE;
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesCbcRequest) +
+                           (uint64_t)len + (uint64_t)key_len +
+                           (uint64_t)AES_BLOCK_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -3926,8 +3930,8 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t enc         = req.enc;
     uint32_t keyLen      = req.keySz;
     uint32_t len         = req.input.sz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesCbcDmaRequest) + keyLen +
-                           AES_IV_SIZE;
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesCbcDmaRequest) +
+                           (uint64_t)keyLen + (uint64_t)AES_IV_SIZE;
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -4100,9 +4104,10 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t tag_len     = req.authTagSz;
     whKeyId  key_id      = wh_KeyId_TranslateFromClient(
              WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmRequest) + len +
-                           key_len + iv_len + authin_len +
-                           ((enc == 0) ? tag_len : 0);
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesGcmRequest) +
+                           (uint64_t)len + (uint64_t)key_len +
+                           (uint64_t)iv_len + (uint64_t)authin_len +
+                           (uint64_t)((enc == 0) ? tag_len : 0);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -4258,8 +4263,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t len         = req.input.sz;
     uint32_t ivLen       = req.ivSz;
     uint32_t tagLen      = req.authTagSz;
-    uint64_t needed_size = sizeof(whMessageCrypto_AesGcmDmaRequest) + keyLen +
-                           ivLen + (enc != 0 ? 0 : tagLen);
+    uint64_t needed_size = (uint64_t)sizeof(whMessageCrypto_AesGcmDmaRequest) +
+                           (uint64_t)keyLen + (uint64_t)ivLen +
+                           (uint64_t)(enc != 0 ? 0 : tagLen);
     if (needed_size != inSize) {
         return WH_ERROR_BADARGS;
     }
