@@ -36,6 +36,24 @@
 #include "wolfhsm/wh_message_nvm.h"
 
 
+/* Keep in step with wh_MessageNvm_TranslateAddObjectRequest */
+int wh_MessageNvm_TranslateMetadata(uint16_t magic, const whNvmMetadata* src,
+        whNvmMetadata* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, id);
+    WH_T16(magic, dest, src, access);
+    WH_T16(magic, dest, src, flags);
+    WH_T16(magic, dest, src, len);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(dest->label));
+    }
+    return 0;
+}
+
 int wh_MessageNvm_TranslateSimpleResponse(uint16_t magic,
         const whMessageNvm_SimpleResponse* src,
         whMessageNvm_SimpleResponse* dest)
@@ -141,6 +159,8 @@ int wh_MessageNvm_TranslateGetMetadataResponse(uint16_t magic,
     return 0;
 }
 
+/* The request mirrors whNvmMetadata: keep in step with
+ * wh_MessageNvm_TranslateMetadata */
 int wh_MessageNvm_TranslateAddObjectRequest(uint16_t magic,
         const whMessageNvm_AddObjectRequest* src,
         whMessageNvm_AddObjectRequest* dest)
