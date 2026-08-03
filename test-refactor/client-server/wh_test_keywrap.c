@@ -32,6 +32,8 @@
  *                                    return WH_ERROR_BADARGS, not underflow
  *   _whTest_KeywrapDataUnwrapUnderflow - undersized wrapped-data blobs must
  *                                    return WH_ERROR_BADARGS, not underflow
+ *   _whTest_KeywrapOversizeRequest - payloads past the configured maximum must
+ *                                    be refused before any copy
  *
  * The positive wrap/unwrap-and-export round trip under a plain client KEK
  * lives in wh_test_crypto_keywrap.c. The trusted-KEK positive paths
@@ -57,6 +59,7 @@
 #include "wolfhsm/wh_keyid.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_message_keystore.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -65,6 +68,11 @@
 #define WH_TEST_KW_WRAPPED_KEYSIZE                         \
     (WH_KEYWRAP_AES_GCM_HEADER_SIZE + WH_TEST_KW_KEYSIZE + \
      sizeof(whNvmMetadata))
+
+/* One byte past the configured maximum. The comm data buffer always has room
+ * for the maximum plus its header, so this is the binding limit */
+#define WH_TEST_KW_OVER_KEY (WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE + 1)
+#define WH_TEST_KW_OVER_DATA (WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE + 1)
 
 /* Distinct id range so nothing collides with other client-group suites; every
  * subtest cleans up its own keys */
@@ -448,12 +456,77 @@ static int _whTest_KeywrapDataUnwrapUnderflow(whClientContext* client)
     return ret;
 }
 
+/* Report whether an oversize request was rejected as expected */
+static int _CheckOversizeRejected(const char* what, int ret)
+{
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("%s oversize expected BADARGS, got %d\n", what, ret);
+        return WH_ERROR_ABORTED;
+    }
+    return WH_ERROR_OK;
+}
+
+/* A payload past the configured maximum must be refused before any copy. The
+ * input buffer stays small on purpose: a builder that copied first would read
+ * off the end of it and trip ASan */
+static int _whTest_KeywrapOversizeRequest(whClientContext* client)
+{
+    int           ret                             = WH_ERROR_OK;
+    whKeyId       kekId                           = WH_KEYID_ERASED;
+    whNvmMetadata meta                            = {0};
+    uint16_t      cachedId                        = WH_KEYID_ERASED;
+    uint8_t       in[WH_TEST_KW_KEYSIZE]          = {0};
+    uint8_t       out[WH_TEST_KW_WRAPPED_KEYSIZE] = {0};
+    uint16_t      keyOutSz                        = (uint16_t)sizeof(out);
+    uint32_t      dataOutSz                       = (uint32_t)sizeof(out);
+
+    WH_TEST_RETURN_ON_FAIL(_CacheSwKek(client, &kekId));
+
+    ret = _CheckOversizeRejected(
+        "KeyWrap", wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, kekId, in,
+                                     (uint16_t)WH_TEST_KW_OVER_KEY, &meta, out,
+                                     &keyOutSz));
+
+    if (ret == WH_ERROR_OK) {
+        ret = _CheckOversizeRejected(
+            "KeyUnwrapAndExport",
+            wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, kekId, in,
+                                         (uint16_t)WH_TEST_KW_OVER_KEY, &meta,
+                                         out, &keyOutSz));
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _CheckOversizeRejected(
+            "KeyUnwrapAndCache", wh_Client_KeyUnwrapAndCache(
+                                     client, WC_CIPHER_AES_GCM, kekId, in,
+                                     (uint16_t)WH_TEST_KW_OVER_KEY, &cachedId));
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _CheckOversizeRejected(
+            "DataWrap",
+            wh_Client_DataWrap(client, WC_CIPHER_AES_GCM, kekId, in,
+                               WH_TEST_KW_OVER_DATA, out, &dataOutSz));
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _CheckOversizeRejected(
+            "DataUnwrap",
+            wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, kekId, in,
+                                 WH_TEST_KW_OVER_DATA, out, &dataOutSz));
+    }
+
+    (void)wh_Client_KeyEvict(client, kekId);
+    return ret;
+}
+
 int whTest_KeyWrap(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapTrustedKekPolicy(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataWrapUsage(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapKeyUnwrapUnderflow(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapDataUnwrapUnderflow(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_KeywrapOversizeRequest(ctx));
 
     WH_TEST_PRINT("KEYWRAP POLICY SUCCESS\n");
     return 0;

@@ -57,8 +57,14 @@
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that
- *  can be wrapped
- *      Default: 512
+ *  can be wrapped. Together with the request header it must fit within
+ *  WOLFHSM_CFG_COMM_DATA_LEN, which is checked at compile time
+ *      Default: 2000, or what WOLFHSM_CFG_COMM_DATA_LEN leaves when smaller
+ *
+ *  WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE - The maximum size (in bytes) of a data
+ *  payload that can be wrapped, bounded by WOLFHSM_CFG_COMM_DATA_LEN the same
+ *  way as WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
+ *      Default: 2000, or what WOLFHSM_CFG_COMM_DATA_LEN leaves when smaller
  *
  *  WOLFHSM_CFG_HWKEYSTORE - If defined, include the hardware keystore
  *  front-end module and hardware-only key (WH_KEYTYPE_HW) support
@@ -242,6 +248,37 @@
 #ifndef WOLFHSM_CFG_COMM_DATA_LEN
 #define WOLFHSM_CFG_COMM_DATA_LEN 1280
 #endif
+
+/* Maximum keywrap key and data sizes, defaulted to fit the comm data buffer
+ * after the largest request header (asserted in the message header) */
+#if defined(WOLFHSM_CFG_KEYWRAP)
+
+/* Widest header is 38 bytes, rounded up to the next 8-byte boundary */
+#define WH_KEYWRAP_MAX_REQ_OVERHEAD 40
+
+#if WOLFHSM_CFG_COMM_DATA_LEN <= WH_KEYWRAP_MAX_REQ_OVERHEAD
+#error "WOLFHSM_CFG_COMM_DATA_LEN is too small to carry a keywrap request"
+#endif
+
+#ifndef WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
+#if (WOLFHSM_CFG_COMM_DATA_LEN - WH_KEYWRAP_MAX_REQ_OVERHEAD) < 2000
+#define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE \
+    (WOLFHSM_CFG_COMM_DATA_LEN - WH_KEYWRAP_MAX_REQ_OVERHEAD)
+#else
+#define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 2000
+#endif
+#endif
+
+#ifndef WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE
+#if (WOLFHSM_CFG_COMM_DATA_LEN - WH_KEYWRAP_MAX_REQ_OVERHEAD) < 2000
+#define WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE \
+    (WOLFHSM_CFG_COMM_DATA_LEN - WH_KEYWRAP_MAX_REQ_OVERHEAD)
+#else
+#define WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE 2000
+#endif
+#endif
+
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 /** Default server resource configurations */
 /* Reported version string */
@@ -485,14 +522,6 @@
 #endif
 
 #if defined(WOLFHSM_CFG_KEYWRAP)
-
-#ifndef WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
-#define WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE 2000
-#endif
-
-#ifndef WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE
-#define WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE 2000
-#endif
 
 #if defined(NO_AES) || !defined(HAVE_AESGCM)
 #error \

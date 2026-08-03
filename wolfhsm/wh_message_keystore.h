@@ -31,6 +31,7 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_utils.h"
 
 /* Key Cache Request */
 typedef struct {
@@ -511,5 +512,46 @@ int wh_MessageKeystore_TranslateDataUnwrapRequest(
 int wh_MessageKeystore_TranslateDataUnwrapResponse(
     uint16_t magic, const whMessageKeystore_DataUnwrapResponse* src,
     whMessageKeystore_DataUnwrapResponse* dest);
+
+#if defined(WOLFHSM_CFG_KEYWRAP)
+/* A maximum-sized keywrap payload plus its header must fit the comm data
+ * buffer. On failure, raise COMM_DATA_LEN or lower the keywrap maximum */
+WH_UTILS_STATIC_ASSERT(
+    (uint32_t)sizeof(whMessageKeystore_KeyWrapRequest) +
+            (uint32_t)sizeof(whNvmMetadata) +
+            (uint32_t)WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE <=
+        (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+    "WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE too large for WOLFHSM_CFG_COMM_DATA_LEN");
+
+WH_UTILS_STATIC_ASSERT(
+    (uint32_t)sizeof(whMessageKeystore_KeyUnwrapAndExportRequest) +
+            (uint32_t)WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE <=
+        (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+    "WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE too large for WOLFHSM_CFG_COMM_DATA_LEN");
+
+WH_UTILS_STATIC_ASSERT(
+    (uint32_t)sizeof(whMessageKeystore_KeyUnwrapAndCacheRequest) +
+            (uint32_t)WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE <=
+        (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+    "WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE too large for WOLFHSM_CFG_COMM_DATA_LEN");
+
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageKeystore_DataWrapRequest) +
+                               (uint32_t)WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE <=
+                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+                       "WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE too large for "
+                       "WOLFHSM_CFG_COMM_DATA_LEN");
+
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageKeystore_DataUnwrapRequest) +
+                               (uint32_t)WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE <=
+                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+                       "WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE too large for "
+                       "WOLFHSM_CFG_COMM_DATA_LEN");
+
+/* The defaults derive from this overhead, so it must cover the widest header */
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageKeystore_KeyWrapRequest) +
+                               (uint32_t)sizeof(whNvmMetadata) <=
+                           (uint32_t)WH_KEYWRAP_MAX_REQ_OVERHEAD,
+                       "WH_KEYWRAP_MAX_REQ_OVERHEAD is too small");
+#endif /* WOLFHSM_CFG_KEYWRAP */
 
 #endif /* !WOLFHSM_WH_MESSAGE_KEYSTORE_H_ */
