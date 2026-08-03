@@ -23,9 +23,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Exclude macOS for draft PRs due to its small pool
+        os: >-
+          ${{ (github.event_name == 'pull_request' &&
+          github.event.pull_request.draft) &&
+          fromJSON('["ubuntu-latest"]') ||
+          fromJSON('["ubuntu-latest", "macos-latest"]') }}
 
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
 
