@@ -504,12 +504,18 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
 
     /* read the auth key by AuthID */
     if (ret == 0) {
-        keySz = sizeof(kdfInput);
+        keySz = WH_SHE_KEY_SZ;
         ret   = wh_Server_KeystoreReadKey(
             server,
             WH_SHE_MAKE_KEYID(server->comm->client_id,
-                                _PopAuthId(req.messageOne)),
+                              _PopAuthId(req.messageOne)),
             NULL, kdfInput, &keySz);
+        /* a slot that doesn't hold exactly WH_SHE_KEY_SZ bytes is not a
+         * usable auth key, and the kdf appends a constant after it */
+        if ((ret == WH_ERROR_NOSPACE) ||
+            ((ret == 0) && (keySz != WH_SHE_KEY_SZ))) {
+            ret = WH_SHE_ERC_KEY_INVALID;
+        }
     }
     /* make K2 using AES-MP(authKey | WH_SHE_KEY_UPDATE_MAC_C) */
     if (ret == 0) {
@@ -566,20 +572,29 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
     wc_AesFree(server->she->sheAes);
     /* load the target key */
     if (ret == 0) {
-        ret = wh_Server_KeystoreReadKey(
+        keySz = WH_SHE_KEY_SZ;
+        ret   = wh_Server_KeystoreReadKey(
             server,
             WH_SHE_MAKE_KEYID(server->comm->client_id, _PopId(req.messageOne)),
             meta, kdfInput, &keySz);
-        /* Extract count and flags from the label, even if it failed */
-        wh_She_Label2Meta(meta->label, &she_meta_count, &she_meta_flags);
-        /* if the keyslot is empty or write protection is not on continue */
-        if (ret == WH_ERROR_NOTFOUND ||
-            (she_meta_flags & WH_SHE_FLAG_WRITE_PROTECT) == 0) {
-            keyRet = ret;
-            ret    = 0;
+        /* meta is left unset when the slot is too big for the buffer, so the
+         * label below would read as all zeros and clear the write protect */
+        if ((ret == WH_ERROR_NOSPACE) ||
+            ((ret == 0) && (keySz != WH_SHE_KEY_SZ))) {
+            ret = WH_SHE_ERC_KEY_INVALID;
         }
         else {
-            ret = WH_SHE_ERC_WRITE_PROTECTED;
+            /* Extract count and flags from the label, even if it failed */
+            wh_She_Label2Meta(meta->label, &she_meta_count, &she_meta_flags);
+            /* if the keyslot is empty or write protection is not on continue */
+            if (ret == WH_ERROR_NOTFOUND ||
+                (she_meta_flags & WH_SHE_FLAG_WRITE_PROTECT) == 0) {
+                keyRet = ret;
+                ret    = 0;
+            }
+            else {
+                ret = WH_SHE_ERC_WRITE_PROTECTED;
+            }
         }
     }
     /* check UID == 0 */

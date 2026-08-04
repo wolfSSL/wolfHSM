@@ -144,8 +144,14 @@ int whTest_She(whClientContext* client)
     uint8_t  messageThree[WH_SHE_M3_SZ];
     uint8_t  messageFour[WH_SHE_M4_SZ];
     uint8_t  messageFive[WH_SHE_M5_SZ];
+    uint8_t  oversizeKey[WH_SHE_KEY_SZ * 2] = {0};
+    uint8_t  oversizeLabel[WH_NVM_LABEL_LEN] = {0};
+    int32_t  sheMetaRc                      = 0;
     const uint32_t SHE_TEST_VECTOR_KEY_ID = 4;
     const uint32_t SHE_WP_KEY_ID          = 6;
+    const uint32_t SHE_SIZE_CHECK_KEY_ID  = 7;
+    const uint32_t SHE_OVERSIZE_AUTH_ID   = 8;
+    const uint32_t SHE_OVERSIZE_TARGET_ID = 9;
 
     if (client == NULL) {
         return WH_ERROR_BADARGS;
@@ -511,6 +517,125 @@ int whTest_She(whClientContext* client)
     }
     ret = 0;
     WH_TEST_PRINT("SHE write protect SUCCESS\n");
+
+    /* === Pre-program key size === */
+
+    /* A SHE slot holds exactly one AES-128 key. The server appends a 16
+     * byte constant after the slot contents when deriving key update keys,
+     * so an oversized slot would overrun its kdf input buffer. */
+    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0,
+                                     oversizeKey, sizeof(oversizeKey));
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Oversized SHE pre-program: expected WH_ERROR_BADARGS, "
+                       "got %d\n", ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    ret = wh_Client_ShePreProgramKey(client, SHE_SIZE_CHECK_KEY_ID, 0,
+                                     oversizeKey, WH_SHE_KEY_SZ / 2);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Short SHE pre-program: expected WH_ERROR_BADARGS, "
+                       "got %d\n", ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    /* neither attempt may leave anything behind in the slot */
+    if ((ret = wh_Client_NvmGetMetadata(
+             client,
+             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_SIZE_CHECK_KEY_ID),
+             &sheMetaRc, NULL, NULL, NULL, NULL, 0, NULL)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_NvmGetMetadata %d\n", ret);
+        goto exit;
+    }
+    if (sheMetaRc != WH_ERROR_NOTFOUND) {
+        WH_ERROR_PRINT("SHE size check slot: expected WH_ERROR_NOTFOUND, "
+                       "got %d\n", (int)sheMetaRc);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE pre-program key size SUCCESS\n");
+
+    /* === Oversized auth key slot === */
+
+    /* The SHE and NVM id spaces overlap, so a client can plant an oversized
+     * object straight into a SHE slot. LoadKey must reject such a slot as an
+     * auth key instead of reading it into its fixed kdf input buffer. */
+    wh_She_Meta2Label(0, 0, oversizeLabel);
+    if ((ret = wh_Client_NvmAddObject(
+             client,
+             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_OVERSIZE_AUTH_ID),
+             0, 0, sizeof(oversizeLabel), oversizeLabel, sizeof(oversizeKey),
+             oversizeKey, &sheMetaRc)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
+        goto exit;
+    }
+    if (sheMetaRc != 0) {
+        WH_ERROR_PRINT("Failed to plant oversized SHE slot, got %d\n",
+                       (int)sheMetaRc);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    if ((ret = wh_She_GenerateLoadableKey(
+             SHE_SIZE_CHECK_KEY_ID, SHE_OVERSIZE_AUTH_ID, 1, 0, sheUid,
+             vectorRawKey, vectorRawKey, messageOne, messageTwo, messageThree,
+             messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to generate loadable key %d\n", ret);
+        goto exit;
+    }
+    ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree,
+                               messageFour, messageFive);
+    if (ret != WH_SHE_ERC_KEY_INVALID) {
+        WH_ERROR_PRINT("Oversized SHE auth key: expected "
+                       "WH_SHE_ERC_KEY_INVALID, got %d\n", ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    if ((ret = _destroySheKey(client, SHE_OVERSIZE_AUTH_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE oversized auth key SUCCESS\n");
+
+    /* === Oversized target key === */
+
+    /* Same overlap, but with the oversized object planted at the target
+     * slot. Reading it leaves the metadata unset, so an unchecked read sees
+     * a zeroed label and overwrites a write-protected slot. */
+    wh_She_Meta2Label(0, WH_SHE_FLAG_WRITE_PROTECT, oversizeLabel);
+    if ((ret = wh_Client_NvmAddObject(
+             client,
+             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_OVERSIZE_TARGET_ID),
+             0, 0, sizeof(oversizeLabel), oversizeLabel, sizeof(oversizeKey),
+             oversizeKey, &sheMetaRc)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
+        goto exit;
+    }
+    if (sheMetaRc != 0) {
+        WH_ERROR_PRINT("Failed to plant oversized SHE target slot, got %d\n",
+                       (int)sheMetaRc);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    if ((ret = wh_She_GenerateLoadableKey(
+             SHE_OVERSIZE_TARGET_ID, WH_SHE_SECRET_KEY_ID, 1, 0, sheUid,
+             vectorRawKey, secretKey, messageOne, messageTwo, messageThree,
+             messageFour, messageFive)) != 0) {
+        WH_ERROR_PRINT("Failed to generate loadable key %d\n", ret);
+        goto exit;
+    }
+    ret = wh_Client_SheLoadKey(client, messageOne, messageTwo, messageThree,
+                               messageFour, messageFive);
+    if (ret != WH_SHE_ERC_KEY_INVALID) {
+        WH_ERROR_PRINT("Oversized SHE target key: expected "
+                       "WH_SHE_ERC_KEY_INVALID, got %d\n", ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    if ((ret = _destroySheKey(client, SHE_OVERSIZE_TARGET_ID)) != 0) {
+        WH_ERROR_PRINT("Failed to _destroySheKey, ret=%d\n", ret);
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE oversized target key SUCCESS\n");
 
     /* === Cleanup: destroy provisioned keys so we don't leak NVM === */
 
