@@ -23,6 +23,7 @@
  */
 
 #include <stddef.h>     /* For NULL */
+#include <stdint.h>     /* For uint64_t, UINT32_MAX */
 #include <fcntl.h>      /* For O_xxxx */
 #include <sys/types.h>  /* For off_t, stat */
 #include <sys/stat.h>   /* For fstat */
@@ -41,24 +42,26 @@ enum {
 };
 
 /** Local declarations */
-#define MAX_OFFSET(_context) ((_context)->partition_size * 2)
+/* Computed in 64 bits so the doubling cannot wrap and the comparisons against
+ * it stay unsigned on platforms with a 32-bit off_t */
+#define MAX_OFFSET(_context) ((uint64_t)(_context)->partition_size * 2)
 
 /* Helper for pwrite like memset.  Write the byte in c to filedes for size
- * bytes starting at offset */
-static ssize_t pfill(int filedes, int c, size_t size, off_t offset);
+ * bytes starting at offset.  Returns 0 on success, -1 on error */
+static int pfill(int filedes, int c, size_t size, off_t offset);
 
 /** Local implementations */
-static ssize_t pfill(int filedes, int c, size_t size, off_t offset)
+static int pfill(int filedes, int c, size_t size, off_t offset)
 {
-    int rc = 0;
+    ssize_t rc = 0;
     uint8_t data = (uint8_t)c;
     size_t count = 0;
     while (count < size) {
         rc = pwrite(filedes, &data, sizeof(data), offset + count);
-        if (rc != sizeof(data)) return rc;
+        if (rc != (ssize_t)sizeof(data)) return -1;
         count += sizeof(data);
     }
-    return size;
+    return 0;
 }
 
 
@@ -69,6 +72,7 @@ int posixFlashFile_Init(   void* c,
     const posixFlashFileConfig* config = cf;
     struct stat st = {0};
     off_t file_size = 0;
+    uint64_t max_offset = 0;
 
     int ret = 0;
     int rc = 0;
@@ -87,23 +91,34 @@ int posixFlashFile_Init(   void* c,
         context->partition_size = config->partition_size;
         context->erased_byte = config->erased_byte;
 
+        max_offset = MAX_OFFSET(context);
+
+        /* The flash interface addresses with uint32_t offsets and seeks with
+         * off_t, so reject a partition whose doubled size exceeds either */
+        if ((max_offset > UINT32_MAX) ||
+            ((uint64_t)(off_t)max_offset != max_offset)) {
+            posixFlashFile_Cleanup(context);
+            return WH_ERROR_BADARGS;
+        }
+
         rc = fstat(context->fd_p1 - 1, &st);
         if (rc == 0) {
             file_size = st.st_size;
 
-            if (file_size < MAX_OFFSET(context)) {
+            if ((uint64_t)file_size < max_offset) {
                 /* Write ERASE_BYTE to fill up to the storage size */
                 rc = pfill( context->fd_p1 - 1,
                             context->erased_byte,
-                            MAX_OFFSET(context) - file_size,
+                            (size_t)(max_offset - (uint64_t)file_size),
                             file_size);
                 if (rc < 0) {
                     /* Error while writing */
                     ret = WH_ERROR_ABORTED;
                 }
-            } else if (file_size > MAX_OFFSET(context)) {
+            } else if ((uint64_t)file_size > max_offset) {
+                /* max_offset is below file_size here, so it fits an off_t */
                 rc = ftruncate( context->fd_p1 - 1,
-                                MAX_OFFSET(context));
+                                (off_t)max_offset);
                 if (rc < 0) {
                     /* Error while truncating */
                     ret = WH_ERROR_ABORTED;
@@ -179,7 +194,7 @@ int posixFlashFile_Read(   void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            ((uint64_t)offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
     }
 
@@ -193,7 +208,7 @@ int posixFlashFile_Read(   void* c,
                         (void*) data,
                         (size_t) size,
                         (off_t) offset);
-    if (rc != size) {
+    if ((rc < 0) || ((size_t)rc != (size_t)size)) {
         /* Error while reading */
         return WH_ERROR_ABORTED;
     }
@@ -205,7 +220,7 @@ int posixFlashFile_Program(void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            ((uint64_t)offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
     }
 
@@ -224,7 +239,7 @@ int posixFlashFile_Program(void* c,
                             (void*) data,
                             (size_t) size,
                             (off_t) offset);
-    if (rc != size) {
+    if ((rc < 0) || ((size_t)rc != (size_t)size)) {
         /* Error while writing */
         return WH_ERROR_ABORTED;
     }
@@ -238,11 +253,12 @@ int posixFlashFile_Verify( void* c,
 {
     posixFlashFileContext* context = c;
     uint8_t buffer[PFF_VERIFY_BUFFER_LEN];
+    /* offset + size is bounded below MAX_OFFSET (<= UINT32_MAX by Init) */
     uint32_t end_offset = offset + size;
     uint32_t data_offset = 0;
 
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            ((uint64_t)offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
     }
 
@@ -278,7 +294,7 @@ int posixFlashFile_Erase(void* c,
 {
     posixFlashFileContext* context = c;
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            ((uint64_t)offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
     }
 
@@ -292,11 +308,11 @@ int posixFlashFile_Erase(void* c,
         return WH_ERROR_LOCKED;
     }
 
-    ssize_t rc = pfill( context->fd_p1 - 1,
-                        context->erased_byte,
-                        (size_t) size,
-                        (off_t) offset);
-    if (rc != size) {
+    int rc = pfill( context->fd_p1 - 1,
+                    context->erased_byte,
+                    (size_t) size,
+                    (off_t) offset);
+    if (rc != 0) {
         /* Error while writing */
         return WH_ERROR_ABORTED;
     }
@@ -310,11 +326,12 @@ int posixFlashFile_BlankCheck(void* c,
     posixFlashFileContext* context = c;
     uint8_t buffer[PFF_BLANKCHECK_BUFFER_LEN];
     uint8_t erased[PFF_BLANKCHECK_BUFFER_LEN];
+    /* offset + size is bounded below MAX_OFFSET (<= UINT32_MAX by Init) */
     uint32_t end_offset = offset + size;
     uint32_t this_size = 0;
 
     if (    (context == NULL) ||
-            (offset + size > MAX_OFFSET(context))){
+            ((uint64_t)offset + size > MAX_OFFSET(context))){
         return WH_ERROR_BADARGS;
     }
 

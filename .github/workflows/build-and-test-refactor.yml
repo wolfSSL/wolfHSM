@@ -158,3 +158,64 @@ jobs:
 
     - name: Show ccache stats
       run: ccache -s
+
+  # 32-bit build, where size_t/off_t/ssize_t are 32 bits wide. Every supported
+  # wolfHSM port is 32-bit, so request-size overflow and width-mismatch bugs
+  # are only visible here. Linux only: gcc-multilib has no macOS equivalent.
+  build-32bit:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # List host info
+    - name: Host info
+      run: uname -a
+
+    # 32-bit libc and startup files for -m32
+    - name: Install 32-bit toolchain
+      run: sudo apt-get update && sudo apt-get install -y gcc-multilib
+
+    # List compiler version
+    - name: List compiler version
+      run: gcc --version
+
+    # pull and build wolfssl
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    # Compiler cache; PR runs restore without saving. Own config-hash so the
+    # -m32 objects get a separate cache namespace from the 64-bit build job
+    - name: Set up ccache
+      uses: ./.github/actions/ccache-setup
+      with:
+        workflow-id: build-and-test-refactor
+        config-hash: m32
+        read-only: ${{ github.event_name == 'pull_request' }}
+
+    # Build and test standard build at 32-bit
+    - name: Build and test refactor 32-bit
+      run: cd test-refactor/posix && make clean && make -j ARCHFLAGS=-m32 WOLFSSL_DIR=../../wolfssl && make run ARCHFLAGS=-m32 WOLFSSL_DIR=../../wolfssl
+
+    # Build and test SHE and DMA at 32-bit, exercising the request size
+    # guards and the DMA handlers at the narrower width
+    - name: Build and test refactor 32-bit SHE DMA
+      run: cd test-refactor/posix && make clean && make -j ARCHFLAGS=-m32 SHE=1 DMA=1 WOLFSSL_DIR=../../wolfssl && make run ARCHFLAGS=-m32 SHE=1 DMA=1 WOLFSSL_DIR=../../wolfssl
+
+    # Build and test without crypto at 32-bit, which selects a different
+    # source set and skips the wolfSSL sources entirely
+    - name: Build and test refactor 32-bit NOCRYPTO
+      run: cd test-refactor/posix && make clean && make -j ARCHFLAGS=-m32 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run ARCHFLAGS=-m32 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl
+
+    # The test-refactor harness wires every NVM test to the RAM simulator, so
+    # the legacy suite is the only one that runs the POSIX flash file backend
+    - name: Build and test legacy suite 32-bit
+      run: cd test && make clean && make -j ARCHFLAGS=-m32 WOLFSSL_DIR=../wolfssl && make run ARCHFLAGS=-m32 WOLFSSL_DIR=../wolfssl
+
+    - name: Show ccache stats
+      run: ccache -s
