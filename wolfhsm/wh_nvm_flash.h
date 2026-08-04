@@ -37,11 +37,14 @@
 
 /* In-memory computed status of an Object or Directory */
 typedef enum {
-    NF_STATUS_UNKNOWN    = 0,    /* State is unknown/not read yet */
-    NF_STATUS_FREE       = 1,    /* State is known to be free/erased */
-    NF_STATUS_USED       = 2,    /* State is known to be used/intact */
-    NF_STATUS_DATA_BAD   = 3,    /* State is known damaged or duplicate data */
-    NF_STATUS_META_BAD   = 4,    /* State is known damaged meta */
+    NF_STATUS_UNKNOWN  = 0, /* State is unknown/not read yet */
+    NF_STATUS_FREE     = 1, /* State is known to be free/erased */
+    NF_STATUS_USED     = 2, /* State is known to be used/intact */
+    NF_STATUS_DATA_BAD = 3, /* State is known damaged or duplicate data */
+    NF_STATUS_META_BAD = 4, /* State is known damaged meta */
+    NF_STATUS_CRC_BAD  = 5, /* Metadata failed CRC check */
+    NF_STATUS_LEN_BAD  = 6, /* Interrupted entry whose metadata failed CRC:
+                             * the extent of its data area is unknown */
 } nfStatus;
 
 /* In-memory version of an Object or Directory State */
@@ -50,6 +53,10 @@ typedef struct {
     uint32_t epoch;
     uint32_t start;
     uint32_t count;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    uint16_t crc_meta; /* CRC16 of metadata, from the start state word */
+    uint16_t crc_data; /* CRC16 of object data, from the count state word */
+#endif
 } nfMemState;
 
 /* In-memory version of an Object */
@@ -76,13 +83,16 @@ typedef struct whNvmFlashConfig_t {
 } whNvmFlashConfig;
 
 typedef struct whNvmFlashContext_t {
-    const whFlashCb* cb;            /* Flash callbacks */
-    void* flash;                    /* Flash context to use */
-    nfMemState state;               /* State of active partition */
-    nfMemDirectory directory;       /* Cache of active objects */
-    uint32_t partition_units;       /* Size of partition in units */
-    int active;                     /* Which partition (0 or 1) is active */
-    int initialized;
+    const whFlashCb* cb;              /* Flash callbacks */
+    void*            flash;           /* Flash context to use */
+    nfMemState       state;           /* State of active partition */
+    nfMemDirectory   directory;       /* Cache of active objects */
+    uint32_t         partition_units; /* Size of partition in units */
+    int              active;          /* Which partition (0 or 1) is active */
+    int              initialized;
+    int              directory_bad; /* Directory could not be reloaded from
+                                     * flash. All operations are refused until
+                                     * the context is reinitialized */
     uint8_t WH_PAD[4];
 } whNvmFlashContext;
 

@@ -98,6 +98,7 @@ These macros size the server-side key cache. The cache is split into "regular" s
 | Macro | Default | Description |
 |---|---|---|
 | `WOLFHSM_CFG_NVM_OBJECT_COUNT` | `32` | Maximum number of objects the NVM directory can hold simultaneously (RAM directory cache *and* the on-disk directory it mirrors). Determines the upper bound on the number of keys, certificates, counters, and user objects that can coexist in NVM at one time. |
+| `WOLFHSM_CFG_NVM_FLASH_CRC16` | Undefined | If defined, the `nvm_flash` backend stores a CRC16 of each object's metadata and data in the on-flash object state and verifies them: metadata when the directory is loaded (failing objects become invisible and reclaimable), data on full-object reads and reclaim copies (returning `WH_ERROR_NOTVERIFIED` on mismatch). Partial reads are not verified. Changes the on-flash format: images written with and without this option are mutually incompatible, and `whnvmtool` must be built with the same setting as the server. |
 | `WOLFHSM_CFG_SERVER_NVM_FLASH_LOG` | Undefined | If defined, compile the log-structured NVM flash backend (`wh_nvm_flash_log`). When enabled it can be selected at runtime as an alternative to the regular flash backend; useful for flash parts that tolerate fewer erases or that prefer append-only update patterns. |
 
 ## Certificate Manager

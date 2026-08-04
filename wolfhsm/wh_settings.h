@@ -101,6 +101,14 @@
  *  WOLFHSM_CFG_NVM_OBJECT_COUNT - Number of objects in ram and disk directories
  *      Default: 32
  *
+ *  WOLFHSM_CFG_NVM_FLASH_CRC16 - If defined, the nvm_flash backend stores a
+ *  CRC16 of each object's metadata and data in the on-flash object state and
+ *  verifies them: metadata when the directory is loaded, data on full-object
+ *  reads and reclaim copies. Changes the on-flash format: images written with
+ *  and without this option are mutually incompatible, and whnvmtool must be
+ *  built with the same setting as the server.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_SERVER_KEYCACHE_COUNT - Number of RAM keys
  *      Default: 8
  *

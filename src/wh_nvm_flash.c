@@ -35,6 +35,7 @@
 #include "wolfhsm/wh_flash.h"
 #include "wolfhsm/wh_flash_unit.h"
 #include "wolfhsm/wh_nvm.h"
+#include "wolfhsm/wh_utils.h"
 
 #include "wolfhsm/wh_nvm_flash.h"
 
@@ -46,6 +47,19 @@ enum {
  * to flash to prevent hardware on certain chipsets from confusing zero values
  * with erased flash */
 static const whFlashUnit BASE_STATE = 0x1234567800000000ULL;
+
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+/* With CRC16 enabled, the object start and count state words carry a CRC in
+ * bits [47:32], replacing the low half of the magic:
+ *   start word: [63:48]=0x1234 [47:32]=CRC16(metadata) [31:0]=start
+ *   count word: [63:48]=0x1234 [47:32]=CRC16(data)     [31:0]=count
+ * The epoch word and all partition state words keep the full BASE_STATE
+ * magic. The remaining 0x12/0x34 bytes still keep every state word distinct
+ * from erased flash. */
+static const whFlashUnit CRC_BASE_STATE = 0x1234000000000000ULL;
+#define NF_STATE_CRC_PACK(_crc) (((whFlashUnit)(_crc)) << 32)
+#define NF_STATE_CRC_EXTRACT(_unit) ((uint16_t)(((_unit) >> 32) & 0xFFFFULL))
+#endif
 
 /* On-flash layout of the state of an Object or Directory*/
 typedef struct {
@@ -124,23 +138,30 @@ static int nfPartition_CheckDataRange(whNvmFlashContext* context,
 static int nfObject_Offset(whNvmFlashContext* context, int partition,
         int object_index, uint32_t *out_object_offset);
 static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t epoch, uint32_t start, whNvmMetadata* meta);
+                                 int object_index, uint32_t epoch,
+                                 uint32_t start, whNvmMetadata* meta,
+                                 uint16_t crc_meta);
 static int nfObject_ProgramDataBytes(whNvmFlashContext* context, int partition,
         uint32_t offset, uint32_t byte_count, const uint8_t* data);
 static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t byte_count);
+                                  int object_index, uint32_t byte_count,
+                                  uint16_t crc_data);
 static int nfObject_Program(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t epoch, whNvmMetadata* meta, uint32_t start,
-        const uint8_t* data);
+                            int object_index, uint32_t epoch,
+                            whNvmMetadata* meta, uint32_t start,
+                            const uint8_t* data, uint16_t crc_meta,
+                            uint16_t crc_data);
 static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
                                   int object_index, uint32_t byte_offset,
                                   uint32_t byte_count, uint8_t* out_data);
 static int nfObject_Copy(whNvmFlashContext* context, int object_index,
         int partition, uint32_t *inout_next_object, uint32_t *inout_next_data);
 
-static int nfMemDirectory_Parse(nfMemDirectory* d);
+static int nfMemDirectory_Parse(whNvmFlashContext* context, nfMemDirectory* d);
 static int nfMemDirectory_FindObjectIndexById(nfMemDirectory* d, whNvmId id,
         int *out_object_index);
+static int nfIdList_Contains(whNvmId list_count, const whNvmId* id_list,
+                             whNvmId id);
 
 
 static int nfMemState_Read(whNvmFlashContext* context, uint32_t offset,
@@ -203,11 +224,29 @@ static int nfMemState_Read(whNvmFlashContext* context, uint32_t offset,
         state->epoch = buffer.epoch;
         state->start = buffer.start;
         state->count = buffer.count;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+        state->crc_meta = NF_STATE_CRC_EXTRACT(buffer.start);
+        state->crc_data = NF_STATE_CRC_EXTRACT(buffer.count);
+#endif
 
         /* Used */
         state->status = NF_STATUS_USED;
     } else  if (    (blank_epoch == WH_ERROR_NOTBLANK) &&
                     (blank_start == WH_ERROR_NOTBLANK)){
+        /* Count is blank. Recover epoch and start so the directory can
+         * account for this entry's reserved data area */
+        ret = wh_FlashUnit_Read(context->cb, context->flash, offset, 2,
+                                (whFlashUnit*)&buffer);
+        if (ret != 0) {
+            /* Error reading state*/
+            return ret;
+        }
+
+        state->epoch = buffer.epoch;
+        state->start = buffer.start;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+        state->crc_meta = NF_STATE_CRC_EXTRACT(buffer.start);
+#endif
         state->status = NF_STATUS_DATA_BAD;
     } else if (blank_epoch == WH_ERROR_NOTBLANK) {
         state->status = NF_STATUS_META_BAD;
@@ -247,6 +286,24 @@ static int nfMemObject_Read(whNvmFlashContext* context,
             /* Copy the metadata out of the buffer */
             memcpy(&object->metadata, buffer, sizeof(object->metadata));
             clear_metadata = 0;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+            /* Verify the metadata against the CRC in the start state word */
+            if (((object->state.status == NF_STATUS_USED) ||
+                 (object->state.status == NF_STATUS_DATA_BAD)) &&
+                (wh_Utils_Crc16(WH_UTILS_CRC16_INIT, &object->metadata,
+                                sizeof(object->metadata)) !=
+                 object->state.crc_meta)) {
+                if (object->state.status == NF_STATUS_USED) {
+                    object->state.status = NF_STATUS_CRC_BAD;
+                }
+                else {
+                    /* Interrupted entry: without trusted metadata the extent
+                     * of its partially written data is unknown */
+                    object->state.status = NF_STATUS_LEN_BAD;
+                }
+                clear_metadata = 1;
+            }
+#endif
         }
     }
     if (clear_metadata != 0){
@@ -377,7 +434,7 @@ static int nfPartition_ReadParseMemDirectory(whNvmFlashContext* context, int par
     if (ret != 0) {
         return ret;
     }
-    return nfMemDirectory_Parse(directory);
+    return nfMemDirectory_Parse(context, directory);
 }
 
 static int nfPartition_ProgramEpoch(whNvmFlashContext* context,
@@ -524,8 +581,9 @@ static int nfObject_Offset(whNvmFlashContext* context, int partition,
 }
 
 static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t epoch, uint32_t start,
-                whNvmMetadata* meta)
+                                 int object_index, uint32_t epoch,
+                                 uint32_t start, whNvmMetadata* meta,
+                                 uint16_t crc_meta)
 {
     int rc = 0;
     uint32_t object_offset = 0;
@@ -537,6 +595,13 @@ static int nfObject_ProgramBegin(whNvmFlashContext* context, int partition,
             (meta == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    /* Start word carries the metadata CRC in place of the low magic half */
+    state_start = CRC_BASE_STATE | NF_STATE_CRC_PACK(crc_meta) | start;
+#else
+    (void)crc_meta;
+#endif
 
     rc = nfObject_Offset(context, partition, object_index, &object_offset);
     if (rc != WH_ERROR_OK) {
@@ -601,7 +666,8 @@ static int nfObject_ProgramDataBytes(whNvmFlashContext* context, int partition,
 }
 
 static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t byte_count)
+                                  int object_index, uint32_t byte_count,
+                                  uint16_t crc_data)
 {
     int rc;
     uint32_t object_offset = 0;
@@ -610,6 +676,14 @@ static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
     if ((context == NULL) || (context->cb == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    /* Count word carries the data CRC in place of the low magic half */
+    state_count = CRC_BASE_STATE | NF_STATE_CRC_PACK(crc_data) |
+                  WHFU_BYTES2UNITS(byte_count);
+#else
+    (void)crc_data;
+#endif
 
     rc = nfObject_Offset(context, partition, object_index, &object_offset);
     if (rc != WH_ERROR_OK) {
@@ -626,9 +700,10 @@ static int nfObject_ProgramFinish(whNvmFlashContext* context, int partition,
 }
 
 static int nfObject_Program(whNvmFlashContext* context, int partition,
-        int object_index, uint32_t epoch,
-        whNvmMetadata* meta,
-        uint32_t start, const uint8_t* data)
+                            int object_index, uint32_t epoch,
+                            whNvmMetadata* meta, uint32_t start,
+                            const uint8_t* data, uint16_t crc_meta,
+                            uint16_t crc_data)
 {
     int rc = 0;
 
@@ -636,8 +711,8 @@ static int nfObject_Program(whNvmFlashContext* context, int partition,
         return WH_ERROR_BADARGS;
     }
 
-    rc = nfObject_ProgramBegin(context, partition, object_index,
-            epoch, start, meta);
+    rc = nfObject_ProgramBegin(context, partition, object_index, epoch, start,
+                               meta, crc_meta);
     if (rc == 0) {
         /* allow metadata only entries for things like counters */
         if (data != NULL) {
@@ -646,7 +721,7 @@ static int nfObject_Program(whNvmFlashContext* context, int partition,
         }
         if (rc == 0) {
             rc = nfObject_ProgramFinish(context, partition, object_index,
-                    meta->len);
+                                        meta->len, crc_data);
         }
     }
     return rc;
@@ -656,6 +731,7 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
                                   int object_index, uint32_t byte_offset,
                                   uint32_t byte_count, uint8_t* out_data)
 {
+    int      ret         = 0;
     int start = 0;
     uint32_t startOffset = 0;
 
@@ -685,9 +761,25 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
         return WH_ERROR_BADARGS;
     }
 
-    return wh_FlashUnit_ReadBytes(
+    ret = wh_FlashUnit_ReadBytes(
         context->cb, context->flash,
         startOffset * WHFU_BYTES_PER_UNIT + byte_offset, byte_count, out_data);
+
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    /* Full-object reads are verified against the stored data CRC. Partial
+     * reads cannot be verified */
+    if ((ret == 0) &&
+        (context->directory.objects[object_index].state.status ==
+         NF_STATUS_USED) &&
+        (byte_offset == 0) &&
+        (byte_count == context->directory.objects[object_index].metadata.len)) {
+        if (wh_Utils_Crc16(WH_UTILS_CRC16_INIT, out_data, byte_count) !=
+            context->directory.objects[object_index].state.crc_data) {
+            ret = WH_ERROR_NOTVERIFIED;
+        }
+    }
+#endif
+    return ret;
 }
 
 static int nfObject_Copy(whNvmFlashContext* context, int object_index,
@@ -699,6 +791,11 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
     nfMemDirectory* d = NULL;
     uint32_t data_len = 0;
     uint32_t data_offset = 0;
+    uint16_t        crc_meta    = 0;
+    uint16_t        crc_data    = 0;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    uint16_t crc_calc = WH_UTILS_CRC16_INIT;
+#endif
 
     if (    (context == NULL) ||
             (inout_next_object == NULL) ||
@@ -712,10 +809,23 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
 
     data_len = d->objects[object_index].metadata.len;
 
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    /* Carry the source CRCs forward rather than recomputing, so corruption
+     * of the cached metadata since load is not re-blessed with a fresh CRC */
+    crc_meta = d->objects[object_index].state.crc_meta;
+    crc_data = d->objects[object_index].state.crc_data;
+
+    /* Verify the cached metadata before programming it */
+    if (wh_Utils_Crc16(WH_UTILS_CRC16_INIT, &d->objects[object_index].metadata,
+                       sizeof(d->objects[object_index].metadata)) != crc_meta) {
+        return WH_ERROR_NOTVERIFIED;
+    }
+#endif
+
     /* Copy the object to the new partition */
     ret = nfObject_ProgramBegin(context, partition, dest_object,
-            d->objects[object_index].state.epoch,
-            dest_data, &d->objects[object_index].metadata);
+                                d->objects[object_index].state.epoch, dest_data,
+                                &d->objects[object_index].metadata, crc_meta);
     if (ret != 0) return ret;
 
     /* Loop through reading the old data into buffer */
@@ -732,6 +842,10 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
                                      data_offset, this_len, buffer);
         if (ret != 0) return ret;
 
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+        crc_calc = wh_Utils_Crc16(crc_calc, buffer, this_len);
+#endif
+
         /* Write the data to the new object. */
         ret = nfObject_ProgramDataBytes(
                 context,
@@ -744,7 +858,16 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
         data_offset += this_len;
         dest_data += WHFU_BYTES2UNITS(this_len);
     }
-    ret = nfObject_ProgramFinish(context, partition, dest_object, data_len);
+
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    /* Verify the data read from the source object */
+    if (crc_calc != crc_data) {
+        return WH_ERROR_NOTVERIFIED;
+    }
+#endif
+
+    ret = nfObject_ProgramFinish(context, partition, dest_object, data_len,
+                                 crc_data);
     if (ret != 0) return ret;
 
     dest_object++;
@@ -755,13 +878,13 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
 }
 
 
-static int nfMemDirectory_Parse(nfMemDirectory* d)
+static int nfMemDirectory_Parse(whNvmFlashContext* context, nfMemDirectory* d)
 {
     int done = 0;
     int this_entry = 0;
     int that_entry = 0;
 
-    if (d == NULL) {
+    if ((context == NULL) || (d == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -796,6 +919,28 @@ static int nfMemDirectory_Parse(nfMemDirectory* d)
             d->next_free_data =
                 d->objects[d->next_free_object].state.start +
                 WHFU_BYTES2UNITS(d->objects[d->next_free_object].metadata.len);
+            break;
+        case NF_STATUS_CRC_BAD:
+            /* Metadata failed CRC. Its data area is still reserved */
+            d->reclaimable_entries++;
+            d->reclaimable_data += d->objects[d->next_free_object].state.count;
+            d->next_free_data = d->objects[d->next_free_object].state.start +
+                                d->objects[d->next_free_object].state.count;
+            break;
+        case NF_STATUS_LEN_BAD:
+            /* Interrupted entry with untrusted metadata: the extent of its
+             * data is unknown, so reserve through the end of the data area.
+             * New writes get NOSPACE until compaction reclaims the entry. A
+             * later intact entry re-bounds the reservation with its own start
+             * and count. Reclaimable size is a best effort */
+            d->reclaimable_entries++;
+            if ((context->partition_units - NF_PARTITION_DATA_OFFSET) >
+                d->objects[d->next_free_object].state.start) {
+                d->reclaimable_data +=
+                    (context->partition_units - NF_PARTITION_DATA_OFFSET) -
+                    d->objects[d->next_free_object].state.start;
+            }
+            d->next_free_data = context->partition_units;
             break;
         default:
             /* Unknown state.  Better barf */
@@ -844,6 +989,19 @@ static int nfMemDirectory_FindObjectIndexById(nfMemDirectory* d, whNvmId id,
     return ret;
 }
 
+/* Returns nonzero if id is in the list */
+static int nfIdList_Contains(whNvmId list_count, const whNvmId* id_list,
+                             whNvmId id)
+{
+    int i = 0;
+
+    for (i = 0; i < (int)list_count; i++) {
+        if (id_list[i] == id) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 
 /*************  WolfHSM NVM Interfaces  ***********/
@@ -921,7 +1079,7 @@ int wh_NvmFlash_Init(void* c, const void* cf)
             ret = nfPartition_ReadMemDirectory(context, context->active,
                                                &context->directory);
             if (ret == WH_ERROR_OK) {
-                ret = nfMemDirectory_Parse(&context->directory);
+                ret = nfMemDirectory_Parse(context, &context->directory);
                 if (ret == WH_ERROR_OK) {
                     context->initialized = 1;
                 }
@@ -969,6 +1127,9 @@ int wh_NvmFlash_List(void* c,
 
     if (context == NULL) {
         return WH_ERROR_BADARGS;
+    }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
     }
 
     d = &context->directory;
@@ -1027,11 +1188,22 @@ int wh_NvmFlash_GetAvailable(void* c,
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
+    }
     nfMemDirectory *d = &context->directory;
     if (out_avail_size != NULL) {
-        *out_avail_size = (context->partition_units -
-                NF_PARTITION_DATA_OFFSET - d->next_free_data) *
-                WHFU_BYTES_PER_UNIT;
+        uint32_t data_units =
+            context->partition_units - NF_PARTITION_DATA_OFFSET;
+        /* next_free_data can exceed the data area when an entry with
+         * untrusted metadata reserves through the end of it */
+        if (d->next_free_data < data_units) {
+            *out_avail_size =
+                (data_units - d->next_free_data) * WHFU_BYTES_PER_UNIT;
+        }
+        else {
+            *out_avail_size = 0;
+        }
     }
     if (out_avail_objects != NULL) {
         *out_avail_objects = WOLFHSM_CFG_NVM_OBJECT_COUNT - d->next_free_object;
@@ -1054,6 +1226,9 @@ int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
     if (context == NULL) {
         return WH_ERROR_BADARGS;
     }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
+    }
 
     ret = nfMemDirectory_FindObjectIndexById(&context->directory, id, &entry);
     if (ret == 0) {
@@ -1072,17 +1247,22 @@ int wh_NvmFlash_GetMetadata(void* c, whNvmId id, whNvmMetadata* meta)
 int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
         whNvmSize data_len, const uint8_t* data)
 {
-    whNvmFlashContext* context = c;
-    nfMemDirectory* d = NULL;
-    int oldentry = -1;
-    int ret = 0;
-    uint32_t epoch = 0;
-    uint32_t count = 0;
+    whNvmFlashContext* context  = c;
+    nfMemDirectory*    d        = NULL;
+    int                oldentry = -1;
+    int                ret      = 0;
+    uint32_t           epoch    = 0;
+    uint32_t           count    = 0;
+    uint16_t           crc_meta = 0;
+    uint16_t           crc_data = 0;
 
     if (    (context == NULL) ||
             (meta == NULL) ||
             ((data_len > 0) && (data == NULL)) ) {
         return WH_ERROR_BADARGS;
+    }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
     }
 
     d = &context->directory;
@@ -1102,13 +1282,13 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     meta->len = data_len;
     count = WHFU_BYTES2UNITS(meta->len);
 
-    ret = nfObject_Program(context,
-            context->active,
-            d->next_free_object,
-            epoch,
-            meta,
-            d->next_free_data,
-            data);
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+    crc_meta = wh_Utils_Crc16(WH_UTILS_CRC16_INIT, meta, sizeof(*meta));
+    crc_data = wh_Utils_Crc16(WH_UTILS_CRC16_INIT, data, data_len);
+#endif
+
+    ret = nfObject_Program(context, context->active, d->next_free_object, epoch,
+                           meta, d->next_free_data, data, crc_meta, crc_data);
 
     if (ret == 0) {
         /* Update directory with new object */
@@ -1116,6 +1296,10 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
         d->objects[d->next_free_object].state.epoch = epoch;
         d->objects[d->next_free_object].state.start = d->next_free_data;
         d->objects[d->next_free_object].state.count = count;
+#ifdef WOLFHSM_CFG_NVM_FLASH_CRC16
+        d->objects[d->next_free_object].state.crc_meta = crc_meta;
+        d->objects[d->next_free_object].state.crc_data = crc_data;
+#endif
         memcpy(&d->objects[d->next_free_object].metadata, meta, sizeof(*meta));
         d->next_free_data += count;
         d->next_free_object++;
@@ -1140,18 +1324,20 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     int ret = 0;
     whNvmFlashContext* context = c;
     nfMemDirectory* d = NULL;
-    nfMemState new_state =  {0};
-    int list_entry = 0;
+    nfMemState         new_state   = {0};
     int entry = 0;
     int src_part = 0;
     int dest_part = 0;
-    int any_marked = 0;
+    int                any_matched = 0;
     uint32_t dest_object = 0;
     uint32_t dest_data = 0;
 
     if (    (context == NULL) ||
             ((list_count > 0) && (id_list == NULL)) ) {
         return WH_ERROR_BADARGS;
+    }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
     }
 
     /* Context is valid.  Generate helper values */
@@ -1165,24 +1351,22 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
                                     .count = context->state.count,
                                 };
 
-    /* Go through the current directory and mark the listed id's as bad */
-    for (list_entry = 0; list_entry < list_count; list_entry++) {
-        /* Mark all matching entries as bad.  Should only be 1. */
-        do {
-            entry = -1;
-            ret = nfMemDirectory_FindObjectIndexById(d, id_list[list_entry],
-                    &entry);
-            if ((ret == 0) && (entry >= 0)) {
-                d->objects[entry].state.status = NF_STATUS_DATA_BAD;
-                any_marked = 1;
-            }
-        } while (entry >= 0);
+    /* Check whether any current object is on the list. The directory is not
+     * modified until replication succeeds, so an aborted replication leaves
+     * it matching the still-active partition */
+    for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
+        if ((d->objects[entry].state.status == NF_STATUS_USED) &&
+            (nfIdList_Contains(list_count, id_list,
+                               d->objects[entry].metadata.id) != 0)) {
+            any_matched = 1;
+            break;
+        }
     }
 
     /* Nothing matched a non-empty list: replicating would just rewrite the
      * partition unchanged, so skip the flash wear.  A zero list_count is a
      * compaction request and must still replicate. */
-    if ((list_count > 0) && (any_marked == 0)) {
+    if ((list_count > 0) && (any_matched == 0)) {
         return WH_ERROR_OK;
     }
 
@@ -1191,37 +1375,41 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
     if (ret == WH_ERROR_NOTBLANK) {
         ret = nfPartition_Erase(context, dest_part);
     }
-    if (ret != 0) {
-        return ret;
-    }
 
-    ret = nfPartition_ProgramEpoch(context, dest_part, new_state.epoch);
-    if (ret != 0) {
-        return ret;
+    if (ret == 0) {
+        ret = nfPartition_ProgramEpoch(context, dest_part, new_state.epoch);
     }
 
     /* Write partition start */
-    ret = nfPartition_ProgramStart(context, dest_part, new_state.start);
-    if (ret != 0) {
-        return ret;
+    if (ret == 0) {
+        ret = nfPartition_ProgramStart(context, dest_part, new_state.start);
     }
 
-    /* Write each used object to new partition */
-    for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
-        if (d->objects[entry].state.status == NF_STATUS_USED) {
-            ret = nfObject_Copy(context, entry,
-                    dest_part, &dest_object, &dest_data);
-            if (ret != WH_ERROR_OK) {
-                /* Abort reclaim to avoid activating a partially copied
-                 * partition */
-                return ret;
+    /* Write each used object that is not on the list to new partition */
+    if (ret == 0) {
+        for (entry = 0; entry < WOLFHSM_CFG_NVM_OBJECT_COUNT; entry++) {
+            if ((d->objects[entry].state.status == NF_STATUS_USED) &&
+                (nfIdList_Contains(list_count, id_list,
+                                   d->objects[entry].metadata.id) == 0)) {
+                ret = nfObject_Copy(context, entry, dest_part, &dest_object,
+                                    &dest_data);
+                if (ret != WH_ERROR_OK) {
+                    /* Abort reclaim to avoid activating a partially copied
+                     * partition */
+                    break;
+                }
             }
         }
     }
 
     /* Write partition count */
-    ret = nfPartition_ProgramCount(context, dest_part, new_state.count);
+    if (ret == 0) {
+        ret = nfPartition_ProgramCount(context, dest_part, new_state.count);
+    }
+
     if (ret != 0) {
+        /* Replication failed. The directory was not modified and still
+         * matches the active partition */
         return ret;
     }
 
@@ -1230,8 +1418,12 @@ int wh_NvmFlash_DestroyObjects(void* c, whNvmId list_count,
             dest_part, &context->directory);
     if (ret != 0) {
         /* Failed to reread the directory.  Read the previous one instead */
-        (void)nfPartition_ReadParseMemDirectory(context,
-                src_part, &context->directory);
+        if (nfPartition_ReadParseMemDirectory(context, src_part,
+                                              &context->directory) != 0) {
+            /* Directory no longer matches flash. Refuse further use until
+             * the context is reinitialized */
+            context->directory_bad = 1;
+        }
         return ret;
     }
 
@@ -1257,6 +1449,9 @@ int wh_NvmFlash_Read(void* c, whNvmId id, whNvmSize offset, whNvmSize data_len,
     if (    (context == NULL) ||
             ((data_len > 0) && (data == NULL)) ){
         return WH_ERROR_BADARGS;
+    }
+    if (context->directory_bad != 0) {
+        return WH_ERROR_ABORTED;
     }
 
     ret = nfMemDirectory_FindObjectIndexById(&context->directory, id,

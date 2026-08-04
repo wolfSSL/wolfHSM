@@ -57,6 +57,9 @@ jobs:
     - name: Build and test NVM tool with ASAN
       run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl ASAN=1
 
+    - name: Build and test NVM tool with NVM flash CRC ASAN
+      run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl NVM_FLASH_CRC=1 ASAN=1
+
     # Build and test with DEBUG=1
     - name: Build and test NVM tool with DEBUG
       run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl DEBUG=1

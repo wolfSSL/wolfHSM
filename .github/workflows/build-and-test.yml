@@ -66,6 +66,10 @@ jobs:
     - name: Build and test DMA ASAN
       run: cd test && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test with NVM flash CRC16 integrity checking enabled
+    - name: Build and test NVM flash CRC ASAN
+      run: cd test && make clean && make -j NVM_FLASH_CRC=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test with LMS and XMSS both in verify-only mode
     - name: Build and test DMA ASAN LMS/XMSS verify-only
       run: cd test && make clean && make -j DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../wolfssl && make run
