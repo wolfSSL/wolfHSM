@@ -39,6 +39,7 @@
 #include "wolfssl/wolfcrypt/wc_xmss.h"
 #endif
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
 
 #include "wolfhsm/wh_error.h"
 
