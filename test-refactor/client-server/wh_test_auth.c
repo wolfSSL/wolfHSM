@@ -561,6 +561,140 @@ static int _whTest_AuthDeleteUser_impl(whClientContext* client)
     return WH_TEST_SUCCESS;
 }
 
+/* Get User Tests */
+static int _whTest_AuthUserGet_impl(whClientContext* client)
+{
+    int32_t           server_rc;
+    whUserId          admin_id   = WH_USER_ID_INVALID;
+    whUserId          getuser_id = WH_USER_ID_INVALID;
+    whUserId          target_id  = WH_USER_ID_INVALID;
+    whUserId          fetched_id = WH_USER_ID_INVALID;
+    whAuthPermissions perms;
+    whAuthPermissions fetched_perms;
+    int               groupIndex = (WH_MESSAGE_GROUP_AUTH >> 8) & 0xFF;
+    uint32_t          actionWord, actionBit;
+
+    WH_AUTH_ACTION_TO_WORD_AND_BITMASK(WH_MESSAGE_AUTH_ACTION_USER_GET,
+                                       actionWord, actionBit);
+
+    /* Login as admin to create the test users */
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             TEST_ADMIN_PIN, (uint16_t)strlen(TEST_ADMIN_PIN),
+                             &server_rc, &admin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Non-admin user holding only the AUTH group USER_GET action */
+    memset(&perms, 0, sizeof(perms));
+    WH_AUTH_SET_ALLOWED_ACTION(perms, WH_MESSAGE_GROUP_AUTH,
+                               WH_MESSAGE_AUTH_ACTION_USER_GET);
+    WH_AUTH_SET_IS_ADMIN(perms, 0);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "getuser", perms,
+                                                  WH_AUTH_METHOD_PIN, "pass", 4,
+                                                  &server_rc, &getuser_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(getuser_id != WH_USER_ID_INVALID);
+
+    /* Second user, whose profile the non-admin must not be able to read */
+    memset(&perms, 0, sizeof(perms));
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserAddOp(client, "gettarget", perms,
+                                                  WH_AUTH_METHOD_PIN, "pass", 4,
+                                                  &server_rc, &target_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(target_id != WH_USER_ID_INVALID);
+
+    /* Switch to the non-admin session */
+    server_rc = 0;
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN,
+                                                "getuser", "pass", 4, &server_rc,
+                                                &getuser_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    /* Test 1: Non-admin getting another user's profile */
+    WH_TEST_PRINT("  Test: Non-admin get of another user\n");
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_id = WH_USER_ID_INVALID;
+    server_rc  = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "gettarget", &server_rc, &fetched_id, &fetched_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+    /* No target identity may leak on the denied path */
+    WH_TEST_ASSERT_RETURN(fetched_id == WH_USER_ID_INVALID);
+
+    /* Test 2: Non-admin getting its own profile */
+    WH_TEST_PRINT("  Test: Non-admin get of own user\n");
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_id = WH_USER_ID_INVALID;
+    server_rc  = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "getuser", &server_rc, &fetched_id, &fetched_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(fetched_id == getuser_id);
+    /* The granted USER_GET action must survive the round trip; not admin */
+    WH_TEST_ASSERT_RETURN(fetched_perms.groupPermissions[groupIndex] != 0);
+    WH_TEST_ASSERT_RETURN(
+        (fetched_perms.actionPermissions[groupIndex][actionWord] & actionBit) !=
+        0);
+    WH_TEST_ASSERT_RETURN(WH_AUTH_IS_ADMIN(fetched_perms) == 0);
+
+    /* Test 3: Non-admin getting a name that does not exist. The error must
+     * match the denied case so the response is not an existence oracle. */
+    WH_TEST_PRINT("  Test: Non-admin get of unknown user\n");
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_id = WH_USER_ID_INVALID;
+    server_rc  = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "nosuchuser", &server_rc, &fetched_id, &fetched_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+    WH_TEST_ASSERT_RETURN(fetched_id == WH_USER_ID_INVALID);
+
+    /* Test 4: Admin getting another user's profile */
+    WH_TEST_PRINT("  Test: Admin get of another user\n");
+    server_rc = 0;
+    _whTest_Auth_LogoutOp(client, getuser_id, &server_rc);
+    server_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_Auth_LoginOp(client, WH_AUTH_METHOD_PIN, TEST_ADMIN_USERNAME,
+                             TEST_ADMIN_PIN, (uint16_t)strlen(TEST_ADMIN_PIN),
+                             &server_rc, &admin_id));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_id = WH_USER_ID_INVALID;
+    server_rc  = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "gettarget", &server_rc, &fetched_id, &fetched_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(fetched_id == target_id);
+    /* gettarget was created with empty permissions and is not admin */
+    WH_TEST_ASSERT_RETURN(fetched_perms.groupPermissions[groupIndex] == 0);
+    WH_TEST_ASSERT_RETURN(WH_AUTH_IS_ADMIN(fetched_perms) == 0);
+
+    /* Test 5: Admin getting a name that does not exist. Unlike a non-admin,
+     * an admin is allowed to learn that the account is absent. */
+    WH_TEST_PRINT("  Test: Admin get of unknown user\n");
+    memset(&fetched_perms, 0, sizeof(fetched_perms));
+    fetched_id = WH_USER_ID_INVALID;
+    server_rc  = 0;
+    WH_TEST_RETURN_ON_FAIL(_whTest_Auth_UserGetOp(
+        client, "nosuchuser", &server_rc, &fetched_id, &fetched_perms));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND);
+    WH_TEST_ASSERT_RETURN(fetched_id == WH_USER_ID_INVALID);
+
+    /* Cleanup */
+    _whTest_Auth_DeleteUserByName(client, "getuser");
+    _whTest_Auth_DeleteUserByName(client, "gettarget");
+    server_rc = 0;
+    _whTest_Auth_LogoutOp(client, admin_id, &server_rc);
+
+    return WH_TEST_SUCCESS;
+}
+
 /* Set User Permissions Tests */
 static int _whTest_AuthSetPermissions_impl(whClientContext* client)
 {
@@ -1099,6 +1233,11 @@ int whTest_AuthAddUser(whClientContext* client)
 int whTest_AuthDeleteUser(whClientContext* client)
 {
     return _whTest_Auth_RunBracketed(client, _whTest_AuthDeleteUser_impl);
+}
+
+int whTest_AuthUserGet(whClientContext* client)
+{
+    return _whTest_Auth_RunBracketed(client, _whTest_AuthUserGet_impl);
 }
 
 int whTest_AuthSetPermissions(whClientContext* client)

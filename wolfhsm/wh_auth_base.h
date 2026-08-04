@@ -127,14 +127,19 @@ int wh_Auth_BaseUserSetPermissions(void* context, uint16_t current_user_id,
 /**
  * @brief Get user information by username.
  *
+ * A non-admin caller may only read its own record; an admin caller may read
+ * any record. To a non-admin, a denied and a missing name both return
+ * WH_ERROR_ACCESS.
+ *
  * @param[in] context Pointer to the auth base context.
+ * @param[in] current_user_id The user ID of the caller performing the lookup.
  * @param[in] username The username to look up.
  * @param[out] out_user_id Pointer to store the user ID.
  * @param[out] out_permissions Pointer to store the user permissions.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
-int wh_Auth_BaseUserGet(void* context, const char* username,
-                        whUserId*          out_user_id,
+int wh_Auth_BaseUserGet(void* context, uint16_t current_user_id,
+                        const char* username, whUserId* out_user_id,
                         whAuthPermissions* out_permissions);
 
 /**
