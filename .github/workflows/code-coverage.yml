@@ -3,10 +3,10 @@ name: Code Coverage
 on:
   # Coverage is an on-demand, information-only report, not a PR gate.
   # Run it manually from the Actions tab against any branch (including a
-  # PR branch); the weekly run keeps a fresh artifact and catches rot.
+  # PR branch); the nightly run keeps a fresh artifact and catches rot.
   workflow_dispatch:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
