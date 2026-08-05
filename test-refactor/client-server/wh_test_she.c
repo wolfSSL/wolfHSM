@@ -529,7 +529,9 @@ int whTest_She(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto exit;
     }
-    /* neither attempt may leave anything behind in the slot */
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    /* neither attempt may leave anything behind in the slot. Only the legacy
+     * flat id space can probe a SHE slot through the raw NVM API. */
     if ((ret = wh_Client_NvmGetMetadata(
              client,
              WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_SIZE_CHECK_KEY_ID),
@@ -543,8 +545,10 @@ int whTest_She(whClientContext* client)
         ret = WH_ERROR_ABORTED;
         goto exit;
     }
+#endif /* WOLFHSM_CFG_LEGACY_CLIENT_NVM */
     WH_TEST_PRINT("SHE pre-program key size SUCCESS\n");
 
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
     /* === Oversized auth key slot === */
 
     /* The SHE and NVM id spaces overlap, so a client can plant an oversized
@@ -626,6 +630,32 @@ int whTest_She(whClientContext* client)
         goto exit;
     }
     WH_TEST_PRINT("SHE oversized target key SUCCESS\n");
+#else
+    /* === SHE slots unreachable via raw NVM ids === */
+
+    /* With per-client NVM id translation the SHE and client NVM id spaces no
+     * longer overlap, so the oversized auth/target slots of the legacy build
+     * cannot be planted here; the add itself must be rejected. The LoadKey
+     * size guards above stay covered by the legacy build. */
+    (void)SHE_OVERSIZE_TARGET_ID;
+    wh_She_Meta2Label(0, 0, oversizeLabel);
+    if ((ret = wh_Client_NvmAddObject(
+             client,
+             WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_OVERSIZE_AUTH_ID),
+             0, 0, sizeof(oversizeLabel), oversizeLabel, sizeof(oversizeKey),
+             oversizeKey, &sheMetaRc)) != 0) {
+        WH_ERROR_PRINT("Failed to wh_Client_NvmAddObject %d\n", ret);
+        goto exit;
+    }
+    if (sheMetaRc != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Planting into a SHE slot: expected WH_ERROR_BADARGS, "
+                       "got %d\n",
+                       (int)sheMetaRc);
+        ret = WH_ERROR_ABORTED;
+        goto exit;
+    }
+    WH_TEST_PRINT("SHE slot unreachable via raw NVM id SUCCESS\n");
+#endif /* WOLFHSM_CFG_LEGACY_CLIENT_NVM */
 
     /* === Cleanup: destroy provisioned keys so we don't leak NVM === */
 

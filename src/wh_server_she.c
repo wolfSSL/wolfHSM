@@ -1685,8 +1685,8 @@ static int _PreProgramKey(whServerContext* server, uint16_t magic,
     if (ret == 0) {
         key_data = (const uint8_t*)req_packet + hdr_len;
 
-        meta.id     = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                                    (whNvmId)req.keyId);
+        meta.id =
+            WH_SHE_MAKE_KEYID(server->comm->client_id, (whNvmId)req.keyId);
         meta.access = 0;
         meta.flags  = 0;
         meta.len    = (whNvmSize)req.keySz;
@@ -1727,8 +1727,7 @@ static int _DestroyKey(whServerContext* server, uint16_t magic,
         ret = wh_MessageShe_TranslateDestroyKeyRequest(magic, req_packet, &req);
     }
     if (ret == 0) {
-        id  = WH_MAKE_KEYID(WH_KEYTYPE_SHE, server->comm->client_id,
-                            (whNvmId)req.keyId);
+        id  = WH_SHE_MAKE_KEYID(server->comm->client_id, (whNvmId)req.keyId);
         ret = WH_SERVER_NVM_LOCK(server);
         if (ret == WH_ERROR_OK) {
             ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &id);

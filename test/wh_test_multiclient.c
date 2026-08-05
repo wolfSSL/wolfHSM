@@ -2156,28 +2156,91 @@ static int _runNvmIdTranslationTests(whClientContext* client1,
 #define SHE_MC_PRIME_SLOT 8
 #define SHE_MC_CTR_SLOT 9
 
-/* Provision a SHE slot in the shared NVM, the way ShePreProgramKey does but
- * with the split API. Counter and SHE flags go in the object label. */
-static int _sheGlobalAddNvmKey(whClientContext* client, whServerContext* server,
-                               uint8_t sheSlot, uint32_t counter,
-                               uint32_t sheFlags, const uint8_t* key)
+/* Provision a SHE slot through the dedicated pre-program message with the
+ * split API. Counter and SHE flags go in the object label. Raw NVM adds can
+ * no longer reach SHE slots since client NVM ids live in their own id space. */
+static int _sheGlobalPreProgramKey(whClientContext* client,
+                                   whServerContext* server, uint8_t sheSlot,
+                                   uint32_t counter, uint32_t sheFlags,
+                                   const uint8_t* key)
 {
-    int     ret;
-    int32_t rc                      = 0;
-    uint8_t label[WH_NVM_LABEL_LEN] = {0};
+    int                                 ret;
+    uint16_t                            group  = 0;
+    uint16_t                            action = 0;
+    uint16_t                            dataSz = 0;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf;
 
-    wh_She_Meta2Label(counter, sheFlags, label);
-    ret = wh_Client_NvmAddObjectRequest(
-        client, WH_SHE_MAKE_KEYID(client->comm->client_id, sheSlot), 0, 0,
-        sizeof(label), label, WH_SHE_KEY_SZ, key);
+    reqBuf     = (uint8_t*)wh_CommClient_GetDataPtr(client->comm);
+    req        = (whMessageShe_PreProgramKeyRequest*)reqBuf;
+    req->keyId = sheSlot;
+    req->count = counter;
+    req->flags = sheFlags;
+    req->keySz = WH_SHE_KEY_SZ;
+    memcpy(reqBuf + sizeof(*req), key, WH_SHE_KEY_SZ);
+
+    ret = wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
+        (uint16_t)(sizeof(*req) + WH_SHE_KEY_SZ), reqBuf);
     if (ret == 0) {
         ret = wh_Server_HandleRequestMessage(server);
     }
     if (ret == 0) {
-        ret = wh_Client_NvmAddObjectResponse(client, &rc);
+        resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+            client->comm);
+        ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+        if (ret == 0) {
+            if ((group != WH_MESSAGE_GROUP_SHE) ||
+                (action != WH_SHE_PRE_PROGRAM_KEY) ||
+                (dataSz != sizeof(*resp))) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                ret = (int)resp->rc;
+            }
+        }
+    }
+    return ret;
+}
+
+/* Remove a SHE slot through the dedicated destroy message with the split API */
+static int _sheGlobalDestroyKey(whClientContext* client,
+                                whServerContext* server, uint8_t sheSlot)
+{
+    int                              ret;
+    uint16_t                         group  = 0;
+    uint16_t                         action = 0;
+    uint16_t                         dataSz = 0;
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
+
+    req =
+        (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(client->comm);
+    memset(req, 0, sizeof(*req));
+    req->keyId = sheSlot;
+
+    ret =
+        wh_Client_SendRequest(client, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,
+                              sizeof(*req), (uint8_t*)req);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
     }
     if (ret == 0) {
-        ret = (int)rc;
+        resp = (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(
+            client->comm);
+        ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+        if (ret == 0) {
+            if ((group != WH_MESSAGE_GROUP_SHE) ||
+                (action != WH_SHE_DESTROY_KEY) || (dataSz != sizeof(*resp))) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                ret = (int)resp->rc;
+            }
+        }
     }
     return ret;
 }
@@ -2423,16 +2486,16 @@ static int _runSheGlobalTests(whClientContext* client1,
      * and the expected bootloader digest; same UID on both servers */
     WH_TEST_RETURN_ON_FAIL(_sheGlobalComputeBootMac(
         bootloader, sizeof(bootloader), bootMacKey, bootDigest));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_SECRET_KEY_ID, 0, 0, secretKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_MASTER_ECU_KEY_ID, 0, 0, masterKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, bootMacKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_BOOT_MAC, 0, 0, bootDigest));
-    WH_TEST_RETURN_ON_FAIL(
-        _sheGlobalAddNvmKey(client1, server1, SHE_MC_USER_SLOT, 0, 0, userKey));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
+        client1, server1, SHE_MC_USER_SLOT, 0, 0, userKey));
     WH_TEST_RETURN_ON_FAIL(
         _sheGlobalSetUid(client1, server1, sheUid, sizeof(sheUid)));
     WH_TEST_RETURN_ON_FAIL(
@@ -2520,7 +2583,7 @@ static int _runSheGlobalTests(whClientContext* client1,
         WH_TEST_PRINT("  PASS: Cross-client unwrap-and-cache prime\n");
 
         /* Counter guard runs against the globally committed slot */
-        WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
             client1, server1, SHE_MC_CTR_SLOT, 5, 0, ctrKey));
         blobSz = sizeof(blob);
         WH_TEST_RETURN_ON_FAIL(whTest_BuildSheKeyBlob(
@@ -2578,20 +2641,18 @@ static int _runSheGlobalTests(whClientContext* client1,
             SHE_MC_USER_SLOT,         SHE_MC_LOAD_SLOT,       SHE_MC_PRIME_SLOT,
             SHE_MC_CTR_SLOT,          WH_SHE_RAM_KEY_ID,
         };
-        /* All SHE ids are global here, so the client id argument is moot */
-        whNvmId destroyList[] = {
-            WH_SHE_MAKE_KEYID(0, WH_SHE_SECRET_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_MASTER_ECU_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC),
-            WH_SHE_MAKE_KEYID(0, SHE_MC_USER_SLOT),
-            WH_SHE_MAKE_KEYID(0, SHE_MC_LOAD_SLOT),
+        static const uint8_t destroySlots[] = {
+            WH_SHE_SECRET_KEY_ID,
+            WH_SHE_MASTER_ECU_KEY_ID,
+            WH_SHE_BOOT_MAC_KEY_ID,
+            WH_SHE_BOOT_MAC,
+            SHE_MC_USER_SLOT,
+            SHE_MC_LOAD_SLOT,
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
             /* Only created by the keywrap sub-tests above */
-            WH_SHE_MAKE_KEYID(0, SHE_MC_CTR_SLOT),
+            SHE_MC_CTR_SLOT,
 #endif
         };
-        int32_t rc = 0;
 
         for (i = 0; i < (int)sizeof(evictSlots); i++) {
             ret = wh_Server_KeystoreEvictKey(
@@ -2601,13 +2662,10 @@ static int _runSheGlobalTests(whClientContext* client1,
                 return ret;
             }
         }
-        WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsRequest(
-            client1, (whNvmId)(sizeof(destroyList) / sizeof(destroyList[0])),
-            destroyList));
-        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-        WH_TEST_RETURN_ON_FAIL(
-            wh_Client_NvmDestroyObjectsResponse(client1, &rc));
-        WH_TEST_ASSERT_RETURN(rc == 0);
+        for (i = 0; i < (int)sizeof(destroySlots); i++) {
+            WH_TEST_RETURN_ON_FAIL(
+                _sheGlobalDestroyKey(client1, server1, destroySlots[i]));
+        }
     }
 
     WH_TEST_PRINT("All Global SHE Keys Tests PASSED ===\n");
