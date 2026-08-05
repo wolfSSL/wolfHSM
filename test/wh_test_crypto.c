@@ -15425,6 +15425,102 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
             }
         }
 
+        /* Positive path: a key referenced by its cached ID rather than
+         * implicitly imported, driven through the DMA encaps/decaps calls.
+         * This is what the ML-KEM benchmark rows do. */
+        if (ret == 0) {
+            MlKemKey      cachedKey[1];
+            whKeyId       cachedKeyId    = WH_KEYID_ERASED;
+            int           cachedInited   = 0;
+            int           cachedCached   = 0;
+            word32        cachedCtLen    = sizeof(ct);
+            word32        cachedSsEncLen = sizeof(ssEnc);
+            word32        cachedSsDecLen = sizeof(ssDec);
+            const uint8_t cachedLabel[]  = "mlkem-dma-byid";
+
+            memset(ct, 0, sizeof(ct));
+            memset(ssEnc, 0, sizeof(ssEnc));
+            memset(ssDec, 0, sizeof(ssDec));
+
+            ret = wh_Client_MlKemMakeCacheKey(
+                ctx, levels[i], &cachedKeyId, WH_NVM_FLAGS_USAGE_ANY,
+                (uint16_t)strlen((const char*)cachedLabel),
+                (uint8_t*)cachedLabel);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Failed ML-KEM DMA by-id cache keygen level=%d "
+                               "ret=%d\n",
+                               levels[i], ret);
+            }
+            else {
+                cachedCached = 1;
+            }
+            if (ret == 0) {
+                ret = wc_MlKemKey_Init(cachedKey, levels[i], NULL, devId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed init ML-KEM DMA by-id key level=%d "
+                                   "ret=%d\n",
+                                   levels[i], ret);
+                }
+                else {
+                    cachedInited = 1;
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemSetKeyId(cachedKey, cachedKeyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed ML-KEM DMA by-id set key id "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemEncapsulateDma(ctx, cachedKey, ct,
+                                                    &cachedCtLen, ssEnc,
+                                                    &cachedSsEncLen);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed ML-KEM DMA by-id encapsulate "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+            }
+            if (ret == 0) {
+                ret = wh_Client_MlKemDecapsulateDma(ctx, cachedKey, ct,
+                                                    cachedCtLen, ssDec,
+                                                    &cachedSsDecLen);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("Failed ML-KEM DMA by-id decapsulate "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+                else if ((cachedSsEncLen != cachedSsDecLen) ||
+                         (memcmp(ssEnc, ssDec, cachedSsEncLen) != 0)) {
+                    WH_ERROR_PRINT("ML-KEM DMA by-id shared secret mismatch "
+                                   "level=%d\n",
+                                   levels[i]);
+                    ret = -1;
+                }
+            }
+            /* The key must still be cached: a by-id operation must not take
+             * the implicit-import path, which evicts after every call. */
+            if (ret == 0) {
+                ret = wh_Client_KeyEvict(ctx, cachedKeyId);
+                if (ret != 0) {
+                    WH_ERROR_PRINT("ML-KEM DMA by-id key was not left cached "
+                                   "level=%d ret=%d\n",
+                                   levels[i], ret);
+                }
+                else {
+                    cachedCached = 0;
+                }
+            }
+            if (cachedCached) {
+                (void)wh_Client_KeyEvict(ctx, cachedKeyId);
+            }
+            if (cachedInited) {
+                wc_MlKemKey_Free(cachedKey);
+            }
+        }
+
         if (keyCached) {
             int evictRet = wh_Client_KeyEvict(ctx, keyId);
             if ((evictRet != 0) && (ret == 0)) {

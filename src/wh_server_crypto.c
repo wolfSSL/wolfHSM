@@ -1031,6 +1031,12 @@ static int _MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
 #endif /* WOLFSSL_HAVE_MLDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
+/* The cache import below always requests a max-size slot, so a build whose big
+ * cache buffer cannot hold one has no working ML-KEM cache keygen or import. */
+WH_UTILS_STATIC_ASSERT(
+    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= WC_ML_KEM_MAX_PRIVATE_KEY_SIZE,
+    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for ML-KEM private key");
+
 int wh_Server_MlKemKeyCacheImport(whServerContext* ctx, MlKemKey* key,
                                   whKeyId keyId, whNvmFlags flags,
                                   uint16_t label_len, uint8_t* label)
