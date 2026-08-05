@@ -319,7 +319,7 @@
 /* Size in bytes of each big key cache buffer  */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(WOLFSSL_HAVE_XMSS) || \
-    defined(WOLFSSL_HAVE_LMS)
+    defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_MLKEM)
 #define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 8192
 #else
 /* Sane default to hold ASN.1 RSA 4096 public+private key */
