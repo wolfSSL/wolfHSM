@@ -475,6 +475,13 @@ int wh_Auth_UserSetPermissions(whAuthContext* context, whUserId user_id,
     rc = context->cb->UserSetPermissions(
         context->context, context->user.user_id, user_id, permissions);
 
+    /* Keep the live session cache in sync when a logged-in user changes its
+     * own permissions; authorization reads only this cache. */
+    if ((rc == WH_ERROR_OK) && (user_id == context->user.user_id) &&
+        (context->user.user_id != WH_USER_ID_INVALID)) {
+        context->user.permissions = permissions;
+    }
+
     (void)WH_AUTH_UNLOCK(context);
     return rc;
 }
