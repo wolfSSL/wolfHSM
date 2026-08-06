@@ -2597,7 +2597,7 @@ exit:
     }
 
     if (sig != NULL) {
-        free(sig);
+        XFREE(sig, NULL, DYNAMIC_TYPE_SIGNATURE);
     }
 
     /* Evict key from HSM */
