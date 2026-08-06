@@ -1,0 +1,95 @@
+name: Clang Format Version Survey
+
+# Throwaway, manually triggered. Reports how far the tree is from each
+# clang-format version so the pinned version can be chosen from data, and
+# shows which versions agree with each other. Delete once the pin is settled.
+
+# workflow_dispatch alone is awkward for a throwaway: the Actions tab only
+# lists workflows found on the default branch, so a survey living only on a
+# dev branch has no "Run workflow" button. The push and pull_request triggers
+# below run the copy on the branch itself, with no default-branch round trip.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'ci-clang-format-survey**'
+  pull_request:
+    paths:
+      - '.github/workflows/clang-format-survey.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  survey:
+    name: Compare clang-format versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Report image defaults
+      run: |
+        . /etc/os-release
+        echo "image: $PRETTY_NAME"
+        echo "unversioned clang-format resolves to:"
+        command -v clang-format && clang-format --version || echo "  (not installed)"
+        echo "preinstalled versioned formatters:"
+        ls /usr/bin/clang-format-* 2>/dev/null || echo "  (none)"
+
+    - name: Install the versions not already on the image
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format-15 clang-format-16 clang-format-17 clang-format-18
+
+    - name: Repo-wide delta per version
+      run: |
+        FILES="$(git ls-files '*.c' '*.h' | grep -vE '^(test/|examples/|benchmark/)')"
+        ALL="$(git ls-files '*.c' '*.h')"
+        for v in 15 16 17 18; do
+          bin="clang-format-$v"
+          command -v "$bin" >/dev/null || { echo "$bin: NOT AVAILABLE"; continue; }
+          lib=0; libd=0; whole=0
+          for f in $FILES; do
+            n=$("$bin" -style=file "$f" | diff -u "$f" - | grep -cE '^[+-]' || true)
+            n=$((n > 2 ? n - 2 : 0))
+            lib=$((lib + n)); [ "$n" -gt 0 ] && libd=$((libd + 1))
+          done
+          for f in $ALL; do
+            n=$("$bin" -style=file "$f" | diff -u "$f" - | grep -cE '^[+-]' || true)
+            n=$((n > 2 ? n - 2 : 0))
+            whole=$((whole + n))
+          done
+          ver=$("$bin" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          printf '%s (%s): library %s lines across %s files | whole repo %s lines\n' \
+            "$bin" "$ver" "$lib" "$libd" "$whole"
+        done
+
+    - name: Do the versions agree with each other?
+      run: |
+        FILES="$(git ls-files '*.c' '*.h' | grep -vE '^(test/|examples/|benchmark/)')"
+        # The last pair checks the claim that the image's unversioned
+        # clang-format is 18, which is what the broken check has been using.
+        for pair in "15 16" "16 17" "17 18" "15 18" "18 "; do
+          set -- $pair
+          a="clang-format-$1"; b="clang-format${2:+-$2}"
+          command -v "$a" >/dev/null && command -v "$b" >/dev/null || continue
+          same=0; diff_n=0
+          for f in $FILES; do
+            if "$a" -style=file "$f" | cmp -s - <("$b" -style=file "$f"); then
+              same=$((same + 1))
+            else
+              diff_n=$((diff_n + 1))
+            fi
+          done
+          echo "$a vs $b: identical on $same files, differ on $diff_n"
+        done
+
+    - name: What the disabled check was actually judging with
+      run: |
+        # Reproduces the current main invocation: no --binary, so the wrapper
+        # spawns the unversioned clang-format rather than the installed 15.
+        echo "git-clang-format-15 without --binary would spawn:"
+        command -v clang-format && clang-format --version

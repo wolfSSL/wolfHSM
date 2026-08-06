@@ -25,7 +25,13 @@ jobs:
 
     - name: Install clang-format-15
       run: |
+        sudo apt-get update
         sudo apt-get install -y clang-format-15
+        # Log the version that will actually run. git-clang-format-15 defaults
+        # to the unversioned clang-format on PATH, which is a different major
+        # version on the runner image, so the --binary flag below is required.
+        clang-format-15 --version
+        clang-format --version || true
 
     - name: Fetch base branch
       env:
@@ -45,8 +51,11 @@ jobs:
         DIFF_FILE="$(mktemp)"
         trap 'rm -f "$DIFF_FILE"' EXIT
 
-        # Run git-clang-format against the PR base commit and capture status safely under set -e
-        if git-clang-format-15 "$BASE_REF" > "$DIFF_FILE"; then
+        # Run git-clang-format against the PR base commit and capture status safely under set -e.
+        # --diff reports instead of rewriting the checkout, and --binary pins the
+        # formatter to 15; without it the wrapper falls back to whatever
+        # clang-format is on PATH.
+        if git-clang-format-15 --binary clang-format-15 --diff "$BASE_REF" > "$DIFF_FILE"; then
           status=0
         else
           status=$?
@@ -64,15 +73,11 @@ jobs:
           echo "=================================================="
           echo ""
           echo "Please run the following command locally on your feature branch and commit the changes:"
-          echo "  git-clang-format-15 $BASE_REF"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
+          echo "  git-clang-format-15 --binary clang-format-15 $BASE_REF"
+          exit 1
         else
           echo "❌ git-clang-format-15 failed with exit code $status"
           echo "Output (if any):"
           cat "$DIFF_FILE"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
+          exit 1
         fi
