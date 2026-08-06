@@ -91,8 +91,6 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->devId  = config->devId;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
-    /* The SHE context is caller-owned and not covered by the memset above, so
-     * the callbacks are assigned on both paths. */
     if (server->she != NULL) {
         if (config->sheConfig != NULL) {
             server->she->getUidCb = config->sheConfig->getUidCb;

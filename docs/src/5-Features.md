@@ -672,7 +672,7 @@ The SHE client API is declared in `wolfhsm/wh_client_she.h` and maps one-to-one 
 - **Bulk crypto**: `wh_Client_SheEncEcb` / `wh_Client_SheEncCbc` / `wh_Client_SheDecEcb` / `wh_Client_SheDecCbc` (`CMD_ENC_*` / `CMD_DEC_*`) — AES-ECB and AES-CBC encrypt and decrypt against a selected key slot
 - **MAC**: `wh_Client_SheGenerateMac` / `wh_Client_SheVerifyMac` (`CMD_GENERATE_MAC` / `CMD_VERIFY_MAC`) — CMAC generation and verification against a selected key slot
 - **Status**: `wh_Client_SheGetStatus` (`CMD_GET_STATUS`) — reads the SHE status register (SREG)
-- **Module identity**: `wh_Client_SheGetId` (`CMD_GET_ID`) — returns the ECU UID, the status register, and a CMAC over the caller's challenge, UID, and status register computed under the `MASTER_ECU_KEY`, letting a party that holds that key verify the module's identity. If the `MASTER_ECU_KEY` slot is empty the MAC is computed with an all-zero key, per the spec.
+- **Module identity**: `wh_Client_SheGetId` (`CMD_GET_ID`) — returns the ECU UID, the status register, and a CMAC over the caller's challenge, UID, and status register computed under the `MASTER_ECU_KEY`, letting a party that holds that key verify the module's identity. If the `MASTER_ECU_KEY` slot is empty the MAC is computed with an all-zero key.
 
 In addition to the spec commands, wolfHSM exposes two non-standard helpers that fill gaps left by the spec's assumption of dedicated hardware:
 
@@ -701,7 +701,7 @@ The SHE spec also requires every key to carry a 28-bit monotonic update counter 
 
 ### SHE UID Storage
 
-By default the 15-byte ECU UID lives in the caller-owned `whServerSheContext`, which means it is RAM-resident and must be re-provisioned with `CMD_SET_UID` after every reset. Integrators whose UID is fused, held in OTP, or kept in NVM can instead point the server at that store with a pair of callbacks:
+A pair of optional callbacks determines where the 15-byte ECU UID lives. Install them and the server reads it from the integrator's store (fuses, OTP, NVM); leave them unset and it stays in the caller-owned `whServerSheContext`, re-provisioned with `CMD_SET_UID` after every reset.
 
 ```c
 typedef int (*whServerSheGetUidCb)(whServerContext* server, void* ctx,
@@ -722,8 +722,6 @@ whServerSheConfig sheConfig = {
 };
 whServerConfig serverConfig = { /* ... */ .she = she, .sheConfig = &sheConfig };
 ```
-
-When a getter is installed the server reads the UID on demand at each point that needs it and keeps no copy in `whServerSheContext`, so the UID never outlives a single request in server RAM. The trade-off is that the getter is called on every gated SHE request, and more than once for commands that use the UID, so it must be cheap, idempotent, and free of side effects. Leaving `sheConfig` unset preserves the original in-context behavior exactly.
 
 ### Global SHE Keys
 
@@ -763,7 +761,7 @@ SHE secure boot is implemented as a three-phase state machine that the client dr
 
 While the state machine is in any state other than `SUCCESS`, the SHE handler refuses every non-boot command except `CMD_GET_STATUS` and `CMD_SET_UID`, returning `WH_SHE_ERC_SEQUENCE_ERROR`. This is what allows the SHE module to gate cryptographic services on a successful boot measurement: once boot has succeeded, the rest of the SHE command set unlocks; on a boot failure the keys remain inaccessible and only status queries are honored.
 
-The same gate also enforces that a UID has been provisioned. When [UID storage callbacks](#she-uid-storage) are installed, that check queries the integrator's store, and a store that reports a failure causes every command except `CMD_GET_STATUS` to return `WH_SHE_ERC_MEMORY_FAILURE`. Status stays readable in every case, per the spec.
+The same stateful gate also enforces that a UID has been provisioned. When [UID storage callbacks](#she-uid-storage) are installed, that check queries the integrator's store, and a store that reports a failure causes every command except `CMD_GET_STATUS` to return `WH_SHE_ERC_MEMORY_FAILURE`.
 
 The bootloader bytes are supplied through the standard message buffer in chunks of up to `WOLFHSM_CFG_COMM_DATA_LEN`. For large bootloaders this is the natural place to opt into [DMA](#dma-support) — a future variant of the secure boot handler could read the bootloader image directly out of flash using the DMA address-translation path — but the current implementation is purely buffer-based.
 

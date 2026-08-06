@@ -166,9 +166,7 @@ static int _TranslateSheReturnCode(int ret)
     return ret;
 }
 
-/* Reads the UID into outUid. Returns WH_ERROR_NOTFOUND if unprovisioned.
- * The UID is public, so failure paths clear the buffer for determinism rather
- * than secrecy and do not need wh_Utils_ForceZero. */
+/* Reads the UID into outUid. Returns WH_ERROR_NOTFOUND if unprovisioned. */
 static int _GetUid(whServerContext* server, uint8_t* outUid)
 {
     whServerSheContext* she = server->she;
@@ -1778,12 +1776,6 @@ static int _GetId(whServerContext* server, uint16_t magic, uint16_t req_size,
         memcpy(macIn + WH_SHE_KEY_SZ, uid, WH_SHE_UID_SZ);
         macIn[WH_SHE_KEY_SZ + WH_SHE_UID_SZ] = sreg;
 
-        /* Load the MASTER_ECU_KEY. Per the SHE spec, if the slot is empty the
-         * MAC is computed with an all-zero key rather than returning an error.
-         * wh_Server_KeystoreReadKey already applies this substitution for the
-         * MASTER_ECU_KEY slot (returns a zero-filled key and rc 0), so the
-         * WH_ERROR_NOTFOUND branch below is only a defensive backstop for
-         * builds/paths where that substitution does not occur. */
         keySz = WH_SHE_KEY_SZ;
         ret   = wh_Server_KeystoreReadKey(
               server,
