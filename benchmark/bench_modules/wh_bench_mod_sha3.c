@@ -147,54 +147,109 @@ static int _benchSha3(whClientContext* client, whBenchOpContext* ctx, int id,
     return ret;
 }
 
-#define WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(_Bits)                               \
-    int wh_Bench_Mod_Sha3##_Bits(whClientContext* client,                     \
-                                 whBenchOpContext* ctx, int id, void* params) \
-    {                                                                         \
-        (void)params;                                                         \
-        return _benchSha3(client, ctx, id, 0, &benchSha3_##_Bits);            \
-    }
-
-#ifdef WOLFHSM_CFG_DMA
-#define WH_DEFINE_SHA3_BENCH_DMA_FNS(_Bits)                                   \
-    int wh_Bench_Mod_Sha3##_Bits##Dma(                                        \
-        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
-    {                                                                         \
-        (void)params;                                                         \
-        return _benchSha3(client, ctx, id, 1, &benchSha3_##_Bits);            \
-    }
-#else
-#define WH_DEFINE_SHA3_BENCH_DMA_FNS(_Bits)                                   \
-    int wh_Bench_Mod_Sha3##_Bits##Dma(                                        \
-        whClientContext* client, whBenchOpContext* ctx, int id, void* params) \
-    {                                                                         \
-        (void)client;                                                         \
-        (void)ctx;                                                            \
-        (void)id;                                                             \
-        (void)params;                                                         \
-        return WH_ERROR_NOTIMPL;                                              \
-    }
-#endif /* WOLFHSM_CFG_DMA */
-
 #ifndef WOLFSSL_NOSHA3_224
-WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(224)
-WH_DEFINE_SHA3_BENCH_DMA_FNS(224)
+
+int wh_Bench_Mod_Sha3224(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params)
+{
+    (void)params;
+    return _benchSha3(client, ctx, id, 0, &benchSha3_224);
+}
+
+int wh_Bench_Mod_Sha3224Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchSha3(client, ctx, id, 1, &benchSha3_224);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
 #endif
+}
+
+#endif /* !WOLFSSL_NOSHA3_224 */
 
 #ifndef WOLFSSL_NOSHA3_256
-WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(256)
-WH_DEFINE_SHA3_BENCH_DMA_FNS(256)
+
+int wh_Bench_Mod_Sha3256(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params)
+{
+    (void)params;
+    return _benchSha3(client, ctx, id, 0, &benchSha3_256);
+}
+
+int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchSha3(client, ctx, id, 1, &benchSha3_256);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
 #endif
+}
+
+#endif /* !WOLFSSL_NOSHA3_256 */
 
 #ifndef WOLFSSL_NOSHA3_384
-WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(384)
-WH_DEFINE_SHA3_BENCH_DMA_FNS(384)
+
+int wh_Bench_Mod_Sha3384(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params)
+{
+    (void)params;
+    return _benchSha3(client, ctx, id, 0, &benchSha3_384);
+}
+
+int wh_Bench_Mod_Sha3384Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchSha3(client, ctx, id, 1, &benchSha3_384);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
 #endif
+}
+
+#endif /* !WOLFSSL_NOSHA3_384 */
 
 #ifndef WOLFSSL_NOSHA3_512
-WH_DEFINE_SHA3_BENCH_NON_DMA_FNS(512)
-WH_DEFINE_SHA3_BENCH_DMA_FNS(512)
+
+int wh_Bench_Mod_Sha3512(whClientContext* client, whBenchOpContext* ctx, int id,
+                         void* params)
+{
+    (void)params;
+    return _benchSha3(client, ctx, id, 0, &benchSha3_512);
+}
+
+int wh_Bench_Mod_Sha3512Dma(whClientContext* client, whBenchOpContext* ctx,
+                            int id, void* params)
+{
+#if defined(WOLFHSM_CFG_DMA)
+    (void)params;
+    return _benchSha3(client, ctx, id, 1, &benchSha3_512);
+#else
+    (void)client;
+    (void)ctx;
+    (void)id;
+    (void)params;
+    return WH_ERROR_NOTIMPL;
 #endif
+}
+
+#endif /* !WOLFSSL_NOSHA3_512 */
 
 #endif /* WOLFSSL_SHA3 */
 
