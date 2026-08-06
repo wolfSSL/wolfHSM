@@ -28,6 +28,7 @@
 #include "wolfhsm/wh_settings.h"
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_nvm.h"
@@ -59,6 +60,11 @@
 #define BUFFER_SIZE \
     (sizeof(whTransportMemCsr) + sizeof(whCommHeader) + \
      WOLFHSM_CFG_COMM_DATA_LEN)
+/* req_size/resp_size on whTransportMemConfig and posixTransportShmConfig are
+ * both uint16_t, so BUFFER_SIZE must fit or transport buffers configured from
+ * it will silently truncate. */
+WH_UTILS_STATIC_ASSERT(BUFFER_SIZE <= UINT16_MAX,
+                       "BUFFER_SIZE exceeds uint16_t transport size fields");
 #define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
 
 typedef struct BenchModule {
@@ -994,8 +1000,8 @@ static int _configureClientTransport(whBenchTransportType transport,
             static posixTransportShmClientContext tccShm;
             static posixTransportShmConfig        myshmconfig = {
                        .name      = "wh_bench_shm",
-                       .req_size  = 7000,
-                       .resp_size = 7000,
+                       .req_size  = (uint16_t)BUFFER_SIZE,
+                       .resp_size = (uint16_t)BUFFER_SIZE,
                        .dma_size  = 80000,
             };
             static whCommClientConfig ccShmConf = {
@@ -1069,8 +1075,8 @@ static int _configureServerTransport(whBenchTransportType transport,
             static posixTransportShmServerContext tscShm;
             static posixTransportShmConfig        myshmconfig = {
                        .name      = "wh_bench_shm",
-                       .req_size  = 7000,
-                       .resp_size = 7000,
+                       .req_size  = (uint16_t)BUFFER_SIZE,
+                       .resp_size = (uint16_t)BUFFER_SIZE,
                        .dma_size  = 80000,
             };
             static whCommServerConfig csShmConf = {

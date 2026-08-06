@@ -37,8 +37,19 @@
  * point in the translation unit. Pull user_settings.h in early so
  * WOLFHSM_CFG_COMM_DATA_LEN can be sized to the largest enabled ML-DSA level.
  * user_settings.h is just a flat set of #define statements guarded by its
- * own include guard, so wh_settings.h's later #include is a no-op. */
-#ifdef WOLFSSL_USER_SETTINGS
+ * own include guard, so wh_settings.h's later #include is a no-op.
+ *
+ * This mirrors wh_settings.h's own gate on its (later) include of
+ * user_settings.h, so a WOLFHSM_CFG_NO_CRYPTO build still sees none of
+ * wolfSSL's config here either.
+ *
+ * NOTE: this include is order-sensitive. It must stay ahead of the
+ * WOLFHSM_CFG_COMM_DATA_LEN ladder below, and nothing that user_settings.h
+ * conditionally tests may be defined later in this file.
+ * In the WOLFSSL_LIB=1 build (-DWOLFSSL_USER_SETTINGS omitted) this include
+ * is skipped and COMM_DATA_LEN falls back to the largest (ML-DSA-87) size. */
+#if defined(WOLFSSL_USER_SETTINGS) && !defined(WOLFHSM_CFG_NO_CRYPTO) && \
+    !defined(WH_PADDING_CHECK)
 #include "user_settings.h"
 #endif
 
