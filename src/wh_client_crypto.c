@@ -153,8 +153,10 @@ static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
                                                 uint16_t algoSubType,
                                                 uint32_t affinity);
 static int      _getCryptoResponse(uint8_t* respBuf, uint16_t type,
-                                   const uint16_t respLen, const uint16_t minRespLen,
-                                   uint8_t** outResponse, uint16_t* outTrailingLen);
+                                   const uint16_t respLen,
+                                   uint8_t**      outResponse,
+                                   const uint16_t minRespLen,
+                                   uint16_t*      outTrailingLen);
 
 
 /* Helper function to prepare a crypto request buffer with generic header */
@@ -179,11 +181,16 @@ static uint8_t* _createCryptoRequestWithSubtype(uint8_t* reqBuf, uint16_t type,
     return reqBuf + sizeof(whMessageCrypto_GenericRequestHeader);
 }
 
-/* Helper function to validate and extract crypto response. */
+/* Validates a crypto response frame and returns the server's return code, or
+ * WH_ERROR_ABORTED if the frame is short or holds another algorithm.
+ * outResponse points past the generic header at a body of at least minRespLen
+ * bytes. outTrailingLen, when given, reports the bytes received past that
+ * body, and is 0 unless the return code is non-negative. */
 /* TODO: add algoSubType checking */
 static int _getCryptoResponse(uint8_t* respBuf, uint16_t type,
-                              const uint16_t respLen, const uint16_t minRespLen,
-                              uint8_t** outResponse, uint16_t* outTrailingLen)
+                              const uint16_t respLen, uint8_t** outResponse,
+                              const uint16_t minRespLen,
+                              uint16_t*      outTrailingLen)
 {
     const whMessageCrypto_GenericResponseHeader* header =
         (const whMessageCrypto_GenericResponseHeader*)respBuf;
@@ -284,8 +291,8 @@ int wh_Client_RngGenerateResponse(whClientContext* ctx, uint8_t* out,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, res_len, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, res_len,
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret == WH_ERROR_OK) {
         /* Reject a size the received message does not actually carry, or that
          * exceeds the inline cap or the caller's buffer. */
@@ -429,7 +436,7 @@ int wh_Client_RngGenerateDmaResponse(whClientContext* ctx)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_RNG, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         /* On success, server has written random bytes directly to client
          * memory — nothing else to copy. */
     }
@@ -554,8 +561,8 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
                                  WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, res_len,
-                                 sizeof(*res) + (2 * AES_BLOCK_SIZE),
-                                 (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res,
+                                 sizeof(*res) + (2 * AES_BLOCK_SIZE), &trailSz);
         if (ret == WH_ERROR_OK) {
             /* Trailing payload is: output (res->sz) + reg (AES_BLOCK_SIZE)
              * + tmp (AES_BLOCK_SIZE) */
@@ -742,9 +749,9 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CTR, res_len,
-                                 sizeof(*res) + AES_IV_SIZE + AES_BLOCK_SIZE,
-                                 (uint8_t**)&res, NULL);
+        ret = _getCryptoResponse(
+            dataPtr, WC_CIPHER_AES_CTR, res_len, (uint8_t**)&res,
+            sizeof(*res) + AES_IV_SIZE + AES_BLOCK_SIZE, NULL);
         if (ret == WH_ERROR_OK) {
             /* Trailing payload is: reg (AES_IV_SIZE) + tmp (AES_BLOCK_SIZE) */
             uint8_t* res_iv =
@@ -890,7 +897,7 @@ int wh_Client_AesEcbResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
                                  WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, res_len,
-                                 sizeof(*res), (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res, sizeof(*res), &trailSz);
         if (ret == WH_ERROR_OK) {
             if (res->sz > trailSz) {
                 ret = WH_ERROR_ABORTED;
@@ -1065,7 +1072,7 @@ int wh_Client_AesEcbDmaResponse(whClientContext* ctx, Aes* aes)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_ECB, res_len,
-                                 sizeof(*res), (uint8_t**)&res, NULL);
+                                 (uint8_t**)&res, sizeof(*res), NULL);
         if (ret == WH_ERROR_OK) {
             WH_DEBUG_CLIENT_VERBOSE("AesEcb DMA res: ok\n");
         }
@@ -1217,7 +1224,7 @@ int wh_Client_AesCbcResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
                                  WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, res_len,
-                                 sizeof(*res) + AES_IV_SIZE, (uint8_t**)&res,
+                                 (uint8_t**)&res, sizeof(*res) + AES_IV_SIZE,
                                  &trailSz);
         if (ret == WH_ERROR_OK) {
             /* Trailing payload is: output (res->sz) + updated IV
@@ -1404,7 +1411,7 @@ int wh_Client_AesCbcDmaResponse(whClientContext* ctx, Aes* aes)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_CBC, res_len,
-                                 sizeof(*res) + AES_IV_SIZE, (uint8_t**)&res,
+                                 (uint8_t**)&res, sizeof(*res) + AES_IV_SIZE,
                                  NULL);
         if (ret == WH_ERROR_OK) {
             /* Trailing payload is the updated IV (AES_IV_SIZE) */
@@ -1578,7 +1585,7 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
                                  WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, res_len,
-                                 sizeof(*res), (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res, sizeof(*res), &trailSz);
         if (ret == WH_ERROR_OK) {
             uint8_t* res_out = (uint8_t*)(res + 1);
             uint8_t* res_tag = res_out + res->sz;
@@ -1806,7 +1813,7 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_AES_GCM, res_len,
-                                 sizeof(*res), (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res, sizeof(*res), &trailSz);
         if (ret == WH_ERROR_OK) {
             /* Trailing payload is the auth tag (res->authTagSz) */
             if (res->authTagSz > trailSz) {
@@ -2061,7 +2068,7 @@ static int _EccMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
 
     /* Get response structure pointer; validates the generic header rc */
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_KEYGEN, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     /* wolfCrypt allows positive error codes on success in some scenarios */
     if (ret >= 0) {
         whKeyId key_id = (whKeyId)(res->keyId);
@@ -2318,8 +2325,8 @@ static int _EccSharedSecretResponse(whClientContext* ctx, uint8_t* out,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ECDH, res_len, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ECDH, res_len, (uint8_t**)&res,
+                             sizeof(*res), &trailSz);
     if (ret >= 0) {
         uint8_t* res_out = (uint8_t*)(res + 1);
         /* Defensive bound: res->sz must fit within the actual received frame */
@@ -2555,7 +2562,7 @@ int wh_Client_EccSignResponse(whClientContext* ctx, uint8_t* sig,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ECDSA_SIGN, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         uint8_t* res_sig = (uint8_t*)(res + 1);
         /* Defensive bound: res->sz must fit within the actual received frame */
@@ -2758,7 +2765,7 @@ int wh_Client_EccVerifyResponse(whClientContext* ctx, ecc_key* opt_key,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ECDSA_VERIFY, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         /* Defensive bound: res->pubSz must fit within the actual received
          * frame */
@@ -2928,7 +2935,7 @@ static int _EccMakePubResponse(whClientContext* ctx, uint8_t* pubOut,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_MAKE_PUB, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         /* Defensive bound: res->pubSz must fit within the actual received
          * frame */
@@ -3064,7 +3071,7 @@ static int _EccCheckPubKeyResponse(whClientContext* ctx)
     /* A negative rc here is the verdict on an invalid key rather than a
      * transport failure, and is handed back to wolfCrypt verbatim. */
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_EC_CHECK_PUB_KEY, res_len,
-                             sizeof(*res), (uint8_t**)&res, NULL);
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         /* A success rc must be accompanied by an affirmative body */
         if (res->ok == 0) {
@@ -3350,7 +3357,7 @@ static int _Curve25519MakeKey(whClientContext* ctx, uint16_t size,
         /* Get response structure pointer, validates generic header */
         ret =
             _getCryptoResponse(dataPtr, WC_PK_TYPE_CURVE25519_KEYGEN, data_len,
-                               sizeof(*res), (uint8_t**)&res, &trailSz);
+                               (uint8_t**)&res, sizeof(*res), &trailSz);
         /* wolfCrypt allows positive error codes on success in some scenarios */
         if (ret >= 0) {
             WH_DEBUG_CLIENT_VERBOSE("Curve25519 KeyGen Res recv:keyid:%u, len:%u, "
@@ -3543,7 +3550,7 @@ static int _Curve25519SharedSecretResponse(whClientContext* ctx, uint8_t* out,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_CURVE25519, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         uint8_t*     res_out = (uint8_t*)(res + 1);
         if (res->sz > trailSz) {
@@ -3868,7 +3875,7 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_KEYGEN, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
 
         /* Defensive bound: res->outSz must fit within the received frame */
@@ -4064,7 +4071,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          &trailSz);
                 if (ret >= 0) {
                     if (res->sigSz > trailSz) {
@@ -4203,7 +4210,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          NULL);
                 if (ret >= 0) {
                     *out_res = res->res;
@@ -4336,7 +4343,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_SIGN,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          NULL);
                 if (ret >= 0) {
                     /* DMA mode: signature was written to the caller's
@@ -4479,7 +4486,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_ED25519_VERIFY,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          NULL);
                 if (ret >= 0) {
                     *out_res = res->verifyResult;
@@ -4693,7 +4700,7 @@ static int _RsaMakeKeyResponse(whClientContext* ctx, whKeyId* out_key_id,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_KEYGEN, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     /* wolfCrypt allows positive return codes on success */
     if (ret >= 0) {
         whKeyId key_id;
@@ -4925,8 +4932,8 @@ int wh_Client_RsaFunctionResponse(whClientContext* ctx, uint8_t* out,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA, res_len, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA, res_len, (uint8_t**)&res,
+                             sizeof(*res), &trailSz);
     if (ret >= 0) {
         uint8_t* res_out;
 
@@ -5121,7 +5128,7 @@ int wh_Client_RsaGetSizeResponse(whClientContext* ctx, int* out_size)
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_RSA_GET_SIZE, res_len,
-                             sizeof(*res), (uint8_t**)&res, NULL);
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         *out_size = (int)res->keySize;
     }
@@ -5318,7 +5325,7 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
             ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_KDF, res_len,
-                                     sizeof(*res), (uint8_t**)&res, &trailSz);
+                                     (uint8_t**)&res, sizeof(*res), &trailSz);
         }
 
         if (ret == WH_ERROR_OK) {
@@ -5489,7 +5496,7 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_KDF, res_len,
-                                 sizeof(*res), (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res, sizeof(*res), &trailSz);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5726,8 +5733,8 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len,
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     /* wolfCrypt allows positive error codes on success */
     if (ret >= 0) {
         /* The MAC bytes the response claims must be in the received frame */
@@ -5855,8 +5862,8 @@ int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac)
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         /* Restore full state from server. The server may leave a partial
          * (or whole) block in its buffer after wc_CmacUpdate (CMAC's last
@@ -5948,8 +5955,8 @@ int wh_Client_CmacFinalResponse(whClientContext* ctx, Cmac* cmac,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, res_len,
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         /* The MAC bytes the response claims must be in the received frame */
         if (res->outSz > trailSz) {
@@ -6199,7 +6206,7 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, respSz,
-                                 sizeof(*res), (uint8_t**)&res, &trailSz);
+                                 (uint8_t**)&res, sizeof(*res), &trailSz);
         if (ret >= 0) {
             /* The MAC bytes the response claims must be in the received
              * frame. A failed server request replies with the generic header
@@ -6355,7 +6362,7 @@ int wh_Client_CmacDmaUpdateResponse(whClientContext* ctx, Cmac* cmac)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, respSz,
-                                 sizeof(*res), (uint8_t**)&res, NULL);
+                                 (uint8_t**)&res, sizeof(*res), NULL);
         if (ret >= 0) {
             /* Restore full state from server (includes any partial/whole
              * block left in the server's wc_CmacUpdate buffer). */
@@ -6446,8 +6453,8 @@ int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, respSz, sizeof(*res),
-                             (uint8_t**)&res, &trailSz);
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_CMAC, respSz,
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         /* The MAC bytes the response claims must be in the received frame */
         if (res->outSz > trailSz) {
@@ -6697,8 +6704,8 @@ int wh_Client_Sha256UpdateResponse(whClientContext* ctx, wc_Sha256* sha)
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA256) {
             return WH_ERROR_ABORTED;
@@ -6775,8 +6782,8 @@ int wh_Client_Sha256FinalResponse(whClientContext* ctx, wc_Sha256* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA256) {
             return WH_ERROR_ABORTED;
@@ -6993,7 +7000,7 @@ int wh_Client_Sha256DmaUpdateResponse(whClientContext* ctx, wc_Sha256* sha)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA256) {
                 ret = WH_ERROR_ABORTED;
@@ -7094,7 +7101,7 @@ int wh_Client_Sha256DmaFinalResponse(whClientContext* ctx, wc_Sha256* sha,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA256, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA256) {
                 return WH_ERROR_ABORTED;
@@ -7284,8 +7291,8 @@ int wh_Client_Sha224UpdateResponse(whClientContext* ctx, wc_Sha224* sha)
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA224) {
             return WH_ERROR_ABORTED;
@@ -7363,8 +7370,8 @@ int wh_Client_Sha224FinalResponse(whClientContext* ctx, wc_Sha224* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA224) {
             return WH_ERROR_ABORTED;
@@ -7569,7 +7576,7 @@ int wh_Client_Sha224DmaUpdateResponse(whClientContext* ctx, wc_Sha224* sha)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA224) {
                 ret = WH_ERROR_ABORTED;
@@ -7666,7 +7673,7 @@ int wh_Client_Sha224DmaFinalResponse(whClientContext* ctx, wc_Sha224* sha,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA224, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA224) {
                 return WH_ERROR_ABORTED;
@@ -7856,8 +7863,8 @@ int wh_Client_Sha384UpdateResponse(whClientContext* ctx, wc_Sha384* sha)
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA384) {
             return WH_ERROR_ABORTED;
@@ -7936,8 +7943,8 @@ int wh_Client_Sha384FinalResponse(whClientContext* ctx, wc_Sha384* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         if (res->hashType != WC_HASH_TYPE_SHA384) {
             return WH_ERROR_ABORTED;
@@ -8143,7 +8150,7 @@ int wh_Client_Sha384DmaUpdateResponse(whClientContext* ctx, wc_Sha384* sha)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA384) {
                 ret = WH_ERROR_ABORTED;
@@ -8241,7 +8248,7 @@ int wh_Client_Sha384DmaFinalResponse(whClientContext* ctx, wc_Sha384* sha,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA384, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             if (resp->hashType != WC_HASH_TYPE_SHA384) {
                 return WH_ERROR_ABORTED;
@@ -8430,8 +8437,8 @@ int wh_Client_Sha512UpdateResponse(whClientContext* ctx, wc_Sha512* sha)
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         /* Family check, not variant match: SHA-512/t shares block size and
          * compression with SHA-512, and the client supplies the variant IV
@@ -8516,8 +8523,8 @@ int wh_Client_Sha512FinalResponse(whClientContext* ctx, wc_Sha512* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, dataSz,
+                             (uint8_t**)&res, sizeof(*res), NULL);
     if (ret >= 0) {
         /* keep hashtype before initialization */
         hashType = sha->hashType;
@@ -8746,7 +8753,7 @@ int wh_Client_Sha512DmaUpdateResponse(whClientContext* ctx, wc_Sha512* sha)
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             /* Family check, not variant match: SHA-512/t shares block size and
              * compression with SHA-512, and the client supplies the variant IV
@@ -8850,7 +8857,7 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_HASH_TYPE_SHA512, respSz,
-                                 sizeof(*resp), (uint8_t**)&resp, NULL);
+                                 (uint8_t**)&resp, sizeof(*resp), NULL);
         if (ret >= 0) {
             /* keep hashtype before initialization */
             hashType = sha->hashType;
@@ -9103,8 +9110,8 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, v->hashType, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, v->hashType, dataSz, (uint8_t**)&res,
+                             sizeof(*res), NULL);
     if (ret >= 0) {
         memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
     }
@@ -9180,8 +9187,8 @@ static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, v->hashType, dataSz, sizeof(*res),
-                             (uint8_t**)&res, NULL);
+    ret = _getCryptoResponse(dataPtr, v->hashType, dataSz, (uint8_t**)&res,
+                             sizeof(*res), NULL);
     if (ret >= 0) {
         memcpy(out, res->hash, v->digestSize);
         /* Reset state, preserving heap and devId. */
@@ -9552,8 +9559,8 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _getCryptoResponse(dataPtr, v->hashType, respSz, sizeof(*resp),
-                                 (uint8_t**)&resp, NULL);
+        ret = _getCryptoResponse(dataPtr, v->hashType, respSz, (uint8_t**)&resp,
+                                 sizeof(*resp), NULL);
         if (ret >= 0) {
             memcpy(sha->s, resp->resumeState.s, sizeof(sha->s));
         }
@@ -9644,8 +9651,8 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _getCryptoResponse(dataPtr, v->hashType, respSz, sizeof(*resp),
-                                 (uint8_t**)&resp, NULL);
+        ret = _getCryptoResponse(dataPtr, v->hashType, respSz, (uint8_t**)&resp,
+                                 sizeof(*resp), NULL);
         if (ret >= 0) {
             memcpy(out, resp->hash, v->digestSize);
             savedHeap  = sha->heap;
@@ -10004,8 +10011,8 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
                     /* Get response structure pointer, validates generic header
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN,
-                                             res_len, sizeof(*res),
-                                             (uint8_t**)&res, &trailSz);
+                                             res_len, (uint8_t**)&res,
+                                             sizeof(*res), &trailSz);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -10234,8 +10241,8 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                     /* Get response structure pointer, validates generic header
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_SIGN,
-                                             res_len, sizeof(*res),
-                                             (uint8_t**)&res, &trailSz);
+                                             res_len, (uint8_t**)&res,
+                                             sizeof(*res), &trailSz);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -10378,8 +10385,8 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
                     /* Get response structure pointer, validates generic header
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                             res_len, sizeof(*res),
-                                             (uint8_t**)&res, NULL);
+                                             res_len, (uint8_t**)&res,
+                                             sizeof(*res), NULL);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -10577,7 +10584,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
              * rc */
             ret =
                 _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, res_len,
-                                   sizeof(*res), (uint8_t**)&res, NULL);
+                                   (uint8_t**)&res, sizeof(*res), NULL);
             /* wolfCrypt allows positive error codes on success in some
              * scenarios */
             if (ret >= 0) {
@@ -10802,8 +10809,8 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                     /* Get response structure pointer, validates generic header
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_SIGN,
-                                             res_len, sizeof(*res),
-                                             (uint8_t**)&res, NULL);
+                                             res_len, (uint8_t**)&res,
+                                             sizeof(*res), NULL);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -10952,8 +10959,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                     /* Get response structure pointer, validates generic header
                      * rc */
                     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
-                                             res_len, sizeof(*res),
-                                             (uint8_t**)&res, NULL);
+                                             res_len, (uint8_t**)&res,
+                                             sizeof(*res), NULL);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
@@ -11169,7 +11176,7 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
     }
 
     ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN, res_len,
-                             sizeof(*res), (uint8_t**)&res, &trailSz);
+                             (uint8_t**)&res, sizeof(*res), &trailSz);
     if (ret >= 0) {
         key_id = (whKeyId)res->keyId;
         WH_DEBUG_CLIENT_VERBOSE("MlKemMakeKey: Res recv:"
@@ -11350,7 +11357,7 @@ int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          &trailSz);
                 if (ret >= 0) {
                     uint8_t*     resp_data  = (uint8_t*)(res + 1);
@@ -11477,7 +11484,7 @@ int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          &trailSz);
                 if (ret >= 0) {
                     uint8_t*     resp_ss    = (uint8_t*)(res + 1);
@@ -11679,7 +11686,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
 
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN, res_len,
-                                 sizeof(*res), (uint8_t**)&res, NULL);
+                                 (uint8_t**)&res, sizeof(*res), NULL);
         if (ret >= 0) {
             key_id = (whKeyId)res->keyId;
             if (inout_key_id != NULL) {
@@ -11850,7 +11857,7 @@ int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          &trailSz);
                 if (ret >= 0) {
                     /* ct was transferred via DMA, ss is inline in response */
@@ -11973,7 +11980,7 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 
             if (ret == WH_ERROR_OK) {
                 ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
-                                         res_len, sizeof(*res), (uint8_t**)&res,
+                                         res_len, (uint8_t**)&res, sizeof(*res),
                                          &trailSz);
                 if (ret >= 0) {
                     /* ss is inline in response, not via DMA */
@@ -12131,7 +12138,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN, res_len,
-                sizeof(*res), (uint8_t**)&res, NULL);
+                (uint8_t**)&res, sizeof(*res), NULL);
             if (ret >= 0) {
                 key_id = (whKeyId)res->keyId;
                 if (inout_key_id != NULL) {
@@ -12237,7 +12244,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
 
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN,
-                                     res_len, sizeof(*res), (uint8_t**)&res,
+                                     res_len, (uint8_t**)&res, sizeof(*res),
                                      NULL);
             if (ret >= 0) {
                 if (res->sigLen > sigCap) {
@@ -12340,7 +12347,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY, res_len,
-                sizeof(*resp), (uint8_t**)&resp, NULL);
+                (uint8_t**)&resp, sizeof(*resp), NULL);
             if (ret >= 0) {
                 *res = (int)resp->res;
                 ret  = WH_ERROR_OK;
@@ -12404,7 +12411,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT, res_len,
-                sizeof(*res), (uint8_t**)&res, NULL);
+                (uint8_t**)&res, sizeof(*res), NULL);
             if (ret >= 0) {
                 /* The server mirrors wc_LmsKey_SigsLeft(), which is a
                  * boolean. Normalize so the only nonzero return is 1. */
@@ -12583,7 +12590,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN, res_len,
-                sizeof(*res), (uint8_t**)&res, NULL);
+                (uint8_t**)&res, sizeof(*res), NULL);
             if (ret >= 0) {
                 key_id = (whKeyId)res->keyId;
                 if (inout_key_id != NULL) {
@@ -12689,7 +12696,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
 
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN,
-                                     res_len, sizeof(*res), (uint8_t**)&res,
+                                     res_len, (uint8_t**)&res, sizeof(*res),
                                      NULL);
             if (ret >= 0) {
                 if (res->sigLen > sigCap) {
@@ -12793,7 +12800,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_VERIFY, res_len,
-                sizeof(*resp), (uint8_t**)&resp, NULL);
+                (uint8_t**)&resp, sizeof(*resp), NULL);
             if (ret >= 0) {
                 *res = (int)resp->res;
                 ret  = WH_ERROR_OK;
@@ -12857,7 +12864,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         if (ret == WH_ERROR_OK) {
             ret = _getCryptoResponse(
                 dataPtr, WC_PK_TYPE_PQC_STATEFUL_SIG_SIGS_LEFT, res_len,
-                sizeof(*res), (uint8_t**)&res, NULL);
+                (uint8_t**)&res, sizeof(*res), NULL);
             if (ret >= 0) {
                 /* The server mirrors wc_XmssKey_SigsLeft(), which is a
                  * boolean. Normalize so the only nonzero return is 1. */
