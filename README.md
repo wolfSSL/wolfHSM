@@ -20,6 +20,13 @@ PKCS11 and AUTOSAR SHE.
 For a technical overview of wolfHSM and instructions on using wolfHSM in your application,
 please refer to the following resources.
 
+## Formatting
+
+Enable the pre-commit clang-format check, once per clone:
+
+    sudo apt-get install -y clang-format-18
+    git config core.hooksPath .githooks
+
 ## Resources
 
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
