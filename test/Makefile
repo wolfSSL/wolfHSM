@@ -142,6 +142,11 @@ ifeq ($(DMA),1)
 	DEF += -DWOLFHSM_CFG_DMA
 endif
 
+# Enable CRC16 integrity checking in the NVM flash backend
+ifeq ($(NVM_FLASH_CRC),1)
+	DEF += -DWOLFHSM_CFG_NVM_FLASH_CRC16
+endif
+
 # Build LMS/XMSS in verify-only mode (omits private-key, sign, and keygen
 # paths). May be combined to exercise the mixed (one verify-only) case.
 ifeq ($(LMS_VERIFY_ONLY),1)

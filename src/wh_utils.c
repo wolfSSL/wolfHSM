@@ -79,6 +79,30 @@ uint32_t wh_Utils_ntohl(uint32_t networklong) {
     return wh_Utils_htonl(networklong);
 }
 
+/** CRC16 functions */
+uint16_t wh_Utils_Crc16(uint16_t crc, const void* data, size_t len)
+{
+    const uint8_t* p = (const uint8_t*)data;
+    size_t         i;
+    int            bit;
+
+    if (p == NULL) {
+        return crc;
+    }
+
+    for (i = 0; i < len; i++) {
+        crc = (uint16_t)(crc ^ ((uint16_t)p[i] << 8));
+        for (bit = 0; bit < 8; bit++) {
+            if ((crc & 0x8000U) != 0U) {
+                crc = (uint16_t)((uint16_t)(crc << 1) ^ 0x1021U);
+            }
+            else {
+                crc = (uint16_t)(crc << 1);
+            }
+        }
+    }
+    return crc;
+}
 
 
 int wh_Utils_memeqzero(uint8_t* buffer, uint32_t size)

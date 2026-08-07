@@ -77,6 +77,7 @@ int whTest_FlashUnitOps(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
 int whTest_NvmRecovery(void* ctx);
+int whTest_NvmCrc16(void* ctx);
 
 /* POSIX-specific logging tests. The portable log suite (frontend,
  * macros, ring buffer, mock/ringbuf harness) runs in the Misc group;
@@ -293,6 +294,10 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmRecovery",
             whTest_NvmRecovery, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmCrc16", whTest_NvmCrc16, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

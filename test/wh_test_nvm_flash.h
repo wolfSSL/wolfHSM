@@ -54,4 +54,14 @@ int whTest_NvmFlashCfg(whNvmFlashConfig* cfg);
  */
 int whTest_NvmFlash_Recovery(void);
 
+#if defined(WOLFHSM_CFG_NVM_FLASH_CRC16)
+/*
+ * Tests NVM flash CRC16 integrity checking: CRC vectors, detection of
+ * corrupted object data on full reads and reclaim copies, and detection of
+ * corrupted metadata when the directory is loaded.
+ * Returns 0 on success, and a non-zero error code on failure
+ */
+int whTest_NvmFlash_Crc16(void);
+#endif
+
 #endif /* TEST_WH_TEST_NVM_FLASH_H_ */

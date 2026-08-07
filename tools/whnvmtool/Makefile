@@ -95,6 +95,12 @@ ifeq ($(DEBUG_VERBOSE),1)
 	CFLAGS += -g -O0 -DDEBUG -ggdb3 -DWOLFHSM_CFG_DEBUG -DWOLFHSM_CFG_DEBUG_VERBOSE
 endif
 
+# Enable CRC16 integrity checking in the NVM flash backend. Must match the
+# setting of the server that will use the generated image.
+ifeq ($(NVM_FLASH_CRC),1)
+	CFLAGS += -DWOLFHSM_CFG_NVM_FLASH_CRC16
+endif
+
 ifeq ($(ASAN), 1)
 	CFLAGS_EXTRA += -fsanitize=address
 endif

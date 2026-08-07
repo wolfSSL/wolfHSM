@@ -133,7 +133,7 @@ she 1 4 0 0x00 path/to/she_key.bin
 
 The generated NVM image is a binary file that can be used to initialize an instance of `whNvmFlash` or loaded directly into device memory at a device-specific address. In order for a generated NVM image to be compatible with a wolfHSM server implementation, the following must be true:
 
-1. `whnvmtool` must be compiled against the same version of wolfHSM as the server, and be compiled to use the same value of `WOLFHSM_CFG_NVM_OBJECT_COUNT`
+1. `whnvmtool` must be compiled against the same version of wolfHSM as the server, and be compiled to use the same value of `WOLFHSM_CFG_NVM_OBJECT_COUNT` and the same `WOLFHSM_CFG_NVM_FLASH_CRC16` setting (build with `NVM_FLASH_CRC=1` to match a CRC-enabled server; a CRC-enabled server treats every object in a non-CRC image as corrupt and discards them at the first compaction, while a non-CRC server loads a CRC image but ignores its CRCs)
 2. The partition size specified for the NVM image must match that of the server's `whNvmFlash` provider
 3. If using a real flash implementation, the binary NVM image must be programmed to the correct address
 
