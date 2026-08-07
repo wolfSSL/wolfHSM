@@ -91,6 +91,18 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
     server->devId  = config->devId;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     server->she = config->she;
+    if (server->she != NULL) {
+        if (config->sheConfig != NULL) {
+            server->she->getUidCb = config->sheConfig->getUidCb;
+            server->she->setUidCb = config->sheConfig->setUidCb;
+            server->she->uidCtx   = config->sheConfig->uidCtx;
+        }
+        else {
+            server->she->getUidCb = NULL;
+            server->she->setUidCb = NULL;
+            server->she->uidCtx   = NULL;
+        }
+    }
 #endif
 #endif
 

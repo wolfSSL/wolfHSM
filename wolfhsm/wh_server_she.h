@@ -40,6 +40,24 @@
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 
+struct whServerContext_t;
+
+/* Reads WH_SHE_UID_SZ bytes into outUid. Returns 0, WH_ERROR_NOTFOUND if no UID
+ * is provisioned, or another wolfHSM error. Called on every gated SHE request,
+ * so it must be cheap and idempotent. */
+typedef int (*whServerSheGetUidCb)(struct whServerContext_t* server, void* ctx,
+                                   uint8_t* outUid);
+
+/* Persists the WH_SHE_UID_SZ byte UID provisioned by WH_SHE_SET_UID. */
+typedef int (*whServerSheSetUidCb)(struct whServerContext_t* server, void* ctx,
+                                   const uint8_t* uid);
+
+typedef struct {
+    whServerSheGetUidCb getUidCb; /* NULL = use in-context uid[]/uidSet */
+    whServerSheSetUidCb setUidCb; /* NULL = UID is read-only */
+    void*               uidCtx;   /* opaque, passed back to both callbacks */
+} whServerSheConfig;
+
 typedef struct {
     uint8_t  sbState;
     uint8_t  cmacKeyFound;
@@ -61,12 +79,34 @@ typedef struct {
     uint8_t  prngState[WH_SHE_KEY_SZ];
     uint8_t  prngKey[WH_SHE_KEY_SZ];
     uint8_t  uid[WH_SHE_UID_SZ];
+
+    /* When getUidCb is set, the uid[] and uidSet fields above are unused. */
+    whServerSheGetUidCb getUidCb;
+    whServerSheSetUidCb setUidCb;
+    void*               uidCtx;
 } whServerSheContext;
 
 int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                                uint16_t action, uint16_t req_size,
                                const void* req_packet, uint16_t* out_resp_size,
                                void* resp_packet);
+
+/**
+ * @brief Register SHE UID storage callbacks at runtime.
+ *
+ * Replaces callbacks previously set via whServerConfig.sheConfig or by a prior
+ * call to this function.
+ *
+ * @param server Server context.
+ * @param getCb  UID read callback, or NULL to use in-context uid[]/uidSet.
+ * @param setCb  UID write callback, or NULL for a read-only UID, which makes
+ *               WH_SHE_SET_UID return WH_SHE_ERC_WRITE_PROTECTED.
+ * @param ctx    Opaque context passed to both callbacks.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if server or server->she is
+ *         NULL.
+ */
+int wh_Server_SheSetUidCb(whServerContext* server, whServerSheGetUidCb getCb,
+                          whServerSheSetUidCb setCb, void* ctx);
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* !WOLFHSM_WH_SERVER_SHE_H */

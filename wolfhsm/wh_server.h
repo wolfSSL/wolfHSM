@@ -156,6 +156,7 @@ typedef struct whServerConfig_t {
     whServerCryptoContext* crypto;
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
+    whServerSheConfig*  sheConfig; /* optional; NULL = in-context UID storage */
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 #if defined WOLF_CRYPTO_CB
     int devId;
