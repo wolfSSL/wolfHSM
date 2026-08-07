@@ -57,7 +57,7 @@ static const whFlashUnit BASE_STATE = 0x1234567800000000ULL;
  * magic. The remaining 0x12/0x34 bytes still keep every state word distinct
  * from erased flash. */
 static const whFlashUnit CRC_BASE_STATE = 0x1234000000000000ULL;
-#define NF_STATE_CRC_PACK(_crc) (((whFlashUnit)(_crc)) << 32)
+#define NF_STATE_CRC_PACK(_crc) (((whFlashUnit)(uint16_t)(_crc)) << 32)
 #define NF_STATE_CRC_EXTRACT(_unit) ((uint16_t)(((_unit) >> 32) & 0xFFFFULL))
 #endif
 
@@ -157,7 +157,7 @@ static int nfObject_ReadDataBytes(whNvmFlashContext* context, int partition,
 static int nfObject_Copy(whNvmFlashContext* context, int object_index,
         int partition, uint32_t *inout_next_object, uint32_t *inout_next_data);
 
-static int nfMemDirectory_Parse(whNvmFlashContext* context, nfMemDirectory* d);
+static int nfMemDirectory_Parse(nfMemDirectory* d);
 static int nfMemDirectory_FindObjectIndexById(nfMemDirectory* d, whNvmId id,
         int *out_object_index);
 static int nfIdList_Contains(whNvmId list_count, const whNvmId* id_list,
@@ -415,6 +415,7 @@ static int nfPartition_ReadMemDirectory(whNvmFlashContext* context, int partitio
     offset = nfPartition_Offset(context, partition) +
                 NF_PARTITION_DIRECTORY_OFFSET;
     memset(directory, 0, sizeof(*directory));
+    directory->max_data = context->partition_units - NF_PARTITION_DATA_OFFSET;
 
     for (index = 0; (index < WOLFHSM_CFG_NVM_OBJECT_COUNT); index++) {
         /* Read all objects from the Partition Directory.
@@ -434,7 +435,7 @@ static int nfPartition_ReadParseMemDirectory(whNvmFlashContext* context, int par
     if (ret != 0) {
         return ret;
     }
-    return nfMemDirectory_Parse(context, directory);
+    return nfMemDirectory_Parse(directory);
 }
 
 static int nfPartition_ProgramEpoch(whNvmFlashContext* context,
@@ -878,13 +879,13 @@ static int nfObject_Copy(whNvmFlashContext* context, int object_index,
 }
 
 
-static int nfMemDirectory_Parse(whNvmFlashContext* context, nfMemDirectory* d)
+static int nfMemDirectory_Parse(nfMemDirectory* d)
 {
     int done = 0;
     int this_entry = 0;
     int that_entry = 0;
 
-    if ((context == NULL) || (d == NULL)) {
+    if (d == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -934,19 +935,22 @@ static int nfMemDirectory_Parse(whNvmFlashContext* context, nfMemDirectory* d)
              * later intact entry re-bounds the reservation with its own start
              * and count. Reclaimable size is a best effort */
             d->reclaimable_entries++;
-            if ((context->partition_units - NF_PARTITION_DATA_OFFSET) >
-                d->objects[d->next_free_object].state.start) {
+            if (d->max_data > d->objects[d->next_free_object].state.start) {
                 d->reclaimable_data +=
-                    (context->partition_units - NF_PARTITION_DATA_OFFSET) -
-                    d->objects[d->next_free_object].state.start;
+                    d->max_data - d->objects[d->next_free_object].state.start;
             }
-            d->next_free_data = context->partition_units;
+            d->next_free_data = d->max_data;
             break;
         default:
             /* Unknown state.  Better barf */
             return WH_ERROR_ABORTED;
         }
         if (done) break;
+    }
+
+    /* Never let corrupt start or count values point past the data area */
+    if (d->next_free_data > d->max_data) {
+        d->next_free_data = d->max_data;
     }
 
     /* Now walk through backwards and reclaim any duplicate meta->id data counts */
@@ -1079,7 +1083,7 @@ int wh_NvmFlash_Init(void* c, const void* cf)
             ret = nfPartition_ReadMemDirectory(context, context->active,
                                                &context->directory);
             if (ret == WH_ERROR_OK) {
-                ret = nfMemDirectory_Parse(context, &context->directory);
+                ret = nfMemDirectory_Parse(&context->directory);
                 if (ret == WH_ERROR_OK) {
                     context->initialized = 1;
                 }
@@ -1193,17 +1197,9 @@ int wh_NvmFlash_GetAvailable(void* c,
     }
     nfMemDirectory *d = &context->directory;
     if (out_avail_size != NULL) {
-        uint32_t data_units =
-            context->partition_units - NF_PARTITION_DATA_OFFSET;
-        /* next_free_data can exceed the data area when an entry with
-         * untrusted metadata reserves through the end of it */
-        if (d->next_free_data < data_units) {
-            *out_avail_size =
-                (data_units - d->next_free_data) * WHFU_BYTES_PER_UNIT;
-        }
-        else {
-            *out_avail_size = 0;
-        }
+        /* next_free_data never exceeds max_data */
+        *out_avail_size =
+            (d->max_data - d->next_free_data) * WHFU_BYTES_PER_UNIT;
     }
     if (out_avail_objects != NULL) {
         *out_avail_objects = WOLFHSM_CFG_NVM_OBJECT_COUNT - d->next_free_object;
@@ -1266,9 +1262,9 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     }
 
     d = &context->directory;
-    if (    (d->next_free_object == WOLFHSM_CFG_NVM_OBJECT_COUNT) ||
-            (d->next_free_data * WHFU_BYTES_PER_UNIT + data_len >
-                context->partition_units * WHFU_BYTES_PER_UNIT) ) {
+    if ((d->next_free_object == WOLFHSM_CFG_NVM_OBJECT_COUNT) ||
+        (d->next_free_data * WHFU_BYTES_PER_UNIT + data_len >
+         d->max_data * WHFU_BYTES_PER_UNIT)) {
         return WH_ERROR_NOSPACE;
     }
 

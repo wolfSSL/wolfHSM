@@ -72,6 +72,8 @@ typedef struct {
     uint32_t next_free_data;
     int reclaimable_entries;
     uint32_t reclaimable_data;
+    uint32_t    max_data; /* Data area size in units. next_free_data and object
+                           * start/count values must stay within this bound */
 } nfMemDirectory;
 
 /** whNvm config and context structure definitions */
