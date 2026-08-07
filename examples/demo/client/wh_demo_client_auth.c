@@ -67,6 +67,20 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
         return (int)serverRc;
     }
 
+    /* If a previous run persisted the demo user (NVM-backed auth), remove it
+     * so this demo can add it fresh */
+    rc = wh_Client_AuthUserGet(clientContext, "demo", &serverRc, &userId,
+                               &out_permissions);
+    if (rc == 0 && serverRc == 0 && userId != WH_USER_ID_INVALID) {
+        rc = wh_Client_AuthUserDelete(clientContext, userId, &serverRc);
+        if (rc != 0 || serverRc != 0) {
+            printf("[AUTH-DEMO] Failed to delete existing demo user: %d, "
+                   "server error %d\n",
+                   rc, (int)serverRc);
+            return (rc != 0) ? rc : (int)serverRc;
+        }
+    }
+
     memset(&out_permissions, 0, sizeof(whAuthPermissions));
     /* Allow demo user to change own credentials */
     WH_AUTH_SET_ALLOWED_ACTION(out_permissions, WH_MESSAGE_GROUP_AUTH,
@@ -77,7 +91,7 @@ static int wh_DemoClient_AuthPin(whClientContext* clientContext)
     if (rc != 0 || serverRc != 0) {
         printf("[AUTH-DEMO] Failed to add user: %d, server error %d\n", rc,
                serverRc);
-        return rc;
+        return (rc != 0) ? rc : (int)serverRc;
     }
 
     rc = wh_Client_AuthLogout(clientContext, adminUserId, &serverRc);
@@ -381,11 +395,57 @@ static int wh_DemoClient_AuthUserSetPermissions(whClientContext* clientContext)
 }
 
 
+/**
+ * Persistence verification: when the server uses NVM-backed auth, users survive
+ * restarts. Run the full demo once (adds demo user), then restart the server
+ * and run again. This check will detect the persisted demo user and print a
+ * verification message.
+ */
+static int wh_DemoClient_AuthPersistenceCheck(whClientContext* clientContext)
+{
+    int32_t serverRc = 0;
+    whUserId userId  = WH_USER_ID_INVALID;
+    int      rc;
+
+    /* Try to log in as demo user - if successful, user was persisted from a
+     * previous server run (NVM-backed auth). A completed previous run leaves
+     * the demo user with PIN "5678" (the PIN demo updates it from "1234"), so
+     * try that first and fall back to "1234" for partial runs. */
+    rc = wh_Client_AuthLogin(clientContext, WH_AUTH_METHOD_PIN, "demo", "5678",
+                             4, &serverRc, &userId);
+    if (serverRc == WH_AUTH_NOT_ENABLED) {
+        return WH_ERROR_OK;
+    }
+    if (rc != 0) {
+        return rc;
+    }
+    if (serverRc != 0) {
+        rc = wh_Client_AuthLogin(clientContext, WH_AUTH_METHOD_PIN, "demo",
+                                 "1234", 4, &serverRc, &userId);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    if (rc == 0 && serverRc == 0) {
+        printf("[AUTH-DEMO] NVM persistence verified: demo user found from "
+               "previous server run\n");
+        (void)wh_Client_AuthLogout(clientContext, userId, &serverRc);
+    }
+    return WH_ERROR_OK;
+}
+
 int wh_DemoClient_Auth(whClientContext* clientContext)
 {
     int rc = 0;
 
     printf("[AUTH-DEMO] Starting authentication demo...\n");
+
+    /* Check for persisted users from a previous server run (NVM-backed auth) */
+    rc = wh_DemoClient_AuthPersistenceCheck(clientContext);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
     rc = wh_DemoClient_AuthCertificate(clientContext);
     if (rc != WH_ERROR_OK) {
         return rc;

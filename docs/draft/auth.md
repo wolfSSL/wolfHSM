@@ -11,12 +11,12 @@ PR #270 introduces a **PKCS11-flavored Authentication/Authorization Manager** to
 - A **permission model** of (admin flag) + (per-group allow boolean) + (per-group bitmap of 256 allowed actions) + (a small per-user list of accessible key IDs — not yet wired into crypto paths).
 - A **server-side request gate** that, on every incoming request, consults the Auth Manager and rejects messages the current session is not permitted to run.
 - A **message group** `WH_MESSAGE_GROUP_AUTH = 0x0D00` with 7 new actions (login, logout, user add/delete/get, set-permissions, set-credentials), complete with endian/magic translation functions.
-- A **pluggable backend**: everything goes through a `whAuthCb` callback vtable. A default in-memory backend lives in `src/wh_auth_base.c` (up to 5 users, credential storage up to 2 KiB per user, used by examples and tests).
+- A **pluggable backend**: everything goes through a `whAuthCb` callback vtable. A default backend lives in `src/wh_auth_base.c` (up to 5 users, credential storage up to 2 KiB per user, optional NVM persistence with credentials split into per-user objects, used by examples and tests).
 - The feature is **opt-in**: entire subsystem is guarded by `WOLFHSM_CFG_ENABLE_AUTHENTICATION`. With it compiled in but no context configured (`server->auth == NULL`), the server logs a SECEVENT and processes all requests without any authorization check — preserving backwards compatibility.
 
 Design notes called out by the author:
 - The "check key use" callback (`CheckKeyAuthorization`) is wired into the interface but **not yet invoked** on the key paths — it's a TODO placeholder.
-- The base user list is in RAM, not NVM — deliberate for an initial cut.
+- The base user list lives in a RAM index and is optionally persisted to NVM (config `whAuthBaseConfig.nvm`; NULL = RAM-only). Credentials are split into per-user NVM objects, and a corrupt/incompatible persisted database is a fatal init error; see [6.1 Persistence (NVM)](#61-persistence-nvm).
 - Logging of auth events (login success/failure, crypto actions) is another TODO, though authorization failures already log via `WH_LOG_ON_ERROR_F`.
 
 ---
@@ -57,7 +57,7 @@ Design notes called out by the author:
              ▼
      ┌─────────────────────────┐
      │   Pluggable backend     │
-     │   default: wh_auth_base │   in-memory user db, SHA-256 PIN hashing,
+     │   default: wh_auth_base │   user db (RAM index + optional NVM), SHA-256 PIN hashing,
      │   (src/wh_auth_base.c)  │   optional wolfSSL cert verification
      └─────────────────────────┘
 ```
@@ -253,13 +253,47 @@ The two "Check*" callbacks are **overrides, not gates** — see §7 below for ex
 
 ## 6. Default backend (`wh_auth_base.c`)
 
-- **Storage:** `static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS]` (=5). Each slot has the public `whAuthUser`, the chosen method, and a `credentials[2048]` byte buffer (+ length). The author notes this is intentionally simple and not yet NVM-backed.
+- **Storage:** `static whAuthBase_User users[WH_AUTH_BASE_MAX_USERS]` (=5). Each slot is a metadata-only index entry: the public `whAuthUser`, the chosen `method`, and `credentials_len` (0 = none). Credential material is not held in this array; it lives separately (per-user NVM object, or a RAM fallback table when no NVM is configured) and is pulled into a force-zeroed scratch buffer only for the duration of an auth or credential-change operation. Optionally persisted to NVM; see [6.1 Persistence (NVM)](#61-persistence-nvm).
 - **Thread safety:** explicitly documented (src/wh_auth_base.c:54) — the global array is protected by the auth context's lock which the core `wh_Auth_*` wrappers acquire before calling any backend entry. The backend itself does no locking.
 - **PIN path:** `wh_Auth_BaseCheckPin` hashes the incoming PIN with `wc_Sha256Hash_ex` and compares to the stored digest using `wh_Utils_ConstantCompare`. Hash buffer is `wh_Utils_ForceZero`d on exit whether the compare succeeded or not. When `WOLFHSM_CFG_NO_CRYPTO` is set, the PIN is stored verbatim (bounded by `WH_AUTH_BASE_MAX_CREDENTIALS_LEN`).
 - **Certificate path:** guarded by `WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO`. Uses a per-call `WOLFSSL_CERT_MANAGER` seeded with the user's stored DER as a CA and then verifies the supplied leaf.
 - **Admin enforcement:** `wh_Auth_BaseUserDelete` and `wh_Auth_BaseUserSetPermissions` both require `current_user_id` (the caller session) to have the admin flag. `wh_Auth_BaseLogout` allows logging out someone *other* than yourself only if you're admin.
 - **Set-credentials:** if the target user already has credentials, the old ones must be presented and match (constant-time compare, PIN hashed first); otherwise `current_credentials` must be NULL. PINs are rehashed before replacement, and intermediate hash buffers are force-zeroed.
 - **User ID policy:** 1-based indexes into `users[]`; 0 reserved. Duplicate usernames are rejected by `wh_Auth_BaseUserAdd` with `WH_ERROR_BADARGS`. `keyIdCount` is clamped to `WH_AUTH_MAX_KEY_IDS` and unused `keyIds` entries are zeroed (done both on add and on set-permissions).
+
+### 6.1 Persistence (NVM)
+
+The user database is optionally persisted to NVM. Persistence is selected purely by the config passed to `wh_Auth_BaseInit`:
+
+```c
+whAuthBaseConfig cfg = {0};
+cfg.nvm = my_nvm_context;   /* whNvmContext* -> persistent; NULL -> RAM-only */
+```
+
+Split object layout: sensitive credential material is deliberately kept out of the shared user index so that a single object read cannot leak PIN hashes or cert material.
+
+- User index: one object at `WH_NVM_ID_AUTH_USER_INDEX` holding the serialized `whAuthUser` records (identity and permissions, with `is_active` cleared). It carries no credential material. `method` and `credentials_len` are not stored here; they live in the per-user credential object metadata and are rebuilt at load. Marked `SENSITIVE | NONEXPORTABLE | NONMODIFIABLE` so clients cannot read, overwrite, or destroy it through the NVM message group. Written with the unchecked NVM add so the backend itself is not blocked by those policy flags.
+- Per-user credentials: each user's credential blob is its own object at `WH_NVM_ID_AUTH_CRED_BASE + (user_id - 1)`. These are read into a static, force-zeroed scratch buffer only for the duration of an authentication or credential change, never held resident.
+- The reserved id range therefore spans `WH_NVM_ID_AUTH_USER_INDEX` through `WH_NVM_ID_AUTH_CRED_BASE + (WH_AUTH_BASE_MAX_USERS - 1)`.
+
+Modes:
+
+- NVM not configured (`cfg.nvm == NULL`, or a NULL config): the backend runs RAM-only. `s_auth_base_nvm` stays NULL, no NVM operations are performed (nothing read at init, nothing written on change), and credentials live in the `s_auth_base_ram_cred` fallback table. All state is lost on restart.
+- NVM configured (`cfg.nvm != NULL`): the index is loaded at init; the index and the affected credential object are rewritten on every change.
+
+> Note on `WOLFHSM_CFG_AUTH_BASE_NVM_ONLY` (RAM savings): the RAM-only mode requires a static fallback table sized to hold every user's full credential blob at once, `s_auth_base_ram_cred[WH_AUTH_BASE_MAX_USERS][WH_AUTH_BASE_MAX_CREDENTIALS_LEN]`, i.e. `5 x 2048 = 10 KiB` at the defaults. On a memory-constrained target that always configures an NVM backend, define `WOLFHSM_CFG_AUTH_BASE_NVM_ONLY` to compile that table out entirely (and drop support for the `nvm == NULL` configuration). Credentials then only ever occupy the single shared `s_auth_base_cred_buf` scratch buffer (`WH_AUTH_BASE_MAX_CREDENTIALS_LEN` = 2 KiB, force-zeroed after each use) while one credential is being read or written, rather than a per-user resident copy. That reclaims roughly `(MAX_USERS - 1) x MAX_CREDENTIALS_LEN` of RAM.
+
+There is no separate "create/format the database" step. Setup is just init followed by adding the first user:
+
+1. First boot on blank NVM: `wh_Auth_BaseInit` -> `wh_Auth_BaseLoadFromNvm` -> `wh_Nvm_GetMetadata(WH_NVM_ID_AUTH_USER_INDEX)` returns `WH_ERROR_NOTFOUND`, and init succeeds with an empty in-RAM index. No NVM write happens yet.
+2. First `wh_Auth_BaseUserAdd(...)` materializes the on-NVM database: it persists the index object and writes the new user's credential object. Every subsequent add, delete, set-permissions, or set-credentials rewrites the index (via `wh_Nvm_AddObjectWithReclaim`, so superseded copies are reclaimed) and the touched credential object. Failed multi-object updates roll back from an in-RAM backup of the affected index entry and credential blob.
+3. Later boots: the index is read back into `users[]`; credentials are pulled on demand per login. Session state is not persisted. `is_active` is forced to `false` for every slot on load, so a restart always starts with everyone logged out.
+
+On-NVM index format: a 4-byte magic (`0x57484142`, "WHAB") followed by one serialized `whAuthUser` record per slot. The magic is the sole format sentinel; there is intentionally no version field and no migration path. The stored index length must equal `WH_AUTH_BASE_NVM_INDEX_SIZE`, derived from `sizeof(whAuthUser)` and `WH_AUTH_BASE_MAX_USERS`, so any change to the persisted record layout or the max-user count changes the expected length.
+
+Corrupt or incompatible database is fatal. If NVM is configured and an index object exists under `WH_NVM_ID_AUTH_USER_INDEX` but its length does not match `WH_AUTH_BASE_NVM_INDEX_SIZE`, or its magic does not match, `wh_Auth_BaseLoadFromNvm` returns `WH_ERROR_ABORTED` and `wh_Auth_BaseInit` fails. This is deliberate: silently starting with an empty user database (e.g. after a firmware upgrade that changed the index layout) could drop every provisioned user or lock out the admin, a security-relevant surprise for a trusted component. The operator must reprovision deliberately. This is distinct from the blank-NVM case (`WH_ERROR_NOTFOUND`), which is not an error.
+
+Locking: `wh_Auth_Base*` backend entries are already called under the auth context lock. The NVM accesses additionally take the NVM lock (`WH_NVM_LOCK`/`WH_NVM_UNLOCK`) around the metadata/read/write, since the NVM API does not lock internally.
 
 ---
 
@@ -444,7 +478,7 @@ Things that are present and worth confirming during review:
 
 Things that are **explicit open items** (per PR body and code comments):
 
-- No NVM backing for the user list — the base backend is RAM-only and losses on reboot.
+- The base user list is now optionally NVM-backed (metadata index + per-user credential objects; see [6.1 Persistence (NVM)](#61-persistence-nvm)). With no NVM configured it remains RAM-only and is lost on reboot.
 - `CheckKeyAuthorization` is wired but not called anywhere in the request-handling paths in this PR.
 - Logging of login attempts (successes and failures) is a TODO — only authorization denials are logged today.
 - The `WH_AUTH_SET_ALLOWED_ACTION` macro comment says "and only the given action bit," but the implementation ORs (Copilot raised this during review). Either the comment or the semantics should change.

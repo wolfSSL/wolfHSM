@@ -34,6 +34,41 @@
 #include "wolfhsm/wh_auth.h"
 
 /**
+ * NVM object IDs reserved by the auth base backend (do not use for other
+ * objects). The user index (serialized whAuthUser records: usernames,
+ * permissions, user_id; no credential material) lives at
+ * WH_NVM_ID_AUTH_USER_INDEX. Each user's credential material, along with the
+ * method and length metadata reconstructed from it at load, is stored in its
+ * own object at WH_NVM_ID_AUTH_CRED_BASE + (user_id - 1), so that only the
+ * credential blob of the user being authenticated is ever read into RAM.
+ * The reserved range spans WH_NVM_ID_AUTH_USER_INDEX through
+ * WH_NVM_ID_AUTH_CRED_BASE + (max users - 1).
+ *
+ * Both IDs may be overridden at build time (e.g. to relocate the reserved
+ * range away from IDs used by other subsystems) by defining them before this
+ * header is included. When overriding, keep WH_NVM_ID_AUTH_CRED_BASE and the
+ * (max users) IDs above it clear of WH_NVM_ID_AUTH_USER_INDEX and any other
+ * reserved objects.
+ */
+#ifndef WH_NVM_ID_AUTH_USER_INDEX
+#define WH_NVM_ID_AUTH_USER_INDEX ((whNvmId)0xFE00)
+#endif
+#ifndef WH_NVM_ID_AUTH_CRED_BASE
+#define WH_NVM_ID_AUTH_CRED_BASE ((whNvmId)0xFE01)
+#endif
+
+/**
+ * @brief Configuration for the auth base implementation.
+ *
+ * When nvm is non-NULL and NVM is built in, the user index and per-user
+ * credential objects are persisted to NVM. When nvm is NULL, the user database
+ * remains in-memory only (lost on restart).
+ */
+typedef struct {
+    void* nvm; /**< NVM context (whNvmContext*) for persistent storage; NULL for in-memory only */
+} whAuthBaseConfig;
+
+/**
  * @brief Initialize the auth base implementation.
  *
  * @param[in] context Pointer to the auth base context.
