@@ -237,9 +237,12 @@ int wh_MessageCert_TranslateVerifyDmaResponse(
  * The root array is inlined at fixed maximum size to keep the request a flat
  * POD; only the first numRoots entries are meaningful.
  *
- * WH_PAD sized so that, with the default WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS
- * (8), the struct total is a multiple of 8. Users overriding the bound to a
- * non-multiple-of-4 may need to adjust WH_PAD to silence -Wpadded. */
+ * Client and server can be different architectures and built by toolchains that
+ * disagree on uint64_t alignment. The total size must therefore be a multiple
+ * of 8 for any root count, or the two sides get different implicit tail
+ * padding, sizeof no longer matches, and the server rejects every request.
+ * WH_PAD2 adds that padding explicitly when the root array does not end on a
+ * multiple of 8; the asserts below enforce this. */
 typedef struct {
     uint64_t   cert_addr;
     uint32_t   cert_len;
@@ -249,6 +252,10 @@ typedef struct {
     whKeyId    keyId;
     uint8_t    WH_PAD[4];
     whNvmId    trustedRootNvmIds[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+#if (WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS % 4) != 0
+    /* 2 == sizeof(whNvmId) */
+    uint8_t WH_PAD2[8 - 2 * (WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS % 4)];
+#endif
 } whMessageCert_VerifyMultiRootDmaRequest;
 
 /* The fixed-size DMA request must fit on the wire. If a build overrides
@@ -260,6 +267,13 @@ WH_UTILS_STATIC_ASSERT(sizeof(whMessageCert_VerifyMultiRootDmaRequest) <=
                        "WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS too large: "
                        "whMessageCert_VerifyMultiRootDmaRequest exceeds "
                        "WOLFHSM_CFG_COMM_DATA_LEN");
+
+/* The server validates this request by exact sizeof, so sizeof must match
+ * across differently-aligning ABIs. A multiple-of-8 total leaves no room for
+ * ABI-dependent tail padding. */
+WH_UTILS_STATIC_ASSERT(
+    (sizeof(whMessageCert_VerifyMultiRootDmaRequest) % 8) == 0,
+    "whMessageCert_VerifyMultiRootDmaRequest size must be a multiple of 8");
 
 int wh_MessageCert_TranslateVerifyMultiRootDmaRequest(
     uint16_t magic, const whMessageCert_VerifyMultiRootDmaRequest* src,
