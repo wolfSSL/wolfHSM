@@ -183,8 +183,22 @@ typedef enum BenchModuleIdx {
     BENCH_MODULE_IDX_HMAC_SHA2_256_DMA,
 #endif /* !(NO_SHA256) */
 #if defined(WOLFSSL_SHA3)
+#if !defined(WOLFSSL_NOSHA3_224)
+    BENCH_MODULE_IDX_HMAC_SHA3_224,
+    BENCH_MODULE_IDX_HMAC_SHA3_224_DMA,
+#endif /* !WOLFSSL_NOSHA3_224 */
+#if !defined(WOLFSSL_NOSHA3_256)
     BENCH_MODULE_IDX_HMAC_SHA3_256,
     BENCH_MODULE_IDX_HMAC_SHA3_256_DMA,
+#endif /* !WOLFSSL_NOSHA3_256 */
+#if !defined(WOLFSSL_NOSHA3_384)
+    BENCH_MODULE_IDX_HMAC_SHA3_384,
+    BENCH_MODULE_IDX_HMAC_SHA3_384_DMA,
+#endif /* !WOLFSSL_NOSHA3_384 */
+#if !defined(WOLFSSL_NOSHA3_512)
+    BENCH_MODULE_IDX_HMAC_SHA3_512,
+    BENCH_MODULE_IDX_HMAC_SHA3_512_DMA,
+#endif /* !WOLFSSL_NOSHA3_512 */
 #endif /* WOLFSSL_SHA3 */
 #endif /* !(NO_HMAC) */
 
@@ -429,8 +443,22 @@ static BenchModule g_benchModules[] = {
     [BENCH_MODULE_IDX_HMAC_SHA2_256_DMA]       = {"HMAC-SHA2-256-DMA",            wh_Bench_Mod_HmacSha256Dma,         BENCH_THROUGHPUT_XBPS, 0, NULL},
 #endif /* !(NO_SHA256) */
 #if defined(WOLFSSL_SHA3)
-    [BENCH_MODULE_IDX_HMAC_SHA3_256]           = {"HMAC-SHA3-256",                wh_Bench_Mod_HmacSha3256,           BENCH_THROUGHPUT_NONE, 0, NULL},
-    [BENCH_MODULE_IDX_HMAC_SHA3_256_DMA]       = {"HMAC-SHA3-256-DMA",            wh_Bench_Mod_HmacSha3256Dma,        BENCH_THROUGHPUT_NONE, 0, NULL},
+#if !defined(WOLFSSL_NOSHA3_224)
+    [BENCH_MODULE_IDX_HMAC_SHA3_224]           = {"HMAC-SHA3-224",                wh_Bench_Mod_HmacSha3224,           BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_HMAC_SHA3_224_DMA]       = {"HMAC-SHA3-224-DMA",            wh_Bench_Mod_HmacSha3224Dma,        BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* !WOLFSSL_NOSHA3_224 */
+#if !defined(WOLFSSL_NOSHA3_256)
+    [BENCH_MODULE_IDX_HMAC_SHA3_256]           = {"HMAC-SHA3-256",                wh_Bench_Mod_HmacSha3256,           BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_HMAC_SHA3_256_DMA]       = {"HMAC-SHA3-256-DMA",            wh_Bench_Mod_HmacSha3256Dma,        BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* !WOLFSSL_NOSHA3_256 */
+#if !defined(WOLFSSL_NOSHA3_384)
+    [BENCH_MODULE_IDX_HMAC_SHA3_384]           = {"HMAC-SHA3-384",                wh_Bench_Mod_HmacSha3384,           BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_HMAC_SHA3_384_DMA]       = {"HMAC-SHA3-384-DMA",            wh_Bench_Mod_HmacSha3384Dma,        BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* !WOLFSSL_NOSHA3_384 */
+#if !defined(WOLFSSL_NOSHA3_512)
+    [BENCH_MODULE_IDX_HMAC_SHA3_512]           = {"HMAC-SHA3-512",                wh_Bench_Mod_HmacSha3512,           BENCH_THROUGHPUT_XBPS, 0, NULL},
+    [BENCH_MODULE_IDX_HMAC_SHA3_512_DMA]       = {"HMAC-SHA3-512-DMA",            wh_Bench_Mod_HmacSha3512Dma,        BENCH_THROUGHPUT_XBPS, 0, NULL},
+#endif /* !WOLFSSL_NOSHA3_512 */
 #endif /* WOLFSSL_SHA3 */
 #endif /* !(NO_HMAC) */
 
