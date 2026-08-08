@@ -1,5 +1,9 @@
 .DS_Store
+# Test/benchmark object dirs. Negate tools/sbom/build/ — bare Build/
+# also matches that path on case-insensitive filesystems (macOS).
 Build/
+!tools/sbom/build/
+!tools/sbom/build/**
 *.o
 *.a
 *.la
@@ -24,3 +28,10 @@ scan_out/*
 
 # Test output
 test-suite.log
+
+# SBOM outputs and wolfGlass temp source lists
+*.cdx.json
+*.spdx.json
+*.spdx
+.*-wolfglass-srcs.txt
+.sbom-wolfhsm-defines.h

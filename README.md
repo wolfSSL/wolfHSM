@@ -25,3 +25,4 @@ please refer to the following resources.
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
 - [wolfHSM API Reference](https://www.wolfssl.com/documentation/manuals/wolfhsm/appendix01.html)
 - [wolfHSM Examples](https://github.com/wolfSSL/wolfHSM/tree/main/examples)
+- [wolfHSM SBOM Generation](docs/SBOM.md) — `make sbom`, CycloneDX/SPDX output, and EU CRA notes
