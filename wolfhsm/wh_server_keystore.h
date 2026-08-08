@@ -196,7 +196,16 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId);
 /**
  * @brief Commit a cached key to NVM with policy enforcement
  *
- * Runs keystore policy checks before committing.
+ * Runs keystore policy checks before committing. Caller must hold the NVM lock.
+ *
+ * @param[in] server  Server context
+ * @param[in] keyId   Key ID to commit
+ * @return WH_ERROR_OK on success
+ * @return WH_ERROR_ACCESS if an NVM object already exists under keyId and
+ *         carries WH_NVM_FLAGS_NONMODIFIABLE or WH_NVM_FLAGS_TRUSTED
+ * @return WH_ERROR_NOTFOUND if the key is not resident in the cache
+ * @return the NVM layer's error, typically WH_ERROR_ABORTED, if the stored
+ *         flags cannot be read
  */
 int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId);
 
@@ -228,7 +237,14 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
 /**
  * @brief Revoke a key (clears usage and marks non-modifiable)
  *
- * Placeholder implementation for key revocation.
+ * Caller must hold the NVM lock
+ *
+ * @param[in] server  Server context
+ * @param[in] keyId   Key ID to revoke
+ * @return 0 on success. WH_ERROR_ACCESS if the stored object carries
+ *         WH_NVM_FLAGS_TRUSTED. The NVM layer's error, typically
+ *         WH_ERROR_ABORTED, if the stored flags cannot be read. Other error
+ *         codes on failure.
  */
 int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
 
