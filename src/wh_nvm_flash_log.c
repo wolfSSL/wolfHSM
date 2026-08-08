@@ -687,7 +687,7 @@ int wh_NvmFlashLog_Read(void* c, whNvmId id, whNvmSize offset,
     if (obj == NULL)
         return WH_ERROR_NOTFOUND;
 
-    if (offset + data_len > obj->meta.len)
+    if ((uint32_t)offset + (uint32_t)data_len > obj->meta.len)
         return WH_ERROR_BADARGS;
 
     obj_data = (uint8_t*)obj + sizeof(whNvmFlashLogMetadata) + offset;
