@@ -1,0 +1,40 @@
+name: Build and Run Generic Port
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - name: "Standard"
+            flags: ""
+          - name: "ASAN"
+            flags: "ASAN=1"
+          - name: "DEBUG"
+            flags: "DEBUG=1"
+          - name: "DEBUG ASAN"
+            flags: "DEBUG=1 ASAN=1"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: Generic Port (${{ matrix.name }})
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    - name: Build generic server
+      run: cd port/posix/server && make -j ${{ matrix.flags }} WOLFSSL_DIR=../../../wolfssl
+
+    - name: Build generic client
+      run: cd port/posix/client && make -j ${{ matrix.flags }} WOLFSSL_DIR=../../../wolfssl
