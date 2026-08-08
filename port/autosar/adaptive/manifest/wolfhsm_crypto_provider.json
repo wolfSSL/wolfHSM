@@ -1,0 +1,18 @@
+{
+  "ProviderName": "WolfhsmCryptoProvider",
+  "ProviderUuid": "f4a3d6f2-91b5-4d1e-9b1a-67c4a8e0d3b5",
+  "ProviderType": "Cryptography",
+  "Version": { "Major": 1, "Minor": 0, "Patch": 0 },
+  "SupportedAlgorithms": [
+    { "AlgId": "0x10006", "Name": "SHA-256",    "Service": "Hash" },
+    { "AlgId": "0x10007", "Name": "SHA-384",    "Service": "Hash" },
+    { "AlgId": "0x10008", "Name": "SHA-512",    "Service": "Hash" },
+    { "AlgId": "0x80000000", "Name": "RNG",     "Service": "Random" }
+  ],
+  "Notes": [
+    "Adaptive provider for wolfHSM. Hash and random are implemented in",
+    "Phase 1. Cipher, MAC, signature, key-agreement and key-storage",
+    "contexts share the same wolfHSM client backing and will be added in",
+    "follow-up work."
+  ]
+}
