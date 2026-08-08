@@ -1420,6 +1420,725 @@ static int _runGlobalKeysTests(whClientContext* client1,
 
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+/* ============================================================================
+ * CLIENT NVM ID-TRANSLATION TEST SUITE
+ *
+ * These tests assert the per-client NVM id namespace: each client sees its own
+ * 1..255 id range plus a shared 1..255 global range. Cross-client raw access
+ * via the NVM api is impossible.
+ *
+ * Only meaningful when client NVM id translation is enabled (default).
+ * ========================================================================== */
+
+static const uint8_t NVM_ISOLATION_PAYLOAD_A[] = "client-A-secret-NVM-payload";
+static const uint8_t NVM_ISOLATION_PAYLOAD_B[] = "client-B-different-payload";
+
+/*
+ * Helper: add an NVM object via the explicit Request/Handle/Response
+ * pattern so that the matching server can be driven manually (multiclient
+ * sequential setup has no automatic dispatch).
+ */
+static int _nvmAddViaServer(whClientContext* client, whServerContext* server,
+                            whNvmId id, whNvmSize len, const uint8_t* data,
+                            int32_t* out_rc)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectRequest(
+        client, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, 0, NULL, len, data));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectResponse(client, out_rc));
+    return WH_ERROR_OK;
+}
+
+static int _nvmReadViaServer(whClientContext* client, whServerContext* server,
+                             whNvmId id, whNvmSize len, int32_t* out_rc,
+                             whNvmSize* out_len, uint8_t* buf)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadRequest(client, id, 0, len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmReadResponse(client, out_rc, out_len, buf));
+    return WH_ERROR_OK;
+}
+
+static int _nvmDestroyViaServer(whClientContext* client,
+                                whServerContext* server, whNvmId id,
+                                int32_t* out_rc)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsRequest(client, 1, &id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsResponse(client, out_rc));
+    return WH_ERROR_OK;
+}
+
+static int _nvmListViaServer(whClientContext* client, whServerContext* server,
+                             whNvmId startId, int32_t* out_rc,
+                             whNvmId* out_count, whNvmId* out_id)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmListRequest(
+        client, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, startId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmListResponse(client, out_rc, out_count, out_id));
+    return WH_ERROR_OK;
+}
+
+static int _nvmGetMetadataViaServer(whClientContext* client,
+                                    whServerContext* server, whNvmId id,
+                                    int32_t* out_rc)
+{
+    whNvmId     got_id = 0;
+    whNvmAccess access = 0;
+    whNvmFlags  flags  = 0;
+    whNvmSize   len    = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataRequest(client, id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadataResponse(
+        client, out_rc, &got_id, &access, &flags, &len, 0, NULL));
+    return WH_ERROR_OK;
+}
+
+/*
+ * Client A adds NVM id 5 with secret payload. Client B reading id 5 must NOT
+ * see A's bytes (either NOTFOUND, or B's own value if B has one).
+ */
+static int _testNvmClientIsolation(whClientContext* client1,
+                                   whServerContext* server1,
+                                   whClientContext* client2,
+                                   whServerContext* server2)
+{
+    const whNvmId shared_id = 5;
+    int32_t       out_rc    = 0;
+    uint8_t       buf[64]   = {0};
+    whNvmSize     out_len   = 0;
+
+    WH_TEST_PRINT("Testing NVM client isolation...\n");
+
+    /* Client A adds a secret object at id=5 */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, shared_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Client A confirms it can read its own bytes back */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_A)) == 0);
+
+    /* Client B reads id=5: must NOT find A's bytes */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client2, server2, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    /* Either NOTFOUND or read returned different bytes; never A's plaintext. */
+    if (out_rc == WH_ERROR_OK) {
+        WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                     sizeof(NVM_ISOLATION_PAYLOAD_A)) != 0);
+    }
+
+    /* Client B adds its own object at the same client-facing id=5 */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client2, server2, shared_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_B),
+                                            NVM_ISOLATION_PAYLOAD_B, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* Client B reads id=5: gets ITS OWN value */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client2, server2, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_B));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_B,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_B)) == 0);
+
+    /* Client A still sees ITS OWN value, not B's */
+    out_len = 0;
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, shared_id, sizeof(buf), &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_A)) == 0);
+
+    /* Cleanup: each client destroys its own */
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client1, server1, shared_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client2, server2, shared_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM client isolation: PASS\n");
+    return WH_ERROR_OK;
+}
+
+/*
+ * A connection that has not completed COMM INIT has client_id 0, which would
+ * translate every NVM request into the USER=0 namespace (shared/global and
+ * factory-provisioned objects). The server must refuse NVM requests from such
+ * an unbound client. Force the server connection's client_id to 0 and confirm
+ * a planted USER=0 object is never read, enumerated, added over, or destroyed.
+ */
+static int _testNvmUnboundClientRejected(whClientContext* client1,
+                                         whServerContext* server1,
+                                         whClientContext* client2,
+                                         whServerContext* server2)
+{
+    const whNvmId planted_id = 8;
+    whNvmId       planted_nvm_id;
+    whNvmMetadata meta = {0};
+    uint8_t       saved_id;
+    int32_t       out_rc = 0;
+    int           prc;
+    int           leaked  = 0;
+    whNvmId       count   = 0;
+    whNvmId       list_id = 0;
+    whNvmSize     out_len = 0;
+    uint8_t       buf[64] = {0};
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT(
+        "Testing NVM reject of unbound (client_id 0) connection...\n");
+
+    /* Plant a USER=0 object directly, as provisioning would. */
+    planted_nvm_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_NVM, WH_KEYUSER_GLOBAL, planted_id);
+    meta.id     = planted_nvm_id;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = sizeof(NVM_ISOLATION_PAYLOAD_B);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, sizeof(NVM_ISOLATION_PAYLOAD_B),
+                         NVM_ISOLATION_PAYLOAD_B) == WH_ERROR_OK);
+
+    /* Force the server connection into the unbound (pre-COMM-INIT) state. */
+    saved_id                 = server1->comm->client_id;
+    server1->comm->client_id = WH_KEYUSER_GLOBAL;
+
+    /* A verb counts as refused when the response parse fails (an early reject
+     * sends a SimpleResponse whose size won't match a read/list/metadata
+     * response) or when out_rc is an error. Accumulate a "leaked" flag across
+     * all verbs, then restore client_id before asserting so a failure can't
+     * corrupt later tests sharing this server. */
+
+    /* Read: refused, and never returns the planted bytes. */
+    prc = wh_Client_NvmReadRequest(client1, planted_id, 0, sizeof(buf));
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmReadResponse(client1, &out_rc, &out_len, buf);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+    if (memcmp(buf, NVM_ISOLATION_PAYLOAD_B, sizeof(NVM_ISOLATION_PAYLOAD_B)) ==
+        0) {
+        leaked = 1;
+    }
+
+    /* GetMetadata: refused. */
+    out_rc = 0;
+    prc    = wh_Client_NvmGetMetadataRequest(client1, planted_id);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        whNvmId     got_id = 0;
+        whNvmAccess access = 0;
+        whNvmFlags  flags  = 0;
+        whNvmSize   len    = 0;
+        prc = wh_Client_NvmGetMetadataResponse(client1, &out_rc, &got_id,
+                                               &access, &flags, &len, 0, NULL);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* List: refused (cannot enumerate the USER=0 namespace). */
+    out_rc = 0;
+    prc    = wh_Client_NvmListRequest(client1, WH_NVM_ACCESS_ANY,
+                                      WH_NVM_FLAGS_NONE, 0);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmListResponse(client1, &out_rc, &count, &list_id);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* Destroy: refused. */
+    out_rc = 0;
+    {
+        whNvmId destroy_id = planted_id;
+        prc = wh_Client_NvmDestroyObjectsRequest(client1, 1, &destroy_id);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmDestroyObjectsResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+    /* Add: refused. */
+    out_rc = 0;
+    prc    = wh_Client_NvmAddObjectRequest(
+        client1, 5, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, 0, NULL,
+        sizeof(NVM_ISOLATION_PAYLOAD_A), NVM_ISOLATION_PAYLOAD_A);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmAddObjectResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* DMA add: refused (shares the same handler entry gate). */
+    out_rc = 0;
+    {
+        whNvmMetadata dma_meta = {0};
+        dma_meta.id            = 5;
+        dma_meta.access        = WH_NVM_ACCESS_ANY;
+        dma_meta.flags         = WH_NVM_FLAGS_NONE;
+        dma_meta.len           = sizeof(NVM_ISOLATION_PAYLOAD_A);
+        prc = wh_Client_NvmAddObjectDmaRequest(client1, &dma_meta,
+                                               sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                               NVM_ISOLATION_PAYLOAD_A);
+        if (prc == WH_ERROR_OK) {
+            prc = wh_Server_HandleRequestMessage(server1);
+        }
+        if (prc == WH_ERROR_OK) {
+            prc = wh_Client_NvmAddObjectDmaResponse(client1, &out_rc);
+        }
+        if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+            leaked = 1;
+        }
+    }
+
+    /* DMA read: refused, and never returns the planted bytes. */
+    out_rc = 0;
+    memset(buf, 0, sizeof(buf));
+    prc = wh_Client_NvmReadDmaRequest(client1, planted_id, 0,
+                                      sizeof(NVM_ISOLATION_PAYLOAD_B), buf);
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Server_HandleRequestMessage(server1);
+    }
+    if (prc == WH_ERROR_OK) {
+        prc = wh_Client_NvmReadDmaResponse(client1, &out_rc);
+    }
+    if ((prc == WH_ERROR_OK) && (out_rc == WH_ERROR_OK)) {
+        leaked = 1;
+    }
+    if (memcmp(buf, NVM_ISOLATION_PAYLOAD_B, sizeof(NVM_ISOLATION_PAYLOAD_B)) ==
+        0) {
+        leaked = 1;
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    /* Restore the bound client id before asserting. */
+    server1->comm->client_id = saved_id;
+
+    WH_TEST_ASSERT_RETURN(leaked == 0);
+
+    /* The planted USER=0 object must still exist, unchanged. */
+    memset(buf, 0, sizeof(buf));
+    WH_TEST_ASSERT_RETURN(wh_Nvm_Read(server1->nvm, planted_nvm_id, 0,
+                                      sizeof(NVM_ISOLATION_PAYLOAD_B),
+                                      buf) == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_B,
+                                 sizeof(NVM_ISOLATION_PAYLOAD_B)) == 0);
+
+    /* Cleanup */
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_DestroyObjects(server1->nvm, 1, &planted_nvm_id) == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM unbound-client reject: PASS\n");
+    return WH_ERROR_OK;
+}
+
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+/*
+ * List has two namespaces:
+ *  - own       : startId without GLOBAL flag
+ *  - global    : startId with WH_KEYID_CLIENT_GLOBAL_FLAG set
+ *
+ * Client A populates 2 own ids and 2 global ids. Each scan must visit only
+ * the corresponding namespace.
+ */
+static int _testNvmGlobalNamespaceList(whClientContext* client1,
+                                       whServerContext* server1,
+                                       whClientContext* client2,
+                                       whServerContext* server2)
+{
+    int32_t       out_rc           = 0;
+    whNvmId       count            = 0;
+    whNvmId       cur              = 0;
+    int           seen_own[256]    = {0};
+    int           seen_global[256] = {0};
+    int           i;
+    int           iters;
+    const whNvmId own_ids[2]    = {3, 7};
+    const whNvmId global_ids[2] = {2, 4};
+    (void)server2;
+    (void)client2;
+
+    WH_TEST_PRINT("Testing NVM list with global namespace...\n");
+
+    /* Populate own ids */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+            client1, server1, own_ids[i], sizeof(NVM_ISOLATION_PAYLOAD_A),
+            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    /* Populate global ids */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+            client1, server1, global_ids[i] | WH_KEYID_CLIENT_GLOBAL_FLAG,
+            sizeof(NVM_ISOLATION_PAYLOAD_B), NVM_ISOLATION_PAYLOAD_B, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    /* Iterate own namespace (no flag on startId). Expect ids in own_ids.
+     * Cap iterations to defend against an unintentional infinite loop. */
+    cur = 0;
+    for (iters = 0; iters < 16; iters++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        if (count == 0) {
+            break;
+        }
+        /* Must not carry the GLOBAL flag */
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_CLIENT_GLOBAL_FLAG) == 0);
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_MASK) <= WH_KEYID_IDMAX);
+        seen_own[cur & WH_KEYID_MASK] = 1;
+        if (count == 1) {
+            break;
+        }
+    }
+    WH_TEST_ASSERT_RETURN(iters < 16);
+
+    /* Iterate global namespace (GLOBAL flag on startId). Expect ids in
+     * global_ids, all returned with GLOBAL flag set. */
+    cur = WH_KEYID_CLIENT_GLOBAL_FLAG;
+    for (iters = 0; iters < 16; iters++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        if (count == 0) {
+            break;
+        }
+        WH_TEST_ASSERT_RETURN((cur & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0);
+        seen_global[cur & WH_KEYID_MASK] = 1;
+        if (count == 1) {
+            break;
+        }
+    }
+    WH_TEST_ASSERT_RETURN(iters < 16);
+
+    for (i = 0; i < 2; i++) {
+        WH_TEST_ASSERT_RETURN(seen_own[own_ids[i]] == 1);
+        WH_TEST_ASSERT_RETURN(seen_global[global_ids[i]] == 1);
+    }
+    /* Crosscheck: globals never appear in the own scan and vice-versa */
+    WH_TEST_ASSERT_RETURN(seen_own[global_ids[0]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_own[global_ids[1]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_global[own_ids[0]] == 0);
+    WH_TEST_ASSERT_RETURN(seen_global[own_ids[1]] == 0);
+
+    /* Cleanup */
+    for (i = 0; i < 2; i++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmDestroyViaServer(client1, server1, own_ids[i], &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+        WH_TEST_RETURN_ON_FAIL(_nvmDestroyViaServer(
+            client1, server1, global_ids[i] | WH_KEYID_CLIENT_GLOBAL_FLAG,
+            &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    }
+
+    WH_TEST_PRINT("  NVM global namespace list: PASS\n");
+    return WH_ERROR_OK;
+}
+
+#else  /* !WOLFHSM_CFG_GLOBAL_KEYS */
+
+/*
+ * Without global keys there is no global namespace: AddObject must reject
+ * the GLOBAL flag and the other verbs must ignore it, resolving to the
+ * caller's own namespace. USER=0 objects (e.g. provisioned by whnvmtool)
+ * must stay unreachable, including via List.
+ */
+static int _testNvmGlobalFlagDisabled(whClientContext* client1,
+                                      whServerContext* server1,
+                                      whClientContext* client2,
+                                      whServerContext* server2)
+{
+    const whNvmId own_id     = 3;
+    const whNvmId planted_id = 6;
+    whNvmId       planted_nvm_id;
+    whNvmMetadata meta    = {0};
+    int32_t       out_rc  = 0;
+    whNvmId       count   = 0;
+    whNvmId       cur     = 0;
+    whNvmSize     out_len = 0;
+    uint8_t       buf[64] = {0};
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT("Testing NVM GLOBAL flag with global keys disabled...\n");
+
+    /* Plant a USER=0 object directly, as provisioning would */
+    planted_nvm_id =
+        WH_MAKE_KEYID(WH_KEYTYPE_NVM, WH_KEYUSER_GLOBAL, planted_id);
+    meta.id     = planted_nvm_id;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = sizeof(NVM_ISOLATION_PAYLOAD_B);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, sizeof(NVM_ISOLATION_PAYLOAD_B),
+                         NVM_ISOLATION_PAYLOAD_B) == WH_ERROR_OK);
+
+    /* AddObject with the GLOBAL flag fails loudly */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(
+        client1, server1, 5 | WH_KEYID_CLIENT_GLOBAL_FLAG,
+        sizeof(NVM_ISOLATION_PAYLOAD_A), NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+
+#ifdef WOLFHSM_CFG_DMA
+    /* The DMA add path shares the same id validation */
+    {
+        whNvmMetadata dma_meta = {0};
+        dma_meta.id            = 5 | WH_KEYID_CLIENT_GLOBAL_FLAG;
+        dma_meta.access        = WH_NVM_ACCESS_ANY;
+        dma_meta.flags         = WH_NVM_FLAGS_NONE;
+        dma_meta.len           = sizeof(NVM_ISOLATION_PAYLOAD_A);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectDmaRequest(
+            client1, &dma_meta, sizeof(NVM_ISOLATION_PAYLOAD_A),
+            NVM_ISOLATION_PAYLOAD_A));
+        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_NvmAddObjectDmaResponse(client1, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+    }
+#endif
+
+    /* Add an own object without the flag */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, own_id,
+                                            sizeof(NVM_ISOLATION_PAYLOAD_A),
+                                            NVM_ISOLATION_PAYLOAD_A, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    /* A GLOBAL-flagged List ignores the flag: it walks the caller's own
+     * namespace and never surfaces the planted USER=0 object */
+    cur = WH_KEYID_CLIENT_GLOBAL_FLAG;
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(count == 1);
+    WH_TEST_ASSERT_RETURN(cur == own_id);
+
+    /* Read ignores the flag the same way: it resolves to the own object */
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, own_id | WH_KEYID_CLIENT_GLOBAL_FLAG, sizeof(buf),
+        &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
+    WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A, out_len) == 0);
+
+    /* The planted USER=0 object is not reachable via the flag */
+    WH_TEST_RETURN_ON_FAIL(_nvmGetMetadataViaServer(
+        client1, server1, planted_id | WH_KEYID_CLIENT_GLOBAL_FLAG, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* Cleanup */
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmDestroyViaServer(client1, server1, own_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_DestroyObjects(server1->nvm, 1, &planted_nvm_id) == WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM GLOBAL flag disabled semantics: PASS\n");
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_GLOBAL_KEYS */
+
+/*
+ * Reject malformed AddObject requests:
+ *  - id portion == 0 (erased sentinel)
+ *  - wrapped flag set
+ */
+static int _testNvmAddObjectRejections(whClientContext* client1,
+                                       whServerContext* server1,
+                                       whClientContext* client2,
+                                       whServerContext* server2)
+{
+    int32_t out_rc = 0;
+    (void)server2;
+    (void)client2;
+
+    WH_TEST_PRINT("Testing NVM AddObject bad-id rejections...\n");
+
+    /* id=0 with own scope */
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, 0, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* id=0 with global scope */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1,
+                                            WH_KEYID_CLIENT_GLOBAL_FLAG, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* wrapped flag set */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1,
+                                            5 | WH_KEYID_CLIENT_WRAPPED_FLAG, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    /* bits above the id and client-flag fields (a legacy-style internal id)
+     * must fail, not silently truncate to id 0x42 */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmAddViaServer(client1, server1, 0x1042, 4,
+                                            (const uint8_t*)"data", &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+    WH_TEST_PRINT("  NVM AddObject rejections: PASS\n");
+    return WH_ERROR_OK;
+}
+
+/*
+ * The WRAPPED and HW client flags must not let the NVM API reach a
+ * differently-typed object. Plant a WRAPPED-typed and an HW-typed object in
+ * client1's own namespace at numeric id 9, then confirm the client NVM
+ * read/getmetadata/destroy verbs cannot touch them via those flags.
+ */
+static int _testNvmWrappedHwFlagIsolation(whClientContext* client1,
+                                          whServerContext* server1,
+                                          whClientContext* client2,
+                                          whServerContext* server2)
+{
+    const whNvmId   planted_id     = 9;
+    const uint8_t   secret[]       = "planted-non-nvm-secret";
+    const whNvmSize secretSz       = (whNvmSize)sizeof(secret);
+    const whKeyId   clientFlags[2] = {WH_KEYID_CLIENT_WRAPPED_FLAG,
+                                      WH_KEYID_CLIENT_HW_FLAG};
+    int32_t         out_rc         = 0;
+    whNvmSize       out_len        = 0;
+    uint8_t         buf[64]        = {0};
+    whNvmMetadata   meta           = {0};
+    whKeyId         wrappedId;
+    whKeyId         hwId;
+    int             i;
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT("Testing NVM WRAPPED/HW flag type isolation...\n");
+
+    wrappedId =
+        WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, server1->comm->client_id, planted_id);
+    hwId = WH_MAKE_KEYID(WH_KEYTYPE_HW, server1->comm->client_id, planted_id);
+
+    /* Plant the two forbidden objects directly in the shared store. */
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = secretSz;
+    meta.id     = wrappedId;
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
+    meta.id = hwId;
+    WH_TEST_ASSERT_RETURN(
+        wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
+
+    for (i = 0; i < 2; i++) {
+        whNvmId flagged = (whNvmId)(planted_id | clientFlags[i]);
+
+        /* Read: must not return the planted bytes. With the flag stripped this
+         * resolves to a nonexistent NVM object 9 and fails. */
+        memset(buf, 0, sizeof(buf));
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+            client1, server1, flagged, secretSz, &out_rc, &out_len, buf));
+        WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(memcmp(buf, secret, secretSz) != 0);
+
+        /* GetMetadata: must not surface the planted object. */
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmGetMetadataViaServer(client1, server1, flagged, &out_rc));
+        WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
+
+        /* Destroy: must not reach the planted object. */
+        out_rc = 0;
+        WH_TEST_RETURN_ON_FAIL(
+            _nvmDestroyViaServer(client1, server1, flagged, &out_rc));
+    }
+
+    /* Both planted objects must still exist after the flagged destroys. */
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, wrappedId, &meta) ==
+                          WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, hwId, &meta) ==
+                          WH_ERROR_OK);
+
+    /* Clean up the planted objects. */
+    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &wrappedId);
+    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &hwId);
+
+    WH_TEST_PRINT("  NVM WRAPPED/HW flag isolation: PASS\n");
+    return WH_ERROR_OK;
+}
+
+static int _runNvmIdTranslationTests(whClientContext* client1,
+                                     whServerContext* server1,
+                                     whClientContext* client2,
+                                     whServerContext* server2)
+{
+    WH_TEST_PRINT("=== NVM Id Translation Tests Begin ===\n");
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmClientIsolation(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmUnboundClientRejected(client1, server1, client2, server2));
+#ifdef WOLFHSM_CFG_GLOBAL_KEYS
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmGlobalNamespaceList(client1, server1, client2, server2));
+#else
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmGlobalFlagDisabled(client1, server1, client2, server2));
+#endif
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmAddObjectRejections(client1, server1, client2, server2));
+    WH_TEST_RETURN_ON_FAIL(
+        _testNvmWrappedHwFlagIsolation(client1, server1, client2, server2));
+    WH_TEST_PRINT("All NVM Id Translation Tests PASSED ===\n");
+    return WH_ERROR_OK;
+}
+
+#endif /* !WOLFHSM_CFG_LEGACY_CLIENT_NVM */
+
 /* ============================================================================
  * GLOBAL SHE KEYS TEST SUITE
  *
@@ -1437,28 +2156,91 @@ static int _runGlobalKeysTests(whClientContext* client1,
 #define SHE_MC_PRIME_SLOT 8
 #define SHE_MC_CTR_SLOT 9
 
-/* Provision a SHE slot in the shared NVM, the way ShePreProgramKey does but
- * with the split API. Counter and SHE flags go in the object label. */
-static int _sheGlobalAddNvmKey(whClientContext* client, whServerContext* server,
-                               uint8_t sheSlot, uint32_t counter,
-                               uint32_t sheFlags, const uint8_t* key)
+/* Provision a SHE slot through the dedicated pre-program message with the
+ * split API. Counter and SHE flags go in the object label. Raw NVM adds can
+ * no longer reach SHE slots since client NVM ids live in their own id space. */
+static int _sheGlobalPreProgramKey(whClientContext* client,
+                                   whServerContext* server, uint8_t sheSlot,
+                                   uint32_t counter, uint32_t sheFlags,
+                                   const uint8_t* key)
 {
-    int     ret;
-    int32_t rc                      = 0;
-    uint8_t label[WH_NVM_LABEL_LEN] = {0};
+    int                                 ret;
+    uint16_t                            group  = 0;
+    uint16_t                            action = 0;
+    uint16_t                            dataSz = 0;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf;
 
-    wh_She_Meta2Label(counter, sheFlags, label);
-    ret = wh_Client_NvmAddObjectRequest(
-        client, WH_SHE_MAKE_KEYID(client->comm->client_id, sheSlot), 0, 0,
-        sizeof(label), label, WH_SHE_KEY_SZ, key);
+    reqBuf     = (uint8_t*)wh_CommClient_GetDataPtr(client->comm);
+    req        = (whMessageShe_PreProgramKeyRequest*)reqBuf;
+    req->keyId = sheSlot;
+    req->count = counter;
+    req->flags = sheFlags;
+    req->keySz = WH_SHE_KEY_SZ;
+    memcpy(reqBuf + sizeof(*req), key, WH_SHE_KEY_SZ);
+
+    ret = wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
+        (uint16_t)(sizeof(*req) + WH_SHE_KEY_SZ), reqBuf);
     if (ret == 0) {
         ret = wh_Server_HandleRequestMessage(server);
     }
     if (ret == 0) {
-        ret = wh_Client_NvmAddObjectResponse(client, &rc);
+        resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+            client->comm);
+        ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+        if (ret == 0) {
+            if ((group != WH_MESSAGE_GROUP_SHE) ||
+                (action != WH_SHE_PRE_PROGRAM_KEY) ||
+                (dataSz != sizeof(*resp))) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                ret = (int)resp->rc;
+            }
+        }
+    }
+    return ret;
+}
+
+/* Remove a SHE slot through the dedicated destroy message with the split API */
+static int _sheGlobalDestroyKey(whClientContext* client,
+                                whServerContext* server, uint8_t sheSlot)
+{
+    int                              ret;
+    uint16_t                         group  = 0;
+    uint16_t                         action = 0;
+    uint16_t                         dataSz = 0;
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
+
+    req =
+        (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(client->comm);
+    memset(req, 0, sizeof(*req));
+    req->keyId = sheSlot;
+
+    ret =
+        wh_Client_SendRequest(client, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,
+                              sizeof(*req), (uint8_t*)req);
+    if (ret == 0) {
+        ret = wh_Server_HandleRequestMessage(server);
     }
     if (ret == 0) {
-        ret = (int)rc;
+        resp = (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(
+            client->comm);
+        ret = wh_Client_RecvResponse(client, &group, &action, &dataSz,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+        if (ret == 0) {
+            if ((group != WH_MESSAGE_GROUP_SHE) ||
+                (action != WH_SHE_DESTROY_KEY) || (dataSz != sizeof(*resp))) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                ret = (int)resp->rc;
+            }
+        }
     }
     return ret;
 }
@@ -1704,16 +2486,16 @@ static int _runSheGlobalTests(whClientContext* client1,
      * and the expected bootloader digest; same UID on both servers */
     WH_TEST_RETURN_ON_FAIL(_sheGlobalComputeBootMac(
         bootloader, sizeof(bootloader), bootMacKey, bootDigest));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_SECRET_KEY_ID, 0, 0, secretKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_MASTER_ECU_KEY_ID, 0, 0, masterKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, bootMacKey));
-    WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
         client1, server1, WH_SHE_BOOT_MAC, 0, 0, bootDigest));
-    WH_TEST_RETURN_ON_FAIL(
-        _sheGlobalAddNvmKey(client1, server1, SHE_MC_USER_SLOT, 0, 0, userKey));
+    WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
+        client1, server1, SHE_MC_USER_SLOT, 0, 0, userKey));
     WH_TEST_RETURN_ON_FAIL(
         _sheGlobalSetUid(client1, server1, sheUid, sizeof(sheUid)));
     WH_TEST_RETURN_ON_FAIL(
@@ -1801,7 +2583,7 @@ static int _runSheGlobalTests(whClientContext* client1,
         WH_TEST_PRINT("  PASS: Cross-client unwrap-and-cache prime\n");
 
         /* Counter guard runs against the globally committed slot */
-        WH_TEST_RETURN_ON_FAIL(_sheGlobalAddNvmKey(
+        WH_TEST_RETURN_ON_FAIL(_sheGlobalPreProgramKey(
             client1, server1, SHE_MC_CTR_SLOT, 5, 0, ctrKey));
         blobSz = sizeof(blob);
         WH_TEST_RETURN_ON_FAIL(whTest_BuildSheKeyBlob(
@@ -1859,20 +2641,18 @@ static int _runSheGlobalTests(whClientContext* client1,
             SHE_MC_USER_SLOT,         SHE_MC_LOAD_SLOT,       SHE_MC_PRIME_SLOT,
             SHE_MC_CTR_SLOT,          WH_SHE_RAM_KEY_ID,
         };
-        /* All SHE ids are global here, so the client id argument is moot */
-        whNvmId destroyList[] = {
-            WH_SHE_MAKE_KEYID(0, WH_SHE_SECRET_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_MASTER_ECU_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC_KEY_ID),
-            WH_SHE_MAKE_KEYID(0, WH_SHE_BOOT_MAC),
-            WH_SHE_MAKE_KEYID(0, SHE_MC_USER_SLOT),
-            WH_SHE_MAKE_KEYID(0, SHE_MC_LOAD_SLOT),
+        static const uint8_t destroySlots[] = {
+            WH_SHE_SECRET_KEY_ID,
+            WH_SHE_MASTER_ECU_KEY_ID,
+            WH_SHE_BOOT_MAC_KEY_ID,
+            WH_SHE_BOOT_MAC,
+            SHE_MC_USER_SLOT,
+            SHE_MC_LOAD_SLOT,
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
             /* Only created by the keywrap sub-tests above */
-            WH_SHE_MAKE_KEYID(0, SHE_MC_CTR_SLOT),
+            SHE_MC_CTR_SLOT,
 #endif
         };
-        int32_t rc = 0;
 
         for (i = 0; i < (int)sizeof(evictSlots); i++) {
             ret = wh_Server_KeystoreEvictKey(
@@ -1882,13 +2662,10 @@ static int _runSheGlobalTests(whClientContext* client1,
                 return ret;
             }
         }
-        WH_TEST_RETURN_ON_FAIL(wh_Client_NvmDestroyObjectsRequest(
-            client1, (whNvmId)(sizeof(destroyList) / sizeof(destroyList[0])),
-            destroyList));
-        WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
-        WH_TEST_RETURN_ON_FAIL(
-            wh_Client_NvmDestroyObjectsResponse(client1, &rc));
-        WH_TEST_ASSERT_RETURN(rc == 0);
+        for (i = 0; i < (int)sizeof(destroySlots); i++) {
+            WH_TEST_RETURN_ON_FAIL(
+                _sheGlobalDestroyKey(client1, server1, destroySlots[i]));
+        }
     }
 
     WH_TEST_PRINT("All Global SHE Keys Tests PASSED ===\n");
@@ -2140,6 +2917,11 @@ static int whTest_MultiClientSequential(void)
 #if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     WH_TEST_RETURN_ON_FAIL(
         _runSheGlobalTests(client1, server1, client2, server2));
+#endif
+
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+    WH_TEST_RETURN_ON_FAIL(
+        _runNvmIdTranslationTests(client1, server1, client2, server2));
 #endif
 
     /* Future test suites here */

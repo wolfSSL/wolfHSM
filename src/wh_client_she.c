@@ -47,29 +47,111 @@
 
 #include "wolfhsm/wh_client_she.h"
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
-    whNvmFlags flags, uint8_t* key, whNvmSize keySz)
+                               uint32_t count, whNvmFlags flags, uint8_t* key,
+                               whNvmSize keySz)
 {
-    int ret;
-    int32_t outRc;
-    uint8_t label[WH_NVM_LABEL_LEN] = { 0 };
+    int                                 ret;
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            dataSz;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf;
+    uint8_t*                            key_data;
 
-    /* SHE slots hold exactly one AES-128 key. The server appends a 16 byte
-     * constant after the slot contents when deriving key update keys, so a
-     * longer object would overrun its kdf input buffer. */
-    if ((c == NULL) || (key == NULL) || (keySz != WH_SHE_KEY_SZ)) {
+    if (c == NULL || key == NULL || keySz == 0) {
+        return WH_ERROR_BADARGS;
+    }
+    if (sizeof(*req) + keySz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Create a key with 0 counter */
-    wh_She_Meta2Label(0, flags, label);
-    ret = wh_Client_NvmAddObject(
-        c, WH_SHE_MAKE_KEYID(c->comm->client_id, keyId), 0, 0, sizeof(label),
-        label, keySz, key, (int32_t*)&outRc);
-    if (ret == 0)
-        ret = outRc;
+    reqBuf   = (uint8_t*)wh_CommClient_GetDataPtr(c->comm);
+    req      = (whMessageShe_PreProgramKeyRequest*)reqBuf;
+    key_data = reqBuf + sizeof(*req);
+
+    req->keyId = keyId;
+    req->count = count;
+    req->flags = flags;
+    req->keySz = keySz;
+    memcpy(key_data, key, keySz);
+
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
+                                sizeof(*req) + keySz, reqBuf);
+    if (ret == 0) {
+        /* Receive into the COMM_DATA_LEN-sized comm buffer (as every other
+         * handler here does) so the copy is bounded; a small stack struct
+         * could be overrun by an oversized response. */
+        resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+            c->comm);
+        do {
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
+                                         (uint8_t*)resp);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        /* Validate the response. A server built without
+         * WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT sends an empty response for
+         * this action; the size check rejects it so a stale buffer is never
+         * read as a successful rc. */
+        if ((group != WH_MESSAGE_GROUP_SHE) ||
+            (action != WH_SHE_PRE_PROGRAM_KEY) || (dataSz != sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            ret = resp->rc;
+        }
+    }
     return ret;
 }
+
+int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId)
+{
+    int                              ret;
+    uint16_t                         group;
+    uint16_t                         action;
+    uint16_t                         dataSz;
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(c->comm);
+    /* Zero the struct so the pad field is not sent as stale buffer bytes */
+    memset(req, 0, sizeof(*req));
+    req->keyId = keyId;
+
+    ret = wh_Client_SendRequest(c, WH_MESSAGE_GROUP_SHE, WH_SHE_DESTROY_KEY,
+                                sizeof(*req), (uint8_t*)req);
+    if (ret == 0) {
+        /* Receive into the comm buffer, not a stack struct (see
+         * wh_Client_ShePreProgramKey). */
+        resp =
+            (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(c->comm);
+        do {
+            ret = wh_Client_RecvResponse(c, &group, &action, &dataSz,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
+                                         (uint8_t*)resp);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret == 0) {
+        /* Validate the response (see wh_Client_ShePreProgramKey) */
+        if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_DESTROY_KEY) ||
+            (dataSz != sizeof(*resp))) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            ret = resp->rc;
+        }
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 int wh_Client_SheSetUidRequest(whClientContext* c, uint8_t* uid, uint32_t uidSz)
 {

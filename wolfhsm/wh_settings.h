@@ -36,6 +36,12 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT - If defined, include the SHE
+ *  pre-program/destroy key helpers, which write and remove SHE key slots
+ *  directly, bypassing the M1-M5 update protocol. Test and provisioning
+ *  builds only, never in production. Requires WOLFHSM_CFG_SHE_EXTENSION.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_GLOBAL_KEYS - If defined, enable global key support allowing
  *  keys to be shared across multiple clients
  *      Default: Not defined
@@ -54,6 +60,18 @@
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_LEGACY_CLIENT_NVM - If defined, the client-facing NVM message
+ *  handlers in wh_server_nvm.c pass IDs to the underlying NVM layer verbatim
+ *  (legacy raw, globally-flat ID space).  When NOT defined (the default),
+ *  every client-supplied NVM id is translated via
+ *  wh_KeyId_TranslateFromClient(WH_KEYTYPE_NVM, client_id, id) so each client
+ *  has its own private 1..255 id namespace. When WOLFHSM_CFG_GLOBAL_KEYS is
+ *  also defined, a shared 1..255 global namespace can be selected with
+ *  WH_KEYID_CLIENT_GLOBAL_FLAG.  Without it the flag is rejected on add and
+ *  ignored elsewhere.  This closes the loophole where a client could reach
+ *  another client's keys / objects via the raw NVM API.
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that

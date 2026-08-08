@@ -32,11 +32,14 @@
 
 #define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
 
+/* NOGLOBALKEYS=1 builds leave global keys disabled to cover that config */
+#ifndef WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
 #define WOLFHSM_CFG_GLOBAL_KEYS
+#endif
 
 #define WOLFHSM_CFG_LOGGING
 
-#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 64
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 9
 #define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 300
 #define WOLFHSM_CFG_DMAADDR_COUNT 8
@@ -51,6 +54,11 @@
 #define WOLFHSM_CFG_KEYWRAP
 #define WOLFHSM_CFG_HWKEYSTORE
 #endif
+
+/* Enable SHE preprogram/destroy test-only key-management APIs. These bypass
+ * the authenticated SHE key-update protocol and are not part of the SHE
+ * specification, so they must never be enabled in production builds. */
+#define WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG

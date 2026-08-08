@@ -389,6 +389,61 @@ int wh_MessageShe_TranslateVerifyMacResponse(
     uint16_t magic, const whMessageShe_VerifyMacResponse* src,
     whMessageShe_VerifyMacResponse* dest);
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+/* Pre-program Key Request. Persists a SHE-typed NVM entry under the calling
+ * client's USER namespace.  Carried on the SHE message group so that NVM
+ * client-id translation does not need to special-case typed adds.
+ *
+ * NOTE: Bypasses the SHE M1-M5 authenticated key-update protocol. Not part of
+ * the SHE specification; gated behind WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT for
+ * test/provisioning use only. */
+typedef struct {
+    uint32_t keyId;
+    uint32_t count;
+    uint32_t flags;
+    uint32_t keySz;
+    /* Data follows:
+     * uint8_t key[keySz]
+     */
+} whMessageShe_PreProgramKeyRequest;
+
+typedef struct {
+    int32_t rc;
+    uint8_t WH_PAD[4];
+} whMessageShe_PreProgramKeyResponse;
+
+int wh_MessageShe_TranslatePreProgramKeyRequest(
+    uint16_t magic, const whMessageShe_PreProgramKeyRequest* src,
+    whMessageShe_PreProgramKeyRequest* dest);
+
+int wh_MessageShe_TranslatePreProgramKeyResponse(
+    uint16_t magic, const whMessageShe_PreProgramKeyResponse* src,
+    whMessageShe_PreProgramKeyResponse* dest);
+
+/* Destroy Key Request. Removes a SHE-typed NVM entry from the calling
+ * client's USER namespace.
+ *
+ * NOTE: Bypasses the SHE debug-authorization protocol. Test/provisioning use
+ * only; see WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT. */
+typedef struct {
+    uint32_t keyId;
+    uint8_t  WH_PAD[4];
+} whMessageShe_DestroyKeyRequest;
+
+typedef struct {
+    int32_t rc;
+    uint8_t WH_PAD[4];
+} whMessageShe_DestroyKeyResponse;
+
+int wh_MessageShe_TranslateDestroyKeyRequest(
+    uint16_t magic, const whMessageShe_DestroyKeyRequest* src,
+    whMessageShe_DestroyKeyRequest* dest);
+
+int wh_MessageShe_TranslateDestroyKeyResponse(
+    uint16_t magic, const whMessageShe_DestroyKeyResponse* src,
+    whMessageShe_DestroyKeyResponse* dest);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
+
 #endif /* WOLFHSM_CFG_SHE_EXTENSION */
 
 #endif /* !WOLFHSM_WH_MESSAGE_SHE_H_ */

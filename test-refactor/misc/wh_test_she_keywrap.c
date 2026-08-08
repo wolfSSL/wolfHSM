@@ -176,6 +176,11 @@ static int _ProvisionNvmKek(whNvmContext* nvm)
     return wh_Nvm_AddObject(nvm, &meta, meta.len, whTest_KeywrapKek);
 }
 
+static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t count,
+                             uint32_t sheFlags, const uint8_t* key,
+                             whNvmSize keySz);
+static int _SheDestroyKey(TestCtx* t, whNvmId keyId);
+
 /* Fresh server + fresh (empty) NVM every call: the reboot interop relies on
  * this modeling a real power cycle between sessions. */
 static int _SetupClientServer(TestCtx* t)
@@ -251,6 +256,14 @@ static int _SetupClientServer(TestCtx* t)
         wh_Server_SetConnected(t->server, WH_COMM_CONNECTED));
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(t->client, t->c_conf));
 
+    /* Until COMM INIT binds a client id, SHE key management must be refused
+     * since an unbound request would target the USER=0 factory namespace. */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _ShePreProgramKey(t, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                            s_bootMacKey, WH_SHE_KEY_SZ));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _SheDestroyKey(t, WH_SHE_BOOT_MAC_KEY_ID));
+
     /* Comm init so the server learns the client id */
     WH_TEST_RETURN_ON_FAIL(wh_Client_CommInitRequest(t->client));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
@@ -300,30 +313,77 @@ static int _ComputeBootMac(const uint8_t* bootloader, uint32_t bootloaderSz,
 /* Sequential wrappers: send the request, pump the server once, then collect
  * the response */
 
-static int _NvmAddObject(TestCtx* t, whNvmId id, whNvmAccess access,
-                         whNvmFlags flags, whNvmSize labelLen, uint8_t* label,
-                         whNvmSize len, const uint8_t* data)
+/* Pre-program a SHE key via the dedicated SHE provisioning message: the
+ * split equivalent of wh_Client_ShePreProgramKey(), pumping the server
+ * between the request and the response */
+static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t count,
+                             uint32_t sheFlags, const uint8_t* key,
+                             whNvmSize keySz)
 {
-    int32_t rc = 0;
+    whMessageShe_PreProgramKeyRequest*  req;
+    whMessageShe_PreProgramKeyResponse* resp;
+    uint8_t*                            reqBuf = NULL;
+    uint16_t                            group  = 0;
+    uint16_t                            action = 0;
+    uint16_t                            dataSz = 0;
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectRequest(
-        t->client, id, access, flags, labelLen, label, len, data));
+    reqBuf     = (uint8_t*)wh_CommClient_GetDataPtr(t->client->comm);
+    req        = (whMessageShe_PreProgramKeyRequest*)reqBuf;
+    req->keyId = keyId;
+    req->count = count;
+    req->flags = sheFlags;
+    req->keySz = keySz;
+    memcpy(reqBuf + sizeof(*req), key, keySz);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        t->client, WH_MESSAGE_GROUP_SHE, WH_SHE_PRE_PROGRAM_KEY,
+        (uint16_t)(sizeof(*req) + keySz), reqBuf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObjectResponse(t->client, &rc));
-    return (int)rc;
+    /* Receive into the comm buffer so the copy is bounded. An oversized
+     * response could overrun a small stack struct (see
+     * wh_Client_ShePreProgramKey). */
+    resp = (whMessageShe_PreProgramKeyResponse*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_RecvResponse(t->client, &group, &action,
+                                                  &dataSz,
+                                                  WOLFHSM_CFG_COMM_DATA_LEN,
+                                                  (uint8_t*)resp));
+    if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_PRE_PROGRAM_KEY) ||
+        (dataSz != sizeof(*resp))) {
+        return WH_ERROR_ABORTED;
+    }
+    return (int)resp->rc;
 }
 
-/* Pre-program a SHE key: an NVM object at the SHE key id with a zero-counter
- * SHE label (split-API equivalent of wh_Client_ShePreProgramKey) */
-static int _ShePreProgramKey(TestCtx* t, whNvmId keyId, uint32_t sheFlags,
-                             const uint8_t* key, whNvmSize keySz)
+/* Split equivalent of wh_Client_SheDestroyKey() */
+static int _SheDestroyKey(TestCtx* t, whNvmId keyId)
 {
-    uint8_t label[WH_NVM_LABEL_LEN] = {0};
+    whMessageShe_DestroyKeyRequest*  req;
+    whMessageShe_DestroyKeyResponse* resp;
+    uint16_t                         group  = 0;
+    uint16_t                         action = 0;
+    uint16_t                         dataSz = 0;
 
-    wh_She_Meta2Label(0, sheFlags, label);
-    return _NvmAddObject(t,
-                         WH_SHE_MAKE_KEYID(t->client->comm->client_id, keyId),
-                         0, 0, sizeof(label), label, keySz, key);
+    req = (whMessageShe_DestroyKeyRequest*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    memset(req, 0, sizeof(*req));
+    req->keyId = keyId;
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_SendRequest(t->client, WH_MESSAGE_GROUP_SHE,
+                              WH_SHE_DESTROY_KEY, sizeof(*req), (uint8_t*)req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
+    resp = (whMessageShe_DestroyKeyResponse*)wh_CommClient_GetDataPtr(
+        t->client->comm);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_RecvResponse(t->client, &group, &action,
+                                                  &dataSz,
+                                                  WOLFHSM_CFG_COMM_DATA_LEN,
+                                                  (uint8_t*)resp));
+    if ((group != WH_MESSAGE_GROUP_SHE) || (action != WH_SHE_DESTROY_KEY) ||
+        (dataSz != sizeof(*resp))) {
+        return WH_ERROR_ABORTED;
+    }
+    return (int)resp->rc;
 }
 
 static int _KeyWrapExport(TestCtx* t, whKeyId keyId, uint16_t keyType,
@@ -527,12 +587,12 @@ static int _SheEstablishSecureBoot(TestCtx* t)
         return ret;
     }
 
-    ret = _ShePreProgramKey(t, WH_SHE_BOOT_MAC_KEY_ID, 0, s_bootMacKey,
+    ret = _ShePreProgramKey(t, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, s_bootMacKey,
                             WH_SHE_KEY_SZ);
     if (ret != 0) {
         return ret;
     }
-    ret = _ShePreProgramKey(t, WH_SHE_BOOT_MAC, 0, digest, sizeof(digest));
+    ret = _ShePreProgramKey(t, WH_SHE_BOOT_MAC, 0, 0, digest, sizeof(digest));
     if (ret != 0) {
         return ret;
     }
@@ -576,7 +636,6 @@ static int _SheKeywrapInterop(TestCtx* t)
     uint8_t       ecbOut[WH_SHE_KEY_SZ];
     uint8_t       ecbBack[WH_SHE_KEY_SZ];
     uint16_t      outId = 0;
-    uint8_t       ctrLabel[WH_NVM_LABEL_LEN];
     uint8_t       m1[WH_SHE_M1_SZ];
     uint8_t       m2[WH_SHE_M2_SZ];
     uint8_t       m3[WH_SHE_M3_SZ];
@@ -593,13 +652,13 @@ static int _SheKeywrapInterop(TestCtx* t)
 
     /* Pre-program the keys the interop uses: SECRET_KEY (slot 0), the master
      * ECU key to authorize the LoadKey update, and the RAM key (slot 14). */
-    ret = _ShePreProgramKey(t, WH_SHE_SECRET_KEY_ID, 0, s_secretKey,
+    ret = _ShePreProgramKey(t, WH_SHE_SECRET_KEY_ID, 0, 0, s_secretKey,
                             WH_SHE_KEY_SZ);
     if (ret != 0) {
         WH_ERROR_PRINT("SHE interop: pre-program SECRET_KEY failed %d\n", ret);
         return ret;
     }
-    ret = _ShePreProgramKey(t, WH_SHE_MASTER_ECU_KEY_ID, 0, s_masterEcuKey,
+    ret = _ShePreProgramKey(t, WH_SHE_MASTER_ECU_KEY_ID, 0, 0, s_masterEcuKey,
                             WH_SHE_KEY_SZ);
     if (ret != 0) {
         WH_ERROR_PRINT("SHE interop: pre-program MASTER_ECU failed %d\n", ret);
@@ -739,10 +798,7 @@ static int _SheKeywrapInterop(TestCtx* t)
     /* Counter guard on the SHE unwrap-and-cache path: seed an NVM SHE slot
      * with counter=5, then check a lower-counter prime is rejected and an
      * equal-counter prime is accepted. */
-    wh_She_Meta2Label(5, 0, ctrLabel);
-    ret = _NvmAddObject(
-        t, WH_SHE_MAKE_KEYID(t->client->comm->client_id, SHE_CTR_SLOT), 0, 0,
-        sizeof(ctrLabel), ctrLabel, sizeof(sheKey), sheKey);
+    ret = _ShePreProgramKey(t, SHE_CTR_SLOT, 5, 0, sheKey, sizeof(sheKey));
     if (ret != 0) {
         WH_ERROR_PRINT("SHE interop: seed counter slot failed %d\n", ret);
         return ret;
@@ -938,7 +994,7 @@ static int _SheInteropProvision(TestCtx* t)
     /* Provision the secret key, then load the master ECU key (auth=secret)
      * and the target key (auth=master ECU) using offline-generated M1/M2/M3.
      */
-    ret = _ShePreProgramKey(t, WH_SHE_SECRET_KEY_ID, 0, s_secretKey,
+    ret = _ShePreProgramKey(t, WH_SHE_SECRET_KEY_ID, 0, 0, s_secretKey,
                             WH_SHE_KEY_SZ);
     if (ret != 0) {
         return ret;

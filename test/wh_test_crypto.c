@@ -15935,7 +15935,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         uint32_t lmsMagic = 0x4C4D5301u; /* 'LMS\1', see wh_crypto.c */
         int32_t  addRc    = 0;
         int      addRet;
-        whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
+        whNvmId  addId = 0x42; /* arbitrary valid client NVM id (1-255) */
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &lmsMagic, sizeof(lmsMagic));
         fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
@@ -16341,7 +16341,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         uint32_t xmssMagic = 0x584D5301u; /* 'XMS\1', see wh_crypto.c */
         int32_t  addRc    = 0;
         int      addRet;
-        whNvmId  addId    = 0x1042; /* An arbitrary ID in the NVM range */
+        whNvmId  addId = 0x42; /* arbitrary valid client NVM id (1-255) */
         memset(fakeBlob, 0, sizeof(fakeBlob));
         memcpy(fakeBlob, &xmssMagic, sizeof(xmssMagic));
         fakeBlob[6] = 1; /* privLen field nonzero: a private-bearing blob */
@@ -17992,10 +17992,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #endif /* HAVE_ECC */
 
 #ifdef HAVE_ED25519
-    if (ret != 0) {
-        WH_ERROR_PRINT("Pre-Ed25519 tests ret=%d\n", ret);
-        return ret;
-    }
     (void)wh_Client_SetDmaMode(client, 0);
     if (ret == 0) {
         ret = whTest_CryptoEd25519Inline(client, WH_CLIENT_DEVID(client), rng);
