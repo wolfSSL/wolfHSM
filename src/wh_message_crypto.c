@@ -190,6 +190,119 @@ int wh_MessageCrypto_TranslateAesGcmResponse(
     WH_T32(magic, dest, src, authTagSz);
     return 0;
 }
+/* SM4 ECB Request translation */
+int wh_MessageCrypto_TranslateSm4EcbRequest(
+    uint16_t magic, const whMessageCrypto_Sm4EcbRequest* src,
+    whMessageCrypto_Sm4EcbRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+/* SM4 ECB Response translation */
+int wh_MessageCrypto_TranslateSm4EcbResponse(
+    uint16_t magic, const whMessageCrypto_Sm4EcbResponse* src,
+    whMessageCrypto_Sm4EcbResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* SM4 CBC Request translation */
+int wh_MessageCrypto_TranslateSm4CbcRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CbcRequest* src,
+    whMessageCrypto_Sm4CbcRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+/* SM4 CBC Response translation */
+int wh_MessageCrypto_TranslateSm4CbcResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CbcResponse* src,
+    whMessageCrypto_Sm4CbcResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* SM4 CTR Request translation */
+int wh_MessageCrypto_TranslateSm4CtrRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CtrRequest* src,
+    whMessageCrypto_Sm4CtrRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, unused);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+/* SM4 CTR Response translation */
+int wh_MessageCrypto_TranslateSm4CtrResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CtrResponse* src,
+    whMessageCrypto_Sm4CtrResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, unused);
+    return 0;
+}
+
+/* SM4 authenticated cipher request translation, shared by GCM and CCM */
+int wh_MessageCrypto_TranslateSm4AuthRequest(
+    uint16_t magic, const whMessageCrypto_Sm4AuthRequest* src,
+    whMessageCrypto_Sm4AuthRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyLen);
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, ivSz);
+    WH_T32(magic, dest, src, authInSz);
+    WH_T32(magic, dest, src, authTagSz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+/* SM4 authenticated cipher response translation, shared by GCM and CCM */
+int wh_MessageCrypto_TranslateSm4AuthResponse(
+    uint16_t magic, const whMessageCrypto_Sm4AuthResponse* src,
+    whMessageCrypto_Sm4AuthResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, authTagSz);
+    return 0;
+}
+
 /* RSA Key Generation Request translation */
 int wh_MessageCrypto_TranslateRsaKeyGenRequest(
     uint16_t magic, const whMessageCrypto_RsaKeyGenRequest* src,
@@ -1937,6 +2050,194 @@ int wh_MessageCrypto_TranslateAesGcmDmaResponse(
     WH_T32(magic, dest, src, authTagSz);
 
     return WH_ERROR_OK;
+}
+
+/* SM4-ECB DMA Request translation */
+int wh_MessageCrypto_TranslateSm4EcbDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4EcbDmaRequest* src,
+    whMessageCrypto_Sm4EcbDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+    return 0;
+}
+
+/* SM4-ECB DMA Response translation */
+int wh_MessageCrypto_TranslateSm4EcbDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4EcbDmaResponse* src,
+    whMessageCrypto_Sm4EcbDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+
+/* SM4-CBC DMA Request translation */
+int wh_MessageCrypto_TranslateSm4CbcDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CbcDmaRequest* src,
+    whMessageCrypto_Sm4CbcDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+    return 0;
+}
+
+/* SM4-CBC DMA Response translation */
+int wh_MessageCrypto_TranslateSm4CbcDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CbcDmaResponse* src,
+    whMessageCrypto_Sm4CbcDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+
+/* SM4-CTR DMA Request translation */
+int wh_MessageCrypto_TranslateSm4CtrDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CtrDmaRequest* src,
+    whMessageCrypto_Sm4CtrDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+    WH_T32(magic, dest, src, unused);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+    return 0;
+}
+
+/* SM4-CTR DMA Response translation */
+int wh_MessageCrypto_TranslateSm4CtrDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CtrDmaResponse* src,
+    whMessageCrypto_Sm4CtrDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    WH_T32(magic, dest, src, unused);
+    return 0;
+}
+
+/* SM4 authenticated cipher DMA request translation, shared by GCM and CCM */
+int wh_MessageCrypto_TranslateSm4AuthDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4AuthDmaRequest* src,
+    whMessageCrypto_Sm4AuthDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->aad, &dest->aad);
+    if (ret != 0) {
+        return ret;
+    }
+    WH_T32(magic, dest, src, enc);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySz);
+    WH_T32(magic, dest, src, ivSz);
+    WH_T32(magic, dest, src, authTagSz);
+    return 0;
+}
+
+/* SM4 authenticated cipher DMA response translation, shared by GCM and CCM */
+int wh_MessageCrypto_TranslateSm4AuthDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4AuthDmaResponse* src,
+    whMessageCrypto_Sm4AuthDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    WH_T32(magic, dest, src, authTagSz);
+    return 0;
 }
 
 /* RNG DMA Request translation */

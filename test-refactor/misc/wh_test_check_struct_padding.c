@@ -113,6 +113,14 @@ whMessageCrypto_RngRequest            rngReq;
 whMessageCrypto_CmacAesRequest        cmacReq;
 whMessageCrypto_AesCbcResponse        cipherAesCbcRes;
 whMessageCrypto_AesGcmResponse        cipherAesGcmRes;
+whMessageCrypto_Sm4EcbRequest   cipherSm4EcbReq;
+whMessageCrypto_Sm4EcbResponse  cipherSm4EcbRes;
+whMessageCrypto_Sm4CbcRequest   cipherSm4CbcReq;
+whMessageCrypto_Sm4CbcResponse  cipherSm4CbcRes;
+whMessageCrypto_Sm4CtrRequest   cipherSm4CtrReq;
+whMessageCrypto_Sm4CtrResponse  cipherSm4CtrRes;
+whMessageCrypto_Sm4AuthRequest  cipherSm4AuthReq;
+whMessageCrypto_Sm4AuthResponse cipherSm4AuthRes;
 whMessageCrypto_RsaKeyGenResponse     pkRsakgRes;
 whMessageCrypto_RsaResponse           pkRsaRes;
 whMessageCrypto_RsaGetSizeResponse    pkRsaGetSizeRes;
@@ -171,6 +179,14 @@ whMessageCrypto_MlKemEncapsDmaRequest  pkMlkemEncapsDmaReq;
 whMessageCrypto_MlKemEncapsDmaResponse pkMlkemEncapsDmaRes;
 whMessageCrypto_MlKemDecapsDmaRequest  pkMlkemDecapsDmaReq;
 whMessageCrypto_MlKemDecapsDmaResponse pkMlkemDecapsDmaRes;
+whMessageCrypto_Sm4EcbDmaRequest       cipherSm4EcbDmaReq;
+whMessageCrypto_Sm4EcbDmaResponse      cipherSm4EcbDmaRes;
+whMessageCrypto_Sm4CbcDmaRequest       cipherSm4CbcDmaReq;
+whMessageCrypto_Sm4CbcDmaResponse      cipherSm4CbcDmaRes;
+whMessageCrypto_Sm4CtrDmaRequest       cipherSm4CtrDmaReq;
+whMessageCrypto_Sm4CtrDmaResponse      cipherSm4CtrDmaRes;
+whMessageCrypto_Sm4AuthDmaRequest      cipherSm4AuthDmaReq;
+whMessageCrypto_Sm4AuthDmaResponse     cipherSm4AuthDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
