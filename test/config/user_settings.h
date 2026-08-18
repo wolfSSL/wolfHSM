@@ -141,6 +141,15 @@
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
 
+/* SM4 (ShangMi block cipher) Options. All five modes are built so the
+ * crypto callback covers every dispatch shape wolfSSL offers for SM4. */
+#define WOLFSSL_SM4
+#define WOLFSSL_SM4_ECB
+#define WOLFSSL_SM4_CBC
+#define WOLFSSL_SM4_CTR
+#define WOLFSSL_SM4_GCM
+#define WOLFSSL_SM4_CCM
+
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
 /* LMS / HSS Options (RFC 8554, NIST SP 800-208) */
