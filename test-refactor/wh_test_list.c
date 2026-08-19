@@ -83,6 +83,7 @@ WH_TEST_DECL(whTest_Crypto_MlKem);
 WH_TEST_DECL(whTest_Crypto_Rng);
 WH_TEST_DECL(whTest_Crypto_Rsa);
 WH_TEST_DECL(whTest_Crypto_Sha);
+WH_TEST_DECL(whTest_Crypto_Sm2);
 WH_TEST_DECL(whTest_Crypto_Sm4);
 WH_TEST_DECL(whTest_Crypto_Sha3);
 WH_TEST_DECL(whTest_Crypto_WcId);
@@ -180,6 +181,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_Crypto_Rng", whTest_Crypto_Rng},
     {"whTest_Crypto_Rsa", whTest_Crypto_Rsa},
     {"whTest_Crypto_Sha", whTest_Crypto_Sha},
+    {"whTest_Crypto_Sm2", whTest_Crypto_Sm2},
     {"whTest_Crypto_Sm4", whTest_Crypto_Sm4},
     {"whTest_Crypto_Sha3", whTest_Crypto_Sha3},
     {"whTest_Crypto_WcId", whTest_Crypto_WcId},

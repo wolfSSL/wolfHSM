@@ -313,6 +313,95 @@ int wh_MessageCrypto_TranslateAesGcmResponse(
 
 
 /*
+ * SM2
+ *
+ * SM2 keys are ecc_key values on the SM2 curve, so they travel through the
+ * existing ECC key cache and DER serialization. Only the three operations
+ * need their own messages.
+ */
+
+/* SM2 Sign Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t sz;
+    /* Data follows:
+     * uint8_t in[sz];
+     */
+} whMessageCrypto_Sm2SignRequest;
+
+/* SM2 Sign Response */
+typedef struct {
+    uint32_t sz;
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_Sm2SignResponse;
+
+int wh_MessageCrypto_TranslateSm2SignRequest(
+    uint16_t magic, const whMessageCrypto_Sm2SignRequest* src,
+    whMessageCrypto_Sm2SignRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2SignResponse(
+    uint16_t magic, const whMessageCrypto_Sm2SignResponse* src,
+    whMessageCrypto_Sm2SignResponse* dest);
+
+/* SM2 Verify Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2VERIFY_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t hashSz;
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     * uint8_t hash[hashSz];
+     */
+} whMessageCrypto_Sm2VerifyRequest;
+
+/* SM2 Verify Response */
+typedef struct {
+    uint32_t res;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_Sm2VerifyResponse;
+
+int wh_MessageCrypto_TranslateSm2VerifyRequest(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyRequest* src,
+    whMessageCrypto_Sm2VerifyRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2VerifyResponse(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyResponse* src,
+    whMessageCrypto_Sm2VerifyResponse* dest);
+
+/* SM2 Shared Secret Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB (1 << 0)
+#define WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV (1 << 1)
+    uint32_t privateKeyId;
+    uint32_t publicKeyId;
+} whMessageCrypto_Sm2DhRequest;
+
+/* SM2 Shared Secret Response */
+typedef struct {
+    uint32_t sz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_Sm2DhResponse;
+
+int wh_MessageCrypto_TranslateSm2DhRequest(
+    uint16_t magic, const whMessageCrypto_Sm2DhRequest* src,
+    whMessageCrypto_Sm2DhRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2DhResponse(
+    uint16_t magic, const whMessageCrypto_Sm2DhResponse* src,
+    whMessageCrypto_Sm2DhResponse* dest);
+
+
+/*
  * SM4
  *
  * SM4 has a single 16-byte key size, so keyLen is carried only so the server
