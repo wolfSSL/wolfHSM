@@ -190,6 +190,85 @@ int wh_MessageCrypto_TranslateAesGcmResponse(
     WH_T32(magic, dest, src, authTagSz);
     return 0;
 }
+/* SM2 Sign Request translation */
+int wh_MessageCrypto_TranslateSm2SignRequest(
+    uint16_t magic, const whMessageCrypto_Sm2SignRequest* src,
+    whMessageCrypto_Sm2SignRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* SM2 Sign Response translation */
+int wh_MessageCrypto_TranslateSm2SignResponse(
+    uint16_t magic, const whMessageCrypto_Sm2SignResponse* src,
+    whMessageCrypto_Sm2SignResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* SM2 Verify Request translation */
+int wh_MessageCrypto_TranslateSm2VerifyRequest(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyRequest* src,
+    whMessageCrypto_Sm2VerifyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, sigSz);
+    WH_T32(magic, dest, src, hashSz);
+    return 0;
+}
+
+/* SM2 Verify Response translation */
+int wh_MessageCrypto_TranslateSm2VerifyResponse(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyResponse* src,
+    whMessageCrypto_Sm2VerifyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, res);
+    return 0;
+}
+
+/* SM2 Shared Secret Request translation */
+int wh_MessageCrypto_TranslateSm2DhRequest(
+    uint16_t magic, const whMessageCrypto_Sm2DhRequest* src,
+    whMessageCrypto_Sm2DhRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, privateKeyId);
+    WH_T32(magic, dest, src, publicKeyId);
+    return 0;
+}
+
+/* SM2 Shared Secret Response translation */
+int wh_MessageCrypto_TranslateSm2DhResponse(
+    uint16_t magic, const whMessageCrypto_Sm2DhResponse* src,
+    whMessageCrypto_Sm2DhResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
 /* SM4 ECB Request translation */
 int wh_MessageCrypto_TranslateSm4EcbRequest(
     uint16_t magic, const whMessageCrypto_Sm4EcbRequest* src,

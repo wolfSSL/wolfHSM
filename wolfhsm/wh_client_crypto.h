@@ -408,6 +408,59 @@ int wh_Client_Curve25519SharedSecretCacheKeyResponse(whClientContext* ctx,
 
 #endif /* HAVE_CURVE25519 */
 
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+
+/* SM2 keys are ecc_key values on the SM2 curve, so they use the existing ECC
+ * key id binding (wh_Client_EccSetKeyId) and the ECC key cache. A key that is
+ * only a handle is used by id; one holding material is imported for the call
+ * and evicted afterwards. */
+
+/**
+ * @brief Sign a hash with an SM2 key held by the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key SM2 key, either server-resident or holding key material
+ * @param[in] in Hash to sign
+ * @param[in] in_len Length of in in bytes
+ * @param[out] sig Buffer to receive the signature
+ * @param[in,out] inout_sig_len Capacity on entry, signature length on exit
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
+                      uint16_t in_len, uint8_t* sig, uint16_t* inout_sig_len);
+
+/**
+ * @brief Verify an SM2 signature with a key held by the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key SM2 key, either server-resident or holding key material
+ * @param[in] sig Signature to verify
+ * @param[in] sig_len Length of sig in bytes
+ * @param[in] hash Hash that was signed
+ * @param[in] hash_len Length of hash in bytes
+ * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
+                        uint16_t sig_len, const uint8_t* hash,
+                        uint16_t hash_len, int* out_res);
+
+/**
+ * @brief Compute an SM2 shared secret on the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] priv_key Private key, server-resident or holding material
+ * @param[in] pub_key Public key, server-resident or holding material
+ * @param[out] out Buffer to receive the shared secret
+ * @param[in,out] inout_size Capacity on entry, secret length on exit
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2SharedSecret(whClientContext* ctx, ecc_key* priv_key,
+                              ecc_key* pub_key, uint8_t* out,
+                              uint16_t* inout_size);
+
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
 #ifdef WOLFSSL_SM4
 
 /* Every SM4 call sends the key held in sm4->devKey together with the key id

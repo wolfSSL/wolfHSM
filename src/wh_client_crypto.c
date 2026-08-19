@@ -1906,6 +1906,353 @@ int wh_Client_AesGcmDma(whClientContext* ctx, Aes* aes, int enc,
 
 #endif /* !NO_AES */
 
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+
+/* SM2 keys are ecc_key values on the SM2 curve, so the existing ECC import
+ * and key cache carry them unchanged. Only the operations differ. */
+
+int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
+                      uint16_t in_len, uint8_t* sig, uint16_t* inout_sig_len)
+{
+    int                             ret     = WH_ERROR_OK;
+    whMessageCrypto_Sm2SignRequest* req     = NULL;
+    uint8_t*                        dataPtr = NULL;
+    whKeyId                         key_id;
+    int                             evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
+        (sig == NULL) || (inout_sig_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    /* Import the key if the caller holds the material rather than a key id */
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempSm2Sign";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags,
+                                     sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint64_t total_len = (uint64_t)sizeof(
+                                 whMessageCrypto_GenericRequestHeader) +
+                             (uint64_t)sizeof(*req) + (uint64_t)in_len;
+        uint32_t options   = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+            goto done;
+        }
+
+        req = (whMessageCrypto_Sm2SignRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_SM2_SIGN, ctx->cryptoAffinity);
+
+        if (total_len <= (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len = (uint16_t)total_len;
+            uint8_t* req_in  = (uint8_t*)(req + 1);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+            req->sz      = in_len;
+            if ((in != NULL) && (in_len > 0)) {
+                memcpy(req_in, in, in_len);
+            }
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+            if (ret == WH_ERROR_OK) {
+                /* The server evicts from here on, so stop tracking it */
+                uint16_t res_len = 0;
+                whMessageCrypto_Sm2SignResponse* res = NULL;
+
+                evict = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_SM2_SIGN,
+                                             (uint8_t**)&res);
+                }
+                if (ret == WH_ERROR_OK) {
+                    const uint32_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if ((res_len < hdr_sz) || (res->sz > (res_len - hdr_sz))) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->sz > *inout_sig_len) {
+                        *inout_sig_len = (uint16_t)res->sz;
+                        ret            = WH_ERROR_BUFFER_SIZE;
+                    }
+                    else {
+                        memcpy(sig, (uint8_t*)(res + 1), res->sz);
+                        *inout_sig_len = (uint16_t)res->sz;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+done:
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    return ret;
+}
+
+int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
+                        uint16_t sig_len, const uint8_t* hash,
+                        uint16_t hash_len, int* out_res)
+{
+    int                               ret     = WH_ERROR_OK;
+    whMessageCrypto_Sm2VerifyRequest* req     = NULL;
+    uint8_t*                          dataPtr = NULL;
+    whKeyId                           key_id;
+    int                               evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
+        ((hash == NULL) && (hash_len > 0)) || (out_res == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempSm2Verify";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
+
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags,
+                                     sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint64_t total_len = (uint64_t)sizeof(
+                                 whMessageCrypto_GenericRequestHeader) +
+                             (uint64_t)sizeof(*req) + (uint64_t)sig_len +
+                             (uint64_t)hash_len;
+        uint32_t options   = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+            goto done;
+        }
+
+        req = (whMessageCrypto_Sm2VerifyRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_SM2_VERIFY, ctx->cryptoAffinity);
+
+        if (total_len <= (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len  = (uint16_t)total_len;
+            uint8_t* req_sig  = (uint8_t*)(req + 1);
+            uint8_t* req_hash = req_sig + sig_len;
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_SM2VERIFY_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->keyId   = key_id;
+            req->sigSz   = sig_len;
+            req->hashSz  = hash_len;
+            if ((sig != NULL) && (sig_len > 0)) {
+                memcpy(req_sig, sig, sig_len);
+            }
+            if ((hash != NULL) && (hash_len > 0)) {
+                memcpy(req_hash, hash, hash_len);
+            }
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+            if (ret == WH_ERROR_OK) {
+                uint16_t res_len = 0;
+                whMessageCrypto_Sm2VerifyResponse* res = NULL;
+
+                evict = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_SM2_VERIFY,
+                                             (uint8_t**)&res);
+                }
+                if (ret == WH_ERROR_OK) {
+                    const uint32_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_len < hdr_sz) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        *out_res = (int)res->res;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+done:
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+    return ret;
+}
+
+int wh_Client_Sm2SharedSecret(whClientContext* ctx, ecc_key* priv_key,
+                              ecc_key* pub_key, uint8_t* out,
+                              uint16_t* inout_size)
+{
+    int                           ret     = WH_ERROR_OK;
+    whMessageCrypto_Sm2DhRequest* req     = NULL;
+    uint8_t*                      dataPtr = NULL;
+    whKeyId                       prv_id;
+    whKeyId                       pub_id;
+    int                           evict_prv = 0;
+    int                           evict_pub = 0;
+
+    if ((ctx == NULL) || (priv_key == NULL) || (pub_key == NULL) ||
+        (out == NULL) || (inout_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    prv_id = WH_DEVCTX_TO_KEYID(priv_key->devCtx);
+    pub_id = WH_DEVCTX_TO_KEYID(pub_key->devCtx);
+
+    if (WH_KEYID_ISERASED(prv_id)) {
+        uint8_t keyLabel[] = "TempSm2Prv";
+
+        ret = wh_Client_EccImportKey(ctx, priv_key, &prv_id,
+                                     WH_NVM_FLAGS_USAGE_DERIVE,
+                                     sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict_prv = 1;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && WH_KEYID_ISERASED(pub_id)) {
+        uint8_t keyLabel[] = "TempSm2Pub";
+
+        ret = wh_Client_EccImportKey(ctx, pub_key, &pub_id,
+                                     WH_NVM_FLAGS_USAGE_DERIVE,
+                                     sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict_pub = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint16_t req_len =
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint32_t options = 0;
+
+        dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            ret = WH_ERROR_BADARGS;
+            goto done;
+        }
+
+        req = (whMessageCrypto_Sm2DhRequest*)_createCryptoRequest(
+            dataPtr, WC_PK_TYPE_SM2_SHARED_SECRET, ctx->cryptoAffinity);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict_prv != 0) {
+                options |= WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV;
+            }
+            if (evict_pub != 0) {
+                options |= WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options      = options;
+            req->privateKeyId = prv_id;
+            req->publicKeyId  = pub_id;
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
+            if (ret == WH_ERROR_OK) {
+                uint16_t res_len = 0;
+                whMessageCrypto_Sm2DhResponse* res = NULL;
+
+                evict_prv = 0;
+                evict_pub = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr,
+                                             WC_PK_TYPE_SM2_SHARED_SECRET,
+                                             (uint8_t**)&res);
+                }
+                if (ret == WH_ERROR_OK) {
+                    const uint32_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if ((res_len < hdr_sz) || (res->sz > (res_len - hdr_sz))) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->sz > *inout_size) {
+                        *inout_size = (uint16_t)res->sz;
+                        ret         = WH_ERROR_BUFFER_SIZE;
+                    }
+                    else {
+                        memcpy(out, (uint8_t*)(res + 1), res->sz);
+                        *inout_size = (uint16_t)res->sz;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+done:
+    if (evict_prv != 0) {
+        (void)wh_Client_KeyEvict(ctx, prv_id);
+    }
+    if (evict_pub != 0) {
+        (void)wh_Client_KeyEvict(ctx, pub_id);
+    }
+    return ret;
+}
+
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
 #ifdef WOLFSSL_SM4
 
 /* Every SM4 request carries the caller's key inline and its key id. The
@@ -1955,6 +2302,7 @@ int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
     uint8_t*                       req_in;
     uint8_t*                       req_key;
     uint32_t                       req_len;
+    uint64_t                       total_len;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL) ||
         ((len % SM4_BLOCK_SIZE) != 0)) {
@@ -1978,14 +2326,17 @@ int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
 
     req = (whMessageCrypto_Sm4EcbRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_ECB, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len;
+    total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                (uint64_t)sizeof(*req) +
+                (uint64_t)len +
+                (uint64_t)key_len;
 
-    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
+    req_len = (uint32_t)total_len;
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -2075,6 +2426,7 @@ int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
     uint8_t*                       req_key;
     uint8_t*                       req_iv;
     uint32_t                       req_len;
+    uint64_t                       total_len;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL) ||
         ((len % SM4_BLOCK_SIZE) != 0)) {
@@ -2097,15 +2449,19 @@ int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
 
     req = (whMessageCrypto_Sm4CbcRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_CBC, ctx->cryptoAffinity);
+    total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                (uint64_t)sizeof(*req) +
+                (uint64_t)len +
+                (uint64_t)key_len +
+                (uint64_t)SM4_IV_SIZE;
+
+    if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_len = (uint32_t)total_len;
     req_in  = (uint8_t*)(req + 1);
     req_key = req_in + len;
     req_iv  = req_key + key_len;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + SM4_IV_SIZE;
-
-    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
-    }
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -2203,6 +2559,7 @@ int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
     uint8_t*                       req_iv;
     uint8_t*                       req_tmp;
     uint32_t                       req_len;
+    uint64_t                       total_len;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL)) {
         return WH_ERROR_BADARGS;
@@ -2224,16 +2581,21 @@ int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
 
     req = (whMessageCrypto_Sm4CtrRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_CTR, ctx->cryptoAffinity);
+    total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                (uint64_t)sizeof(*req) +
+                (uint64_t)len +
+                (uint64_t)key_len +
+                (uint64_t)SM4_IV_SIZE +
+                (uint64_t)SM4_BLOCK_SIZE;
+
+    if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_len = (uint32_t)total_len;
     req_in  = (uint8_t*)(req + 1);
     req_key = req_in + len;
     req_iv  = req_key + key_len;
     req_tmp = req_iv + SM4_IV_SIZE;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + SM4_IV_SIZE + SM4_BLOCK_SIZE;
-
-    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
-    }
 
     req->keyLen = key_len;
     req->sz     = len;
@@ -2344,9 +2706,11 @@ static int _Sm4AuthRequest(whClientContext* ctx, uint16_t cipherType,
     uint8_t*                        req_authin;
     uint8_t*                        req_tag;
     uint32_t                        req_len;
+    uint64_t                        total_len;
 
     if ((ctx == NULL) || (sm4 == NULL) || ((in == NULL) && (len > 0)) ||
-        (iv == NULL) || ((authin == NULL) && (authin_len > 0))) {
+        (iv == NULL) || ((authin == NULL) && (authin_len > 0)) ||
+        ((tag == NULL) && (tag_len > 0))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -2363,17 +2727,23 @@ static int _Sm4AuthRequest(whClientContext* ctx, uint16_t cipherType,
 
     req = (whMessageCrypto_Sm4AuthRequest*)_createCryptoRequest(
         dataPtr, cipherType, ctx->cryptoAffinity);
+    total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                (uint64_t)sizeof(*req) +
+                (uint64_t)len +
+                (uint64_t)key_len +
+                (uint64_t)iv_len +
+                (uint64_t)authin_len +
+                (uint64_t)tag_len;
+
+    if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_len    = (uint32_t)total_len;
     req_in     = (uint8_t*)(req + 1);
     req_key    = req_in + len;
     req_iv     = req_key + key_len;
     req_authin = req_iv + iv_len;
     req_tag    = req_authin + authin_len;
-    req_len    = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + iv_len + authin_len + tag_len;
-
-    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
-    }
 
     req->enc       = enc;
     req->keyLen    = key_len;
@@ -2466,6 +2836,13 @@ int wh_Client_Sm4Gcm(whClientContext* ctx, wc_Sm4* sm4, int enc,
 {
     int ret;
 
+    if ((ctx == NULL) || (sm4 == NULL) || (iv == NULL) ||
+        ((in == NULL) && (len > 0)) || ((out == NULL) && (len > 0)) ||
+        ((authin == NULL) && (authin_len > 0)) ||
+        ((tag == NULL) && (tag_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
     ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_GCM, sm4, enc, in, len, iv,
                           iv_len, authin, authin_len, tag, tag_len);
     if (ret == WH_ERROR_OK) {
@@ -2486,6 +2863,13 @@ int wh_Client_Sm4Ccm(whClientContext* ctx, wc_Sm4* sm4, int enc,
                      uint8_t* out)
 {
     int ret;
+
+    if ((ctx == NULL) || (sm4 == NULL) || (iv == NULL) ||
+        ((in == NULL) && (len > 0)) || ((out == NULL) && (len > 0)) ||
+        ((authin == NULL) && (authin_len > 0)) ||
+        ((tag == NULL) && (tag_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
 
     ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_CCM, sm4, enc, in, len, iv,
                           iv_len, authin, authin_len, tag, tag_len);
@@ -2508,7 +2892,7 @@ static uint32_t _Sm4DmaKeyFields(wc_Sm4* sm4, uint32_t* out_key_id,
                                  uint32_t* out_key_sz)
 {
     *out_key_id = WH_DEVCTX_TO_KEYID(sm4->devCtx);
-    *out_key_sz = (*out_key_id != WH_KEYID_ERASED) ? 0 : SM4_KEY_SIZE;
+    *out_key_sz = WH_KEYID_ISERASED(*out_key_id) ? SM4_KEY_SIZE : 0;
     return *out_key_sz;
 }
 
@@ -2943,6 +3327,13 @@ int wh_Client_Sm4GcmDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
                         uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
                         uint8_t* out)
 {
+    if ((ctx == NULL) || (sm4 == NULL) || (iv == NULL) ||
+        ((in == NULL) && (len > 0)) || ((out == NULL) && (len > 0)) ||
+        ((authin == NULL) && (authin_len > 0)) ||
+        ((tag == NULL) && (tag_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
     return _Sm4AuthDma(ctx, WC_CIPHER_SM4_GCM, sm4, enc, in, len, iv, iv_len,
                        authin, authin_len, tag, tag_len, out);
 }
@@ -2955,6 +3346,13 @@ int wh_Client_Sm4CcmDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
                         uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
                         uint8_t* out)
 {
+    if ((ctx == NULL) || (sm4 == NULL) || (iv == NULL) ||
+        ((in == NULL) && (len > 0)) || ((out == NULL) && (len > 0)) ||
+        ((authin == NULL) && (authin_len > 0)) ||
+        ((tag == NULL) && (tag_len > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
     return _Sm4AuthDma(ctx, WC_CIPHER_SM4_CCM, sm4, enc, in, len, iv, iv_len,
                        authin, authin_len, tag, tag_len, out);
 }

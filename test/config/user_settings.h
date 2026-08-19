@@ -141,6 +141,14 @@
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
 
+/* SM2 (ShangMi elliptic curve) Options. Needs ECC and SHA-256, both already
+ * enabled above; SM2 signing hashes with SM3. */
+#define WOLFSSL_SM2
+#define WOLFSSL_SM3
+/* sm2.c decodes the curve parameters from hex, which configure.ac pairs with
+ * WOLFSSL_SM2 for the same reason. */
+#define WOLFSSL_BASE16
+
 /* SM4 (ShangMi block cipher) Options. All five modes are built so the
  * crypto callback covers every dispatch shape wolfSSL offers for SM4. */
 #define WOLFSSL_SM4

@@ -667,6 +667,68 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+        case WC_PK_TYPE_SM2_SIGN: {
+            ecc_key*    key      = info->pk.sm2sign.key;
+            const byte* in       = info->pk.sm2sign.in;
+            word32      in_len   = info->pk.sm2sign.inlen;
+            byte*       out      = info->pk.sm2sign.out;
+            word32*     out_len  = info->pk.sm2sign.outlen;
+            uint16_t    sig_len  = 0;
+
+            /* Convert to a uint16_t local to support big endian. */
+            if (out_len != NULL) {
+                sig_len = (uint16_t)(*out_len);
+            }
+
+            if (in_len > UINT16_MAX) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else {
+                ret = wh_Client_Sm2Sign(ctx, key, in, (uint16_t)in_len, out,
+                                        &sig_len);
+                /* Propagate the required length on BUFFER_SIZE so the caller
+                 * can retry with a large enough buffer. */
+                if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                    (out_len != NULL)) {
+                    *out_len = sig_len;
+                }
+            }
+        } break;
+
+        case WC_PK_TYPE_SM2_VERIFY: {
+            word32 sig_len  = info->pk.sm2verify.siglen;
+            word32 hash_len = info->pk.sm2verify.hashlen;
+
+            if ((sig_len > UINT16_MAX) || (hash_len > UINT16_MAX)) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else {
+                ret = wh_Client_Sm2Verify(
+                    ctx, info->pk.sm2verify.key, info->pk.sm2verify.sig,
+                    (uint16_t)sig_len, info->pk.sm2verify.hash,
+                    (uint16_t)hash_len, info->pk.sm2verify.res);
+            }
+        } break;
+
+        case WC_PK_TYPE_SM2_SHARED_SECRET: {
+            word32*  out_len = info->pk.sm2dh.outlen;
+            uint16_t sec_len = 0;
+
+            if (out_len != NULL) {
+                sec_len = (uint16_t)(*out_len);
+            }
+
+            ret = wh_Client_Sm2SharedSecret(ctx, info->pk.sm2dh.private_key,
+                                            info->pk.sm2dh.public_key,
+                                            info->pk.sm2dh.out, &sec_len);
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (out_len != NULL)) {
+                *out_len = sec_len;
+            }
+        } break;
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
             ret = _handlePqcSigKeyGen(ctx, info, 0);

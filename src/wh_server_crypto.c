@@ -4470,6 +4470,234 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
 
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+
+/* SM2 keys are ecc_key values, so these reuse the ECC key cache and its usage
+ * policy enforcement wholesale; only the wolfCrypt call differs. */
+
+static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    int                             ret;
+    ecc_key                         key[1];
+    whMessageCrypto_Sm2SignRequest  req;
+    whMessageCrypto_Sm2SignResponse res;
+    whKeyId                         key_id;
+    const byte*                     in;
+    byte*                           res_out;
+    word32                          in_len;
+    word32                          res_len;
+    int                             evict;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2SignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm2SignRequest(
+        magic, (const whMessageCrypto_Sm2SignRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    in_len = req.sz;
+    if (in_len > (word32)(inSize - sizeof(whMessageCrypto_Sm2SignRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT);
+
+    in      = (const byte*)cryptoDataIn +
+              sizeof(whMessageCrypto_Sm2SignRequest);
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_Sm2SignResponse);
+    /* cryptoDataOut already points past the generic response header, so that
+     * header comes out of the budget too. */
+    res_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       sizeof(whMessageCrypto_Sm2SignResponse));
+
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _EccKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                        key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ecc_sm2_sign_hash(in, in_len, res_out, &res_len,
+                                       ctx->crypto->rng, key);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.sz = res_len;
+        (void)wh_MessageCrypto_TranslateSm2SignResponse(
+            magic, &res, (whMessageCrypto_Sm2SignResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2SignResponse) + res_len;
+    }
+    return ret;
+}
+
+static int _HandleSm2Verify(whServerContext* ctx, uint16_t magic, int devId,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret;
+    ecc_key                           key[1];
+    whMessageCrypto_Sm2VerifyRequest  req;
+    whMessageCrypto_Sm2VerifyResponse res;
+    whKeyId                           key_id;
+    const byte*                       req_sig;
+    const byte*                       req_hash;
+    word32                            sig_len;
+    word32                            hash_len;
+    word32                            available;
+    int                               evict;
+    int                               result = 0;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2VerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm2VerifyRequest(
+        magic, (const whMessageCrypto_Sm2VerifyRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    sig_len   = req.sigSz;
+    hash_len  = req.hashSz;
+    available = (word32)(inSize - sizeof(whMessageCrypto_Sm2VerifyRequest));
+    if ((sig_len > available) || (hash_len > (available - sig_len))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SM2VERIFY_OPTIONS_EVICT);
+
+    req_sig =
+        (const byte*)cryptoDataIn + sizeof(whMessageCrypto_Sm2VerifyRequest);
+    req_hash = req_sig + sig_len;
+
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _EccKeyCacheExportEnforce(ctx, key_id,
+                                        WH_NVM_FLAGS_USAGE_VERIFY, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ecc_sm2_verify_hash(req_sig, sig_len, req_hash, hash_len,
+                                         &result, key);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.res = (uint32_t)result;
+        (void)wh_MessageCrypto_TranslateSm2VerifyResponse(
+            magic, &res, (whMessageCrypto_Sm2VerifyResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2VerifyResponse);
+    }
+    return ret;
+}
+
+static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
+                                  int devId, const void* cryptoDataIn,
+                                  uint16_t inSize, void* cryptoDataOut,
+                                  uint16_t* outSize)
+{
+    int                           ret;
+    ecc_key                       prv[1];
+    ecc_key                       pub[1];
+    whMessageCrypto_Sm2DhRequest  req;
+    whMessageCrypto_Sm2DhResponse res;
+    whKeyId                       prv_id;
+    whKeyId                       pub_id;
+    byte*                         res_out;
+    word32                        res_len;
+    int                           evict_prv;
+    int                           evict_pub;
+    int                           prvInit = 0;
+    int                           pubInit = 0;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2DhRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm2DhRequest(
+        magic, (const whMessageCrypto_Sm2DhRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    prv_id    = wh_KeyId_TranslateFromClient(
+           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
+    pub_id    = wh_KeyId_TranslateFromClient(
+           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    evict_prv = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV);
+    evict_pub = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB);
+
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_Sm2DhResponse);
+    res_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       sizeof(whMessageCrypto_Sm2DhResponse));
+
+    ret = wc_ecc_init_ex(prv, NULL, devId);
+    if (ret == 0) {
+        prvInit = 1;
+        ret     = wc_ecc_init_ex(pub, NULL, devId);
+    }
+    if (ret == 0) {
+        pubInit = 1;
+        ret     = _EccKeyCacheExportEnforce(ctx, prv_id,
+                                            WH_NVM_FLAGS_USAGE_DERIVE, prv);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _EccKeyCacheExportEnforce(ctx, pub_id,
+                                        WH_NVM_FLAGS_USAGE_DERIVE, pub);
+    }
+    if (ret == WH_ERROR_OK) {
+        /* Point multiplication is blinded under ECC_TIMING_RESISTANT, which
+         * needs an RNG on the private key. The freshly imported key has
+         * none, so lend it the server's. */
+        ret = wc_ecc_set_rng(prv, ctx->crypto->rng);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_ecc_sm2_shared_secret(prv, pub, res_out, &res_len);
+    }
+
+    if (pubInit) {
+        wc_ecc_free(pub);
+    }
+    if (prvInit) {
+        wc_ecc_free(prv);
+    }
+
+    if (evict_prv != 0) {
+        _CryptoEvictKeyLocked(ctx, prv_id);
+    }
+    if (evict_pub != 0) {
+        _CryptoEvictKeyLocked(ctx, pub_id);
+    }
+
+    if (ret == 0) {
+        res.sz = res_len;
+        (void)wh_MessageCrypto_TranslateSm2DhResponse(
+            magic, &res, (whMessageCrypto_Sm2DhResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2DhResponse) + res_len;
+    }
+    return ret;
+}
+
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
 #ifdef WOLFSSL_SM4
 
 /* Resolve the key for an SM4 request. A key id that is not erased wins over
@@ -4831,6 +5059,10 @@ static int _HandleSm4Auth(whServerContext* ctx, uint16_t magic, int devId,
         return WH_ERROR_BUFFER_SIZE;
     }
 
+    if (tag_len > SM4_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                           ctx->comm->client_id, req.keyId);
 
@@ -4850,10 +5082,8 @@ static int _HandleSm4Auth(whServerContext* ctx, uint16_t magic, int devId,
             /* The tag is read before the output is written, so a decrypt that
              * fails authentication leaves no plaintext behind. */
             uint8_t reqTag[SM4_BLOCK_SIZE];
-            uint32_t copyTag = (tag_len > sizeof(reqTag)) ? sizeof(reqTag)
-                                                          : tag_len;
-            if ((enc == 0) && (copyTag > 0)) {
-                memcpy(reqTag, tag, copyTag);
+            if ((enc == 0) && (tag_len > 0)) {
+                memcpy(reqTag, tag, tag_len);
             }
 
             if (isCcm == 0) {
@@ -7175,6 +7405,24 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                          &cryptoOutSize);
                     break;
 #endif /* HAVE_ECC_SIGN */
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+                case WC_PK_TYPE_SM2_SIGN:
+                    ret = _HandleSm2Sign(ctx, magic, devId, cryptoDataIn,
+                                         cryptoInSize, cryptoDataOut,
+                                         &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_SM2_VERIFY:
+                    ret = _HandleSm2Verify(ctx, magic, devId, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_SM2_SHARED_SECRET:
+                    ret = _HandleSm2SharedSecret(ctx, magic, devId,
+                                                 cryptoDataIn, cryptoInSize,
+                                                 cryptoDataOut,
+                                                 &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
 #ifdef HAVE_ECC_VERIFY
                 case WC_PK_TYPE_ECDSA_VERIFY:
                     ret = _HandleEccVerify(ctx, magic, devId, cryptoDataIn,

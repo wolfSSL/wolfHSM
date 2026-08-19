@@ -19,7 +19,7 @@
 /*
  * test-refactor/client-server/wh_test_crypto_sm4.c
  *
- * SM4 tests routed through the server.
+ * SM4 tests routed through the server, in every mode.
  *
  * Each mode is driven through the plain wolfCrypt API with the client devId,
  * which is the path an application takes, and the result is checked against a
@@ -488,6 +488,7 @@ done:
     return ret;
 }
 #endif /* WOLFSSL_SM4_CBC */
+
 
 int whTest_Crypto_Sm4(whClientContext* ctx)
 {
