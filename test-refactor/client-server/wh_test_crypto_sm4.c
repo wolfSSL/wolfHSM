@@ -302,14 +302,54 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
     int    devId = WH_CLIENT_DEVID(ctx);
     int    ret;
     wc_Sm4 sm4[1];
+    wc_Sm4 sw[1];
     byte   cipher[sizeof(whTestSm4Plain)];
+    byte   expect[sizeof(whTestSm4Plain)];
     byte   plain[sizeof(whTestSm4Plain)];
     byte   tag[SM4_BLOCK_SIZE];
+    byte   expectTag[SM4_BLOCK_SIZE];
     byte   nonce[12];
     const char* name = isCcm ? "CCM" : "GCM";
 
     memset(nonce, 0x5A, sizeof(nonce));
     memset(plain, 0, sizeof(plain));
+    memset(expect, 0, sizeof(expect));
+    memset(expectTag, 0, sizeof(expectTag));
+
+    /* Software reference, so a marshalling, nonce, AAD or tag-placement
+     * error that is symmetric in both directions cannot pass the round
+     * trip unnoticed. */
+    ret = wc_Sm4Init(sw, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        return ret;
+    }
+    if (isCcm == 0) {
+#ifdef WOLFSSL_SM4_GCM
+        ret = wc_Sm4GcmSetKey(sw, whTestSm4Key, sizeof(whTestSm4Key));
+        if (ret == 0) {
+            ret = wc_Sm4GcmEncrypt(sw, expect, whTestSm4Plain,
+                                   sizeof(whTestSm4Plain), nonce,
+                                   sizeof(nonce), expectTag, sizeof(expectTag),
+                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+        }
+#endif
+    }
+    else {
+#ifdef WOLFSSL_SM4_CCM
+        ret = wc_Sm4SetKey(sw, whTestSm4Key, sizeof(whTestSm4Key));
+        if (ret == 0) {
+            ret = wc_Sm4CcmEncrypt(sw, expect, whTestSm4Plain,
+                                   sizeof(whTestSm4Plain), nonce,
+                                   sizeof(nonce), expectTag, sizeof(expectTag),
+                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+        }
+#endif
+    }
+    wc_Sm4Free(sw);
+    if (ret != 0) {
+        WH_ERROR_PRINT("SM4-%s software reference failed %d\n", name, ret);
+        return ret;
+    }
 
     ret = wc_Sm4Init(sm4, NULL, devId);
     if (ret != 0) {
@@ -340,6 +380,18 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
     }
     if (ret != 0) {
         WH_ERROR_PRINT("SM4-%s encrypt failed %d\n", name, ret);
+        goto done;
+    }
+
+    /* The HSM must agree with the software reference, ciphertext and tag. */
+    if (memcmp(cipher, expect, sizeof(expect)) != 0) {
+        WH_ERROR_PRINT("SM4-%s ciphertext mismatch vs software\n", name);
+        ret = WH_ERROR_ABORTED;
+        goto done;
+    }
+    if (memcmp(tag, expectTag, sizeof(expectTag)) != 0) {
+        WH_ERROR_PRINT("SM4-%s tag mismatch vs software\n", name);
+        ret = WH_ERROR_ABORTED;
         goto done;
     }
 

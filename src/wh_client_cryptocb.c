@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -676,9 +676,12 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             word32*     out_len  = info->pk.sm2sign.outlen;
             uint16_t    sig_len  = 0;
 
-            /* Convert to a uint16_t local to support big endian. */
+            /* Convert to a uint16_t local to support big endian. Saturate
+             * rather than truncate: a capacity of 65536 would otherwise wrap
+             * to zero and fail a request the output easily fits. */
             if (out_len != NULL) {
-                sig_len = (uint16_t)(*out_len);
+                sig_len = (*out_len > UINT16_MAX) ? UINT16_MAX
+                                                  : (uint16_t)(*out_len);
             }
 
             if (in_len > UINT16_MAX) {
@@ -715,8 +718,10 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             word32*  out_len = info->pk.sm2dh.outlen;
             uint16_t sec_len = 0;
 
+            /* Saturate rather than truncate, as above. */
             if (out_len != NULL) {
-                sec_len = (uint16_t)(*out_len);
+                sec_len = (*out_len > UINT16_MAX) ? UINT16_MAX
+                                                  : (uint16_t)(*out_len);
             }
 
             ret = wh_Client_Sm2SharedSecret(ctx, info->pk.sm2dh.private_key,

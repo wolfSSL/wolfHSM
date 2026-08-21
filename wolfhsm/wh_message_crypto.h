@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -334,10 +334,19 @@ typedef struct {
 /* SM2 Sign Response */
 typedef struct {
     uint32_t sz;
+    /* Pad to ensure overlap for input and output buffers: the signature is
+     * written while the hash is still being read from the shared buffer, so
+     * the payload must start at the same offset in both directions. */
+    uint8_t WH_PAD[sizeof(whMessageCrypto_Sm2SignRequest) - sizeof(uint32_t)];
     /* Data follows:
      * uint8_t out[sz];
      */
 } whMessageCrypto_Sm2SignResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm2SignRequest) ==
+        sizeof(whMessageCrypto_Sm2SignResponse),
+    "Sm2SignRequest and Sm2SignResponse must be the same size");
 
 int wh_MessageCrypto_TranslateSm2SignRequest(
     uint16_t magic, const whMessageCrypto_Sm2SignRequest* src,

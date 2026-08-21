@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -140,6 +140,11 @@
 /* Enables wc_Sha3_SetFlags so the SHA3 Keccak-mode reject/fallback paths are
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
+
+/* Exposes the SM entries in the crypto callback info union. Without it
+ * wolfSSL compiles no sm2sign/sm4cbc/... members and this build cannot
+ * reference them. */
+#define WOLFSSL_SM_CRYPTOCB
 
 /* SM2 (ShangMi elliptic curve) Options. Needs ECC and SHA-256, both already
  * enabled above; SM2 signing hashes with SM3. */

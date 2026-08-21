@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -2308,8 +2308,11 @@ int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
         ((len % SM4_BLOCK_SIZE) != 0)) {
         return WH_ERROR_BADARGS;
     }
+    /* The paired Response call would wait for a response that was never
+     * sent, so a zero-length split request is a caller error. The blocking
+     * wrappers still treat it as a no-op. */
     if (len == 0) {
-        return WH_ERROR_OK;
+        return WH_ERROR_BADARGS;
     }
 
     /* Fail-fast on occupied transport to prevent modification to local state */
@@ -2432,8 +2435,11 @@ int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
         ((len % SM4_BLOCK_SIZE) != 0)) {
         return WH_ERROR_BADARGS;
     }
+    /* The paired Response call would wait for a response that was never
+     * sent, so a zero-length split request is a caller error. The blocking
+     * wrappers still treat it as a no-op. */
     if (len == 0) {
-        return WH_ERROR_OK;
+        return WH_ERROR_BADARGS;
     }
 
     if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
@@ -2564,8 +2570,11 @@ int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL)) {
         return WH_ERROR_BADARGS;
     }
+    /* The paired Response call would wait for a response that was never
+     * sent, so a zero-length split request is a caller error. The blocking
+     * wrappers still treat it as a no-op. */
     if (len == 0) {
-        return WH_ERROR_OK;
+        return WH_ERROR_BADARGS;
     }
 
     if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
@@ -3214,6 +3223,7 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
     uint8_t*                            req_tag;
     uint8_t*                            req_key;
     uint32_t                            req_len;
+    uint64_t                            total_len;
     uintptr_t                           aadAddr = 0;
     uint16_t                            group   = 0;
     uint16_t                            action  = 0;
@@ -3241,14 +3251,20 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
     req->authTagSz = tag_len;
     (void)_Sm4DmaKeyFields(sm4, &req->keyId, &req->keySz);
 
+    /* Sum in 64 bits and check before deriving any trailing pointer: the
+     * lengths are caller supplied and a 32-bit sum could wrap past the
+     * buffer check. */
+    total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                (uint64_t)sizeof(*req) + (uint64_t)iv_len +
+                (uint64_t)tag_len + (uint64_t)req->keySz;
+    if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_len = (uint32_t)total_len;
+
     req_iv  = (uint8_t*)req + sizeof(*req);
     req_tag = req_iv + iv_len;
     req_key = req_tag + tag_len;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              iv_len + tag_len + req->keySz;
-    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
-    }
     memcpy(req_iv, iv, iv_len);
     if (tag_len > 0) {
         /* The tag is an input when decrypting and reserved space otherwise */

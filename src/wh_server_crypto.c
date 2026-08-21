@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -4494,6 +4494,9 @@ static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
         return WH_ERROR_BADARGS;
     }
 
+    /* The response carries padding; do not put stack bytes on the wire. */
+    memset(&res, 0, sizeof(res));
+
     ret = wh_MessageCrypto_TranslateSm2SignRequest(
         magic, (const whMessageCrypto_Sm2SignRequest*)cryptoDataIn, &req);
     if (ret != WH_ERROR_OK) {
@@ -5196,6 +5199,7 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t                           cachedKey[SM4_KEY_SIZE];
     void*                             inAddr  = NULL;
     void*                             outAddr = NULL;
+    int                               outMapped = 0;
     const uint8_t*                    key     = NULL;
     uint32_t                          key_len = 0;
     uint64_t                          needed;
@@ -5244,6 +5248,9 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.output;
         }
+        else {
+            outMapped = 1;
+        }
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5267,12 +5274,18 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
-        ret = wh_Server_DmaProcessClientAddress(
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res.dmaAddrStatus.badAddr = req.output;
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
         }
     }
     if (inAddr != NULL) {
@@ -5303,6 +5316,7 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t                           cachedKey[SM4_KEY_SIZE];
     void*                             inAddr  = NULL;
     void*                             outAddr = NULL;
+    int                               outMapped = 0;
     const uint8_t*                    key     = NULL;
     uint32_t                          key_len = 0;
     uint64_t                          needed;
@@ -5355,6 +5369,9 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.output;
         }
+        else {
+            outMapped = 1;
+        }
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5382,12 +5399,18 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
-        ret = wh_Server_DmaProcessClientAddress(
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res.dmaAddrStatus.badAddr = req.output;
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
         }
     }
     if (inAddr != NULL) {
@@ -5418,6 +5441,7 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t                           cachedKey[SM4_KEY_SIZE];
     void*                             inAddr  = NULL;
     void*                             outAddr = NULL;
+    int                               outMapped = 0;
     const uint8_t*                    key     = NULL;
     uint32_t                          key_len = 0;
     uint64_t                          needed;
@@ -5477,6 +5501,9 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.output;
         }
+        else {
+            outMapped = 1;
+        }
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5502,12 +5529,18 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
-        ret = wh_Server_DmaProcessClientAddress(
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res.dmaAddrStatus.badAddr = req.output;
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
         }
     }
     if (inAddr != NULL) {
@@ -5540,6 +5573,7 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t                            cachedKey[SM4_KEY_SIZE];
     void*                              inAddr  = NULL;
     void*                              outAddr = NULL;
+    int                                outMapped = 0;
     void*                              aadAddr = NULL;
     const uint8_t*                     key     = NULL;
     uint32_t                           key_len = 0;
@@ -5612,6 +5646,9 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.output;
         }
+        else {
+            outMapped = 1;
+        }
     }
     if ((ret == WH_ERROR_OK) && (req.aad.sz > 0)) {
         ret = wh_Server_DmaProcessClientAddress(
@@ -5679,12 +5716,18 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
-        ret = wh_Server_DmaProcessClientAddress(
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-        if (ret == WH_ERROR_ACCESS) {
-            res.dmaAddrStatus.badAddr = req.output;
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
         }
     }
     if (aadAddr != NULL) {
