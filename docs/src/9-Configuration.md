@@ -117,6 +117,7 @@ These macros size the server-side key cache. The cache is split into "regular" s
 | `WOLFHSM_CFG_SERVER_IMG_MGR` | Undefined | If defined, compile the server-side image manager (manifest-driven boot/runtime image verification). |
 | `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_IMG_COUNT` | `4` | Maximum number of images that a single image-manager configuration can track at one time. |
 | `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE` | `512` | Maximum signature size, in bytes, that the image manager will allocate buffer space for. The default accommodates RSA-4096; raise it when using signature schemes with larger signatures. |
+| `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE` | `1200` | Maximum verification key size, in bytes, that the image manager copies out of the keystore before invoking a verify method. The default accommodates an ASN.1 RSA-4096 public key; raise it for larger keys such as ML-DSA. |
 
 ## Custom Server Callbacks
 

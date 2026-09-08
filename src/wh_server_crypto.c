@@ -4613,7 +4613,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
             *outSize = sizeof(res) + res.outSz;
         }
     }
+    /* Scrub the key and the Cmac context (AES schedule, k1/k2). Zeroing the
+     * struct instead of wc_CmacFree avoids a double free after wc_CmacFinal */
     wc_ForceZero(tmpKey, sizeof(tmpKey));
+    wc_ForceZero(cmac, sizeof(cmac));
     WH_DEBUG_SERVER_VERBOSE("cmac end ret:%d\n", ret);
     return ret;
 }
@@ -9127,7 +9130,10 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
+    /* Scrub the key and the Cmac context (AES schedule, k1/k2). Zeroing the
+     * struct instead of wc_CmacFree avoids a double free after wc_CmacFinal */
     wc_ForceZero(tmpKey, sizeof(tmpKey));
+    wc_ForceZero(cmac, sizeof(cmac));
     WH_DEBUG_SERVER_VERBOSE("dma cmac end ret:%d\n", ret);
     return ret;
 }

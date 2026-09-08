@@ -890,7 +890,7 @@ A verify method returns `WH_ERROR_OK` on a successful verification, `WH_ERROR_NO
 - `wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256`: RSA-4096 verification of a wolfBoot-formatted image (see [wolfBoot Image Support](#wolfboot-image-support))
 - `wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256`: cert-chain-based RSA-4096 verification of a wolfBoot image
 
-Applications can supply their own verify method to support algorithms not represented in the built-in set, or to layer additional checks on top of an existing one — for example, validating a monotonic counter against a [non-volatile counter](#non-volatile-monotonic-counters) inside a wrapper verify method to add anti-rollback protection. The maximum signature size handled by the framework is `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE`, whose default accommodates RSA-4096.
+Applications can supply their own verify method to support algorithms not represented in the built-in set, or to layer additional checks on top of an existing one — for example, validating a monotonic counter against a [non-volatile counter](#non-volatile-monotonic-counters) inside a wrapper verify method to add anti-rollback protection. The maximum signature size handled by the framework is `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_SIG_SIZE`, whose default accommodates RSA-4096. Verification keys are copied out of the keystore into a private buffer before the verify method runs, bounded by `WOLFHSM_CFG_SERVER_IMG_MGR_MAX_KEY_SIZE` (default 1200 bytes, enough for an ASN.1 RSA-4096 public key).
 
 ### Verify Actions
 
