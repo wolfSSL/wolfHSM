@@ -11409,6 +11409,8 @@ int wh_Client_SlhDsaImportKey(whClientContext* ctx, SlhDsaKey* key,
 
     WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len, label,
                             ret, key_id);
+    /* The DER above holds private key material. */
+    wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
 
@@ -11432,6 +11434,8 @@ int wh_Client_SlhDsaExportKey(whClientContext* ctx, whKeyId keyId,
 
     WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId, key,
                             ret, (int)label_len, label);
+    /* The DER above holds private key material. */
+    wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
 
@@ -12139,6 +12143,8 @@ int wh_Client_SlhDsaImportKeyDma(whClientContext* ctx, SlhDsaKey* key,
         }
     }
 
+    /* The DER above holds private key material. */
+    wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
 
@@ -12161,6 +12167,8 @@ int wh_Client_SlhDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
         ret = wh_Crypto_SlhDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
 
+    /* The DER above holds private key material. */
+    wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
 
@@ -12352,6 +12360,8 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     else {
         ret = WH_ERROR_BADARGS;
     }
+    /* The DER above holds private key material. */
+    wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
 
