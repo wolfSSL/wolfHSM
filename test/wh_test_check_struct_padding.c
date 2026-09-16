@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -139,6 +139,14 @@ whMessageCrypto_MlDsaSignRequest      pkMldsaSignReq;
 whMessageCrypto_MlDsaSignResponse     pkMldsaSignRes;
 whMessageCrypto_MlDsaVerifyRequest    pkMldsaVerifyReq;
 whMessageCrypto_MlDsaVerifyResponse   pkMldsaVerifyRes;
+whMessageCrypto_SlhDsaKeyGenRequest   pkSlhdsaKeygenReq;
+whMessageCrypto_SlhDsaKeyGenResponse  pkSlhdsaKeygenRes;
+whMessageCrypto_SlhDsaSignRequest     pkSlhdsaSignReq;
+whMessageCrypto_SlhDsaSignResponse    pkSlhdsaSignRes;
+whMessageCrypto_SlhDsaVerifyRequest   pkSlhdsaVerifyReq;
+whMessageCrypto_SlhDsaVerifyResponse  pkSlhdsaVerifyRes;
+whMessageCrypto_SlhDsaCheckPrivKeyRequest  pkSlhdsaCheckReq;
+whMessageCrypto_SlhDsaCheckPrivKeyResponse pkSlhdsaCheckRes;
 whMessageCrypto_MlKemKeyGenRequest    pkMlkemKeygenReq;
 whMessageCrypto_MlKemKeyGenResponse   pkMlkemKeygenRes;
 whMessageCrypto_MlKemEncapsRequest    pkMlkemEncapsReq;
@@ -161,6 +169,12 @@ whMessageCrypto_MlDsaSignDmaRequest    pqMldsaSignDmaReq;
 whMessageCrypto_MlDsaSignDmaResponse   pqMldsaSignDmaRes;
 whMessageCrypto_MlDsaVerifyDmaRequest  pqMldsaVerifyDmaReq;
 whMessageCrypto_MlDsaVerifyDmaResponse pqMldsaVerifyDmaRes;
+whMessageCrypto_SlhDsaKeyGenDmaRequest  pqSlhdsaKeygenDmaReq;
+whMessageCrypto_SlhDsaKeyGenDmaResponse pqSlhdsaKeygenDmaRes;
+whMessageCrypto_SlhDsaSignDmaRequest    pqSlhdsaSignDmaReq;
+whMessageCrypto_SlhDsaSignDmaResponse   pqSlhdsaSignDmaRes;
+whMessageCrypto_SlhDsaVerifyDmaRequest  pqSlhdsaVerifyDmaReq;
+whMessageCrypto_SlhDsaVerifyDmaResponse pqSlhdsaVerifyDmaRes;
 whMessageCrypto_CmacAesDmaRequest      cmacDmaReq;
 whMessageCrypto_CmacAesDmaResponse     cmacDmaRes;
 whMessageCrypto_MlKemKeyGenDmaRequest  pkMlkemKeygenDmaReq;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/wc_slhdsa.h"
 
 #include "wolfhsm/wh_message_crypto.h"
 
@@ -118,6 +119,20 @@ int wh_Crypto_MlDsaSerializeKeyDer(wc_MlDsaKey* key, uint16_t max_size,
 int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
                                      wc_MlDsaKey* key);
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+#define WH_CRYPTO_SLHDSA_MAX_CTX_LEN (255U)
+/* RFC 9909 wraps the raw 4n private and 2n public key in a OneAsymmetricKey.
+ * The slack covers the algorithm identifier and the ASN.1 headers. */
+#define WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE \
+    (WC_SLHDSA_MAX_PRIV_LEN + WC_SLHDSA_MAX_PUB_LEN + 128U)
+/* Store a SlhDsaKey to a byte sequence */
+int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
+                                    uint8_t* buffer, uint16_t* out_size);
+/* Restore a SlhDsaKey from a byte sequence */
+int wh_Crypto_SlhDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                      SlhDsaKey* key);
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 /* Store a MlKemKey to a byte sequence */

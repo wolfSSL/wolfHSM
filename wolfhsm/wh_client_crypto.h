@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -52,6 +52,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/wc_slhdsa.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #ifdef WOLFSSL_SHA3
 #include "wolfssl/wolfcrypt/sha3.h"
@@ -3383,6 +3384,385 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+
+/**
+ * @brief Associates an SLH-DSA key with a specific key ID.
+ *
+ * This function sets the device context of an SLH-DSA key to the specified
+ * key ID. On the server side, this key ID is used to reference the key stored
+ * in the HSM.
+ *
+ * @param[in] key Pointer to the SLH-DSA key structure.
+ * @param[in] keyId Key ID to be associated with the SLH-DSA key.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaSetKeyId(SlhDsaKey* key, whKeyId keyId);
+
+/**
+ * @brief Gets the wolfHSM keyId being used by the wolfCrypt struct.
+ *
+ * @param[in] key Pointer to the SLH-DSA key structure.
+ * @param[out] outId Pointer to the key ID to return.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaGetKeyId(SlhDsaKey* key, whKeyId* outId);
+
+/**
+ * @brief Import an SLH-DSA key to the server key cache.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key Pointer to the key to import
+ * @param[in,out] inout_keyId Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaImportKey(whClientContext* ctx, SlhDsaKey* key,
+                              whKeyId* inout_keyId, whNvmFlags flags,
+                              uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export an SLH-DSA key from the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] keyId ID of key to export
+ * @param[out] key Pointer to receive exported key
+ * @param[in] label_len Length of optional label buffer
+ * @param[in] label Optional buffer to receive key label
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaExportKey(whClientContext* ctx, whKeyId keyId,
+                              SlhDsaKey* key, uint16_t label_len,
+                              uint8_t* label);
+
+/**
+ * @brief Exports only the public part of a cached SLH-DSA key.
+ *
+ * The private key stays inside the HSM. The caller is responsible for
+ * initializing key with wc_SlhDsaKey_Init; the parameter set is taken from
+ * the key OID in the exported DER, so the placeholder set the caller used
+ * does not have to match.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] keyId Server key ID whose public key should be exported
+ * @param[out] key Pointer to receive the exported public key
+ * @param[in] label_len Length of optional label buffer
+ * @param[in] label Optional buffer to receive key label
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                    SlhDsaKey* key, uint16_t label_len,
+                                    uint8_t* label);
+
+/**
+ * @brief Generate an SLH-DSA key on the server and leave it cached there.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeCacheKey(whClientContext* ctx, int param,
+                                 whKeyId* inout_key_id, whNvmFlags flags,
+                                 uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Generate a cached SLH-DSA key and export its public part.
+ *
+ * On success pub is a usable handle to the cached private key: its key ID and
+ * the client's HSM devId are stamped into it.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence, must not be EPHEMERAL
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @param[out] pub Pointer to receive the public key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
+    whClientContext* ctx, int param, whKeyId* inout_key_id, whNvmFlags flags,
+    uint16_t label_len, const uint8_t* label, SlhDsaKey* pub);
+
+/**
+ * @brief Generate an ephemeral SLH-DSA key and export it to the caller.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[out] key Pointer to receive the generated key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeExportKey(whClientContext* ctx, int param,
+                                  SlhDsaKey* key);
+
+/**
+ * @brief Generate an ephemeral SLH-DSA key from a caller-supplied seed.
+ *
+ * The seed is the contiguous SK.seed || SK.prf || PK.seed, 3n bytes for the
+ * requested parameter set. Deterministic generation makes known-answer tests
+ * and reproducible provisioning possible.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in] seed Pointer to the 3n seed bytes
+ * @param[in] seedSz Length of seed in bytes
+ * @param[out] key Pointer to receive the generated key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
+                                          const byte* seed, word32 seedSz,
+                                          SlhDsaKey* key);
+
+/**
+ * @brief Generate a cached SLH-DSA key from a caller-supplied seed.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in] seed Pointer to the 3n seed bytes
+ * @param[in] seedSz Length of seed in bytes
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
+                                         const byte* seed, word32 seedSz,
+                                         whKeyId* inout_key_id,
+                                         whNvmFlags flags, uint16_t label_len,
+                                         uint8_t* label);
+
+/**
+ * @brief Sign a message or digest with an SLH-DSA key held by the server.
+ *
+ * Covers the whole FIPS 205 signing surface. preHashType selects pure
+ * SLH-DSA (WC_HASH_TYPE_NONE) or HashSLH-DSA. isMPrime signs a caller-built
+ * M' directly, in which case context and preHashType are ignored. A non-empty
+ * addRnd supplies the randomizer explicitly; otherwise randomized selects
+ * between a server-generated randomizer and deterministic signing.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] in Message, digest, or M' to sign
+ * @param[in] in_len Length of in in bytes
+ * @param[out] out Buffer to receive the signature
+ * @param[in,out] inout_len Capacity of out on entry, signature length on exit
+ * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] context FIPS 205 context string, may be NULL
+ * @param[in] contextLen Length of context, 0 to 255
+ * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
+ * @param[in] addRnd Explicit randomizer, may be NULL
+ * @param[in] addRndSz Length of addRnd in bytes, 0 if none
+ * @param[in] randomized Non-zero to have the server pick the randomizer
+ * @param[in] isMPrime Non-zero when in is a caller-built M'
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
+                         byte* out, word32* inout_len, SlhDsaKey* key,
+                         const byte* context, byte contextLen,
+                         word32 preHashType, const byte* addRnd, byte addRndSz,
+                         int randomized, int isMPrime);
+
+/**
+ * @brief Verify an SLH-DSA signature with a key held by the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sig Signature to verify
+ * @param[in] sig_len Length of sig in bytes
+ * @param[in] msg Message, digest, or M' that was signed
+ * @param[in] msg_len Length of msg in bytes
+ * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
+ * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] context FIPS 205 context string, may be NULL
+ * @param[in] contextLen Length of context, 0 to 255
+ * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
+ * @param[in] isMPrime Non-zero when msg is a caller-built M'
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
+                           word32 sig_len, const byte* msg, word32 msg_len,
+                           int* out_res, SlhDsaKey* key, const byte* context,
+                           byte contextLen, word32 preHashType, int isMPrime);
+
+/**
+ * @brief Check that a server-held SLH-DSA private key matches a public key.
+ *
+ * Passing NULL for pubKey (with pubKeySz 0) asks the server to check its copy
+ * of the private key for internal consistency, with nothing to compare it
+ * against. That is what a caller holding only a key ID can ask for.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key Key handle for the private key
+ * @param[in] pubKey Public key bytes, PK.seed || PK.root, or NULL
+ * @param[in] pubKeySz Length of pubKey in bytes, 2n, or 0 when pubKey is NULL
+ * @return int Returns 0 when they match, WC_KEY_MISMATCH_E when they do not,
+ *         or a negative error code on failure.
+ */
+int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
+                                 const byte* pubKey, word32 pubKeySz);
+
+#ifdef WOLFHSM_CFG_DMA
+
+/**
+ * @brief Import an SLH-DSA key to the server key cache using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key Pointer to the key to import
+ * @param[in,out] inout_keyId Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaImportKeyDma(whClientContext* ctx, SlhDsaKey* key,
+                                 whKeyId* inout_keyId, whNvmFlags flags,
+                                 uint16_t label_len, uint8_t* label);
+
+/**
+ * @brief Export an SLH-DSA key from the server using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] keyId ID of key to export
+ * @param[out] key Pointer to receive exported key
+ * @param[in] label_len Length of optional label buffer
+ * @param[in] label Optional buffer to receive key label
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                 SlhDsaKey* key, uint16_t label_len,
+                                 uint8_t* label);
+
+/**
+ * @brief Export only the public part of a cached SLH-DSA key using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] keyId Server key ID whose public key should be exported
+ * @param[out] key Pointer to receive the exported public key
+ * @param[in] label_len Length of optional label buffer
+ * @param[in] label Optional buffer to receive key label
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
+                                       SlhDsaKey* key, uint16_t label_len,
+                                       uint8_t* label);
+
+/**
+ * @brief Generate an ephemeral SLH-DSA key and export it using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[out] key Pointer to receive the generated key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeExportKeyDma(whClientContext* ctx, int param,
+                                     SlhDsaKey* key);
+
+/**
+ * @brief Generate an ephemeral SLH-DSA key from a seed using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in] seed Pointer to the 3n seed bytes
+ * @param[in] seedSz Length of seed in bytes
+ * @param[out] key Pointer to receive the generated key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeExportKeyFromSeedDma(whClientContext* ctx, int param,
+                                             const byte* seed, word32 seedSz,
+                                             SlhDsaKey* key);
+
+/**
+ * @brief Generate a cached SLH-DSA key and export its public part using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] param Parameter set to generate (enum SlhDsaParam)
+ * @param[in,out] inout_key_id Pointer to key ID to use/receive
+ * @param[in] flags Flags to control key persistence, must not be EPHEMERAL
+ * @param[in] label_len Length of optional label
+ * @param[in] label Optional label to associate with key
+ * @param[out] pub Pointer to receive the public key
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
+                                    whKeyId* inout_key_id, whNvmFlags flags,
+                                    uint16_t label_len, const uint8_t* label,
+                                    SlhDsaKey* pub);
+
+/**
+ * @brief Sign with an SLH-DSA key held by the server using DMA.
+ *
+ * Arguments match wh_Client_SlhDsaSign; the message and signature travel by
+ * DMA rather than through the comm buffer, which is what makes the larger
+ * parameter sets usable.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] in Message, digest, or M' to sign
+ * @param[in] in_len Length of in in bytes
+ * @param[out] out Buffer to receive the signature
+ * @param[in,out] out_len Capacity of out on entry, signature length on exit
+ * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] context FIPS 205 context string, may be NULL
+ * @param[in] contextLen Length of context, 0 to 255
+ * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
+ * @param[in] addRnd Explicit randomizer, may be NULL
+ * @param[in] addRndSz Length of addRnd in bytes, 0 if none
+ * @param[in] randomized Non-zero to have the server pick the randomizer
+ * @param[in] isMPrime Non-zero when in is a caller-built M'
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
+                            word32 in_len, byte* out, word32* out_len,
+                            SlhDsaKey* key, const byte* context,
+                            byte contextLen, word32 preHashType,
+                            const byte* addRnd, byte addRndSz, int randomized,
+                            int isMPrime);
+
+/**
+ * @brief Verify an SLH-DSA signature using DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sig Signature to verify
+ * @param[in] sig_len Length of sig in bytes
+ * @param[in] msg Message, digest, or M' that was signed
+ * @param[in] msg_len Length of msg in bytes
+ * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
+ * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] context FIPS 205 context string, may be NULL
+ * @param[in] contextLen Length of context, 0 to 255
+ * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
+ * @param[in] isMPrime Non-zero when msg is a caller-built M'
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
+                              word32 sig_len, const byte* msg, word32 msg_len,
+                              int* out_res, SlhDsaKey* key,
+                              const byte* context, byte contextLen,
+                              word32 preHashType, int isMPrime);
+
+/**
+ * @brief Check a server-held SLH-DSA private key against a public key.
+ *
+ * The public key is only 2n bytes, so this forwards to the comm-buffer path.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key Key handle for the private key
+ * @param[in] pubKey Public key bytes, PK.seed || PK.root
+ * @param[in] pubKeySz Length of pubKey in bytes, 2n
+ * @return int Returns 0 when they match, WC_KEY_MISMATCH_E when they do not,
+ *         or a negative error code on failure.
+ */
+int wh_Client_SlhDsaCheckPrivKeyDma(whClientContext* ctx, SlhDsaKey* key,
+                                    const byte* pubKey, word32 pubKeySz);
+
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 

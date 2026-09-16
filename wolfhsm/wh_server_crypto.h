@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -103,6 +103,16 @@ int wh_Server_MlDsaKeyCacheImport(whServerContext* ctx, wc_MlDsaKey* key,
 int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   wc_MlDsaKey* key);
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+/* Store a SlhDsaKey into a server key cache with optional metadata */
+int wh_Server_SlhDsaKeyCacheImport(whServerContext* ctx, SlhDsaKey* key,
+                                   whKeyId keyId, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label);
+/* Restore a SlhDsaKey from a server key cache */
+int wh_Server_SlhDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                   SlhDsaKey* key);
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 /* Store a MlKemKey into a server key cache with optional metadata */

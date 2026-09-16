@@ -44,6 +44,23 @@
 #define WOLFSSL_CMAC
 #define HAVE_HKDF
 
+/* SLH-DSA. Only the smallest parameter set is built: its 7856-byte signature
+ * is the only one that fits WOLFHSM_CFG_COMM_DATA_LEN. */
+#define WOLFSSL_HAVE_SLHDSA
+#define WOLFSSL_SHA3
+#define WOLFSSL_SHAKE128
+#define WOLFSSL_SHAKE256
+#define WOLFSSL_SLHDSA_PARAM_NO_128F
+#define WOLFSSL_SLHDSA_PARAM_NO_192
+#define WOLFSSL_SLHDSA_PARAM_NO_256
+
+/* Build the client with no software SLH-DSA at all, so every operation must
+ * reach the server or fail closed. Set -DWH_CFG_SLHDSA_CB_ONLY to select it;
+ * the server keeps its software implementation either way. */
+#ifdef WH_CFG_SLHDSA_CB_ONLY
+#define WOLF_CRYPTO_CB_ONLY_SLHDSA
+#endif
+
 /* wolfCrypt benchmark settings */
 #define NO_MAIN_DRIVER
 #define BENCH_EMBEDDED
