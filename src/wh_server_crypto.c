@@ -8138,18 +8138,23 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
 
                 if (ret == 0) {
+                    int postRet;
+
                     ret = wh_Crypto_SlhDsaSerializeKeyDer(
                         key, (uint16_t)req.key.sz, clientOutAddr, &keySize);
                     if (ret == 0) {
                         res.keyId   = WH_KEYID_ERASED;
                         res.keySize = keySize;
                     }
-                }
 
-                if (ret == 0) {
-                    ret = wh_Server_DmaProcessClientAddress(
-                        ctx, req.key.addr, &clientOutAddr, keySize,
+                    /* Release the mapping that PRE acquired: the same range
+                     * it was given, and on the failure path too. */
+                    postRet = wh_Server_DmaProcessClientAddress(
+                        ctx, req.key.addr, &clientOutAddr, req.key.sz,
                         WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                    if (ret == 0) {
+                        ret = postRet;
+                    }
                 }
             }
             else {
@@ -8321,14 +8326,22 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                 }
 
                 if (sigAddr != NULL) {
-                    (void)wh_Server_DmaProcessClientAddress(
-                        ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+                    /* Release the range PRE mapped, not the shorter signature
+                     * that came back: sigLen travels in the response. */
+                    int postRet = wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
                         WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                    if (ret == 0) {
+                        ret = postRet;
+                    }
                 }
                 if (msgAddr != NULL) {
-                    (void)wh_Server_DmaProcessClientAddress(
+                    int postRet = wh_Server_DmaProcessClientAddress(
                         ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
                         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+                    if (ret == 0) {
+                        ret = postRet;
+                    }
                 }
             }
         }
