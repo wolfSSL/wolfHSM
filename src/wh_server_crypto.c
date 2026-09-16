@@ -5887,6 +5887,12 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 key_id = WH_KEYID_ERASED;
                 ret    = wh_Crypto_SlhDsaSerializeKeyDer(key, max_size, res_out,
                                                          &res_size);
+                if (ret != 0) {
+                    /* Zero sensitive data on failure: a partial private key
+                     * DER must not be left in the response buffer. */
+                    wc_ForceZero(res_out, max_size);
+                    res_size = 0;
+                }
             }
             else {
                 /* Must import the key into the cache and return keyid */
@@ -8185,6 +8191,7 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                  * the error rather than returning a keyId with no public
                  * key. */
                 if (ret == 0) {
+                    int postRet;
                     int rc = wh_Server_DmaProcessClientAddress(
                         ctx, req.key.addr, &clientOutAddr, req.key.sz,
                         WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
@@ -8197,10 +8204,15 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                         else {
                             ret = (pub_ret < 0) ? pub_ret : WH_ERROR_ABORTED;
                         }
-                        (void)wh_Server_DmaProcessClientAddress(
-                            ctx, req.key.addr, &clientOutAddr, keySize,
+                        /* Release the range PRE mapped, not the shorter DER
+                         * that came back, and keep a POST failure visible. */
+                        postRet = wh_Server_DmaProcessClientAddress(
+                            ctx, req.key.addr, &clientOutAddr, req.key.sz,
                             WH_DMA_OPER_CLIENT_WRITE_POST,
                             (whServerDmaFlags){0});
+                        if (ret == 0) {
+                            ret = postRet;
+                        }
                     }
                     else {
                         ret = rc;
@@ -8249,6 +8261,8 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     SlhDsaKey key[1];
     void*     msgAddr = NULL;
     void*     sigAddr = NULL;
+    int       msgPre  = 0;
+    int       sigPre  = 0;
     word32    sigLen  = 0;
     whKeyId   key_id;
     int       evict;
@@ -8304,7 +8318,10 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
             ret = wh_Server_DmaProcessClientAddress(
                 ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-            if (ret == WH_ERROR_ACCESS) {
+            if (ret == 0) {
+                msgPre = 1;
+            }
+            else if (ret == WH_ERROR_ACCESS) {
                 res.dmaAddrStatus.badAddr = req.msg;
             }
 
@@ -8312,7 +8329,14 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                 ret = wh_Server_DmaProcessClientAddress(
                     ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-                if (ret == WH_ERROR_ACCESS) {
+                if (ret == 0) {
+                    sigPre = 1;
+                    /* The mapping is copied back whatever happens below, so
+                     * clear it first: a failed signing must not publish
+                     * whatever the staging buffer happened to hold. */
+                    memset(sigAddr, 0, (size_t)req.sig.sz);
+                }
+                else if (ret == WH_ERROR_ACCESS) {
                     res.dmaAddrStatus.badAddr = req.sig;
                 }
 
@@ -8325,7 +8349,7 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                            &sigLen);
                 }
 
-                if (sigAddr != NULL) {
+                if (sigPre) {
                     /* Release the range PRE mapped, not the shorter signature
                      * that came back: sigLen travels in the response. */
                     int postRet = wh_Server_DmaProcessClientAddress(
@@ -8335,7 +8359,7 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                         ret = postRet;
                     }
                 }
-                if (msgAddr != NULL) {
+                if (msgPre) {
                     int postRet = wh_Server_DmaProcessClientAddress(
                         ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
                         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});

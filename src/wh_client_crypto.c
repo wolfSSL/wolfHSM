@@ -11549,6 +11549,11 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
             ret = WH_ERROR_BADARGS;
         }
     }
+    /* The request carried the seed and the response carried private
+     * key DER; neither may stay in the shared packet buffer. */
+    if (dataPtr != NULL) {
+        wc_ForceZero(dataPtr, WOLFHSM_CFG_COMM_DATA_LEN);
+    }
     return ret;
 }
 
@@ -12158,6 +12163,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     uintptr_t                                seedAddr    = 0;
     uint64_t                                 keyAddrSz   = 0;
     int                                      keyPre      = 0;
+    int                                      postErr     = WH_ERROR_OK;
     int                                      seedPre     = 0;
     uint16_t                                 pkType;
     uint16_t                                 req_len;
@@ -12242,22 +12248,24 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
             } while (ret == WH_ERROR_NOTREADY);
         }
 
-        /* Release only what was acquired, and do not report a good key when
-         * the copy-back failed. */
+        /* Release only what was acquired. The error is held back rather than
+         * folded into ret here: the response below carries the key id the
+         * server may already have committed, and losing it would strand a
+         * cached key with no way to evict it. */
         if (seedPre) {
-            int postRet = wh_Client_DmaProcessClientAddress(
+            int rc = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)seed, (void**)&seedAddr, seedSz,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-            if (ret == WH_ERROR_OK) {
-                ret = postRet;
+            if (postErr == WH_ERROR_OK) {
+                postErr = rc;
             }
         }
         if (keyPre) {
-            int postRet = wh_Client_DmaProcessClientAddress(
+            int rc = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
-            if (ret == WH_ERROR_OK) {
-                ret = postRet;
+            if (postErr == WH_ERROR_OK) {
+                postErr = rc;
             }
         }
 
@@ -12309,6 +12317,11 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     }
     else {
         ret = WH_ERROR_BADARGS;
+    }
+    /* Now that the key id has been recovered, a failed copy-back is the
+     * result: the DER in the buffer cannot be trusted. */
+    if ((ret >= 0) && (postErr != WH_ERROR_OK)) {
+        ret = postErr;
     }
     /* The DER above holds private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
