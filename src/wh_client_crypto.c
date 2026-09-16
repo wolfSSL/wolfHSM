@@ -12205,6 +12205,8 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     uintptr_t                                keyAddr     = 0;
     uintptr_t                                seedAddr    = 0;
     uint64_t                                 keyAddrSz   = 0;
+    int                                      keyPre      = 0;
+    int                                      seedPre     = 0;
     uint16_t                                 pkType;
     uint16_t                                 req_len;
     uint16_t                                 res_len     = 0;
@@ -12253,6 +12255,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
             ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         if (ret == WH_ERROR_OK) {
+            keyPre        = 1;
             req->key.addr = (uint64_t)(uintptr_t)keyAddr;
         }
 
@@ -12262,6 +12265,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
                 ctx, (uintptr_t)seed, (void**)&seedAddr, seedSz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
             if (ret == WH_ERROR_OK) {
+                seedPre        = 1;
                 req->seed.addr = (uint64_t)(uintptr_t)seedAddr;
             }
         }
@@ -12286,14 +12290,24 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
             } while (ret == WH_ERROR_NOTREADY);
         }
 
-        if (seedSz > 0) {
-            (void)wh_Client_DmaProcessClientAddress(
+        /* Release only what was acquired, and do not report a good key when
+         * the copy-back failed. */
+        if (seedPre) {
+            int postRet = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)seed, (void**)&seedAddr, seedSz,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            if (ret == WH_ERROR_OK) {
+                ret = postRet;
+            }
         }
-        (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
-            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+        if (keyPre) {
+            int postRet = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)buffer, (void**)&keyAddr, keyAddrSz,
+                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+            if (ret == WH_ERROR_OK) {
+                ret = postRet;
+            }
+        }
 
         if (ret == WH_ERROR_OK) {
             /* Get response structure pointer, validates generic header rc */
@@ -12417,6 +12431,8 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
     uint8_t*                               dataPtr = NULL;
     uintptr_t                              inAddr  = 0;
     uintptr_t                              outAddr = 0;
+    int                                    inPre   = 0;
+    int                                    outPre  = 0;
     word32                                 sigCap  = 0;
     uint16_t                               pkType;
 
@@ -12512,6 +12528,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
                 ctx, (uintptr_t)in, (void**)&inAddr, req->msg.sz,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
             if (ret == WH_ERROR_OK) {
+                inPre         = 1;
                 req->msg.addr = inAddr;
             }
 
@@ -12521,6 +12538,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
                     ctx, (uintptr_t)out, (void**)&outAddr, req->sig.sz,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
                 if (ret == WH_ERROR_OK) {
+                    outPre        = 1;
                     req->sig.addr = outAddr;
                 }
             }
@@ -12566,12 +12584,24 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
                 }
             }
 
-            (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)out, (void**)&outAddr, sigCap,
-                WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
-            (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)in, (void**)&inAddr, in_len,
-                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            /* Release only what was acquired, and do not report a good
+             * signature when the copy-back failed. */
+            if (outPre) {
+                int postRet = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)out, (void**)&outAddr, sigCap,
+                    WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    ret = postRet;
+                }
+            }
+            if (inPre) {
+                int postRet = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)in, (void**)&inAddr, in_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    ret = postRet;
+                }
+            }
         }
         else {
             ret = WH_ERROR_BADARGS;
@@ -12596,6 +12626,8 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
     whMessageCrypto_SlhDsaVerifyDmaResponse* res     = NULL;
     uint8_t*                                 dataPtr = NULL;
     uint16_t                                 pkType;
+    int                                      sigPre  = 0;
+    int                                      msgPre  = 0;
 
     /* Transaction state */
     whKeyId key_id;
@@ -12678,6 +12710,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
                 WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
             if (ret == WH_ERROR_OK) {
+                sigPre        = 1;
                 req->sig.addr = sigAddr;
             }
             if (ret == WH_ERROR_OK) {
@@ -12686,6 +12719,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                     ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
                     WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
                 if (ret == WH_ERROR_OK) {
+                    msgPre        = 1;
                     req->msg.addr = msgAddr;
                 }
             }
@@ -12730,12 +12764,23 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 }
             }
 
-            (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
-                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-            (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
-                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            /* Release only what was acquired. */
+            if (msgPre) {
+                int postRet = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)msg, (void**)&msgAddr, msg_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    ret = postRet;
+                }
+            }
+            if (sigPre) {
+                int postRet = wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)sig, (void**)&sigAddr, sig_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+                if (ret == WH_ERROR_OK) {
+                    ret = postRet;
+                }
+            }
         }
         else {
             ret = WH_ERROR_BADARGS;
