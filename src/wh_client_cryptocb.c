@@ -1379,10 +1379,6 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
             int         isMPrime =
                 (info->pk.type == WC_PK_TYPE_PQC_SIG_SIGN_MSG);
 
-            if (!_SlhDsaKeyHasMaterial((const SlhDsaKey*)key)) {
-                addRnd   = NULL;
-                addRndSz = 0;
-            }
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
                 ret = wh_Client_SlhDsaSignDma(

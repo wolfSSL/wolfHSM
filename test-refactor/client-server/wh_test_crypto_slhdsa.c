@@ -375,6 +375,31 @@ static int _whTest_CryptoSlhDsaCachedKey(whClientContext* ctx)
                 ret = WH_TEST_FAIL;
                 goto done;
             }
+
+            /* A different randomizer must change the signature: that is what
+             * shows the caller's value reached the server rather than being
+             * dropped on the way and replaced by a deterministic one. */
+            memset(addRnd, 0x17, sizeof(addRnd));
+            sig2Len = sizeof(sig2);
+            ret     = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, msg,
+                                                  sizeof(msg), sig2, &sig2Len,
+                                                  addRnd);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Third cached-key sign failed: %d\n", ret);
+                goto done;
+            }
+            if ((sig2Len == sigLen) && (memcmp(sig, sig2, sigLen) == 0)) {
+                WH_ERROR_PRINT("Cached-key randomizer was ignored\n");
+                ret = WH_TEST_FAIL;
+                goto done;
+            }
+            ret = wc_SlhDsaKey_Verify(pub, NULL, 0, msg, sizeof(msg), sig2,
+                                      sig2Len);
+            if (ret != 0) {
+                WH_ERROR_PRINT("Re-randomized signature did not verify: %d\n",
+                               ret);
+                goto done;
+            }
         }
     }
 
@@ -999,7 +1024,13 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
 #endif /* WH_TEST_SLHDSA_FAST_PARAM */
 
     (void)ctx;
+#if !defined(WH_TEST_SLHDSA_COMM_PARAM) && !defined(WH_TEST_SLHDSA_FAST_PARAM)
+    /* A verify-only build compiles out every signing parameter set, leaving
+     * nothing above to run. Report that rather than a pass. */
+    return WH_TEST_SKIPPED;
+#else
     return 0;
+#endif
 }
 
 #endif /* WOLFSSL_HAVE_SLHDSA */
