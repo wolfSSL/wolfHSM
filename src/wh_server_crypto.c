@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -1029,6 +1029,103 @@ static int _MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+#define WH_SERVER_SLHDSA_MAX_CACHE_DER_SIZE WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE
+
+WH_UTILS_STATIC_ASSERT(WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >=
+                           WH_SERVER_SLHDSA_MAX_CACHE_DER_SIZE,
+                       "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for "
+                       "SLH-DSA key DER");
+
+int wh_Server_SlhDsaKeyCacheImport(whServerContext* ctx, SlhDsaKey* key,
+                                   whKeyId keyId, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       der_size;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(
+        ctx, keyId, WH_SERVER_SLHDSA_MAX_CACHE_DER_SIZE, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_SlhDsaSerializeKeyDer(
+            key, WH_SERVER_SLHDSA_MAX_CACHE_DER_SIZE, cacheBuf, &der_size);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = der_size;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+int wh_Server_SlhDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                   SlhDsaKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_SlhDsaDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+    }
+    return ret;
+}
+
+static int _SlhDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                        whNvmFlags requiredUsage,
+                                        SlhDsaKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Freshen, check usage and deserialize under one hold of the NVM lock so
+     * the policy verdict, the metadata length and the key bytes all come from
+     * the same snapshot of the shared cache slot. */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta, requiredUsage);
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Crypto_SlhDsaDeserializeKeyDer(cacheBuf, cacheMeta->len,
+                                                    key);
+            WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+        }
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+    } /* WH_SERVER_NVM_LOCK() */
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 /* The cache import below always requests a max-size slot, so a build whose big
@@ -5538,6 +5635,598 @@ static int _HandleMlDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef WOLFSSL_HAVE_SLHDSA
+static int _IsSlhDsaParamSupported(int param)
+{
+    /* A parameter set with no table row cannot be initialized, so ask the
+     * library rather than tracking the build guards here. */
+    return (wc_SlhDsaKey_SigSizeFromParam((enum SlhDsaParam)param) > 0);
+}
+
+/* Initialize a key to load a cached one into. req.param is the parameter set
+ * the client believes the key has; it is only a starting point, because the
+ * DER the key was cached as carries the real one and the decoder switches to
+ * it. It is deliberately not enforced: a caller holding nothing but a key id
+ * legitimately initializes its handle with a placeholder parameter set, so a
+ * mismatch here is not an error. */
+static int _SlhDsaInitForCachedKey(SlhDsaKey* key, uint32_t param, int devId)
+{
+    enum SlhDsaParam hint = (enum SlhDsaParam)param;
+
+    if (0 == _IsSlhDsaParamSupported((int)param)) {
+        hint = WC_SLHDSA_DEFAULT_PARAM;
+    }
+    return wc_SlhDsaKey_Init(key, hint, NULL, devId);
+}
+
+/* Load the signing or verifying key named by the request. */
+static int _SlhDsaLoadKey(whServerContext* ctx, whKeyId key_id,
+                          whNvmFlags requiredUsage, SlhDsaKey* key)
+{
+    return _SlhDsaKeyCacheExportEnforce(ctx, key_id, requiredUsage, key);
+}
+
+#ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
+/* Largest SLH-DSA security parameter, in bytes: FIPS 205 defines n as 16, 24
+ * or 32. */
+#define WH_SLHDSA_MAX_N (32U)
+
+/* Sign with whichever FIPS 205 entry point the request selected. */
+static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
+                               uint32_t options, const byte* in, word32 in_len,
+                               const byte* context, uint32_t contextSz,
+                               uint32_t preHashType, const byte* addRnd,
+                               uint32_t addRndSz, byte* sig, word32* sigLen)
+{
+    int      ret;
+    uint32_t n;
+    byte     rnd[WH_SLHDSA_MAX_N];
+    int mprime     = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_MPRIME);
+    int randomized = !!(options &
+                        WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_RANDOMIZED);
+
+    if ((key == NULL) || (key->params == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    n = (uint32_t)key->params->n;
+    if (n > sizeof(rnd)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* The signing entry points take a randomizer pointer but no length: they
+     * read exactly n bytes. Anything else would read past what the client
+     * sent, or silently ignore the tail of what it did send. */
+    if ((addRndSz != 0) && (addRndSz != n)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (mprime) {
+        if (addRndSz > 0) {
+            ret = wc_SlhDsaKey_SignMsgWithRandom(key, in, in_len, sig, sigLen,
+                                                 addRnd);
+        }
+        else if (randomized) {
+            /* The internal interface has no RNG-taking entry point, so draw
+             * the randomizer here rather than quietly signing
+             * deterministically for a request that asked not to. */
+            ret = wc_RNG_GenerateBlock(ctx->crypto->rng, rnd, n);
+            if (ret == 0) {
+                ret = wc_SlhDsaKey_SignMsgWithRandom(key, in, in_len, sig,
+                                                     sigLen, rnd);
+            }
+            wc_ForceZero(rnd, sizeof(rnd));
+        }
+        else {
+            /* The randomizer is the key's own PK.seed, which only the server
+             * copy of the key has. */
+            ret = wc_SlhDsaKey_SignMsgDeterministic(key, in, in_len, sig,
+                                                    sigLen);
+        }
+    }
+    else if (preHashType != WC_HASH_TYPE_NONE) {
+        if (addRndSz > 0) {
+            ret = wc_SlhDsaKey_SignHashWithRandom(
+                key, context, (byte)contextSz, in, in_len,
+                (enum wc_HashType)preHashType, sig, sigLen, addRnd);
+        }
+        else if (randomized) {
+            ret = wc_SlhDsaKey_SignHash(key, context, (byte)contextSz, in,
+                                        in_len, (enum wc_HashType)preHashType,
+                                        sig, sigLen, ctx->crypto->rng);
+        }
+        else {
+            ret = wc_SlhDsaKey_SignHashDeterministic(
+                key, context, (byte)contextSz, in, in_len,
+                (enum wc_HashType)preHashType, sig, sigLen);
+        }
+    }
+    else {
+        if (addRndSz > 0) {
+            ret = wc_SlhDsaKey_SignWithRandom(key, context, (byte)contextSz, in,
+                                              in_len, sig, sigLen, addRnd);
+        }
+        else if (randomized) {
+            ret = wc_SlhDsaKey_Sign(key, context, (byte)contextSz, in, in_len,
+                                    sig, sigLen, ctx->crypto->rng);
+        }
+        else {
+            ret = wc_SlhDsaKey_SignDeterministic(key, context, (byte)contextSz,
+                                                 in, in_len, sig, sigLen);
+        }
+    }
+
+    return ret;
+}
+#endif /* !WOLFSSL_SLHDSA_VERIFY_ONLY */
+
+/* Verify with whichever FIPS 205 entry point the request selected. wolfCrypt
+ * reports a bad signature as an error code, but the client interface wants a
+ * boolean, so translate here. */
+static int _SlhDsaVerifyDispatch(SlhDsaKey* key, uint32_t options,
+                                 const byte* sig, word32 sig_len,
+                                 const byte* msg, word32 msg_len,
+                                 const byte* context, uint32_t contextSz,
+                                 uint32_t preHashType, int* out_result)
+{
+    int ret;
+    int mprime = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_MPRIME);
+
+    if (mprime) {
+        ret = wc_SlhDsaKey_VerifyMsg(key, msg, msg_len, sig, sig_len);
+    }
+    else if (preHashType != WC_HASH_TYPE_NONE) {
+        ret = wc_SlhDsaKey_VerifyHash(key, context, (byte)contextSz, msg,
+                                      msg_len, (enum wc_HashType)preHashType,
+                                      sig, sig_len);
+    }
+    else {
+        ret = wc_SlhDsaKey_Verify(key, context, (byte)contextSz, msg, msg_len,
+                                  sig, sig_len);
+    }
+
+    if (ret == 0) {
+        *out_result = 1;
+    }
+    else if (ret == WC_NO_ERR_TRACE(SIG_VERIFY_E)) {
+        /* A signature that does not verify is a result, not a failure. Every
+         * other code, BAD_LENGTH_E in particular, describes a malformed
+         * request and is propagated so the caller can tell the two apart the
+         * same way a software-only build would. */
+        *out_result = 0;
+        ret         = 0;
+    }
+
+    return ret;
+}
+
+static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                  ret = WH_ERROR_OK;
+    SlhDsaKey                            key[1];
+    whMessageCrypto_SlhDsaKeyGenRequest  req;
+    whMessageCrypto_SlhDsaKeyGenResponse res;
+    whKeyId                              key_id;
+    whNvmFlags                           flags;
+    uint8_t*                             label;
+    const byte*                          seed;
+    uint32_t                             seedSz;
+    uint8_t*                             res_out;
+    uint16_t                             max_size;
+    uint16_t                             res_size = 0;
+    int                                  param;
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateSlhDsaKeyGenRequest(
+        magic, (whMessageCrypto_SlhDsaKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    param  = (int)req.param;
+    flags  = req.flags;
+    label  = req.label;
+    seedSz = req.seedSz;
+    seed   = (const byte*)cryptoDataIn +
+           sizeof(whMessageCrypto_SlhDsaKeyGenRequest);
+
+    if (seedSz > (uint32_t)(inSize -
+                            sizeof(whMessageCrypto_SlhDsaKeyGenRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Response message. cryptoDataOut already points past the generic
+     * response header, so that header comes out of the budget too. */
+    res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_SlhDsaKeyGenResponse);
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          sizeof(whMessageCrypto_GenericResponseHeader) -
+                          sizeof(whMessageCrypto_SlhDsaKeyGenResponse));
+
+    if (0 == _IsSlhDsaParamSupported(param)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_SlhDsaKey_Init(key, (enum SlhDsaParam)param, NULL, devId);
+    if (ret == 0) {
+        if (seedSz > 0) {
+            /* The seed is the contiguous SK.seed || SK.prf || PK.seed */
+            word32 n = seedSz / 3;
+            if ((seedSz % 3) != 0) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else {
+                ret = wc_SlhDsaKey_MakeKeyWithRandom(key, seed, n, seed + n, n,
+                                                     seed + 2 * n, n);
+            }
+        }
+        else {
+            ret = wc_SlhDsaKey_MakeKey(key, ctx->crypto->rng);
+        }
+
+        if (ret == 0) {
+            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                /* Must serialize the key into the response message. */
+                key_id = WH_KEYID_ERASED;
+                ret    = wh_Crypto_SlhDsaSerializeKeyDer(key, max_size, res_out,
+                                                         &res_size);
+            }
+            else {
+                /* Must import the key into the cache and return keyid */
+                res_size = 0;
+                /* Hold the NVM lock so id allocation and cache import are
+                 * atomic with respect to other server contexts under
+                 * THREADSAFE. */
+                ret = WH_SERVER_NVM_LOCK(ctx);
+                if (ret == WH_ERROR_OK) {
+                    if (WH_KEYID_ISERASED(key_id)) {
+                        ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_SlhDsaKeyCacheImport(
+                            ctx, key, key_id, flags, WH_NVM_LABEL_LEN, label);
+                    }
+                    (void)WH_SERVER_NVM_UNLOCK(ctx);
+                } /* WH_SERVER_NVM_LOCK() */
+                if (ret == 0) {
+                    /* Best-effort public key export so the client can skip a
+                     * separate ExportPublicKey call. An empty body is not an
+                     * error; MakeCacheKeyAndExportPublic callers detect it. */
+                    int pub_ret =
+                        wc_SlhDsaKey_PublicKeyToDer(key, res_out, max_size, 1);
+                    res_size = (pub_ret > 0) ? (uint16_t)pub_ret : 0;
+                }
+            }
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
+        res.len   = res_size;
+
+        wh_MessageCrypto_TranslateSlhDsaKeyGenResponse(magic, &res,
+                                                       cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_SlhDsaKeyGenResponse) + res_size;
+    }
+    return ret;
+#endif /* WOLFSSL_SLHDSA_VERIFY_ONLY */
+}
+
+static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                ret;
+    SlhDsaKey                          key[1];
+    whMessageCrypto_SlhDsaSignRequest  req;
+    whMessageCrypto_SlhDsaSignResponse res;
+    byte*                              in;
+    byte*                              req_context;
+    byte*                              req_addRnd;
+    byte*                              res_out;
+    whKeyId                            key_id;
+    word32                             in_len;
+    word32                             available;
+    word32                             max_len;
+    word32                             res_len;
+    uint32_t                           contextSz;
+    uint32_t                           preHashType;
+    uint32_t                           addRndSz;
+    uint32_t                           options;
+    int                                evict;
+    int                                sigLen;
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateSlhDsaSignRequest(
+        magic, (whMessageCrypto_SlhDsaSignRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_SlhDsaSignRequest);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    in_len      = req.sz;
+    contextSz   = req.contextSz;
+    preHashType = req.preHashType;
+    addRndSz    = req.addRndSz;
+    options     = req.options;
+    evict = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
+
+    /* Validate the declared lengths against the remaining payload */
+    available = inSize - sizeof(whMessageCrypto_SlhDsaSignRequest);
+    if (in_len > available) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > (available - in_len)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (addRndSz > (available - in_len - contextSz)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > WH_CRYPTO_SLHDSA_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    req_context = (contextSz > 0) ? (in + in_len) : NULL;
+    req_addRnd  = (addRndSz > 0) ? (in + in_len + contextSz) : NULL;
+
+    /* Response message. cryptoDataOut already points past the generic
+     * response header, so that header comes out of the budget too. */
+    res_out =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_SlhDsaSignResponse);
+    max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       sizeof(whMessageCrypto_SlhDsaSignResponse));
+    res_len = max_len;
+
+    ret = _SlhDsaInitForCachedKey(key, req.param, devId);
+    if (ret == 0) {
+        ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        if (ret == WH_ERROR_OK) {
+            /* SLH-DSA signatures run from 7856 to 49856 bytes, so most
+             * parameter sets cannot be returned through the comm buffer at
+             * all. Report that up front rather than as a wolfCrypt length
+             * error from inside the sign call. */
+            sigLen = wc_SlhDsaKey_SigSize(key);
+            if (sigLen <= 0) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else if ((word32)sigLen > max_len) {
+                ret = WH_ERROR_BUFFER_SIZE;
+            }
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = _SlhDsaSignDispatch(ctx, key, options, in, in_len,
+                                      req_context, contextSz, preHashType,
+                                      req_addRnd, addRndSz, res_out, &res_len);
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+    if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+    if (ret == 0) {
+        res.sz = res_len;
+
+        wh_MessageCrypto_TranslateSlhDsaSignResponse(
+            magic, &res, (whMessageCrypto_SlhDsaSignResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_SlhDsaSignResponse) + res_len;
+    }
+    return ret;
+#endif /* WOLFSSL_SLHDSA_VERIFY_ONLY */
+}
+
+static int _HandleSlhDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                  ret;
+    SlhDsaKey                            key[1];
+    whMessageCrypto_SlhDsaVerifyRequest  req;
+    whMessageCrypto_SlhDsaVerifyResponse res;
+    byte*                                req_sig;
+    byte*                                req_hash;
+    byte*                                req_context;
+    whKeyId                              key_id;
+    uint32_t                             options;
+    uint32_t                             hash_len;
+    uint32_t                             sig_len;
+    uint32_t                             contextSz;
+    uint32_t                             preHashType;
+    uint32_t                             available;
+    int                                  evict;
+    int                                  result = 0;
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Translate the request */
+    ret = wh_MessageCrypto_TranslateSlhDsaVerifyRequest(
+        magic, (whMessageCrypto_SlhDsaVerifyRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    options = req.options;
+    key_id  = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                           ctx->comm->client_id, req.keyId);
+    hash_len    = req.hashSz;
+    sig_len     = req.sigSz;
+    contextSz   = req.contextSz;
+    preHashType = req.preHashType;
+    req_sig =
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_SlhDsaVerifyRequest);
+    evict = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT);
+
+    /* Validate lengths against available payload (overflow-safe) */
+    available = inSize - sizeof(whMessageCrypto_SlhDsaVerifyRequest);
+    if ((sig_len > available) || (hash_len > available) ||
+        (sig_len > (available - hash_len))) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > (available - sig_len - hash_len)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > WH_CRYPTO_SLHDSA_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req_hash    = req_sig + sig_len;
+    req_context = (contextSz > 0) ? (req_hash + hash_len) : NULL;
+
+    ret = _SlhDsaInitForCachedKey(key, req.param, devId);
+    if (ret == 0) {
+        ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+        if (ret == WH_ERROR_OK) {
+            ret = _SlhDsaVerifyDispatch(key, options, req_sig, sig_len,
+                                        req_hash, hash_len, req_context,
+                                        contextSz, preHashType, &result);
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+    if (evict != 0) {
+        /* User requested to evict from cache, even if the call failed */
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+    if (ret == 0) {
+        res.res = result;
+
+        wh_MessageCrypto_TranslateSlhDsaVerifyResponse(
+            magic, &res, (whMessageCrypto_SlhDsaVerifyResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_SlhDsaVerifyResponse);
+    }
+    return ret;
+}
+
+static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
+                                     int devId, const void* cryptoDataIn,
+                                     uint16_t inSize, void* cryptoDataOut,
+                                     uint16_t* outSize)
+{
+#ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int       ret;
+    SlhDsaKey key[1];
+    whMessageCrypto_SlhDsaCheckPrivKeyRequest  req;
+    whMessageCrypto_SlhDsaCheckPrivKeyResponse res;
+    byte*                                      req_pub;
+    whKeyId                                    key_id;
+    uint32_t                                   pubSz;
+    uint32_t                                   available;
+    int                                        evict;
+    int                                        result = 0;
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaCheckPrivKeyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSlhDsaCheckPrivKeyRequest(
+        magic, (whMessageCrypto_SlhDsaCheckPrivKeyRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    pubSz  = req.pubSz;
+    evict  = !!(req.options &
+                WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT);
+    req_pub = (uint8_t*)(cryptoDataIn) +
+              sizeof(whMessageCrypto_SlhDsaCheckPrivKeyRequest);
+
+    available = inSize - sizeof(whMessageCrypto_SlhDsaCheckPrivKeyRequest);
+    if (pubSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _SlhDsaInitForCachedKey(key, req.param, devId);
+    if (ret == 0) {
+        ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        if (ret == WH_ERROR_OK) {
+            /* Recompute the public root from the private seeds */
+            ret = wc_SlhDsaKey_CheckKey(key);
+        }
+        if (ret == WH_ERROR_OK) {
+            /* PK.seed || PK.root sits at the end of the key data. An absent
+             * public key means the caller had none to offer, so the
+             * consistency check above is the whole answer. */
+            uint32_t expected = 2U * (uint32_t)key->params->n;
+            if (pubSz == 0) {
+                result = 1;
+            }
+            else if (pubSz != expected) {
+                result = 0;
+            }
+            else {
+                result = (memcmp(key->sk + 2 * key->params->n, req_pub,
+                                 pubSz) == 0);
+            }
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+    if (ret == 0) {
+        /* Mirror wc_SlhDsaKey_CheckKey: 0 on match, WC_KEY_MISMATCH_E on not */
+        res.res = (result != 0) ? 0 : WC_KEY_MISMATCH_E;
+
+        wh_MessageCrypto_TranslateSlhDsaCheckPrivKeyResponse(
+            magic, &res,
+            (whMessageCrypto_SlhDsaCheckPrivKeyResponse*)cryptoDataOut);
+
+        *outSize = sizeof(whMessageCrypto_SlhDsaCheckPrivKeyResponse);
+    }
+    return ret;
+#endif /* WOLFSSL_SLHDSA_VERIFY_ONLY */
+}
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
 #ifdef WOLFSSL_HAVE_MLKEM
 static int _IsMlKemLevelSupported(int level)
 {
@@ -5881,7 +6570,8 @@ cleanup:
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
 static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
                                   uint16_t cryptoInSize, void* cryptoDataOut,
@@ -5922,6 +6612,37 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
             }
         } break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                    ret = _HandleSlhDsaKeyGen(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+                    ret = _HandleSlhDsaSign(ctx, magic, devId, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+                    ret = _HandleSlhDsaVerify(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandleSlhDsaCheckPrivKey(
+                        ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                        cryptoDataOut, cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -6156,11 +6877,16 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* HAVE_ED25519 */
 
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_SIG_SIGN:
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
                 case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+#ifdef WOLFSSL_HAVE_SLHDSA
+                case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+                case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+#endif
                     ret = _HandlePqcSigAlgorithm(
                         ctx, magic, devId, cryptoDataIn, cryptoInSize,
                         cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
@@ -7331,7 +8057,413 @@ static int _HandleMlDsaCheckPrivKeyDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
 
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#ifdef WOLFSSL_HAVE_SLHDSA
+static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                  int devId, const void* cryptoDataIn,
+                                  uint16_t inSize, void* cryptoDataOut,
+                                  uint16_t* outSize)
+{
+#ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int       ret = WH_ERROR_OK;
+    SlhDsaKey key[1];
+    void*     clientOutAddr  = NULL;
+    void*     clientSeedAddr = NULL;
+    uint16_t  keySize        = 0;
+    /* A denied access can come from either client buffer; remember which so
+     * the client is told the address it can actually act on. */
+    int seedAccessFail = 0;
+
+    whMessageCrypto_SlhDsaKeyGenDmaRequest  req;
+    whMessageCrypto_SlhDsaKeyGenDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaKeyGenDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSlhDsaKeyGenDmaRequest(
+        magic, (whMessageCrypto_SlhDsaKeyGenDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (0 == _IsSlhDsaParamSupported((int)req.param)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_SlhDsaKey_Init(key, (enum SlhDsaParam)req.param, NULL, devId);
+    if (ret == 0) {
+        if (req.seed.sz > 0) {
+            /* The seed is the contiguous SK.seed || SK.prf || PK.seed */
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, req.seed.addr, &clientSeedAddr, req.seed.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                seedAccessFail = 1;
+            }
+            if (ret == 0) {
+                word32 n = (word32)(req.seed.sz / 3);
+                if ((req.seed.sz % 3) != 0) {
+                    ret = WH_ERROR_BADARGS;
+                }
+                else {
+                    const byte* seed = (const byte*)clientSeedAddr;
+                    ret = wc_SlhDsaKey_MakeKeyWithRandom(
+                        key, seed, n, seed + n, n, seed + 2 * n, n);
+                }
+                (void)wh_Server_DmaProcessClientAddress(
+                    ctx, req.seed.addr, &clientSeedAddr, req.seed.sz,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+            }
+        }
+        else {
+            ret = wc_SlhDsaKey_MakeKey(key, ctx->crypto->rng);
+        }
+
+        if (ret == 0) {
+            if (req.flags & WH_NVM_FLAGS_EPHEMERAL) {
+                /* Must serialize the key into client memory */
+                ret = wh_Server_DmaProcessClientAddress(
+                    ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+
+                if (ret == 0) {
+                    ret = wh_Crypto_SlhDsaSerializeKeyDer(
+                        key, (uint16_t)req.key.sz, clientOutAddr, &keySize);
+                    if (ret == 0) {
+                        res.keyId   = WH_KEYID_ERASED;
+                        res.keySize = keySize;
+                    }
+                }
+
+                if (ret == 0) {
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, req.key.addr, &clientOutAddr, keySize,
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                }
+            }
+            else {
+                /* Must import the key into the cache and return keyid */
+                whKeyId keyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
+                /* Hold the NVM lock so id allocation and cache import are
+                 * atomic with respect to other server contexts under
+                 * THREADSAFE. */
+                ret = WH_SERVER_NVM_LOCK(ctx);
+                if (ret == WH_ERROR_OK) {
+                    if (WH_KEYID_ISERASED(keyId)) {
+                        ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_SlhDsaKeyCacheImport(
+                            ctx, key, keyId, req.flags, req.labelSize,
+                            req.label);
+                    }
+                    (void)WH_SERVER_NVM_UNLOCK(ctx);
+                } /* WH_SERVER_NVM_LOCK() */
+
+                /* Stream the public key back through the client's DMA buffer
+                 * so it gets the pubkey without a separate ExportPublicKey
+                 * call. A freshly generated key must serialize, so treat a
+                 * failure as fatal: evict the just-committed key and propagate
+                 * the error rather than returning a keyId with no public
+                 * key. */
+                if (ret == 0) {
+                    int rc = wh_Server_DmaProcessClientAddress(
+                        ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                        WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                    if (rc == 0) {
+                        int pub_ret = wc_SlhDsaKey_PublicKeyToDer(
+                            key, (byte*)clientOutAddr, (word32)req.key.sz, 1);
+                        if (pub_ret > 0) {
+                            keySize = (uint16_t)pub_ret;
+                        }
+                        else {
+                            ret = (pub_ret < 0) ? pub_ret : WH_ERROR_ABORTED;
+                        }
+                        (void)wh_Server_DmaProcessClientAddress(
+                            ctx, req.key.addr, &clientOutAddr, keySize,
+                            WH_DMA_OPER_CLIENT_WRITE_POST,
+                            (whServerDmaFlags){0});
+                    }
+                    else {
+                        ret = rc;
+                    }
+                    if (ret != 0) {
+                        _CryptoEvictKeyLocked(ctx, keyId);
+                    }
+                }
+                if (ret == 0) {
+                    res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                    res.keySize = keySize;
+                }
+            }
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+
+    if (ret == WH_ERROR_ACCESS) {
+        res.dmaAddrStatus.badAddr = seedAccessFail ? req.seed : req.key;
+    }
+
+    (void)wh_MessageCrypto_TranslateSlhDsaKeyGenDmaResponse(
+        magic, &res, (whMessageCrypto_SlhDsaKeyGenDmaResponse*)cryptoDataOut);
+
+    *outSize = sizeof(res);
+
+    return ret;
+#endif /* WOLFSSL_SLHDSA_VERIFY_ONLY */
+}
+
+static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
+                                const void* cryptoDataIn, uint16_t inSize,
+                                void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int       ret = 0;
+    SlhDsaKey key[1];
+    void*     msgAddr = NULL;
+    void*     sigAddr = NULL;
+    word32    sigLen  = 0;
+    whKeyId   key_id;
+    int       evict;
+    uint32_t  contextSz;
+    uint32_t  preHashType;
+    uint32_t  addRndSz;
+    byte*     req_context = NULL;
+    byte*     req_addRnd  = NULL;
+    uint32_t  inline_len;
+
+    whMessageCrypto_SlhDsaSignDmaRequest  req;
+    whMessageCrypto_SlhDsaSignDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaSignDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSlhDsaSignDmaRequest(
+        magic, (whMessageCrypto_SlhDsaSignDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
+
+    contextSz   = req.contextSz;
+    preHashType = req.preHashType;
+    addRndSz    = req.addRndSz;
+    if (contextSz > WH_CRYPTO_SLHDSA_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    inline_len = inSize - sizeof(whMessageCrypto_SlhDsaSignDmaRequest);
+    if ((contextSz > inline_len) || (addRndSz > (inline_len - contextSz))) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 0) {
+        req_context = (uint8_t*)(cryptoDataIn) +
+                      sizeof(whMessageCrypto_SlhDsaSignDmaRequest);
+    }
+    if (addRndSz > 0) {
+        req_addRnd = (uint8_t*)(cryptoDataIn) +
+                     sizeof(whMessageCrypto_SlhDsaSignDmaRequest) + contextSz;
+    }
+
+    ret = _SlhDsaInitForCachedKey(key, req.param, devId);
+    if (ret == 0) {
+        ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
+        if (ret == 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.msg;
+            }
+
+            if (ret == 0) {
+                ret = wh_Server_DmaProcessClientAddress(
+                    ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+                    WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                if (ret == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.sig;
+                }
+
+                if (ret == 0) {
+                    sigLen = (word32)req.sig.sz;
+                    ret    = _SlhDsaSignDispatch(
+                           ctx, key, req.options, (const byte*)msgAddr,
+                           (word32)req.msg.sz, req_context, contextSz,
+                           preHashType, req_addRnd, addRndSz, (byte*)sigAddr,
+                           &sigLen);
+                }
+
+                if (sigAddr != NULL) {
+                    (void)wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+                }
+                if (msgAddr != NULL) {
+                    (void)wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+                }
+            }
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+
+    if (evict) {
+        /* User requested to evict from cache, even if the call failed */
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.sigLen = sigLen;
+    }
+
+    (void)wh_MessageCrypto_TranslateSlhDsaSignDmaResponse(
+        magic, &res, (whMessageCrypto_SlhDsaSignDmaResponse*)cryptoDataOut);
+
+    *outSize = sizeof(res);
+
+    return ret;
+#endif /* WOLFSSL_SLHDSA_VERIFY_ONLY */
+}
+
+static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
+                                  int devId, const void* cryptoDataIn,
+                                  uint16_t inSize, void* cryptoDataOut,
+                                  uint16_t* outSize)
+{
+    int       ret = 0;
+    SlhDsaKey key[1];
+    void*     msgAddr = NULL;
+    void*     sigAddr = NULL;
+    whKeyId   key_id;
+    int       evict;
+    int       result = 0;
+    uint32_t  contextSz;
+    uint32_t  preHashType;
+    byte*     req_context = NULL;
+
+    whMessageCrypto_SlhDsaVerifyDmaRequest  req;
+    whMessageCrypto_SlhDsaVerifyDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_SlhDsaVerifyDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSlhDsaVerifyDmaRequest(
+        magic, (whMessageCrypto_SlhDsaVerifyDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT);
+
+    contextSz   = req.contextSz;
+    preHashType = req.preHashType;
+    if (contextSz > WH_CRYPTO_SLHDSA_MAX_CTX_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+    if (contextSz > 0) {
+        if (inSize <
+            sizeof(whMessageCrypto_SlhDsaVerifyDmaRequest) + contextSz) {
+            return WH_ERROR_BADARGS;
+        }
+        req_context = (uint8_t*)(cryptoDataIn) +
+                      sizeof(whMessageCrypto_SlhDsaVerifyDmaRequest);
+    }
+
+    ret = _SlhDsaInitForCachedKey(key, req.param, devId);
+    if (ret == 0) {
+        ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, key);
+        if (ret == 0) {
+            ret = wh_Server_DmaProcessClientAddress(
+                ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.sig;
+            }
+
+            if (ret == 0) {
+                ret = wh_Server_DmaProcessClientAddress(
+                    ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                    WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+                if (ret == WH_ERROR_ACCESS) {
+                    res.dmaAddrStatus.badAddr = req.msg;
+                }
+
+                if (ret == 0) {
+                    ret = _SlhDsaVerifyDispatch(
+                        key, req.options, (const byte*)sigAddr,
+                        (word32)req.sig.sz, (const byte*)msgAddr,
+                        (word32)req.msg.sz, req_context, contextSz,
+                        preHashType, &result);
+                }
+
+                if (msgAddr != NULL) {
+                    (void)wh_Server_DmaProcessClientAddress(
+                        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+                }
+            }
+            if (sigAddr != NULL) {
+                (void)wh_Server_DmaProcessClientAddress(
+                    ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+            }
+        }
+        wc_SlhDsaKey_Free(key);
+    }
+
+    if (evict) {
+        /* User requested to evict from cache, even if the call failed */
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.verifyResult = result;
+    }
+
+    (void)wh_MessageCrypto_TranslateSlhDsaVerifyDmaResponse(
+        magic, &res, (whMessageCrypto_SlhDsaVerifyDmaResponse*)cryptoDataOut);
+
+    *outSize = sizeof(res);
+
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
 static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
                                      int devId, const void* cryptoDataIn,
                                      uint16_t cryptoInSize, void* cryptoDataOut,
@@ -7372,6 +8504,39 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
             }
         } break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                    ret = _HandleSlhDsaKeyGenDma(ctx, magic, devId,
+                                                 cryptoDataIn, cryptoInSize,
+                                                 cryptoDataOut, cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+                    ret = _HandleSlhDsaSignDma(ctx, magic, devId, cryptoDataIn,
+                                               cryptoInSize, cryptoDataOut,
+                                               cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+                    ret = _HandleSlhDsaVerifyDma(ctx, magic, devId,
+                                                 cryptoDataIn, cryptoInSize,
+                                                 cryptoDataOut, cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    /* The public key is 2n bytes, so the comm-buffer handler
+                     * carries it and there is nothing for DMA to move. */
+                    ret = _HandleSlhDsaCheckPrivKey(
+                        ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                        cryptoDataOut, cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -9344,17 +10509,22 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
         case WC_ALGO_TYPE_PK:
             switch (rqstHeader.algoType) {
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
                 case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_SIG_SIGN:
                 case WC_PK_TYPE_PQC_SIG_VERIFY:
                 case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+#ifdef WOLFSSL_HAVE_SLHDSA
+                case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+                case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+#endif
                     ret = _HandlePqcSigAlgorithmDma(
                         ctx, magic, devId, cryptoDataIn, cryptoInSize,
                         cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
                         rqstHeader.algoSubType);
                     break;
-#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON || WOLFSSL_HAVE_SLHDSA */
 #if defined(WOLFSSL_HAVE_MLKEM)
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
                 case WC_PK_TYPE_PQC_KEM_ENCAPS:

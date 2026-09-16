@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -161,6 +161,14 @@
  * callback to handle client to server and/or server to client memory copy
  * operation in DMA requests.
  *     Default: Not defined
+ *
+ *  SLH-DSA signatures range from 7856 bytes (128s) to 49856 bytes (256f), so
+ *  the non-DMA sign and verify paths only work for a parameter set whose
+ *  signature fits WOLFHSM_CFG_COMM_DATA_LEN alongside the message headers.
+ *  With the default buffer no parameter set fits; at 8192 only 128s does, and
+ *  a maximum-length context with a 64-byte pre-hash still overflows it. The
+ *  server reports WH_ERROR_BUFFER_SIZE rather than truncating. Use the DMA
+ *  sign and verify calls for the other parameter sets.
  *
  *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
  *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the

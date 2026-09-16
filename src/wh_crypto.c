@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -386,6 +386,67 @@ int wh_Crypto_MlDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
+                                    uint8_t* buffer, uint16_t* out_size)
+{
+    int ret = 0;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Choose appropriate serialization based on key flags */
+    if (key->flags & WC_SLHDSA_FLAG_PRIVATE) {
+#ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
+        /* RFC 9909 always carries the public key alongside the private one */
+        ret = wc_SlhDsaKey_KeyToDer(key, buffer, max_size);
+#else
+        ret = WH_ERROR_BADARGS;
+#endif
+    }
+    else if (key->flags & WC_SLHDSA_FLAG_PUBLIC) {
+        /* Public key only - use SPKI format */
+        ret = wc_SlhDsaKey_PublicKeyToDer(key, buffer, max_size, 1);
+    }
+    else {
+        /* No key data set */
+        return WH_ERROR_BADARGS;
+    }
+
+    /* ASN.1 functions return the size of the DER encoded key on success */
+    if (ret > 0) {
+        *out_size = ret;
+        ret       = WH_ERROR_OK;
+    }
+    return ret;
+}
+
+int wh_Crypto_SlhDsaDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                      SlhDsaKey* key)
+{
+    word32 idx = 0;
+    int    ret;
+
+    if ((buffer == NULL) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+#ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
+    /* Try private key first, if that fails try public key */
+    ret = wc_SlhDsaKey_PrivateKeyDecode(buffer, &idx, key, size);
+    if (ret != 0) {
+        /* Reset index before trying public key */
+        idx = 0;
+        ret = wc_SlhDsaKey_PublicKeyDecode(buffer, &idx, key, size);
+    }
+#else
+    ret = wc_SlhDsaKey_PublicKeyDecode(buffer, &idx, key, size);
+#endif
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 #ifdef WOLFSSL_HAVE_MLKEM
 int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
