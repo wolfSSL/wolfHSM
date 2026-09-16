@@ -60,6 +60,17 @@
 #define WH_TEST_SLHDSA_FAST_SIG_LEN WC_SLHDSA_SHAKE128F_SIG_LEN
 #endif
 
+/* The direct-DMA tests do not pass a signature through the comm buffer, so
+ * any built parameter set exercises them. Prefer the fast one, but fall back
+ * to the small one so a build without 128F still covers the DMA APIs. */
+#if defined(WH_TEST_SLHDSA_FAST_PARAM)
+#define WH_TEST_SLHDSA_DMA_PARAM WH_TEST_SLHDSA_FAST_PARAM
+#define WH_TEST_SLHDSA_DMA_SIG_LEN WH_TEST_SLHDSA_FAST_SIG_LEN
+#elif defined(WH_TEST_SLHDSA_COMM_PARAM)
+#define WH_TEST_SLHDSA_DMA_PARAM WH_TEST_SLHDSA_COMM_PARAM
+#define WH_TEST_SLHDSA_DMA_SIG_LEN WH_TEST_SLHDSA_COMM_SIG_LEN
+#endif
+
 #ifdef WH_TEST_SLHDSA_COMM_PARAM
 
 /* Drives the crypto callback through the plain wolfCrypt API, which is how an
@@ -753,7 +764,9 @@ done:
     return ret;
 }
 
-#ifdef WOLFHSM_CFG_DMA
+#endif /* WH_TEST_SLHDSA_FAST_PARAM */
+
+#if defined(WH_TEST_SLHDSA_DMA_PARAM) && defined(WOLFHSM_CFG_DMA)
 /* The fast parameter set signs a 17088-byte signature, which no reasonable
  * comm buffer holds, so this is the DMA path end to end. */
 static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
@@ -762,16 +775,16 @@ static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
     int       ret;
     SlhDsaKey key[1];
     byte      msg[] = "Test message for DMA SLH-DSA";
-    byte      sig[WH_TEST_SLHDSA_FAST_SIG_LEN];
+    byte      sig[WH_TEST_SLHDSA_DMA_SIG_LEN];
     word32    sigLen   = sizeof(sig);
     int       verified = 0;
 
-    ret = wc_SlhDsaKey_Init(key, WH_TEST_SLHDSA_FAST_PARAM, NULL, devId);
+    ret = wc_SlhDsaKey_Init(key, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
     if (ret != 0) {
         return ret;
     }
 
-    ret = wh_Client_SlhDsaMakeExportKeyDma(ctx, WH_TEST_SLHDSA_FAST_PARAM, key);
+    ret = wh_Client_SlhDsaMakeExportKeyDma(ctx, WH_TEST_SLHDSA_DMA_PARAM, key);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to generate SLH-DSA key over DMA: %d\n", ret);
         goto done;
@@ -783,10 +796,10 @@ static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
         WH_ERROR_PRINT("Failed to sign over DMA: %d\n", ret);
         goto done;
     }
-    if (sigLen != WH_TEST_SLHDSA_FAST_SIG_LEN) {
+    if (sigLen != WH_TEST_SLHDSA_DMA_SIG_LEN) {
         WH_ERROR_PRINT("DMA signature length %u, expected %u\n",
                        (unsigned)sigLen,
-                       (unsigned)WH_TEST_SLHDSA_FAST_SIG_LEN);
+                       (unsigned)WH_TEST_SLHDSA_DMA_SIG_LEN);
         ret = WH_TEST_FAIL;
         goto done;
     }
@@ -839,14 +852,14 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
     int       handleInit = 0;
     uint8_t   label[]    = "SlhDsaDmaCached";
 
-    ret = wc_SlhDsaKey_Init(pub, WH_TEST_SLHDSA_FAST_PARAM, NULL, devId);
+    ret = wc_SlhDsaKey_Init(pub, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
     if (ret != 0) {
         return ret;
     }
     pubInit = 1;
 
     ret = wh_Client_SlhDsaMakeCacheKeyDma(
-        ctx, WH_TEST_SLHDSA_FAST_PARAM, &keyId,
+        ctx, WH_TEST_SLHDSA_DMA_PARAM, &keyId,
         WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, sizeof(label),
         label, pub);
     if (ret != 0) {
@@ -854,7 +867,7 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
         goto done;
     }
 
-    ret = wc_SlhDsaKey_Init(handle, WH_TEST_SLHDSA_FAST_PARAM, NULL, devId);
+    ret = wc_SlhDsaKey_Init(handle, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
     if (ret != 0) {
         goto done;
     }
@@ -863,7 +876,7 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
 
     {
         byte   msg[] = "DMA signed by a key that never left the HSM";
-        byte   sig[WH_TEST_SLHDSA_FAST_SIG_LEN];
+        byte   sig[WH_TEST_SLHDSA_DMA_SIG_LEN];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
 
@@ -898,7 +911,7 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
         word32    aSz = sizeof(a);
         word32    bSz = sizeof(b);
 
-        ret = wc_SlhDsaKey_Init(exported, WH_TEST_SLHDSA_FAST_PARAM, NULL,
+        ret = wc_SlhDsaKey_Init(exported, WH_TEST_SLHDSA_DMA_PARAM, NULL,
                                 devId);
         if (ret != 0) {
             goto done;
@@ -936,8 +949,7 @@ done:
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
-#endif /* WH_TEST_SLHDSA_FAST_PARAM */
+#endif /* WH_TEST_SLHDSA_DMA_PARAM && WOLFHSM_CFG_DMA */
 
 #ifdef WH_TEST_SLHDSA_COMM_PARAM
 /* The comm buffer cannot carry the larger parameter sets, so the server must
@@ -1016,12 +1028,13 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
 #endif /* WH_TEST_SLHDSA_COMM_PARAM */
 
 #ifdef WH_TEST_SLHDSA_FAST_PARAM
+    /* The KAT vector is SLH-DSA-SHAKE-128f, so it needs that parameter. */
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaSeededKat(ctx));
-#ifdef WOLFHSM_CFG_DMA
+#endif /* WH_TEST_SLHDSA_FAST_PARAM */
+#if defined(WH_TEST_SLHDSA_DMA_PARAM) && defined(WOLFHSM_CFG_DMA)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaDmaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaDmaCachedKey(ctx));
 #endif
-#endif /* WH_TEST_SLHDSA_FAST_PARAM */
 
     (void)ctx;
 #if !defined(WH_TEST_SLHDSA_COMM_PARAM) && !defined(WH_TEST_SLHDSA_FAST_PARAM)
