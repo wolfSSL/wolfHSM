@@ -44,6 +44,10 @@
 #include "wolfssl/wolfcrypt/kdf.h"
 #endif
 
+#ifdef WOLFSSL_HAVE_SLHDSA
+#include "wolfssl/wolfcrypt/wc_slhdsa.h"
+#endif
+
 #include "wh_demo_client_crypto.h"
 
 #if !defined(NO_RSA)
@@ -1691,5 +1695,97 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
 }
 
 #endif /* HAVE_CMAC_KDF && WOLFSSL_CMAC */
+
+#if defined(WOLFSSL_HAVE_SLHDSA) && !defined(WOLFSSL_SLHDSA_VERIFY_ONLY)
+
+/* Generate an SLH-DSA key that stays on the server and use it purely by key
+ * id. Only the smallest parameter set produces a signature that fits the comm
+ * buffer, so that is what this demo asks for. */
+int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
+{
+    int       ret;
+    int       devId = WH_CLIENT_DEVID(clientContext);
+    whKeyId   keyId = WH_KEYID_ERASED;
+    SlhDsaKey pub[1];
+    SlhDsaKey handle[1];
+    uint8_t   label[] = "slhdsa-demo";
+    byte      message[] = "wolfHSM SLH-DSA demo message";
+    byte      signature[WC_SLHDSA_SHAKE128S_SIG_LEN];
+    word32    sigLen = sizeof(signature);
+    byte      addRnd[WC_SLHDSA_MAX_SEED];
+
+    memset(addRnd, 0x42, sizeof(addRnd));
+
+    ret = wc_SlhDsaKey_Init(pub, SLHDSA_SHAKE128S, NULL, devId);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_Init %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_SlhDsaKey_Init(handle, SLHDSA_SHAKE128S, NULL, devId);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_Init %d\n", ret);
+        wc_SlhDsaKey_Free(pub);
+        return ret;
+    }
+
+    /* The private key is generated on and never leaves the HSM; only the
+     * public key comes back. */
+    ret = wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
+        clientContext, SLHDSA_SHAKE128S, &keyId,
+        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, sizeof(label),
+        label, pub);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to generate SLH-DSA key %d\n", ret);
+        goto exit;
+    }
+
+    /* handle holds no key material at all, just the server key id */
+    ret = wh_Client_SlhDsaSetKeyId(handle, keyId);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to wh_Client_SlhDsaSetKeyId %d\n", ret);
+        goto exit;
+    }
+
+    /* The randomizer comes from the caller: the deterministic entry points
+     * read PK.seed out of the local key, which this handle does not hold. */
+    ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, message,
+                                      sizeof(message), signature, &sigLen,
+                                      addRnd);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_SignWithRandom %d\n", ret);
+        goto exit;
+    }
+
+    ret = wc_SlhDsaKey_Verify(pub, NULL, 0, message, sizeof(message),
+                              signature, sigLen);
+    if (ret != 0) {
+        WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_Verify %d\n", ret);
+        goto exit;
+    }
+
+    /* A tampered signature must not verify */
+    signature[0] ^= 0xFF;
+    if (wc_SlhDsaKey_Verify(pub, NULL, 0, message, sizeof(message), signature,
+                            sigLen) == 0) {
+        WOLFHSM_CFG_PRINTF("SLH-DSA verified a tampered signature\n");
+        ret = -1;
+        goto exit;
+    }
+
+    WOLFHSM_CFG_PRINTF("SLH-DSA sign/verify with a server-resident key: "
+                       "SUCCESS\n");
+    ret = 0;
+
+exit:
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(clientContext, keyId);
+    }
+    wc_SlhDsaKey_Free(handle);
+    wc_SlhDsaKey_Free(pub);
+    return ret;
+}
+
+#endif /* WOLFSSL_HAVE_SLHDSA && !WOLFSSL_SLHDSA_VERIFY_ONLY */
 
 #endif /* WOLFHSM_CFG_NO_CRYPTO */

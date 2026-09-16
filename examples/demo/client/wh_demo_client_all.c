@@ -201,5 +201,12 @@ int wh_DemoClient_All(whClientContext* clientContext)
 
 #endif /* WOLFSSL_CMAC */
 
+#if defined(WOLFSSL_HAVE_SLHDSA) && !defined(WOLFSSL_SLHDSA_VERIFY_ONLY)
+    rc = wh_DemoClient_CryptoSlhDsa(clientContext);
+    if (rc != 0) {
+        return rc;
+    }
+#endif /* WOLFSSL_HAVE_SLHDSA && !WOLFSSL_SLHDSA_VERIFY_ONLY */
+
     return rc;
 }

@@ -143,6 +143,13 @@ ifeq ($(AUTH),1)
 DEF += -DWOLFHSM_CFG_ENABLE_AUTHENTICATION
 endif
 
+# Strip the software SLH-DSA from the client so every operation has to reach
+# the server. The server is a separate binary with its own settings, so it
+# keeps its software implementation.
+ifeq ($(SLHDSA_CB_ONLY),1)
+DEF += -DWH_CFG_SLHDSA_CB_ONLY
+endif
+
 else
 DEF += -DWOLFHSM_CFG_NO_CRYPTO
 endif
