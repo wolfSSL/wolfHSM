@@ -784,6 +784,35 @@ int wh_MessageCrypto_TranslateSha3Response(
     return 0;
 }
 
+/* SHAKE Request translation. The input and output data follows these structs
+ * and are byte arrays, so neither translation touches them. */
+int wh_MessageCrypto_TranslateShakeRequest(
+    uint16_t magic, const whMessageCrypto_ShakeRequest* src,
+    whMessageCrypto_ShakeRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, isLastBlock);
+    WH_T32(magic, dest, src, inSz);
+    WH_T32(magic, dest, src, outSz);
+    return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
+                                               &dest->resumeState);
+}
+
+/* SHAKE Response translation */
+int wh_MessageCrypto_TranslateShakeResponse(
+    uint16_t magic, const whMessageCrypto_ShakeResponse* src,
+    whMessageCrypto_ShakeResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, outSz);
+    return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
+                                               &dest->resumeState);
+}
+
 
 /* CMAC-AES State translation */
 int wh_MessageCrypto_TranslateCmacAesState(
