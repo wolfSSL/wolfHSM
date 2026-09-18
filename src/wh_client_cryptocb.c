@@ -716,6 +716,62 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             } break;
 #endif /* WOLFSSL_SHA3 */
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+#ifdef WOLFSSL_SHAKE128
+            case WC_HASH_TYPE_SHAKE128:
+#endif
+#ifdef WOLFSSL_SHAKE256
+            case WC_HASH_TYPE_SHAKE256:
+#endif
+            {
+                /* SHAKE output length the caller chooses, so outSz is
+                 * meaningful only on a finalize. Digest set to NULL means
+                 * update, non-NULL means finalize. */
+                wc_Shake* sha = info->hash.sha3;
+#ifdef WOLFSSL_HASH_FLAGS
+                /* Keccak mode swaps SHAKE256's 0x1f padding for 0x01, and the
+                 * flag is not carried on the wire, so the server would produce
+                 * different output. Fall through to the software path. */
+                if (sha != NULL &&
+                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                    break;
+                }
+#endif
+
+                /* wolfCrypt accepts a finalize with outSz set to 0: it
+                 * produces nothing and only resets the context, so there is
+                 * nothing worth a round trip. Decline so the software path
+                 * keeps that behaviour rather than turning it into an error. */
+                if (info->hash.digest != NULL && info->hash.outSz == 0) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                    break;
+                }
+
+                switch (info->hash.type) {
+#ifdef WOLFSSL_SHAKE128
+                    case WC_HASH_TYPE_SHAKE128:
+                        ret = wh_Client_Shake128(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest,
+                                                 info->hash.outSz);
+                        break;
+#endif
+#ifdef WOLFSSL_SHAKE256
+                    case WC_HASH_TYPE_SHAKE256:
+                        ret = wh_Client_Shake256(ctx, sha, info->hash.in,
+                                                 info->hash.inSz,
+                                                 info->hash.digest,
+                                                 info->hash.outSz);
+                        break;
+#endif
+                }
+                /* Requested output size is too big, surface error. */
+                if (ret == WH_ERROR_NOSPACE) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                }
+            } break;
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;

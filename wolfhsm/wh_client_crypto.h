@@ -2985,6 +2985,37 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !WOLFSSL_NOSHA3_512 */
 
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+/* SHAKE offload. Mirrors the SHA3 entry points above, with the caller's
+ * chosen output length carried through: a SHAKE has no natural digest size.
+ * A length larger than a response can carry returns WH_ERROR_NOSPACE so the
+ * caller can finish in software from the state it still holds. */
+#ifdef WOLFSSL_SHAKE128
+int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake128UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake256UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+#endif /* WOLFSSL_SHAKE256 */
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
+
 #endif /* WOLFSSL_SHA3 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
