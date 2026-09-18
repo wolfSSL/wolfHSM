@@ -44,6 +44,22 @@ DEF += -DWOLFHSM_CFG_TEST_POSIX
 DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
 DEF += -DWOLFHSM_CFG_ENABLE_SERVER
 
+# SHAKE build variants. Each variant is gated on its own so a helper that
+# assumes the other one exists fails to compile rather than silently working
+# in the build where both are enabled.
+ifeq ($(NO_SHAKE),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128 -DWOLFHSM_CFG_TEST_NO_SHAKE256
+endif
+ifeq ($(SHAKE128_ONLY),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE256
+endif
+ifeq ($(SHAKE256_ONLY),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128
+endif
+ifeq ($(NO_SHA3_512),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHA3_512
+endif
+
 # C standard
 CSTD        ?= -std=c90
 
