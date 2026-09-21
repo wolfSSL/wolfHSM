@@ -445,6 +445,34 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
     }
 #endif
 
+#ifdef WOLFSSL_HASH_FLAGS
+    /* Keccak mode is not carried on the wire, so the request helpers must
+     * refuse it rather than return a digest with SHAKE padding. */
+    if (!bad) {
+        bool sent = false;
+        (void)wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
+#ifdef WOLFSSL_SHAKE128
+        if (v->hashType == WC_HASH_TYPE_SHAKE128) {
+            bad = (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                                   &sent) !=
+                   WH_ERROR_BADARGS) ||
+                  (wh_Client_Shake128FinalRequest(ctx, sha, 32u) !=
+                   WH_ERROR_BADARGS);
+        }
+#endif
+#ifdef WOLFSSL_SHAKE256
+        if (v->hashType == WC_HASH_TYPE_SHAKE256) {
+            bad = (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                                   &sent) !=
+                   WH_ERROR_BADARGS) ||
+                  (wh_Client_Shake256FinalRequest(ctx, sha, 32u) !=
+                   WH_ERROR_BADARGS);
+        }
+#endif
+        (void)wc_Sha3_SetFlags(sha, 0);
+    }
+#endif
+
     v->freeFn(sha);
 
     if (bad) {
@@ -454,11 +482,8 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
     WH_TEST_PRINT("%s bad-args SUCCESS\n", v->name);
     return WH_ERROR_OK;
 }
-#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
-
 int whTest_Crypto_Shake(whClientContext* ctx)
 {
-#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
     const uint32_t variantCnt =
         sizeof(shakeTestVariants) / sizeof(shakeTestVariants[0]);
     uint32_t i;
@@ -479,9 +504,9 @@ int whTest_Crypto_Shake(whClientContext* ctx)
         WH_TEST_RETURN_ON_FAIL(_ShakeTestKeccakFlag(ctx, v));
 #endif
     }
-#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
-    (void)ctx;
     return 0;
 }
+
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
