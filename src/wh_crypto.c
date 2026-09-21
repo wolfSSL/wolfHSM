@@ -420,6 +420,12 @@ int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
         *out_size = ret;
         ret       = WH_ERROR_OK;
     }
+    else {
+        /* The encoder may have written part of a private key before failing,
+         * so do not hand the caller a buffer holding key material. */
+        wc_ForceZero(buffer, max_size);
+        *out_size = 0;
+    }
     return ret;
 }
 

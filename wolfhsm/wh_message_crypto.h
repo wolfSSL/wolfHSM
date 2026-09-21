@@ -1276,7 +1276,6 @@ int wh_MessageCrypto_TranslateSlhDsaSignResponse(
 typedef struct {
     uint32_t options;
 #define WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT (1 << 0)
-#define WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EXPORTPUB (1 << 1)
 /* Message is a caller-built M', so context and pre-hash do not apply */
 #define WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_MPRIME (1 << 2)
     uint32_t param;
