@@ -652,7 +652,7 @@ static int _whTest_CryptoEccCacheKeyAndExportPublic(whClientContext* ctx)
     return ret;
 }
 
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+#if !defined(NO_ECC_MAKE_PUB) || !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 
 /* Build a private-key-only ECC key bound to devId, along with a locally
  * generated reference keypair holding the public point it must derive to. */
@@ -700,6 +700,9 @@ static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
     return 0;
 }
 
+#endif /* !NO_ECC_MAKE_PUB || !WOLF_CRYPTO_CB_ONLY_ECC */
+
+#if !defined(NO_ECC_MAKE_PUB)
 /* Exercise WC_PK_TYPE_EC_MAKE_PUB, both for a key the client holds and for one
  * resident on the server. Also covers exporting the public half of a resident
  * private-only key, which requires the server to derive it. */
@@ -999,7 +1002,9 @@ static int _whTest_CryptoEccMakePub(whClientContext* ctx)
     }
     return ret;
 }
+#endif /* !NO_ECC_MAKE_PUB */
 
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 #ifdef HAVE_ECC_CHECK_KEY
 /* Exercise WC_PK_TYPE_EC_CHECK_PUB_KEY: a private-only key, a full keypair, and
  * a keypair whose public point does not belong to its private scalar. */
@@ -2388,8 +2393,10 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheDuplicate(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheKeyAndExportPublic(ctx));
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+#if !defined(NO_ECC_MAKE_PUB)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccMakePub(ctx));
+#endif /* !NO_ECC_MAKE_PUB */
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 #ifdef HAVE_ECC_CHECK_KEY
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCheckPubKey(ctx));
 #endif /* HAVE_ECC_CHECK_KEY */
