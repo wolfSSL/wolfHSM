@@ -9751,6 +9751,11 @@ static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
     }
     *requestSent = false;
 
+    ret = _Sha3RejectKeccak(sha);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
     }
@@ -9803,6 +9808,7 @@ static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
 
     /* Pure buffer-fill update: nothing to send. */
     if (wirePos == 0) {
+        wc_ForceZero(savedT, sizeof(savedT));
         return WH_ERROR_OK;
     }
 
@@ -9823,6 +9829,7 @@ static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
         sha->i = (uint8_t)savedI;
         memcpy(sha->t, savedT, savedI);
     }
+    wc_ForceZero(savedT, sizeof(savedT));
     return ret;
 }
 
@@ -9872,6 +9879,10 @@ static int _ShakeFinalRequest(whClientContext* ctx, wc_Shake* sha,
 
     if (ctx == NULL || sha == NULL || outSz == 0) {
         return WH_ERROR_BADARGS;
+    }
+    ret = _Sha3RejectKeccak(sha);
+    if (ret != WH_ERROR_OK) {
+        return ret;
     }
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
@@ -10033,6 +10044,8 @@ static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
     if (ret != WH_ERROR_OK) {
         _ShakeRestoreState(sha, &saved);
     }
+    /* The snapshot holds sponge state and message bytes. */
+    wc_ForceZero(&saved, sizeof(saved));
     return ret;
 }
 
