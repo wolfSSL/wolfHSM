@@ -5928,7 +5928,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         res.keyId = wh_KeyId_TranslateToClient(key_id);
         res.len   = res_size;
 
-        wh_MessageCrypto_TranslateSlhDsaKeyGenResponse(magic, &res,
+        (void)wh_MessageCrypto_TranslateSlhDsaKeyGenResponse(magic, &res,
                                                        cryptoDataOut);
 
         *outSize = sizeof(whMessageCrypto_SlhDsaKeyGenResponse) + res_size;
@@ -6048,7 +6048,7 @@ static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         res.sz = res_len;
 
-        wh_MessageCrypto_TranslateSlhDsaSignResponse(
+        (void)wh_MessageCrypto_TranslateSlhDsaSignResponse(
             magic, &res, (whMessageCrypto_SlhDsaSignResponse*)cryptoDataOut);
 
         *outSize = sizeof(whMessageCrypto_SlhDsaSignResponse) + res_len;
@@ -6133,7 +6133,7 @@ static int _HandleSlhDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         res.res = result;
 
-        wh_MessageCrypto_TranslateSlhDsaVerifyResponse(
+        (void)wh_MessageCrypto_TranslateSlhDsaVerifyResponse(
             magic, &res, (whMessageCrypto_SlhDsaVerifyResponse*)cryptoDataOut);
 
         *outSize = sizeof(whMessageCrypto_SlhDsaVerifyResponse);
@@ -8399,6 +8399,8 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     SlhDsaKey key[1];
     void*     msgAddr = NULL;
     void*     sigAddr = NULL;
+    int       sigPre  = 0;
+    int       msgPre  = 0;
     whKeyId   key_id;
     int       evict;
     int       result = 0;
@@ -8449,6 +8451,7 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
             if (ret == WH_ERROR_ACCESS) {
                 res.dmaAddrStatus.badAddr = req.sig;
             }
+            sigPre = (ret == 0);
 
             if (ret == 0) {
                 ret = wh_Server_DmaProcessClientAddress(
@@ -8457,6 +8460,7 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                 if (ret == WH_ERROR_ACCESS) {
                     res.dmaAddrStatus.badAddr = req.msg;
                 }
+                msgPre = (ret == 0);
 
                 if (ret == 0) {
                     ret = _SlhDsaVerifyDispatch(
@@ -8466,13 +8470,13 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                         preHashType, &result);
                 }
 
-                if (msgAddr != NULL) {
+                if (msgPre) {
                     (void)wh_Server_DmaProcessClientAddress(
                         ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
                         WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
                 }
             }
-            if (sigAddr != NULL) {
+            if (sigPre) {
                 (void)wh_Server_DmaProcessClientAddress(
                     ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
                     WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
