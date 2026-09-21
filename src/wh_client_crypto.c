@@ -10469,8 +10469,9 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + in_len + contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)in_len + (uint64_t)contextLen;
         uint32_t options = 0;
 
         /* Get data pointer from the context to use as request/response storage
@@ -11450,7 +11451,8 @@ int wh_Client_SlhDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
 static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
                           word32 seedSz, whKeyId* inout_key_id,
                           whNvmFlags flags, uint16_t label_len,
-                          const uint8_t* label, SlhDsaKey* key)
+                          const uint8_t* label, SlhDsaKey* key,
+                          int* out_committed)
 {
     int                                   ret     = WH_ERROR_OK;
     whKeyId                               key_id  = WH_KEYID_ERASED;
@@ -11458,6 +11460,10 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
     whMessageCrypto_SlhDsaKeyGenRequest*  req     = NULL;
     whMessageCrypto_SlhDsaKeyGenResponse* res     = NULL;
     uint16_t                              pkType;
+
+    if (out_committed != NULL) {
+        *out_committed = 0;
+    }
 
     if ((ctx == NULL) || ((seed == NULL) && (seedSz > 0))) {
         return WH_ERROR_BADARGS;
@@ -11544,6 +11550,9 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
                     if (ret >= 0) {
                         /* Key is cached on server or is ephemeral */
                         key_id = (whKeyId)(res->keyId);
+                        if (out_committed != NULL) {
+                            *out_committed = 1;
+                        }
 
                         /* Update output variable if requested */
                         if (inout_key_id != NULL) {
@@ -11604,7 +11613,7 @@ int wh_Client_SlhDsaMakeCacheKey(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKey(ctx, param, NULL, 0, inout_key_id, flags, label_len,
-                          label, NULL);
+                          label, NULL, NULL);
 }
 
 int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
@@ -11612,7 +11621,7 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
     uint16_t label_len, const uint8_t* label, SlhDsaKey* pub)
 {
     int     ret;
-    whKeyId in_keyId;
+    int     committed = 0;
 
     if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
         return WH_ERROR_BADARGS;
@@ -11623,9 +11632,8 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
         return WH_ERROR_BADARGS;
     }
 
-    in_keyId = *inout_key_id;
     ret = _SlhDsaMakeKey(ctx, param, NULL, 0, inout_key_id, flags, label_len,
-                         label, pub);
+                         label, pub, &committed);
     if (ret >= 0) {
         /* Stamp the cached keyId and the client's HSM devId so pub is
          * immediately usable as a handle to the cached private key. The keyId
@@ -11634,11 +11642,15 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
         wh_Client_SlhDsaSetKeyId(pub, *inout_key_id);
         pub->devId = WH_CLIENT_DEVID(ctx);
     }
-    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
-             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+    else if (committed && !WH_KEYID_ISERASED(*inout_key_id)) {
         /* The server committed a key but the best-effort export returned no
          * public key. Roll back so the operation is atomic and no cache slot
-         * is orphaned. */
+         * is orphaned.
+         *
+         * Gated on the commit latch rather than on WH_ERROR_ABORTED: the
+         * response-frame check reports that code too, but it fires before any
+         * key id has been read, so a short or malformed response would
+         * otherwise evict a caller-supplied key this call never touched. */
         (void)wh_Client_KeyEvict(ctx, *inout_key_id);
         *inout_key_id = WH_KEYID_ERASED;
     }
@@ -11653,7 +11665,7 @@ int wh_Client_SlhDsaMakeExportKey(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKey(ctx, param, NULL, 0, NULL, WH_NVM_FLAGS_EPHEMERAL, 0,
-                          NULL, key);
+                          NULL, key, NULL);
 }
 
 int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
@@ -11665,7 +11677,7 @@ int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKey(ctx, param, seed, seedSz, NULL,
-                          WH_NVM_FLAGS_EPHEMERAL, 0, NULL, key);
+                          WH_NVM_FLAGS_EPHEMERAL, 0, NULL, key, NULL);
 }
 
 int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
@@ -11679,7 +11691,7 @@ int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKey(ctx, param, seed, seedSz, inout_key_id, flags,
-                          label_len, label, NULL);
+                          label_len, label, NULL, NULL);
 }
 
 int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
@@ -12416,7 +12428,12 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
     else if (WH_KEYID_ISERASED(in_keyId) && !WH_KEYID_ISERASED(*inout_key_id)) {
         /* The server auto-assigned and committed a key but the export failed.
          * Roll back so the operation is atomic and no cache slot is
-         * orphaned. */
+         * orphaned.
+         *
+         * Deliberately narrower than the inline path's condition: here a
+         * changed key id is itself proof the server committed, because the
+         * id only moves off ERASED once the response has been read. Do not
+         * widen this to match the other function. */
         (void)wh_Client_KeyEvict(ctx, *inout_key_id);
         *inout_key_id = WH_KEYID_ERASED;
     }

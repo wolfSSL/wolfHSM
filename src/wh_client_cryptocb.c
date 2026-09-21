@@ -568,9 +568,13 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
     defined(WOLFSSL_HAVE_SLHDSA)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
+            ret = _handlePqcSigKeyGen(ctx, info, 0);
+            break;
+#ifdef WOLFSSL_HAVE_SLHDSA
         case WC_PK_TYPE_PQC_SIG_KEYGEN_SEED:
             ret = _handlePqcSigKeyGen(ctx, info, 0);
             break;
+#endif
 
         case WC_PK_TYPE_PQC_SIG_SIGN:
             ret = _handlePqcSign(ctx, info, 0);
@@ -1693,9 +1697,13 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
     defined(WOLFSSL_HAVE_SLHDSA)
             case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                ret = _handlePqcSigKeyGen(ctx, info, 1);
+                break;
+#ifdef WOLFSSL_HAVE_SLHDSA
             case WC_PK_TYPE_PQC_SIG_KEYGEN_SEED:
                 ret = _handlePqcSigKeyGen(ctx, info, 1);
                 break;
+#endif
             case WC_PK_TYPE_PQC_SIG_SIGN:
                 ret = _handlePqcSign(ctx, info, 1);
                 break;
