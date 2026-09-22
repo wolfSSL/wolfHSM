@@ -5847,6 +5847,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     uint16_t                             max_size;
     uint16_t                             res_size = 0;
     int                                  param;
+    uint32_t                             available;
 
     if (inSize < sizeof(whMessageCrypto_SlhDsaKeyGenRequest)) {
         return WH_ERROR_BADARGS;
@@ -5868,8 +5869,12 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     seed   = (byte*)cryptoDataIn +
            sizeof(whMessageCrypto_SlhDsaKeyGenRequest);
 
-    if (seedSz > (uint32_t)(inSize -
-                            sizeof(whMessageCrypto_SlhDsaKeyGenRequest))) {
+    available =
+        (uint32_t)(inSize - sizeof(whMessageCrypto_SlhDsaKeyGenRequest));
+
+    if (seedSz > available) {
+        /* seedSz is the value being rejected, so clear what is present */
+        wc_ForceZero(seed, available);
         return WH_ERROR_BADARGS;
     }
 
