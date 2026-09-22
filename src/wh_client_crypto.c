@@ -11605,14 +11605,8 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
         pub->devId = WH_CLIENT_DEVID(ctx);
     }
     else if (committed && !WH_KEYID_ISERASED(*inout_key_id)) {
-        /* The server committed a key but the best-effort export returned no
-         * public key. Roll back so the operation is atomic and no cache slot
-         * is orphaned.
-         *
-         * Gated on the commit latch rather than on WH_ERROR_ABORTED: the
-         * response-frame check reports that code too, but it fires before any
-         * key id has been read, so a short or malformed response would
-         * otherwise evict a caller-supplied key this call never touched. */
+        /* Gated on the commit latch: the response-frame check also reports
+         * ABORTED, before any key id has been read. */
         (void)wh_Client_KeyEvict(ctx, *inout_key_id);
         *inout_key_id = WH_KEYID_ERASED;
     }
@@ -12388,14 +12382,8 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
         pub->devId = WH_CLIENT_DEVID(ctx);
     }
     else if (WH_KEYID_ISERASED(in_keyId) && !WH_KEYID_ISERASED(*inout_key_id)) {
-        /* The server auto-assigned and committed a key but the export failed.
-         * Roll back so the operation is atomic and no cache slot is
-         * orphaned.
-         *
-         * Deliberately narrower than the inline path's condition: here a
-         * changed key id is itself proof the server committed, because the
-         * id only moves off ERASED once the response has been read. Do not
-         * widen this to match the other function. */
+        /* A changed key id is itself proof of commit: it moves off ERASED
+         * only once the response has been read. */
         (void)wh_Client_KeyEvict(ctx, *inout_key_id);
         *inout_key_id = WH_KEYID_ERASED;
     }
