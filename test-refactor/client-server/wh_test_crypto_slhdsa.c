@@ -1449,6 +1449,147 @@ static const byte whTestSlhDsaVerifySig[WH_TEST_SLHDSA_KAT_SIG_LEN] = {
     0x6a, 0x55, 0xd3, 0x04, 0x4c, 0xda, 0x5b, 0x43
 };
 
+#ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
+/* The seed the vector above was generated from, as the contiguous
+ * SK.seed || SK.prf || PK.seed the server expects. */
+static const byte whTestSlhDsaKeyGenSeed[] = {
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
+    0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f
+};
+
+/* Rebuilds the vector's key from its seed, which covers the seeded keygen
+ * path and the lengths the server accepts for a seed. */
+static int _whTest_CryptoSlhDsaSeededKeyGen(whClientContext* ctx)
+{
+    int       devId = WH_CLIENT_DEVID(ctx);
+    int       ret;
+    SlhDsaKey key[1];
+    byte      pub[WH_TEST_SLHDSA_KAT_PUB_LEN];
+    word32    pubSz = sizeof(pub);
+    byte      badSeed[sizeof(whTestSlhDsaKeyGenSeed) + 3];
+
+    memset(badSeed, 0x5a, sizeof(badSeed));
+
+    ret = wc_SlhDsaKey_Init(key, WH_TEST_SLHDSA_KAT_PARAM, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize SLH-DSA key: %d\n", ret);
+        return ret;
+    }
+
+    /* A seed of 3n bytes for a different parameter set divides by three but
+     * does not match the requested one, and must be refused. */
+    ret = wh_Client_SlhDsaMakeExportKeyFromSeed(ctx, WH_TEST_SLHDSA_KAT_PARAM,
+                                                badSeed, sizeof(badSeed), key);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Mismatched SLH-DSA seed length returned %d\n", ret);
+        ret = WH_TEST_FAIL;
+    }
+    else {
+        ret = 0;
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_SlhDsaMakeExportKeyFromSeed(
+            ctx, WH_TEST_SLHDSA_KAT_PARAM, badSeed, sizeof(badSeed) - 1, key);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Ragged SLH-DSA seed length returned %d\n", ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_SlhDsaMakeExportKeyFromSeed(
+            ctx, WH_TEST_SLHDSA_KAT_PARAM, whTestSlhDsaKeyGenSeed,
+            sizeof(whTestSlhDsaKeyGenSeed), key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed seeded SLH-DSA keygen: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        ret = wc_SlhDsaKey_ExportPublic(key, pub, &pubSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to export the seeded public key: %d\n",
+                           ret);
+        }
+    }
+
+    if (ret == 0) {
+        if ((pubSz != sizeof(whTestSlhDsaVerifyPub)) ||
+            (memcmp(pub, whTestSlhDsaVerifyPub, pubSz) != 0)) {
+            WH_ERROR_PRINT("Seeded SLH-DSA key does not match the vector\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    /* The vector's signature verifies under the regenerated key, so the seed
+     * reached the server unaltered. */
+    if (ret == 0) {
+        ret = wc_SlhDsaKey_Verify(key, NULL, 0, whTestSlhDsaVerifyMsg,
+                                  (word32)sizeof(whTestSlhDsaVerifyMsg),
+                                  whTestSlhDsaVerifySig,
+                                  (word32)sizeof(whTestSlhDsaVerifySig));
+        if (ret != 0) {
+            WH_ERROR_PRINT("Seeded SLH-DSA key did not verify: %d\n", ret);
+        }
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    /* The DMA handler applies the same seed length rules. */
+    if (ret == 0) {
+        ret = wh_Client_SlhDsaMakeExportKeyFromSeedDma(
+            ctx, WH_TEST_SLHDSA_KAT_PARAM, badSeed, sizeof(badSeed), key);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("Mismatched SLH-DSA DMA seed returned %d\n", ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_SlhDsaMakeExportKeyFromSeedDma(
+            ctx, WH_TEST_SLHDSA_KAT_PARAM, whTestSlhDsaKeyGenSeed,
+            sizeof(whTestSlhDsaKeyGenSeed), key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed seeded SLH-DSA DMA keygen: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        pubSz = sizeof(pub);
+        ret   = wc_SlhDsaKey_ExportPublic(key, pub, &pubSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to export the DMA seeded key: %d\n", ret);
+        }
+    }
+
+    if (ret == 0) {
+        if ((pubSz != sizeof(whTestSlhDsaVerifyPub)) ||
+            (memcmp(pub, whTestSlhDsaVerifyPub, pubSz) != 0)) {
+            WH_ERROR_PRINT("DMA seeded SLH-DSA key does not match\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SLH-DSA SEEDED KEYGEN DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_SlhDsaKey_Free(key);
+    return ret;
+}
+#endif /* !WOLFSSL_SLHDSA_VERIFY_ONLY */
+
 /* Drives the vector through the plain wolfCrypt API, which is how an
  * application reaches the server. */
 static int _whTest_CryptoSlhDsaVerifyKat(int devId)
@@ -1955,6 +2096,8 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
     (void)wh_Client_SetDmaMode(ctx, 0);
 #ifdef WOLFSSL_SLHDSA_VERIFY_ONLY
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaNoSign(ctx));
+#else
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaSeededKeyGen(ctx));
 #endif
 #endif /* WH_TEST_SLHDSA_KAT_PARAM */
 

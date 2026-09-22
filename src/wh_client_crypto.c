@@ -12117,7 +12117,7 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
                             ret = WH_ERROR_ABORTED;
                         }
                         else {
-                            ret = (int)res->res;
+                            ret = res->res;
                         }
                     }
                 }
