@@ -1045,7 +1045,7 @@ int wh_Server_SlhDsaKeyCacheImport(whServerContext* ctx, SlhDsaKey* key,
     int            ret = WH_ERROR_OK;
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
-    uint16_t       der_size;
+    uint16_t       der_size = 0;
 
     if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
         ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
@@ -5820,7 +5820,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     whKeyId                              key_id;
     whNvmFlags                           flags;
     uint8_t*                             label;
-    const byte*                          seed;
+    byte*                                seed;
     uint32_t                             seedSz;
     uint8_t*                             res_out;
     uint16_t                             max_size;
@@ -5844,7 +5844,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     flags  = req.flags;
     label  = req.label;
     seedSz = req.seedSz;
-    seed   = (const byte*)cryptoDataIn +
+    seed   = (byte*)cryptoDataIn +
            sizeof(whMessageCrypto_SlhDsaKeyGenRequest);
 
     if (seedSz > (uint32_t)(inSize -
@@ -5861,15 +5861,17 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                           sizeof(whMessageCrypto_SlhDsaKeyGenResponse));
 
     if (0 == _IsSlhDsaParamSupported(param)) {
-        return WH_ERROR_BADARGS;
+        ret = WH_ERROR_BADARGS;
+    }
+    else {
+        ret = wc_SlhDsaKey_Init(key, (enum SlhDsaParam)param, NULL, devId);
     }
 
-    ret = wc_SlhDsaKey_Init(key, (enum SlhDsaParam)param, NULL, devId);
     if (ret == 0) {
         if (seedSz > 0) {
             /* The seed is the contiguous SK.seed || SK.prf || PK.seed */
             word32 n = seedSz / 3;
-            if ((seedSz % 3) != 0) {
+            if (((seedSz % 3) != 0) || (n != key->params->n)) {
                 ret = WH_ERROR_BADARGS;
             }
             else {
@@ -5880,6 +5882,9 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         else {
             ret = wc_SlhDsaKey_MakeKey(key, ctx->crypto->rng);
         }
+        /* The seed is the whole private key. Clear it before the response is
+         * written over the same buffer. */
+        wc_ForceZero(seed, seedSz);
 
         if (ret == 0) {
             if (flags & WH_NVM_FLAGS_EPHEMERAL) {
@@ -5922,6 +5927,9 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
         wc_SlhDsaKey_Free(key);
+    }
+    else {
+        wc_ForceZero(seed, seedSz);
     }
 
     if (ret == WH_ERROR_OK) {
@@ -8119,7 +8127,7 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
             }
             if (ret == 0) {
                 word32 n = (word32)(req.seed.sz / 3);
-                if ((req.seed.sz % 3) != 0) {
+                if (((req.seed.sz % 3) != 0) || (n != key->params->n)) {
                     ret = WH_ERROR_BADARGS;
                 }
                 else {

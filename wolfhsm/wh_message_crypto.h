@@ -1320,8 +1320,8 @@ typedef struct {
 
 /* SLH-DSA Check Private Key Response */
 typedef struct {
-    uint32_t res;
-    uint8_t  WH_PAD[4];
+    int32_t res;
+    uint8_t WH_PAD[4];
 } whMessageCrypto_SlhDsaCheckPrivKeyResponse;
 
 int wh_MessageCrypto_TranslateSlhDsaCheckPrivKeyRequest(
