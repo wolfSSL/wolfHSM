@@ -724,14 +724,13 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHAKE256:
 #endif
             {
-                /* SHAKE output length the caller chooses, so outSz is
-                 * meaningful only on a finalize. Digest set to NULL means
-                 * update, non-NULL means finalize. */
+                /* Caller chooses SHAKE output length, so outSz is
+                 * relevant only on a finalize.
+                 * Digest set to NULL means update, non-NULL means finalize. */
                 wc_Shake* sha = info->hash.sha3;
 #ifdef WOLFSSL_HASH_FLAGS
-                /* Keccak mode swaps SHAKE256's 0x1f padding for 0x01, and the
-                 * flag is not carried on the wire, so the server would produce
-                 * different output. Fall through to the software path. */
+                /* Keccak-mode (legacy 0x01-padding variant) is a software-
+                 * only mode; fall through to wolfCrypt's software path. */
                 if (sha != NULL &&
                     (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
                     ret = CRYPTOCB_UNAVAILABLE;
@@ -739,10 +738,9 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
 #endif
 
-                /* wolfCrypt accepts a finalize with outSz set to 0: it
-                 * produces nothing and only resets the context, so there is
-                 * nothing worth a round trip. Decline so the software path
-                 * keeps that behaviour rather than turning it into an error. */
+                /* wolfCrypt accepts a finalize with outSz=0, but only the
+                 * context is updated. Decline it and let the software path
+                 * do the work. */
                 if (info->hash.digest != NULL && info->hash.outSz == 0) {
                     ret = CRYPTOCB_UNAVAILABLE;
                     break;

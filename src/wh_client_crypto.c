@@ -9908,8 +9908,7 @@ static int _ShakeFinalResponse(whClientContext* ctx, wc_Shake* sha,
             return WH_ERROR_ABORTED;
         }
         memcpy(out, (uint8_t*)(res + 1), outSz);
-        /* Reset state, preserving heap and devId. Also drops devCtx, as the
-         * other hash types here do. */
+        /* Reset state, preserving heap and devId, dropping devCtx. */
         savedHeap  = sha->heap;
         savedDevId = sha->devId;
         (void)v->initFn(sha, savedHeap, savedDevId);

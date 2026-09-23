@@ -784,8 +784,8 @@ int wh_MessageCrypto_TranslateSha3Response(
     return 0;
 }
 
-/* SHAKE Request translation. The input and output data follows these structs
- * and are byte arrays, so neither translation touches them. */
+/* SHAKE Request translation. Trailing input bytes are raw and need no
+ * translation. */
 int wh_MessageCrypto_TranslateShakeRequest(
     uint16_t magic, const whMessageCrypto_ShakeRequest* src,
     whMessageCrypto_ShakeRequest* dest)
