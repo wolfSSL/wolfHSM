@@ -137,31 +137,20 @@
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
 
-/* SHAKE Options. The two variants are gated separately so each can be built
- * on its own, which is what catches a helper that assumes the other exists.
- * ML-DSA and ML-KEM need both, so they follow. */
 #ifndef WOLFHSM_CFG_TEST_NO_SHAKE128
 #define WOLFSSL_SHAKE128
 #endif
 #ifndef WOLFHSM_CFG_TEST_NO_SHAKE256
 #define WOLFSSL_SHAKE256
 #endif
-/* Drop the largest SHA3 variant, so nothing else may depend on its guard. */
-#ifdef WOLFHSM_CFG_TEST_NO_SHA3_512
-#define WOLFSSL_NOSHA3_512
-#endif
 
-/* ML-DSA and ML-KEM need both SHAKE variants, and ML-KEM hashes with SHA3-512,
- * so they follow whichever of those is dropped. */
-#if !defined(WOLFHSM_CFG_TEST_NO_SHAKE128) &&  \
-    !defined(WOLFHSM_CFG_TEST_NO_SHAKE256) &&  \
-    !defined(WOLFHSM_CFG_TEST_NO_SHA3_512)
-/* ML-DSA Options */
+/* ML-DSA and ML-KEM both hash with SHAKE128 and SHAKE256. */
+#if !defined(WOLFHSM_CFG_TEST_NO_SHAKE128) && \
+    !defined(WOLFHSM_CFG_TEST_NO_SHAKE256)
 #define WOLFSSL_HAVE_MLDSA
-
-/* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
 #endif
+
 /* LMS / HSS Options (RFC 8554, NIST SP 800-208) */
 #define WOLFSSL_HAVE_LMS
 
