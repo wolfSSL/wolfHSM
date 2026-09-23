@@ -5045,7 +5045,6 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic, int devId,
 
 #if defined(WOLFSSL_SHA3)
 /* SHA3 - one handler dispatches all four variants on hashType. */
-
 typedef struct {
     uint32_t blockSize;
     uint32_t digestSize;
@@ -5177,9 +5176,8 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
 #endif /* WOLFSSL_SHA3 */
 
 #if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
-/* SHAKE server handler. Mirrors _HandleSha3 above, with the output length
- * coming from the request and the result trailing the response rather than
- * sitting in a fixed digest field. */
+/* SHAKE server handler. Mirrors _HandleSha3 above, with caller-specified
+ * output length */
 typedef struct {
     uint32_t blockSize;
     int (*initFn)(wc_Shake* sha, void* heap, int devId);
@@ -5252,7 +5250,6 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     if (req.isLastBlock && req.inSz >= ops.blockSize) {
         return WH_ERROR_BADARGS;
     }
-    /* A SHAKE produces whatever was asked for, bounded by what fits back */
     if (req.isLastBlock) {
         if ((req.outSz == 0) ||
             (req.outSz > WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ)) {
@@ -5270,8 +5267,7 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
         return ret;
     }
 
-    /* Restore intermediate state from the client; the server is stateless
-     * otherwise and the partial block lives only on the client. */
+    /* Return intermediate state to the client; the server is stateless */
     memcpy(shake->s, req.resumeState.s, sizeof(shake->s));
 
     if (req.inSz > 0) {
