@@ -56,9 +56,6 @@ endif
 ifeq ($(SHAKE256_ONLY),1)
     DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128
 endif
-ifeq ($(NO_SHA3_512),1)
-    DEF += -DWOLFHSM_CFG_TEST_NO_SHA3_512
-endif
 
 # C standard
 CSTD        ?= -std=c90
