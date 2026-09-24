@@ -1102,6 +1102,148 @@ done:
     return ret;
 }
 
+#if defined(WOLFHSM_CFG_DMA) &&                               \
+    (defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER) || \
+     defined(HAVE_AES_ECB))
+/* One buffer as both input and output must match out-of-place. Also fails if
+ * a zero-fill moves into wh_Server_DmaProcessClientAddress(): in and out map
+ * to one address here, so a central memset would erase the plaintext. */
+static int whTest_CryptoAesDmaInPlace(whClientContext* ctx)
+{
+    /* The wh_Client_Aes*Dma entry points are called directly, so the devId
+     * only has to be a valid one -- it does not select the DMA path here. */
+    int           devId = WH_CLIENT_DEVID(ctx);
+    int           ret   = 0;
+    Aes           aes[1];
+    uint8_t       inplace[AES_BLOCK_SIZE * 2];
+    uint8_t       refcipher[AES_BLOCK_SIZE * 2];
+    const uint8_t key[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+                           0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+#if defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER)
+    const uint8_t iv[AES_BLOCK_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                        0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
+                                        0x0c, 0x0d, 0x0e, 0x0f};
+#endif
+    const uint8_t plainIn[AES_BLOCK_SIZE * 2] = {
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e,
+        0x11, 0x73, 0x93, 0x17, 0x2a, 0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03,
+        0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51};
+
+#ifdef HAVE_AES_CBC
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret == 0) {
+                ret = wh_Client_AesCbcDma(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                          refcipher);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret == 0) {
+                memcpy(inplace, plainIn, sizeof(plainIn));
+                ret = wh_Client_AesCbcDma(ctx, aes, 1, inplace, sizeof(inplace),
+                                          inplace);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0 && memcmp(inplace, refcipher, sizeof(refcipher)) != 0) {
+        WH_ERROR_PRINT("AES-CBC DMA in-place != out-of-place\n");
+        ret = -1;
+    }
+    /* Decrypt is the harder in-place direction: the recovered plaintext below
+     * proves each ciphertext block survived to serve as the next block's IV. */
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            if (ret == 0) {
+                memcpy(inplace, refcipher, sizeof(refcipher));
+                ret = wh_Client_AesCbcDma(ctx, aes, 0, inplace, sizeof(inplace),
+                                          inplace);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0 && memcmp(inplace, plainIn, sizeof(plainIn)) != 0) {
+        WH_ERROR_PRINT("AES-CBC DMA in-place decrypt != plaintext\n");
+        ret = -1;
+    }
+#endif /* HAVE_AES_CBC */
+
+#ifdef WOLFSSL_AES_COUNTER
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret == 0) {
+                ret = wh_Client_AesCtrDma(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                          refcipher);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (ret == 0) {
+                memcpy(inplace, plainIn, sizeof(plainIn));
+                ret = wh_Client_AesCtrDma(ctx, aes, 1, inplace, sizeof(inplace),
+                                          inplace);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0 && memcmp(inplace, refcipher, sizeof(refcipher)) != 0) {
+        WH_ERROR_PRINT("AES-CTR DMA in-place != out-of-place\n");
+        ret = -1;
+    }
+#endif /* WOLFSSL_AES_COUNTER */
+
+#ifdef HAVE_AES_ECB
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_ENCRYPTION);
+            if (ret == 0) {
+                ret = wh_Client_AesEcbDma(ctx, aes, 1, plainIn, sizeof(plainIn),
+                                          refcipher);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, devId);
+        if (ret == 0) {
+            ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_ENCRYPTION);
+            if (ret == 0) {
+                memcpy(inplace, plainIn, sizeof(plainIn));
+                ret = wh_Client_AesEcbDma(ctx, aes, 1, inplace, sizeof(inplace),
+                                          inplace);
+            }
+            (void)wc_AesFree(aes);
+        }
+    }
+    if (ret == 0 && memcmp(inplace, refcipher, sizeof(refcipher)) != 0) {
+        WH_ERROR_PRINT("AES-ECB DMA in-place != out-of-place\n");
+        ret = -1;
+    }
+#endif /* HAVE_AES_ECB */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("AES DMA in-place aliasing DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA && AES (CBC|CTR|ECB) */
+
 int whTest_Crypto_Aes(whClientContext* ctx)
 {
     int i;
@@ -1123,6 +1265,11 @@ int whTest_Crypto_Aes(whClientContext* ctx)
 #endif
 #ifdef WOLFSSL_AES_COUNTER
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCtrLeftOob(ctx));
+#endif
+#if defined(WOLFHSM_CFG_DMA) &&                               \
+    (defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER) || \
+     defined(HAVE_AES_ECB))
+    WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesDmaInPlace(ctx));
 #endif
     /* TODO: port legacy AES async + DMA-async coverage (comm-buffer & DMA, round-trip & KAT) -- the only remaining legacy crypto parity gap; deferred to follow-up PR. */
     return 0;

@@ -29,6 +29,8 @@
     && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
@@ -83,9 +85,67 @@ static int _whTest_CertReadTrustedSmallBuffer(whClientContext* ctx)
 }
 
 
+#ifdef WOLFHSM_CFG_DMA
+
+#define CERT_DMA_POISON ((uint8_t)0xA7)
+
+/* File-scope so an oversized request that the server wrongly accepts writes
+ * into this instead of smashing the sub-test's frame. */
+static uint8_t _certDmaOversize[WOLFHSM_CFG_MAX_CERT_SIZE + 1];
+
+
+/* The server writes the whole requested length once it maps the buffer, so
+ * the tail past a short certificate must be zeros. A length beyond
+ * WOLFHSM_CFG_MAX_CERT_SIZE is refused before any mapping happens. */
+static int _whTest_CertReadTrustedDmaTailZeroed(whClientContext* ctx)
+{
+    int32_t       out_rc   = 0;
+    const whNvmId cert_id  = 104;
+    uint8_t       dma_buf[2048];
+    size_t        i;
+
+    WH_TEST_ASSERT_RETURN(ROOT_A_CERT_len < sizeof(dma_buf));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertAddTrusted(
+        ctx, cert_id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONMODIFIABLE,
+        NULL, 0, ROOT_A_CERT, ROOT_A_CERT_len, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    memset(dma_buf, CERT_DMA_POISON, sizeof(dma_buf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertReadTrustedDma(
+        ctx, cert_id, dma_buf, sizeof(dma_buf), &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    WH_TEST_ASSERT_RETURN(0 == memcmp(dma_buf, ROOT_A_CERT, ROOT_A_CERT_len));
+    for (i = ROOT_A_CERT_len; i < sizeof(dma_buf); i++) {
+        WH_TEST_ASSERT_RETURN(dma_buf[i] == 0);
+    }
+
+    /* Past the cap: refused before the map, so the buffer keeps its fill. */
+    memset(_certDmaOversize, CERT_DMA_POISON, sizeof(_certDmaOversize));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CertReadTrustedDma(
+        ctx, cert_id, _certDmaOversize, sizeof(_certDmaOversize), &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+    for (i = 0; i < sizeof(_certDmaOversize); i++) {
+        WH_TEST_ASSERT_RETURN(_certDmaOversize[i] == CERT_DMA_POISON);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CertEraseTrusted(ctx, cert_id, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
+
+    return WH_ERROR_OK;
+}
+
+#endif /* WOLFHSM_CFG_DMA */
+
+
 int whTest_ClientCerts(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CertReadTrustedSmallBuffer(ctx));
+#ifdef WOLFHSM_CFG_DMA
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertReadTrustedDmaTailZeroed(ctx));
+#endif
 
     return WH_ERROR_OK;
 }

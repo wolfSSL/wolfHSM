@@ -43,6 +43,13 @@
 #define NVM_TEST_OBJECT_ID_BASE      20
 #define NVM_TEST_OOB_ID            30
 #define NVM_TEST_DMA_ID_BASE       40
+#define NVM_TEST_DMA_TAIL_ID       45
+#define NVM_TEST_DMA_DENY_ID       46
+
+/* Destination is much larger than the object, so the zero-filled tail is
+ * the bulk of it. The fill byte marks bytes the server never wrote. */
+#define NVM_TEST_DMA_TAIL_LEN      256
+#define NVM_TEST_DMA_POISON        ((uint8_t)0xA7)
 
 
 /*
@@ -488,11 +495,90 @@ static int _whTest_NvmDmaNullAddrs(whClientContext* ctx)
 }
 
 
+/* Object contents for the two DMA residue cases below. */
+static const uint8_t _nvmDmaPayload[32] = {
+    0x8f, 0x21, 0xd6, 0x4b, 0xa0, 0x37, 0xc9, 0x15, 0x62, 0xee, 0x0d,
+    0xb3, 0x74, 0x58, 0xfc, 0x29, 0x91, 0x4e, 0xa5, 0x07, 0xdb, 0x36,
+    0x6a, 0xcf, 0x18, 0x82, 0x53, 0xe7, 0x2b, 0xb4, 0x70, 0x9d};
+
+
+/* A read shorter than the request still writes the whole requested length,
+ * so the tail past the object must be zeros rather than whatever the
+ * destination held before. */
+static int _whTest_NvmDmaTailZeroed(whClientContext* ctx)
+{
+    const whNvmId id  = NVM_TEST_DMA_TAIL_ID;
+    uint8_t       buf[NVM_TEST_DMA_TAIL_LEN];
+    int32_t       server_rc = 0;
+    size_t        i;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        ctx, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, 0, NULL,
+        sizeof(_nvmDmaPayload), _nvmDmaPayload, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    memset(buf, NVM_TEST_DMA_POISON, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadDma(
+        ctx, id, 0, sizeof(buf), buf, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_ASSERT_RETURN(
+        0 == memcmp(buf, _nvmDmaPayload, sizeof(_nvmDmaPayload)));
+    for (i = sizeof(_nvmDmaPayload); i < sizeof(buf); i++) {
+        WH_TEST_ASSERT_RETURN(buf[i] == 0);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(_destroyNvmId(ctx, id));
+
+    return WH_ERROR_OK;
+}
+
+
+/* A refused read must be rejected before the destination is mapped, so the
+ * client buffer is left exactly as it was. The offset is not consulted first,
+ * or the error code would report whether the object is longer than it. */
+static int _whTest_NvmDmaDeniedUntouched(whClientContext* ctx)
+{
+    const whNvmId id  = NVM_TEST_DMA_DENY_ID;
+    uint8_t       buf[NVM_TEST_DMA_TAIL_LEN];
+    int32_t       server_rc = 0;
+    size_t        i;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        ctx, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONEXPORTABLE, 0, NULL,
+        sizeof(_nvmDmaPayload), _nvmDmaPayload, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    memset(buf, NVM_TEST_DMA_POISON, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadDma(
+        ctx, id, 0, sizeof(buf), buf, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+    for (i = 0; i < sizeof(buf); i++) {
+        WH_TEST_ASSERT_RETURN(buf[i] == NVM_TEST_DMA_POISON);
+    }
+
+    /* Past the end of the object: still ACCESS, never BADARGS. */
+    memset(buf, NVM_TEST_DMA_POISON, sizeof(buf));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadDma(
+        ctx, id, sizeof(_nvmDmaPayload), sizeof(buf), buf, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_ACCESS);
+    for (i = 0; i < sizeof(buf); i++) {
+        WH_TEST_ASSERT_RETURN(buf[i] == NVM_TEST_DMA_POISON);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(_destroyNvmId(ctx, id));
+
+    return WH_ERROR_OK;
+}
+
+
 int whTest_NvmDma(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(
         _runNvmObjectTest(ctx, &g_dmaTestOps, NVM_TEST_DMA_ID_BASE));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmDmaNullAddrs(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmDmaTailZeroed(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmDmaDeniedUntouched(ctx));
 
     return WH_ERROR_OK;
 }
