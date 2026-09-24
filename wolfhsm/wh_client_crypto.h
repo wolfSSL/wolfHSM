@@ -52,6 +52,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/wc_frodokem.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #ifdef WOLFSSL_SHA3
 #include "wolfssl/wolfcrypt/sha3.h"
@@ -3693,6 +3694,102 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+
+/* FrodoKEM client API. Mirrors the ML-KEM API, with the wolfCrypt FrodoKEM key
+ * "type" (a base parameter set optionally OR'd with the AES and ephemeral
+ * modifiers) in place of the ML-KEM level.
+ *
+ * FrodoKEM objects are far larger than anything else wolfHSM handles:
+ *
+ *   parameter set   public   private   ciphertext
+ *   FrodoKEM-640      9616     19888         9752
+ *   FrodoKEM-976     15632     31296        15792
+ *   FrodoKEM-1344    21520     43088        21696
+ *
+ * Three consequences, all of which an integrator has to size for:
+ *
+ * - Every key and ciphertext exceeds the default comm data length, so the
+ *   non-DMA encapsulate/decapsulate/export functions return WH_ERROR_BADARGS
+ *   unless WOLFHSM_CFG_COMM_DATA_LEN is raised well above its default. The DMA
+ *   functions are the usable path on a default build. Cache keygen is the
+ *   exception: its request and response are small, so it works either way.
+ * - The server key cache slot must hold a whole private key, so
+ *   WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE has to be at least the private
+ *   key size above, multiplied by WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT slots.
+ * - The import, export and DMA keygen helpers below each place one private-key
+ *   buffer on the caller's stack, so a thread calling them needs at least that
+ *   many bytes of stack free on top of its own usage: ~20KB at 640, ~43KB at
+ *   1344. That is more than a typical embedded task stack, so size the calling
+ *   thread accordingly or keep these calls off constrained threads.
+ */
+
+/* Associate a cached key id with a FrodoKEM key object */
+int wh_Client_FrodoKemSetKeyId(FrodoKemKey* key, whKeyId keyId);
+
+/* Read the cached key id associated with a FrodoKEM key object */
+int wh_Client_FrodoKemGetKeyId(FrodoKemKey* key, whKeyId* outId);
+
+/* Cache a FrodoKEM key in the server, optionally with a caller-chosen id */
+int wh_Client_FrodoKemImportKey(whClientContext* ctx, FrodoKemKey* key,
+                                whKeyId* inout_keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label);
+
+/* Export a cached FrodoKEM key into a caller-initialized key object */
+int wh_Client_FrodoKemExportKey(whClientContext* ctx, whKeyId keyId,
+                                FrodoKemKey* key, uint16_t label_len,
+                                uint8_t* label);
+
+/* Generate a FrodoKEM key on the server and export it into key */
+int wh_Client_FrodoKemMakeExportKey(whClientContext* ctx, int type,
+                                    FrodoKemKey* key);
+
+/* Generate a FrodoKEM key that stays cached in the server */
+int wh_Client_FrodoKemMakeCacheKey(whClientContext* ctx, int type,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label);
+
+/* Encapsulate to the public key held by key, caching it first if needed */
+int wh_Client_FrodoKemEncapsulate(whClientContext* ctx, FrodoKemKey* key,
+                                  uint8_t* ct, uint32_t* inout_ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len);
+
+/* Decapsulate with the private key held by key, caching it first if needed */
+int wh_Client_FrodoKemDecapsulate(whClientContext* ctx, FrodoKemKey* key,
+                                  const uint8_t* ct, uint32_t ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len);
+
+#ifdef WOLFHSM_CFG_DMA
+/* DMA counterparts of the functions above */
+int wh_Client_FrodoKemImportKeyDma(whClientContext* ctx, FrodoKemKey* key,
+                                   whKeyId* inout_keyId, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label);
+
+int wh_Client_FrodoKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                   FrodoKemKey* key, uint16_t label_len,
+                                   uint8_t* label);
+
+int wh_Client_FrodoKemMakeExportKeyDma(whClientContext* ctx, int type,
+                                       FrodoKemKey* key);
+
+/* pub is required and receives the generated public key, which the server
+ * streams back through the client's DMA buffer. */
+int wh_Client_FrodoKemMakeCacheKeyDma(whClientContext* ctx, int type,
+                                      whKeyId* inout_key_id, whNvmFlags flags,
+                                      uint16_t label_len, const uint8_t* label,
+                                      FrodoKemKey* pub);
+
+int wh_Client_FrodoKemEncapsulateDma(whClientContext* ctx, FrodoKemKey* key,
+                                     uint8_t* ct, uint32_t* inout_ct_len,
+                                     uint8_t* ss, uint32_t* inout_ss_len);
+
+int wh_Client_FrodoKemDecapsulateDma(whClientContext* ctx, FrodoKemKey* key,
+                                     const uint8_t* ct, uint32_t ct_len,
+                                     uint8_t* ss, uint32_t* inout_ss_len);
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 #ifdef WOLFHSM_CFG_DMA

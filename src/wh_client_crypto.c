@@ -12183,6 +12183,975 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+int wh_Client_FrodoKemSetKeyId(FrodoKemKey* key, whKeyId keyId)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_FrodoKemGetKeyId(FrodoKemKey* key, whKeyId* outId)
+{
+    if ((key == NULL) || (outId == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
+    return WH_ERROR_OK;
+}
+
+int wh_Client_FrodoKemImportKey(whClientContext* ctx, FrodoKemKey* key,
+                                whKeyId* inout_keyId, whNvmFlags flags,
+                                uint16_t label_len, uint8_t* label)
+{
+    int      ret        = WH_ERROR_OK;
+    whKeyId  key_id     = WH_KEYID_ERASED;
+    uint8_t  buffer[FRODOKEM_MAX_PRIVATE_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        key_id = *inout_keyId;
+    }
+
+    ret = wh_Crypto_FrodoKemSerializeKey(key, buffer_len, buffer, &buffer_len);
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemImportKey: serialize ret:%d, len:%u\n",
+                            ret, (unsigned int)buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyCache(ctx, flags, label, label_len, buffer,
+                                 buffer_len, &key_id);
+        if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
+            *inout_keyId = key_id;
+        }
+    }
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemImportKey: ret:%d keyId:%u\n", ret,
+                            key_id);
+
+    wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+int wh_Client_FrodoKemExportKey(whClientContext* ctx, whKeyId keyId,
+                                FrodoKemKey* key, uint16_t label_len,
+                                uint8_t* label)
+{
+    int      ret        = WH_ERROR_OK;
+    uint8_t  buffer[FRODOKEM_MAX_PRIVATE_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExport(ctx, keyId, label, label_len, buffer,
+                              &buffer_len);
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemExportKey: export ret:%d, len:%u\n",
+                            ret, (unsigned int)buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FrodoKemDeserializeKey(buffer, buffer_len, key);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemExportKey: keyId:%x ret:%d\n", keyId, ret);
+
+    wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+static int _FrodoKemMakeKey(whClientContext* ctx, int type,
+                            whKeyId* inout_key_id, whNvmFlags flags,
+                            uint16_t label_len, const uint8_t* label,
+                            FrodoKemKey* key)
+{
+    int                                     ret     = WH_ERROR_OK;
+    whKeyId                                 key_id  = WH_KEYID_ERASED;
+    uint8_t*                                dataPtr = NULL;
+    whMessageCrypto_FrodoKemKeyGenRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemKeyGenResponse* res     = NULL;
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action = WC_ALGO_TYPE_PK;
+    uint16_t req_len;
+    uint16_t res_len;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req =
+        (whMessageCrypto_FrodoKemKeyGenRequest*)_createCryptoRequestWithSubtype(
+            dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN, WC_PQC_KEM_TYPE_FRODOKEM,
+            ctx->cryptoAffinity);
+
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    /* Defense in depth: ensure request fits in comm buffer */
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(req, 0, sizeof(*req));
+    req->type   = type;
+    req->flags  = flags;
+    req->keyId  = key_id;
+    req->access = WH_NVM_ACCESS_ANY;
+    if ((label != NULL) && (label_len > 0)) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+    }
+
+    ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                (uint8_t*)dataPtr);
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemMakeKey: Req sent:type:%d, ret:%d\n",
+                            type, ret);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    do {
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                     WOLFHSM_CFG_COMM_DATA_LEN,
+                                     (uint8_t*)dataPtr);
+    } while (ret == WH_ERROR_NOTREADY);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN,
+                             (uint8_t**)&res);
+    if (ret >= 0) {
+        key_id = (whKeyId)res->keyId;
+        WH_DEBUG_CLIENT_VERBOSE("FrodoKemMakeKey: Res recv:"
+                                "keyId:%u, len:%u, ret:%d\n",
+                                (unsigned int)res->keyId,
+                                (unsigned int)res->len, ret);
+        if (inout_key_id != NULL) {
+            *inout_key_id = key_id;
+        }
+        if (key != NULL) {
+            wh_Client_FrodoKemSetKeyId(key, key_id);
+            /* Response carries the exported key (EPHEMERAL) or the public key
+             * (cached keygen). An empty body means the server returned no key
+             * material, which for FrodoKEM is the common case inline: nothing
+             * fits unless WOLFHSM_CFG_COMM_DATA_LEN is raised a long way. */
+            if (res->len > 0) {
+                uint8_t*     key_raw = (uint8_t*)(res + 1);
+                const size_t hdr_sz =
+                    sizeof(whMessageCrypto_GenericResponseHeader) +
+                    sizeof(*res);
+                if (res_len < hdr_sz || res->len > (res_len - hdr_sz)) {
+                    ret = WH_ERROR_ABORTED;
+                }
+                else {
+                    ret = wh_Crypto_FrodoKemDeserializeKey(
+                        key_raw, (uint16_t)res->len, key);
+                }
+            }
+            else {
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+    return ret;
+}
+
+int wh_Client_FrodoKemMakeCacheKey(whClientContext* ctx, int type,
+                                   whKeyId* inout_key_id, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label)
+{
+    if (inout_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path: the server would return the
+     * key material and no cache id, so reporting success here would hand back
+     * an erased id. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _FrodoKemMakeKey(ctx, type, inout_key_id, flags, label_len, label,
+                            NULL);
+}
+
+int wh_Client_FrodoKemMakeExportKey(whClientContext* ctx, int type,
+                                    FrodoKemKey* key)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _FrodoKemMakeKey(ctx, type, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                            key);
+}
+
+int wh_Client_FrodoKemEncapsulate(whClientContext* ctx, FrodoKemKey* key,
+                                  uint8_t* ct, uint32_t* inout_ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len)
+{
+    int                                     ret     = WH_ERROR_OK;
+    uint8_t*                                dataPtr = NULL;
+    whMessageCrypto_FrodoKemEncapsRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemEncapsResponse* res     = NULL;
+
+    whKeyId key_id;
+    int     evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || (ct == NULL) || (ss == NULL) ||
+        (inout_ct_len == NULL) || (inout_ss_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((*inout_ct_len == 0) || (*inout_ss_len == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFrodoEncaps";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        ret = wh_Client_FrodoKemImportKey(ctx, key, &key_id, flags,
+                                          sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint16_t req_len =
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
+        uint32_t options = 0;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            if (evict != 0) {
+                (void)wh_Client_KeyEvict(ctx, key_id);
+            }
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FrodoKemEncapsRequest*)
+            _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
+                                            WC_PQC_KEM_TYPE_FRODOKEM,
+                                            ctx->cryptoAffinity);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FRODOKEM_ENCAPS_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->type    = key->type;
+            req->keyId   = key_id;
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+            WH_DEBUG_CLIENT_VERBOSE("FrodoKemEncapsulate: Req sent:keyId:%u, "
+                                    "type:%u, ret:%d\n",
+                                    (unsigned int)key_id,
+                                    (unsigned int)key->type, ret);
+            if (ret == WH_ERROR_OK) {
+                evict = 0;
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    uint8_t*     resp_data  = (uint8_t*)(res + 1);
+                    uint32_t     out_ct_len = res->ctSz;
+                    uint32_t     out_ss_len = res->ssSz;
+                    const size_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_len < hdr_sz || out_ct_len > (res_len - hdr_sz) ||
+                        out_ss_len > (res_len - hdr_sz - out_ct_len)) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (*inout_ct_len < out_ct_len ||
+                             *inout_ss_len < out_ss_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        memcpy(ct, resp_data, out_ct_len);
+                        memcpy(ss, resp_data + out_ct_len, out_ss_len);
+                        *inout_ct_len = out_ct_len;
+                        *inout_ss_len = out_ss_len;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        wc_ForceZero(ss, *inout_ss_len);
+    }
+
+    return ret;
+}
+
+int wh_Client_FrodoKemDecapsulate(whClientContext* ctx, FrodoKemKey* key,
+                                  const uint8_t* ct, uint32_t ct_len,
+                                  uint8_t* ss, uint32_t* inout_ss_len)
+{
+    int                                     ret     = WH_ERROR_OK;
+    uint8_t*                                dataPtr = NULL;
+    whMessageCrypto_FrodoKemDecapsRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemDecapsResponse* res     = NULL;
+
+    whKeyId key_id;
+    int     evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || (ct == NULL) || (ss == NULL) ||
+        (inout_ss_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if ((ct_len == 0) || (*inout_ss_len == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFrodoDecaps";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        ret = wh_Client_FrodoKemImportKey(ctx, key, &key_id, flags,
+                                          sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        /* Compute the full request size at 32 bits. A FrodoKEM ciphertext is
+         * nearly 10KB and comes from the caller, so narrowing before the
+         * bounds check could wrap and let the memcpy below overrun the comm
+         * buffer. */
+        uint32_t full_len =
+            (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint32_t)sizeof(*req) + ct_len;
+        uint16_t req_len = 0;
+        uint16_t res_len = 0;
+        uint32_t options = 0;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            if (evict != 0) {
+                (void)wh_Client_KeyEvict(ctx, key_id);
+            }
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FrodoKemDecapsRequest*)
+            _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
+                                            WC_PQC_KEM_TYPE_FRODOKEM,
+                                            ctx->cryptoAffinity);
+
+        /* Bound by the comm buffer and by what the 16-bit transport length can
+         * describe, then narrow. */
+        if ((full_len <= (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN) &&
+            (full_len <= (uint32_t)UINT16_MAX)) {
+            req_len = (uint16_t)full_len;
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FRODOKEM_DECAPS_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->type    = key->type;
+            req->keyId   = key_id;
+            req->ctSz    = ct_len;
+            memcpy((uint8_t*)(req + 1), ct, ct_len);
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+            WH_DEBUG_CLIENT_VERBOSE("FrodoKemDecapsulate: Req sent:keyId:%u, "
+                                    "type:%u, ret:%d\n",
+                                    (unsigned int)key_id,
+                                    (unsigned int)key->type, ret);
+            if (ret == WH_ERROR_OK) {
+                evict = 0;
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    uint8_t*     resp_ss    = (uint8_t*)(res + 1);
+                    uint32_t     out_ss_len = res->ssSz;
+                    const size_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_len < hdr_sz || out_ss_len > (res_len - hdr_sz)) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (*inout_ss_len < out_ss_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        memcpy(ss, resp_ss, out_ss_len);
+                        *inout_ss_len = out_ss_len;
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        wc_ForceZero(ss, *inout_ss_len);
+    }
+
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_FrodoKemImportKeyDma(whClientContext* ctx, FrodoKemKey* key,
+                                   whKeyId* inout_keyId, whNvmFlags flags,
+                                   uint16_t label_len, uint8_t* label)
+{
+    int      ret        = WH_ERROR_OK;
+    whKeyId  key_id     = WH_KEYID_ERASED;
+    uint8_t  buffer[FRODOKEM_MAX_PRIVATE_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        key_id = *inout_keyId;
+    }
+
+    ret = wh_Crypto_FrodoKemSerializeKey(key, buffer_len, buffer, &buffer_len);
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemImportKeyDma: serialize ret:%d, len:%u\n",
+                            ret, (unsigned int)buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyCacheDma(ctx, flags, label, label_len, buffer,
+                                    buffer_len, &key_id);
+        if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
+            *inout_keyId = key_id;
+        }
+    }
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemImportKeyDma: ret:%d keyId:%u\n", ret,
+                            key_id);
+
+    wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+int wh_Client_FrodoKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
+                                   FrodoKemKey* key, uint16_t label_len,
+                                   uint8_t* label)
+{
+    int      ret        = WH_ERROR_OK;
+    uint8_t  buffer[FRODOKEM_MAX_PRIVATE_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(buffer, 0, sizeof(buffer));
+    ret = wh_Client_KeyExportDma(ctx, keyId, buffer, buffer_len, label,
+                                 label_len, &buffer_len);
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemExportKeyDma: export ret:%d, len:%u\n",
+                            ret, (unsigned int)buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FrodoKemDeserializeKey(buffer, buffer_len, key);
+    }
+    WH_DEBUG_CLIENT_VERBOSE("FrodoKemExportKeyDma: keyId:%x ret:%d\n", keyId,
+                            ret);
+
+    wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+static int _FrodoKemMakeKeyDma(whClientContext* ctx, int type,
+                               whKeyId* inout_key_id, whNvmFlags flags,
+                               uint16_t label_len, const uint8_t* label,
+                               FrodoKemKey* key)
+{
+    int                                        ret     = WH_ERROR_OK;
+    whKeyId                                    key_id  = WH_KEYID_ERASED;
+    uint8_t*                                   dataPtr = NULL;
+    whMessageCrypto_FrodoKemKeyGenDmaRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemKeyGenDmaResponse* res     = NULL;
+    uintptr_t                                  keyAddr = 0;
+    uint8_t  buffer[FRODOKEM_MAX_PRIVATE_KEY_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+    uint16_t res_len    = 0;
+    uint16_t group      = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action     = WC_ALGO_TYPE_PK;
+    uint16_t req_len;
+    int      dmaMapped  = 0;
+
+    if ((ctx == NULL) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_FrodoKemKeyGenDmaRequest*)
+        _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN,
+                                        WC_PQC_KEM_TYPE_FRODOKEM,
+                                        ctx->cryptoAffinity);
+
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(req, 0, sizeof(*req));
+    req->type   = type;
+    req->flags  = flags;
+    req->keyId  = key_id;
+    req->access = WH_NVM_ACCESS_ANY;
+    req->key.sz = buffer_len;
+
+    ret = wh_Client_DmaProcessClientAddress(
+        ctx, (uintptr_t)buffer, (void**)&keyAddr, buffer_len,
+        WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+    if (ret == WH_ERROR_OK) {
+        dmaMapped     = 1;
+        req->key.addr = (uint64_t)(uintptr_t)keyAddr;
+    }
+
+    if ((label != NULL) && (label_len > 0)) {
+        if (label_len > WH_NVM_LABEL_LEN) {
+            label_len = WH_NVM_LABEL_LEN;
+        }
+        memcpy(req->label, label, label_len);
+        req->labelSize = label_len;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                    (uint8_t*)dataPtr);
+    }
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                         WOLFHSM_CFG_COMM_DATA_LEN,
+                                         (uint8_t*)dataPtr);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+
+    /* Only unmap what was mapped: a failed PRE has nothing to release. */
+    if (dmaMapped) {
+        (void)wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)buffer, (void**)&keyAddr, buffer_len,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_KEYGEN,
+                                 (uint8_t**)&res);
+        if (ret >= 0) {
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            if (res_len < hdr_sz) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                key_id = (whKeyId)res->keyId;
+                if (inout_key_id != NULL) {
+                    *inout_key_id = key_id;
+                }
+                if (key != NULL) {
+                    wh_Client_FrodoKemSetKeyId(key, key_id);
+                    /* buffer holds the exported key (EPHEMERAL) or the public
+                     * key (cached keygen); keySize bounds the DMA write. */
+                    if (res->keySize == 0) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->keySize > buffer_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        ret = wh_Crypto_FrodoKemDeserializeKey(
+                            buffer, (uint16_t)res->keySize, key);
+                    }
+                }
+            }
+        }
+    }
+
+    wc_ForceZero(buffer, buffer_len);
+    return ret;
+}
+
+int wh_Client_FrodoKemMakeExportKeyDma(whClientContext* ctx, int type,
+                                       FrodoKemKey* key)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    return _FrodoKemMakeKeyDma(ctx, type, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                               key);
+}
+
+int wh_Client_FrodoKemMakeCacheKeyDma(whClientContext* ctx, int type,
+                                      whKeyId* inout_key_id, whNvmFlags flags,
+                                      uint16_t label_len, const uint8_t* label,
+                                      FrodoKemKey* pub)
+{
+    int     ret;
+    whKeyId in_keyId;
+
+    /* pub is required: the server streams the generated public key back
+     * through the client's DMA buffer, which pub supplies. */
+    if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path: the
+     * server would take the export branch and return WH_KEYID_ERASED, so
+     * reporting success here would claim a cache key that does not exist. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in_keyId = *inout_key_id;
+    ret = _FrodoKemMakeKeyDma(ctx, type, inout_key_id, flags, label_len, label,
+                              pub);
+    if (ret >= 0) {
+        /* Stamp the cached keyId and the client's HSM devId so pub is
+         * immediately usable as a handle to the cached private key. Set here
+         * as well as inside the helper because a public-key deserialize that
+         * retries parameter sets can re-init pub and clear it. */
+        wh_Client_FrodoKemSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (!WH_KEYID_ISERASED(*inout_key_id) &&
+             (WH_KEYID_ISERASED(in_keyId) || (ret == WH_ERROR_ABORTED))) {
+        /* The server committed a key but the client side failed afterwards
+         * (for example the public key would not deserialize). Roll back so the
+         * operation is atomic and no cache slot is orphaned. */
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
+}
+
+int wh_Client_FrodoKemEncapsulateDma(whClientContext* ctx, FrodoKemKey* key,
+                                     uint8_t* ct, uint32_t* inout_ct_len,
+                                     uint8_t* ss, uint32_t* inout_ss_len)
+{
+    int                                        ret     = WH_ERROR_OK;
+    uint8_t*                                   dataPtr = NULL;
+    whMessageCrypto_FrodoKemEncapsDmaRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemEncapsDmaResponse* res     = NULL;
+    uintptr_t                                  ctAddr  = 0;
+    whKeyId                                    key_id;
+    int                                        evict     = 0;
+    int                                        dmaMapped = 0;
+    uint32_t                                   options   = 0;
+    uint32_t                                   origCtSz;
+
+    if ((ctx == NULL) || (key == NULL) || (ct == NULL) || (ss == NULL) ||
+        (inout_ct_len == NULL) || (inout_ss_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    origCtSz = *inout_ct_len;
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFrodoEncaps";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        ret = wh_Client_FrodoKemImportKeyDma(ctx, key, &key_id, flags,
+                                             sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint16_t req_len =
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            if (evict != 0) {
+                (void)wh_Client_KeyEvict(ctx, key_id);
+            }
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FrodoKemEncapsDmaRequest*)
+            _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
+                                            WC_PQC_KEM_TYPE_FRODOKEM,
+                                            ctx->cryptoAffinity);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FRODOKEM_ENCAPS_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->type    = key->type;
+            req->keyId   = key_id;
+
+            req->ct.sz = origCtSz;
+            ret        = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)ct, (void**)&ctAddr, req->ct.sz,
+                WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
+            if (ret == WH_ERROR_OK) {
+                dmaMapped    = 1;
+                req->ct.addr = ctAddr;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                            (uint8_t*)dataPtr);
+            }
+            if (ret == WH_ERROR_OK) {
+                evict = 0;
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_ENCAPS,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    /* ct was transferred via DMA, ss is inline in response */
+                    uint8_t*     resp_ss = (uint8_t*)(res + 1);
+                    const size_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_len < hdr_sz || res->ssLen > (res_len - hdr_sz)) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->ctLen > origCtSz ||
+                             res->ssLen > *inout_ss_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        memcpy(ss, resp_ss, res->ssLen);
+                        *inout_ct_len = res->ctLen;
+                        *inout_ss_len = res->ssLen;
+                    }
+                }
+            }
+
+            /* Only unmap what was mapped. */
+            if (dmaMapped) {
+                (void)wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)ct, (void**)&ctAddr, origCtSz,
+                    WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        wc_ForceZero(ss, *inout_ss_len);
+    }
+
+    return ret;
+}
+
+int wh_Client_FrodoKemDecapsulateDma(whClientContext* ctx, FrodoKemKey* key,
+                                     const uint8_t* ct, uint32_t ct_len,
+                                     uint8_t* ss, uint32_t* inout_ss_len)
+{
+    int                                        ret     = WH_ERROR_OK;
+    uint8_t*                                   dataPtr = NULL;
+    whMessageCrypto_FrodoKemDecapsDmaRequest*  req     = NULL;
+    whMessageCrypto_FrodoKemDecapsDmaResponse* res     = NULL;
+    uintptr_t                                  ctAddr    = 0;
+    whKeyId                                    key_id;
+    int                                        evict     = 0;
+    int                                        dmaMapped = 0;
+    uint32_t                                   options   = 0;
+
+    if ((ctx == NULL) || (key == NULL) || (ct == NULL) || (ss == NULL) ||
+        (inout_ss_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (ct_len == 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFrodoDecaps";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_DERIVE;
+        ret = wh_Client_FrodoKemImportKeyDma(ctx, key, &key_id, flags,
+                                             sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint16_t req_len =
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+        uint16_t res_len = 0;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            if (evict != 0) {
+                (void)wh_Client_KeyEvict(ctx, key_id);
+            }
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FrodoKemDecapsDmaRequest*)
+            _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
+                                            WC_PQC_KEM_TYPE_FRODOKEM,
+                                            ctx->cryptoAffinity);
+
+        if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FRODOKEM_DECAPS_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->type    = key->type;
+            req->keyId   = key_id;
+
+            req->ct.sz = ct_len;
+            ret        = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)ct, (void**)&ctAddr, req->ct.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            if (ret == WH_ERROR_OK) {
+                dmaMapped    = 1;
+                req->ct.addr = ctAddr;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                            (uint8_t*)dataPtr);
+            }
+            if (ret == WH_ERROR_OK) {
+                evict = 0;
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_KEM_DECAPS,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    uint8_t*     resp_ss = (uint8_t*)(res + 1);
+                    const size_t hdr_sz =
+                        sizeof(whMessageCrypto_GenericResponseHeader) +
+                        sizeof(*res);
+                    if (res_len < hdr_sz || res->ssLen > (res_len - hdr_sz)) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else if (res->ssLen > *inout_ss_len) {
+                        ret = WH_ERROR_BADARGS;
+                    }
+                    else {
+                        memcpy(ss, resp_ss, res->ssLen);
+                        *inout_ss_len = res->ssLen;
+                    }
+                }
+            }
+
+            /* Only unmap what was mapped. */
+            if (dmaMapped) {
+                (void)wh_Client_DmaProcessClientAddress(
+                    ctx, (uintptr_t)ct, (void**)&ctAddr, ct_len,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    if (ret != WH_ERROR_OK) {
+        wc_ForceZero(ss, *inout_ss_len);
+    }
+
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 #ifdef WOLFHSM_CFG_DMA
 

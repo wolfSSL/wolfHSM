@@ -326,7 +326,19 @@
 
 /* Size in bytes of each big key cache buffer  */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(WOLFSSL_HAVE_XMSS) || \
+#if defined(WOLFSSL_HAVE_FRODOKEM)
+/* FrodoKEM private keys dwarf every other supported key: 19,888 bytes at 640,
+ * 31,296 at 976 and 43,088 at 1344, and a cache slot must hold one whole. The
+ * default covers the largest parameter set the build enables. Multiply by
+ * WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT for the total server cost. */
+#if !defined(WOLFSSL_NO_FRODOKEM_1344)
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 43264
+#elif !defined(WOLFSSL_NO_FRODOKEM_976)
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 31488
+#else
+#define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 20096
+#endif
+#elif defined(WOLFSSL_HAVE_MLDSA) || defined(WOLFSSL_HAVE_XMSS) || \
     defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_MLKEM)
 #define WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE 8192
 #else

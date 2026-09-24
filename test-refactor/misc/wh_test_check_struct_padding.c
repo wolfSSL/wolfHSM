@@ -147,6 +147,12 @@ whMessageCrypto_MlKemEncapsRequest    pkMlkemEncapsReq;
 whMessageCrypto_MlKemEncapsResponse   pkMlkemEncapsRes;
 whMessageCrypto_MlKemDecapsRequest    pkMlkemDecapsReq;
 whMessageCrypto_MlKemDecapsResponse   pkMlkemDecapsRes;
+whMessageCrypto_FrodoKemKeyGenRequest  pkFrodokemKeygenReq;
+whMessageCrypto_FrodoKemKeyGenResponse pkFrodokemKeygenRes;
+whMessageCrypto_FrodoKemEncapsRequest  pkFrodokemEncapsReq;
+whMessageCrypto_FrodoKemEncapsResponse pkFrodokemEncapsRes;
+whMessageCrypto_FrodoKemDecapsRequest  pkFrodokemDecapsReq;
+whMessageCrypto_FrodoKemDecapsResponse pkFrodokemDecapsRes;
 
 /* DMA crypto messages */
 #if defined(WOLFHSM_CFG_DMA)
@@ -171,6 +177,12 @@ whMessageCrypto_MlKemEncapsDmaRequest  pkMlkemEncapsDmaReq;
 whMessageCrypto_MlKemEncapsDmaResponse pkMlkemEncapsDmaRes;
 whMessageCrypto_MlKemDecapsDmaRequest  pkMlkemDecapsDmaReq;
 whMessageCrypto_MlKemDecapsDmaResponse pkMlkemDecapsDmaRes;
+whMessageCrypto_FrodoKemKeyGenDmaRequest  pkFrodokemKeygenDmaReq;
+whMessageCrypto_FrodoKemKeyGenDmaResponse pkFrodokemKeygenDmaRes;
+whMessageCrypto_FrodoKemEncapsDmaRequest  pkFrodokemEncapsDmaReq;
+whMessageCrypto_FrodoKemEncapsDmaResponse pkFrodokemEncapsDmaRes;
+whMessageCrypto_FrodoKemDecapsDmaRequest  pkFrodokemDecapsDmaReq;
+whMessageCrypto_FrodoKemDecapsDmaResponse pkFrodokemDecapsDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
