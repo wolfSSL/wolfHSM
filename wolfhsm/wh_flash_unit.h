@@ -60,23 +60,11 @@
 #define WHFU_U32_PER_UNIT WHFU_DIV_ROUND_UP(WOLFHSM_CFG_FLASH_UNIT_SIZE, 4)
 #define WHFU_U16_PER_UNIT WHFU_DIV_ROUND_UP(WOLFHSM_CFG_FLASH_UNIT_SIZE, 2)
 
-#if defined(__GNUC__) || defined(__clang__) || defined(__IAR_SYSTEMS_ICC__)
-    #define WHFU_ALIGN8 __attribute__((aligned(8)))
-#elif defined(_MSC_VER)
-    #define WHFU_ALIGN8 __declspec(align(8))
-#elif defined(__CC_ARM)
-    #define WHFU_ALIGN8 __align(8)
-#else
-    #define WHFU_ALIGN8
-#endif
-
 typedef union whFlashUnit_t {
-    WHFU_ALIGN8 uint64_t u64[WHFU_U64_PER_UNIT];
+    WH_ALIGN8 uint64_t u64[WHFU_U64_PER_UNIT];
     uint32_t u32[WHFU_U32_PER_UNIT];
     uint16_t u16[WHFU_U16_PER_UNIT];
 } whFlashUnit;
-
-#undef WHFU_ALIGN8
 
 #define WHFU_BYTES_PER_UNIT sizeof(whFlashUnit)
 /* Reject unsupported layouts at compile time. */

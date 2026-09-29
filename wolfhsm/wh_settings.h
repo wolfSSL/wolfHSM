@@ -107,6 +107,14 @@
  *  NVM.
  *      Default: 8
  *
+ *  WH_BIG_ENDIAN - Selects big-endian (1) or little-endian (0) byte order
+ *  for NVM flash state and metadata. Set to the target order when building
+ *  whnvmtool on a host with a different endian order. Object data is opaque.
+ *      Default: Detected from the compiler and wolfSSL configuration
+ *
+ *  WH_ALIGN8 - Compiler-specific 8-byte alignment attribute.
+ *      Default: Detected from the compiler
+ *
  *  WOLFHSM_CFG_NVM_FLASH_CRC16 - If defined, the nvm_flash backend stores a
  *  CRC16 of each object's metadata and data in the on-flash object state and
  *  verifies them: metadata when the directory is loaded, data on full-object
@@ -244,6 +252,29 @@
 #define WOLFHSM_CFG_HEXDUMP
 #endif
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && !WH_PADDING_CHECK */
+
+#ifndef WH_BIG_ENDIAN
+    #if defined(BIG_ENDIAN_ORDER) || defined(__BIG_ENDIAN__) || \
+        (defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+         (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__))
+        #define WH_BIG_ENDIAN 1
+    #else
+        #define WH_BIG_ENDIAN 0
+    #endif
+#endif
+
+#ifndef WH_ALIGN8
+    #if defined(__GNUC__) || defined(__clang__) || \
+        defined(__IAR_SYSTEMS_ICC__)
+        #define WH_ALIGN8 __attribute__((aligned(8)))
+    #elif defined(_MSC_VER)
+        #define WH_ALIGN8 __declspec(align(8))
+    #elif defined(__CC_ARM)
+        #define WH_ALIGN8 __align(8)
+    #else
+        #define WH_ALIGN8
+    #endif
+#endif
 
 /* Platform system time access */
 #if !defined WOLFHSM_CFG_NO_SYS_TIME && !defined(WOLFHSM_CFG_PORT_GETTIME)

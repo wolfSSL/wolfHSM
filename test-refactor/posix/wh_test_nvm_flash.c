@@ -41,9 +41,9 @@
 #include "wh_test_list.h"
 #include "wh_test_flash_fault_inject.h"
 
-#define NVM_FLASH_SIZE       (1024 * 1024)
-#define NVM_FLASH_SECTOR_SZ  (4096)
 #define NVM_FLASH_PAGE_SZ    WHFU_BYTES_PER_UNIT
+#define NVM_FLASH_SECTOR_SZ  (512 * NVM_FLASH_PAGE_SZ)
+#define NVM_FLASH_SIZE       (256 * NVM_FLASH_SECTOR_SZ)
 
 
 /*
@@ -285,7 +285,7 @@ static int _geometryBlankCheck(void* context, uint32_t offset, uint32_t size)
 }
 
 
-int whTest_NvmInvalidGeometry(void* ctx)
+int whTest_NvmFlashInvalidGeometry(void* ctx)
 {
     const uint32_t       alignedTooSmall = WHFU_BYTES_PER_UNIT;
     const uint32_t       misalignedLarge = NVM_FLASH_SECTOR_SZ + 1;
@@ -368,6 +368,40 @@ int whTest_NvmInitStates(void* ctx)
     WH_TEST_ASSERT_RETURN(0 == c->nvmSetup.nvmFlashCtx.active);
     WH_TEST_ASSERT_RETURN(NF_STATUS_USED ==
                           c->nvmSetup.nvmFlashCtx.state.status);
+    WH_TEST_RETURN_ON_FAIL(c->nvmCfg.cb->Cleanup(c->nvmCfg.context));
+
+    return 0;
+}
+
+int whTest_NvmFlashEndianLayout(void* ctx)
+{
+    whTestNvmFlashCtx* c = &_ctx;
+    whNvmMetadata meta = {.id = 0x1234, .access = 0x5678,
+                          .flags = 0x9ABC, .label = "endian"};
+    const uint8_t data[3] = {1, 2, 3};
+#if WH_BIG_ENDIAN
+    const uint8_t expectedState[8] = {0x12, 0x34, 0x56, 0x78,
+                                      0, 0, 0, 0};
+    const uint8_t expectedMeta[8] = {0x12, 0x34, 0x56, 0x78,
+                                     0x9A, 0xBC, 0, 3};
+#else
+    const uint8_t expectedState[8] = {0, 0, 0, 0,
+                                      0x78, 0x56, 0x34, 0x12};
+    const uint8_t expectedMeta[8] = {0x34, 0x12, 0x78, 0x56,
+                                     0xBC, 0x9A, 3, 0};
+#endif
+
+    (void)ctx;
+    _setup();
+    WH_TEST_RETURN_ON_FAIL(_selectNvm(WH_NVM_TEST_BACKEND_FLASH));
+    WH_TEST_RETURN_ON_FAIL(c->nvmCfg.cb->Init(c->nvmCfg.context,
+                                              c->nvmCfg.config));
+    WH_TEST_RETURN_ON_FAIL(c->nvmCfg.cb->AddObject(c->nvmCfg.context,
+                                                   &meta, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(c->memory, expectedState,
+                                      sizeof(expectedState)));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(c->memory + 6 * WHFU_BYTES_PER_UNIT,
+                                      expectedMeta, sizeof(expectedMeta)));
     WH_TEST_RETURN_ON_FAIL(c->nvmCfg.cb->Cleanup(c->nvmCfg.context));
 
     return 0;

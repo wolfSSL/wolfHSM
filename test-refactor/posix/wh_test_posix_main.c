@@ -74,8 +74,9 @@
 int whTest_FlashWriteLock(void* ctx);
 int whTest_FlashEraseProgramVerify(void* ctx);
 int whTest_FlashUnitOps(void* ctx);
-int whTest_NvmInvalidGeometry(void* ctx);
+int whTest_NvmFlashInvalidGeometry(void* ctx);
 int whTest_NvmInitStates(void* ctx);
+int whTest_NvmFlashEndianLayout(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
 int whTest_NvmRecovery(void* ctx);
@@ -284,13 +285,18 @@ int main(void)
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
-        rc = whTestGroup_RunOne("whTest_NvmInvalidGeometry",
-            whTest_NvmInvalidGeometry, NULL);
+        rc = whTestGroup_RunOne("whTest_NvmFlashInvalidGeometry",
+            whTest_NvmFlashInvalidGeometry, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
         rc = whTestGroup_RunOne("whTest_NvmInitStates",
             whTest_NvmInitStates, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmFlashEndianLayout",
+            whTest_NvmFlashEndianLayout, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
