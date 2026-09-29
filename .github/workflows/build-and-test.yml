@@ -128,6 +128,14 @@ jobs:
       if: matrix.group == 'wolfcrypt'
       run: cd test && make clean && make -j SHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    - name: Build and test ASAN NOGLOBALKEYS DMA
+      if: matrix.group == 'wolfcrypt'
+      run: cd test && make clean && make -j NOGLOBALKEYS=1 DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    - name: Build and test ASAN LEGACYNVM DMA
+      if: matrix.group == 'wolfcrypt'
+      run: cd test && make clean && make -j LEGACYNVM=1 DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test with per-client crypto affinity enabled (runs the crypto
     # affinity unit test, gated behind WOLFHSM_CFG_CRYPTO_AFFINITY)
     - name: Build and test CRYPTO_AFFINITY ASAN

@@ -53,10 +53,11 @@ jobs:
     - name: Build POSIX server
       run: |
         cd examples/posix/wh_posix_server
+        SHE_TEST_CFLAGS="-Wextra -DWOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT"
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl
+            make -j SHE=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         else
-            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl
+            make -j TLS=1 SHE=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         fi
 
     # Start the server in the background
@@ -129,10 +130,11 @@ jobs:
         kill $SERVER_PID || true
         cd examples/posix/wh_posix_server
         make clean
+        SHE_TEST_CFLAGS="-Wextra -DWOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT"
         if [ "${{ matrix.transport }}" = "tcp" ]; then
-            make -j SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+            make -j SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         else
-            make -j TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl
+            make -j TLS=1 SHE=1 AUTH=1 WOLFSSL_DIR=../../../wolfssl CFLAGS_EXTRA="$SHE_TEST_CFLAGS"
         fi
         rm -f *.bin || true
         ./Build/wh_posix_server.elf --type ${{ matrix.transport }} &

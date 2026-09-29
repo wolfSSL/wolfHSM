@@ -69,33 +69,40 @@
 
 /** SHE provisioning and identity functions */
 
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+/* Test or provisioning key management functions that bypass the SHE
+ * authenticated update protocol. Gated by WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT. */
+
 /**
  * @brief Pre-programs a SHE key directly into NVM, bypassing the key update
  * protocol.
  *
- * This is a wolfHSM-specific provisioning helper that has no equivalent in the
- * AUTOSAR SHE command set. It writes @p key straight into the SHE NVM slot
- * @p keyId with an update counter of zero, skipping the encrypted M1-M5
- * CMD_LOAD_KEY protocol. It is intended for the initial provisioning of a
- * blank device (for example installing the MASTER_ECU_KEY or BOOT_MAC at
- * production) before any key-update authorization key exists; subsequent
- * in-field updates should use the spec-compliant wh_Client_SheLoadKey(). The
- * key is scoped to the calling client via the keyId USER field, or to the
- * shared global namespace when WOLFHSM_CFG_SHE_GLOBAL_KEYS is defined.
+ * Writes key material directly into the SHE NVM slot keyId with the
+ * specified update counter and flags. Intended for initial device provisioning.
  *
  * @param[in] c Pointer to the client context.
- * @param[in] keyId SHE key slot to write (0-15, e.g. WH_SHE_MASTER_ECU_KEY_ID).
- * @param[in] flags SHE key protection flags to store with the key
- *                  (WH_SHE_FLAG_WRITE_PROTECT, WH_SHE_FLAG_BOOT_PROTECT, etc.).
- * @param[in] key Pointer to the key material to store.
- * @param[in] keySz Length of the key material in bytes. Must be exactly
- *                  WH_SHE_KEY_SZ (16); any other length is rejected.
- * @return int Returns 0 on success, WH_ERROR_BADARGS if @p c or @p key is NULL
- *             or @p keySz is not WH_SHE_KEY_SZ, or a negative error code on
- *             failure.
+ * @param[in] keyId SHE key slot to write (0-15).
+ * @param[in] count Initial SHE key counter value.
+ * @param[in] flags SHE key protection flags.
+ * @param[in] key Pointer to key material.
+ * @param[in] keySz Length of key material in bytes (must be WH_SHE_KEY_SZ).
+ * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_ShePreProgramKey(whClientContext* c, whNvmId keyId,
-    whNvmFlags flags, uint8_t* key, whNvmSize keySz);
+                               uint32_t count, whNvmFlags flags, uint8_t* key,
+                               whNvmSize keySz);
+
+/**
+ * @brief Destroys a pre-programmed SHE key.
+ *
+ * Removes the SHE key in slot keyId from the calling client's NVM namespace.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] keyId SHE key slot to destroy (0-15).
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_SheDestroyKey(whClientContext* c, whNvmId keyId);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 
 /**
  * @brief Sends a request to set the ECU UID (wolfHSM-specific).

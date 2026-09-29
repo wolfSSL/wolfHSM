@@ -28,9 +28,13 @@
  * Architecture:
  * - 1 shared NVM context with lock
  * - 4 server contexts sharing the NVM
- * - 4 client threads (all doing both NVM and keystore ops)
- * - Different contention phases to stress test contention patterns across
- *    various different APIs
+ * - 4 client threads with distinct comm client IDs
+ * - Contention phases across various APIs
+ *
+ * Phase namespace variants:
+ * - global: all IDs carry WH_KEYID_CLIENT_GLOBAL_FLAG (shared objects)
+ * - local: bare IDs resolve into private namespaces
+ * - mixed: clients 0-1 use global namespace, clients 2-3 use private namespaces
  *
  * NOTE: Uses PTHREAD_MUTEX_ERRORCHECK attribute to trap undefined behavior
  * errors (EDEADLK for deadlock, EPERM for non-owner unlock) which indicate
@@ -211,10 +215,35 @@ static const whTransportServerCb serverTransportCb = WH_TRANSPORT_MEM_SERVER_CB;
 #define REVOKE_EXPORT_KEY_LOCAL 13                         /* ID=13, local */
 #define FRESHEN_KEY_GLOBAL WH_CLIENT_KEYID_MAKE_GLOBAL(14) /* ID=14, global */
 #define FRESHEN_KEY_LOCAL 15                               /* ID=15, local */
+
+/* Distinct revoke keys for mixed variant */
+#define REVOKE_CACHE_KEY_MIXED_GLOBAL WH_CLIENT_KEYID_MAKE_GLOBAL(16)
+#define REVOKE_CACHE_KEY_MIXED_LOCAL 17
+#define REVOKE_EXPORT_KEY_MIXED_GLOBAL WH_CLIENT_KEYID_MAKE_GLOBAL(18)
+#define REVOKE_EXPORT_KEY_MIXED_LOCAL 19
+
 #define HOT_NVM_ID ((whNvmId)100)
 #define HOT_NVM_ID_2 ((whNvmId)101)
 #define HOT_NVM_ID_3 ((whNvmId)102)
 #define HOT_COUNTER_ID ((whNvmId)200)
+
+/* ID ranges for Add With Reclaim phase */
+#define RECLAIM_ID_BASE ((whNvmId)10)
+#define RECLAIM_IDS_PER_CLIENT 20 /* global: disjoint range per client */
+#define RECLAIM_IDS_LOCAL 40      /* local: cycle length per namespace */
+#define RECLAIM_SETUP_COUNT 10    /* objects pre-filled by setup */
+
+/* Data patterns encoding client ID and namespace */
+#define GLOBAL_PATTERN_BASE 0x50 /* global-side writer: 0x50 | clientId */
+#define LOCAL_PATTERN_BASE 0xA0  /* local-side writer:  0xA0 | clientId */
+
+/* Content expectation for doNvmRead/doNvmReadDma */
+#define NVM_EXPECT_NONE (-1)        /* no content check */
+#define NVM_EXPECT_ANY_GLOBAL 0x100 /* uniform, from any global-side writer */
+
+/* Test-local failure codes */
+#define STRESS_ERR_DATA_MISMATCH (-77001)  /* object content wrong/torn */
+#define STRESS_ERR_NAMESPACE_LEAK (-77002) /* list returned foreign-ns id */
 
 /* ============================================================================
  * PHASE DEFINITIONS
@@ -284,6 +313,15 @@ typedef enum {
     ROLE_OP_A, /* Perform operation A (e.g., Cache, Add) */
     ROLE_OP_B, /* Perform operation B (e.g., Evict, Read) */
 } ClientRole;
+
+/* Namespace variant for phase run */
+typedef enum {
+    VARIANT_GLOBAL = 0, /* all clients share global namespace */
+    VARIANT_LOCAL,      /* each client uses private namespace */
+    VARIANT_MIXED,      /* clients 0-1 global, clients 2-3 private */
+} NamespaceVariant;
+
+#define VARIANT_COUNT 3
 
 /* Phase configuration */
 typedef struct {
@@ -495,6 +533,8 @@ typedef struct {
     volatile int stopFlag;
     volatile int errorCount;
     volatile int iterationCount;
+    volatile int successCount;
+    volatile int commInitFailed;
 
     /* Pointer back to shared context */
     struct StressTestContext* sharedCtx;
@@ -535,17 +575,85 @@ typedef struct StressTestContext {
     pthread_barrier_t setupCompleteBarrier;
     pthread_barrier_t streamStartBarrier;
     pthread_barrier_t streamEndBarrier;
+    pthread_barrier_t cleanupStartBarrier;
 
     /* Phase control */
-    volatile int             phaseRunning;
-    volatile ContentionPhase currentPhase;
-    volatile whKeyId         currentKeyId;
-    volatile ClientRole      clientRoles[NUM_CLIENTS];
+    volatile int              phaseRunning;
+    volatile ContentionPhase  currentPhase;
+    volatile NamespaceVariant currentVariant;
+    volatile ClientRole       clientRoles[NUM_CLIENTS];
 } StressTestContext;
 
 /* Forward declarations */
 static void* serverThread(void* arg);
 static void* contentionClientThread(void* arg);
+static whKeyId selectKeyIdForPhase(ContentionPhase  phase,
+                                   NamespaceVariant variant, int globalSide);
+
+/* ============================================================================
+ * NAMESPACE VARIANT HELPERS
+ * ========================================================================== */
+
+static const char* variantName(NamespaceVariant variant)
+{
+    switch (variant) {
+        case VARIANT_GLOBAL:
+            return "global";
+        case VARIANT_LOCAL:
+            return "local";
+        case VARIANT_MIXED:
+            return "mixed";
+        default:
+            return "?";
+    }
+}
+
+/* True if this client targets the shared global namespace this run */
+static int isGlobalSide(const ClientServerPair* pair, NamespaceVariant variant)
+{
+    return (variant == VARIANT_GLOBAL) ||
+           ((variant == VARIANT_MIXED) && (pair->clientId < (NUM_CLIENTS / 2)));
+}
+
+/* Return NVM object ID for client under current variant */
+static whNvmId nvmIdFor(const ClientServerPair* pair, NamespaceVariant variant,
+                        whNvmId baseId)
+{
+    if (isGlobalSide(pair, variant)) {
+        return (whNvmId)(baseId | WH_KEYID_CLIENT_GLOBAL_FLAG);
+    }
+    return baseId;
+}
+
+/* Data byte this client writes into NVM objects under the current variant */
+static uint8_t nvmPatternFor(const ClientServerPair* pair,
+                             NamespaceVariant        variant)
+{
+    if (isGlobalSide(pair, variant)) {
+        return (uint8_t)(GLOBAL_PATTERN_BASE | pair->clientId);
+    }
+    return (uint8_t)(LOCAL_PATTERN_BASE | pair->clientId);
+}
+
+/* Content expectation for client reads under current variant */
+static int nvmReadExpectFor(const ClientServerPair* pair,
+                            NamespaceVariant        variant)
+{
+    if (isGlobalSide(pair, variant)) {
+        return NVM_EXPECT_ANY_GLOBAL;
+    }
+    return (int)nvmPatternFor(pair, variant);
+}
+
+/* Role for client under current variant */
+static ClientRole roleFor(const PhaseConfig* config, NamespaceVariant variant,
+                          int clientId)
+{
+    if (variant == VARIANT_MIXED) {
+        return config->roles[(clientId % 2 == 0) ? 0 : (NUM_CLIENTS - 1)];
+    }
+    return config->roles[clientId];
+}
 
 /* ============================================================================
  * INITIALIZATION HELPERS
@@ -706,9 +814,8 @@ static void* serverThread(void* arg)
     /* Wait for all threads to start */
     pthread_barrier_wait(&ctx->startBarrier);
 
-    /* Process requests until stopped */
-    while (!ATOMIC_LOAD_INT(&pair->stopFlag) &&
-           !ATOMIC_LOAD_INT(&ctx->globalStopFlag)) {
+    /* Process requests until stopFlag is set */
+    while (!ATOMIC_LOAD_INT(&pair->stopFlag)) {
         rc = wh_Server_HandleRequestMessage(&pair->server);
 
         if (rc == WH_ERROR_NOTREADY) {
@@ -728,14 +835,59 @@ static void* serverThread(void* arg)
  * CLIENT OPERATIONS
  * ========================================================================== */
 
-static int doNvmAddObject(whClientContext* client, whNvmId id, int iteration)
+/* Register client ID with server */
+static int doCommInit(ClientServerPair* pair)
+{
+    uint32_t outClientId = 0;
+    uint32_t outServerId = 0;
+    int      rc;
+
+    rc = wh_Client_CommInitRequest(&pair->client);
+    if (rc != WH_ERROR_OK) {
+        return rc;
+    }
+
+    do {
+        rc = wh_Client_CommInitResponse(&pair->client, &outClientId,
+                                        &outServerId);
+        if (rc == WH_ERROR_NOTREADY) {
+            sched_yield();
+        }
+    } while (rc == WH_ERROR_NOTREADY);
+
+    return rc;
+}
+
+/* Verify read-back object content matches expected pattern */
+static int checkNvmData(const uint8_t* data, whNvmSize len, int expect)
+{
+    whNvmSize i;
+
+    if (expect == NVM_EXPECT_NONE || len == 0) {
+        return WH_ERROR_OK;
+    }
+    for (i = 1; i < len; i++) {
+        if (data[i] != data[0]) {
+            return STRESS_ERR_DATA_MISMATCH;
+        }
+    }
+    if (expect == NVM_EXPECT_ANY_GLOBAL) {
+        return ((data[0] & 0xF0) == GLOBAL_PATTERN_BASE)
+                   ? WH_ERROR_OK
+                   : STRESS_ERR_DATA_MISMATCH;
+    }
+    return (data[0] == (uint8_t)expect) ? WH_ERROR_OK
+                                        : STRESS_ERR_DATA_MISMATCH;
+}
+
+static int doNvmAddObject(whClientContext* client, whNvmId id, uint8_t pattern)
 {
     uint8_t data[NVM_OBJECT_DATA_SIZE];
     int32_t out_rc;
     int     rc;
 
-    /* Fill data with pattern */
-    memset(data, (uint8_t)(iteration & 0xFF), sizeof(data));
+    /* Fill data with writer pattern */
+    memset(data, pattern, sizeof(data));
 
     /* Send request */
     rc = wh_Client_NvmAddObjectRequest(client, id, WH_NVM_ACCESS_ANY,
@@ -760,7 +912,8 @@ static int doNvmAddObject(whClientContext* client, whNvmId id, int iteration)
     return out_rc;
 }
 
-static int doNvmRead(whClientContext* client, whNvmId id)
+/* Read an object and optionally verify its content */
+static int doNvmRead(whClientContext* client, whNvmId id, int expect)
 {
     uint8_t   data[NVM_OBJECT_DATA_SIZE];
     whNvmSize outSz = sizeof(data);
@@ -784,12 +937,17 @@ static int doNvmRead(whClientContext* client, whNvmId id)
     if (rc != WH_ERROR_OK) {
         return rc;
     }
+    if (out_rc != WH_ERROR_OK) {
+        return out_rc;
+    }
 
-    return out_rc;
+    return checkNvmData(data, outSz, expect);
 }
 
-static int doNvmList(whClientContext* client)
+/* List objects in client or global namespace and verify returned ID scope */
+static int doNvmList(whClientContext* client, int listGlobal)
 {
+    whNvmId   startId = listGlobal ? (whNvmId)WH_KEYID_CLIENT_GLOBAL_FLAG : 0;
     whNvmId   outId;
     whNvmSize outCount;
     int32_t   out_rc;
@@ -797,7 +955,7 @@ static int doNvmList(whClientContext* client)
 
     /* Send request */
     rc = wh_Client_NvmListRequest(client, WH_NVM_ACCESS_ANY,
-                                  WH_NVM_FLAGS_USAGE_ANY, 0);
+                                  WH_NVM_FLAGS_USAGE_ANY, startId);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -813,8 +971,19 @@ static int doNvmList(whClientContext* client)
     if (rc != WH_ERROR_OK) {
         return rc;
     }
+    if (out_rc != WH_ERROR_OK) {
+        return out_rc;
+    }
 
-    return out_rc;
+    /* Verify returned ID belongs to requested namespace */
+    if (outCount > 0) {
+        int idIsGlobal = (outId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0;
+        if (idIsGlobal != (listGlobal != 0)) {
+            return STRESS_ERR_NAMESPACE_LEAK;
+        }
+    }
+
+    return WH_ERROR_OK;
 }
 
 static int doNvmDestroy(whClientContext* client, whNvmId id)
@@ -1192,15 +1361,15 @@ static int doKeyExportDma(ClientServerPair* pair, whKeyId keyId)
     return rc;
 }
 
-static int doNvmAddObjectDma(ClientServerPair* pair, whNvmId id, int iteration)
+static int doNvmAddObjectDma(ClientServerPair* pair, whNvmId id,
+                             uint8_t pattern)
 {
     whNvmMetadata meta;
     int32_t       out_rc;
     int           rc;
 
-    /* Fill DMA buffer with pattern */
-    memset(pair->dmaNvmBuffer, (uint8_t)(iteration & 0xFF),
-           sizeof(pair->dmaNvmBuffer));
+    /* Fill DMA buffer with writer pattern */
+    memset(pair->dmaNvmBuffer, pattern, sizeof(pair->dmaNvmBuffer));
 
     /* Set up metadata */
     memset(&meta, 0, sizeof(meta));
@@ -1231,7 +1400,8 @@ static int doNvmAddObjectDma(ClientServerPair* pair, whNvmId id, int iteration)
     return out_rc;
 }
 
-static int doNvmReadDma(ClientServerPair* pair, whNvmId id)
+/* DMA read with optional content verification */
+static int doNvmReadDma(ClientServerPair* pair, whNvmId id, int expect)
 {
     int32_t out_rc;
     int     rc;
@@ -1254,8 +1424,11 @@ static int doNvmReadDma(ClientServerPair* pair, whNvmId id)
     if (rc != WH_ERROR_OK) {
         return rc;
     }
+    if (out_rc != WH_ERROR_OK) {
+        return out_rc;
+    }
 
-    return out_rc;
+    return checkNvmData(pair->dmaNvmBuffer, sizeof(pair->dmaNvmBuffer), expect);
 }
 #endif /* WOLFHSM_CFG_DMA */
 
@@ -1264,12 +1437,45 @@ static int doNvmReadDma(ClientServerPair* pair, whNvmId id)
  * ========================================================================== */
 
 static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
-                        whKeyId keyId)
+                        NamespaceVariant variant)
 {
-    whClientContext* client = &pair->client;
+    whClientContext* client     = &pair->client;
+    int              globalSide = isGlobalSide(pair, variant);
+    whKeyId          keyId   = selectKeyIdForPhase(phase, variant, globalSide);
+    whNvmId          hotId   = nvmIdFor(pair, variant, HOT_NVM_ID);
+    whNvmId          counterId = nvmIdFor(pair, variant, HOT_COUNTER_ID);
+    uint8_t          pattern = nvmPatternFor(pair, variant);
+    int              provision;
     int              rc;
 
+    /* Exactly one client provisions each shared (global-side) resource;
+     * every client provisions its own private resources. */
+    switch (variant) {
+        case VARIANT_GLOBAL:
+            provision = (pair->clientId == 0);
+            break;
+        case VARIANT_LOCAL:
+            provision = 1;
+            break;
+        case VARIANT_MIXED:
+        default:
+            provision = (pair->clientId == 0) || !globalSide;
+            break;
+    }
+    if (!provision) {
+        return WH_ERROR_OK;
+    }
+
     switch (phase) {
+        /* Counter phases: initialize counter to 0 */
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+        case PHASE_COUNTER_INCREMENT_VS_READ:
+            (void)doCounterDestroy(client, counterId);
+            rc = doCounterInit(client, counterId, 0);
+            if (rc == WH_ERROR_NOSPACE)
+                rc = WH_ERROR_OK;
+            return rc;
+
         /* Keystore phases that need clean state (evict first) */
         case PHASE_KS_CONCURRENT_CACHE:
             rc = doKeyEvict(client, keyId);
@@ -1290,7 +1496,7 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
 
         /* NVM phases that need clean state (destroy first) */
         case PHASE_NVM_CONCURRENT_ADD:
-            rc = doNvmDestroy(client, HOT_NVM_ID);
+            rc = doNvmDestroy(client, hotId);
             if (rc == WH_ERROR_NOTFOUND)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1302,18 +1508,20 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
         case PHASE_NVM_CONCURRENT_READ:
         case PHASE_NVM_CONCURRENT_DESTROY:
             /* First destroy any existing object to make space */
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            return doNvmAddObject(client, HOT_NVM_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            return doNvmAddObject(client, hotId, pattern);
 
         /* List during modify needs multiple objects */
         case PHASE_NVM_LIST_DURING_MODIFY:
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc != WH_ERROR_OK && rc != WH_ERROR_NOSPACE)
                 return rc;
-            rc = doNvmAddObject(client, HOT_NVM_ID_2, 0);
+            rc = doNvmAddObject(client, nvmIdFor(pair, variant, HOT_NVM_ID_2),
+                                pattern);
             if (rc != WH_ERROR_OK && rc != WH_ERROR_NOSPACE)
                 return rc;
-            rc = doNvmAddObject(client, HOT_NVM_ID_3, 0);
+            rc = doNvmAddObject(client, nvmIdFor(pair, variant, HOT_NVM_ID_3),
+                                pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1324,7 +1532,7 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
             rc = doKeyCache(client, keyId, 0);
             if (rc != WH_ERROR_OK)
                 return rc;
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1341,7 +1549,7 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
             if (rc != WH_ERROR_OK && rc != WH_ERROR_NOTFOUND)
                 return rc;
             /* Add NVM object for the NVM modify operations */
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1401,9 +1609,11 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
         /* Add with reclaim: fill NVM with objects to trigger reclaim */
         case PHASE_NVM_ADD_WITH_RECLAIM: {
             int i;
-            /* Add 10 objects to fill up NVM and trigger reclaim during test */
-            for (i = 0; i < 10; i++) {
-                rc = doNvmAddObject(client, (whNvmId)(HOT_NVM_ID + i), 0);
+            /* Pre-fill NVM so reclaim triggers early during the test */
+            for (i = 0; i < RECLAIM_SETUP_COUNT; i++) {
+                rc = doNvmAddObject(
+                    client, nvmIdFor(pair, variant, (whNvmId)(HOT_NVM_ID + i)),
+                    pattern);
                 if (rc != WH_ERROR_OK && rc != WH_ERROR_NOSPACE)
                     return rc;
             }
@@ -1412,27 +1622,16 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
 
         /* GetAvailable vs Add: add one object */
         case PHASE_NVM_GETAVAILABLE_VS_ADD:
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
 
         /* GetMetadata vs Destroy: destroy then add object */
         case PHASE_NVM_GETMETADATA_VS_DESTROY:
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
-            if (rc == WH_ERROR_NOSPACE)
-                rc = WH_ERROR_OK;
-            return rc;
-
-        /* Counter phases - create counter with initial value 0 */
-        case PHASE_COUNTER_CONCURRENT_INCREMENT:
-        case PHASE_COUNTER_INCREMENT_VS_READ:
-            /* Destroy any existing counter first */
-            (void)doCounterDestroy(client, HOT_COUNTER_ID);
-            /* Initialize counter with value 0 */
-            rc = doCounterInit(client, HOT_COUNTER_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1441,9 +1640,9 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
         case PHASE_NVM_READ_VS_RESIZE:
         case PHASE_NVM_CONCURRENT_RESIZE:
             /* Destroy any existing object first */
-            (void)doNvmDestroy(client, HOT_NVM_ID);
+            (void)doNvmDestroy(client, hotId);
             /* Create object with initial size (64 bytes) */
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1462,17 +1661,17 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
             return rc;
 
         case PHASE_NVM_ADD_DMA_VS_READ:
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            return doNvmAddObject(client, HOT_NVM_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            return doNvmAddObject(client, hotId, pattern);
 
         case PHASE_NVM_READ_DMA_VS_DESTROY:
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            return doNvmAddObject(client, HOT_NVM_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            return doNvmAddObject(client, hotId, pattern);
 
         /* NVM Read DMA vs Resize */
         case PHASE_NVM_READ_DMA_VS_RESIZE:
-            (void)doNvmDestroy(client, HOT_NVM_ID);
-            rc = doNvmAddObject(client, HOT_NVM_ID, 0);
+            (void)doNvmDestroy(client, hotId);
+            rc = doNvmAddObject(client, hotId, pattern);
             if (rc == WH_ERROR_NOSPACE)
                 rc = WH_ERROR_OK;
             return rc;
@@ -1484,13 +1683,161 @@ static int doPhaseSetup(ClientServerPair* pair, ContentionPhase phase,
 }
 
 /* ============================================================================
+ * PHASE CLEANUP
+ * ========================================================================== */
+
+/* Best-effort teardown after each phase run */
+static void doPhaseCleanup(ClientServerPair* pair, ContentionPhase phase,
+                           NamespaceVariant variant)
+{
+    whClientContext* client     = &pair->client;
+    int              globalSide = isGlobalSide(pair, variant);
+    whKeyId          keyId = selectKeyIdForPhase(phase, variant, globalSide);
+    whNvmId          hotId = nvmIdFor(pair, variant, HOT_NVM_ID);
+    int              owner;
+    int              i;
+
+    /* Same ownership rule as setup: one owner per shared resource, every
+     * client for its own */
+    switch (variant) {
+        case VARIANT_GLOBAL:
+            owner = (pair->clientId == 0);
+            break;
+        case VARIANT_LOCAL:
+            owner = 1;
+            break;
+        case VARIANT_MIXED:
+        default:
+            owner = (pair->clientId == 0) || !globalSide;
+            break;
+    }
+
+    switch (phase) {
+        /* The owner destroys the counter it provisioned */
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+        case PHASE_COUNTER_INCREMENT_VS_READ:
+            if (owner) {
+                (void)doCounterDestroy(
+                    client, nvmIdFor(pair, variant, HOT_COUNTER_ID));
+            }
+            return;
+
+        /* Every client destroys the ids it added while streaming; the
+         * owner also removes the setup pre-fill */
+        case PHASE_NVM_ADD_WITH_RECLAIM:
+            if (globalSide) {
+                for (i = 0; i < RECLAIM_IDS_PER_CLIENT; i++) {
+                    (void)doNvmDestroy(
+                        client, nvmIdFor(pair, variant,
+                                         (whNvmId)(RECLAIM_ID_BASE +
+                                                   pair->clientId *
+                                                       RECLAIM_IDS_PER_CLIENT +
+                                                   i)));
+                }
+            }
+            else {
+                for (i = 0; i < RECLAIM_IDS_LOCAL; i++) {
+                    (void)doNvmDestroy(client, (whNvmId)(RECLAIM_ID_BASE + i));
+                }
+            }
+            if (owner) {
+                for (i = 0; i < RECLAIM_SETUP_COUNT; i++) {
+                    (void)doNvmDestroy(
+                        client,
+                        nvmIdFor(pair, variant, (whNvmId)(HOT_NVM_ID + i)));
+                }
+            }
+            return;
+
+        /* List phase uses three hot objects */
+        case PHASE_NVM_LIST_DURING_MODIFY:
+            if (owner) {
+                (void)doNvmDestroy(client, hotId);
+                (void)doNvmDestroy(client,
+                                   nvmIdFor(pair, variant, HOT_NVM_ID_2));
+                (void)doNvmDestroy(client,
+                                   nvmIdFor(pair, variant, HOT_NVM_ID_3));
+            }
+            return;
+
+        /* NVM phases: drop the hot object */
+        case PHASE_NVM_CONCURRENT_ADD:
+        case PHASE_NVM_ADD_VS_READ:
+        case PHASE_NVM_ADD_VS_DESTROY:
+        case PHASE_NVM_READ_VS_DESTROY:
+        case PHASE_NVM_CONCURRENT_READ:
+        case PHASE_NVM_CONCURRENT_DESTROY:
+        case PHASE_NVM_GETAVAILABLE_VS_ADD:
+        case PHASE_NVM_GETMETADATA_VS_DESTROY:
+        case PHASE_NVM_READ_VS_RESIZE:
+        case PHASE_NVM_CONCURRENT_RESIZE:
+#ifdef WOLFHSM_CFG_DMA
+        case PHASE_NVM_ADD_DMA_VS_READ:
+        case PHASE_NVM_READ_DMA_VS_DESTROY:
+        case PHASE_NVM_READ_DMA_VS_RESIZE:
+#endif
+            if (owner) {
+                (void)doNvmDestroy(client, hotId);
+            }
+            return;
+
+        /* Cross-subsystem: drop both the key and the hot object */
+        case PHASE_CROSS_COMMIT_VS_ADD:
+        case PHASE_CROSS_COMMIT_VS_DESTROY:
+        case PHASE_CROSS_FRESHEN_VS_MODIFY:
+            if (owner) {
+                (void)doKeyEvict(client, keyId);
+                (void)doKeyErase(client, keyId);
+                (void)doNvmDestroy(client, hotId);
+            }
+            return;
+
+        /* Keystore phases: evict the cache slot and erase any committed
+         * copy (fails harmlessly on revoked keys) */
+        case PHASE_KS_CONCURRENT_CACHE:
+        case PHASE_KS_CACHE_VS_EVICT:
+        case PHASE_KS_CACHE_VS_EXPORT:
+        case PHASE_KS_EVICT_VS_EXPORT:
+        case PHASE_KS_CACHE_VS_COMMIT:
+        case PHASE_KS_COMMIT_VS_EVICT:
+        case PHASE_KS_CONCURRENT_EXPORT:
+        case PHASE_KS_CONCURRENT_EVICT:
+        case PHASE_KS_ERASE_VS_CACHE:
+        case PHASE_KS_ERASE_VS_EXPORT:
+        case PHASE_KS_REVOKE_VS_CACHE:
+        case PHASE_KS_REVOKE_VS_EXPORT:
+        case PHASE_KS_EXPLICIT_FRESHEN:
+#ifdef WOLFHSM_CFG_DMA
+        case PHASE_KS_CACHE_DMA_VS_EXPORT:
+        case PHASE_KS_EXPORT_DMA_VS_EVICT:
+#endif
+            if (owner) {
+                (void)doKeyEvict(client, keyId);
+                (void)doKeyErase(client, keyId);
+            }
+            return;
+
+        /* GetUniqueId creates server-assigned ids we can't enumerate */
+        case PHASE_KS_CONCURRENT_GETUNIQUEID:
+        default:
+            return;
+    }
+}
+
+/* ============================================================================
  * PHASE OPERATION DISPATCH
  * ========================================================================== */
 
 static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
-                                 ClientRole role, int iteration, whKeyId keyId)
+                                 ClientRole role, int iteration, whKeyId keyId,
+                                 NamespaceVariant variant)
 {
-    whClientContext* client = &pair->client;
+    whClientContext* client     = &pair->client;
+    int              globalSide = isGlobalSide(pair, variant);
+    whNvmId          hotId      = nvmIdFor(pair, variant, HOT_NVM_ID);
+    whNvmId          counterId  = nvmIdFor(pair, variant, HOT_COUNTER_ID);
+    uint8_t          pattern    = nvmPatternFor(pair, variant);
+    int              readExpect = nvmReadExpectFor(pair, variant);
 
     switch (phase) {
         /* Keystore phases */
@@ -1535,56 +1882,57 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
 
         /* NVM phases */
         case PHASE_NVM_CONCURRENT_ADD:
-            return doNvmAddObject(client, HOT_NVM_ID, iteration);
+            return doNvmAddObject(client, hotId, pattern);
 
         case PHASE_NVM_ADD_VS_READ:
             if (role == ROLE_OP_A)
-                return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                return doNvmAddObject(client, hotId, pattern);
             else
-                return doNvmRead(client, HOT_NVM_ID);
+                return doNvmRead(client, hotId, readExpect);
 
         case PHASE_NVM_ADD_VS_DESTROY:
             if (role == ROLE_OP_A)
-                return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                return doNvmAddObject(client, hotId, pattern);
             else
-                return doNvmDestroy(client, HOT_NVM_ID);
+                return doNvmDestroy(client, hotId);
 
         case PHASE_NVM_READ_VS_DESTROY:
             if (role == ROLE_OP_A)
-                return doNvmRead(client, HOT_NVM_ID);
+                return doNvmRead(client, hotId, readExpect);
             else
-                return doNvmDestroy(client, HOT_NVM_ID);
+                return doNvmDestroy(client, hotId);
 
         case PHASE_NVM_CONCURRENT_READ:
-            return doNvmRead(client, HOT_NVM_ID);
+            return doNvmRead(client, hotId, readExpect);
 
         case PHASE_NVM_LIST_DURING_MODIFY:
             if (role == ROLE_OP_A) {
                 /* Alternate between add and destroy */
                 if (iteration % 2 == 0)
-                    return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                    return doNvmAddObject(client, hotId, pattern);
                 else
-                    return doNvmDestroy(client, HOT_NVM_ID);
+                    return doNvmDestroy(client, hotId);
             }
             else {
-                return doNvmList(client);
+                /* Alternate between client and global namespaces */
+                return doNvmList(client, iteration % 2);
             }
 
         case PHASE_NVM_CONCURRENT_DESTROY:
-            return doNvmDestroy(client, HOT_NVM_ID);
+            return doNvmDestroy(client, hotId);
 
         /* Cross-subsystem phases */
         case PHASE_CROSS_COMMIT_VS_ADD:
             if (role == ROLE_OP_A)
                 return doKeyCommit(client, keyId);
             else
-                return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                return doNvmAddObject(client, hotId, pattern);
 
         case PHASE_CROSS_COMMIT_VS_DESTROY:
             if (role == ROLE_OP_A)
                 return doKeyCommit(client, keyId);
             else
-                return doNvmDestroy(client, HOT_NVM_ID);
+                return doNvmDestroy(client, hotId);
 
         case PHASE_CROSS_FRESHEN_VS_MODIFY:
             if (role == ROLE_OP_A) {
@@ -1594,9 +1942,9 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
             else {
                 /* Modify NVM while freshen might be happening */
                 if (iteration % 2 == 0)
-                    return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                    return doNvmAddObject(client, hotId, pattern);
                 else
-                    return doNvmDestroy(client, HOT_NVM_ID);
+                    return doNvmDestroy(client, hotId);
             }
 
         /* Erase vs Cache */
@@ -1636,50 +1984,56 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
         case PHASE_KS_EXPLICIT_FRESHEN:
             return doKeyExport(client, keyId);
 
-        /* Add With Reclaim: all threads add unique objects to trigger reclaim
-         */
-        case PHASE_NVM_ADD_WITH_RECLAIM:
-            /* Use client ID and iteration to create unique object IDs */
-            return doNvmAddObject(client,
-                                  (whNvmId)(HOT_NVM_ID + 10 +
-                                            (pair->clientId * 1000) +
-                                            iteration),
-                                  iteration);
+        /* Add With Reclaim: add objects from bounded ID ranges */
+        case PHASE_NVM_ADD_WITH_RECLAIM: {
+            whNvmId base;
+            if (globalSide) {
+                base = (whNvmId)(RECLAIM_ID_BASE +
+                                 pair->clientId * RECLAIM_IDS_PER_CLIENT +
+                                 (iteration % RECLAIM_IDS_PER_CLIENT));
+            }
+            else {
+                base = (whNvmId)(RECLAIM_ID_BASE +
+                                 (iteration % RECLAIM_IDS_LOCAL));
+            }
+            return doNvmAddObject(client, nvmIdFor(pair, variant, base),
+                                  pattern);
+        }
 
         /* GetAvailable vs Add */
         case PHASE_NVM_GETAVAILABLE_VS_ADD:
             if (role == ROLE_OP_A)
                 return doNvmGetAvailable(client);
             else
-                return doNvmAddObject(client, HOT_NVM_ID, iteration);
+                return doNvmAddObject(client, hotId, pattern);
 
         /* GetMetadata vs Destroy */
         case PHASE_NVM_GETMETADATA_VS_DESTROY:
             if (role == ROLE_OP_A)
-                return doNvmGetMetadata(client, HOT_NVM_ID);
+                return doNvmGetMetadata(client, hotId);
             else
-                return doNvmDestroy(client, HOT_NVM_ID);
+                return doNvmDestroy(client, hotId);
 
         /* Counter Concurrent Increment */
         case PHASE_COUNTER_CONCURRENT_INCREMENT: {
             uint32_t counter = 0;
-            return doCounterIncrement(client, HOT_COUNTER_ID, &counter);
+            return doCounterIncrement(client, counterId, &counter);
         }
 
         /* Counter Increment vs Read */
         case PHASE_COUNTER_INCREMENT_VS_READ: {
             uint32_t counter = 0;
             if (role == ROLE_OP_A)
-                return doCounterIncrement(client, HOT_COUNTER_ID, &counter);
+                return doCounterIncrement(client, counterId, &counter);
             else
-                return doCounterRead(client, HOT_COUNTER_ID, &counter);
+                return doCounterRead(client, counterId, &counter);
         }
 
         /* NVM Read vs Resize - alternating object sizes */
         case PHASE_NVM_READ_VS_RESIZE:
             if (role == ROLE_OP_A) {
                 /* Read operation */
-                return doNvmRead(client, HOT_NVM_ID);
+                return doNvmRead(client, hotId, readExpect);
             }
             else {
                 /* Resize operation: destroy and re-add with different size
@@ -1692,13 +2046,13 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
                                         : (NVM_OBJECT_DATA_SIZE / 2);
 
                 /* Destroy existing object */
-                (void)doNvmDestroy(client, HOT_NVM_ID);
+                (void)doNvmDestroy(client, hotId);
 
                 /* Re-add with new size */
-                memset(data, (uint8_t)(iteration & 0xFF), newSize);
+                memset(data, pattern, newSize);
                 rc = wh_Client_NvmAddObjectRequest(
-                    client, HOT_NVM_ID, WH_NVM_ACCESS_ANY,
-                    WH_NVM_FLAGS_USAGE_ANY, 0, NULL, newSize, data);
+                    client, hotId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_USAGE_ANY, 0,
+                    NULL, newSize, data);
                 if (rc != WH_ERROR_OK) {
                     return rc;
                 }
@@ -1724,13 +2078,13 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
                                     : (NVM_OBJECT_DATA_SIZE / 2);
 
             /* Destroy existing object */
-            (void)doNvmDestroy(client, HOT_NVM_ID);
+            (void)doNvmDestroy(client, hotId);
 
             /* Re-add with new size */
-            memset(data, (uint8_t)(iteration & 0xFF), newSize);
-            rc = wh_Client_NvmAddObjectRequest(
-                client, HOT_NVM_ID, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_USAGE_ANY,
-                0, NULL, newSize, data);
+            memset(data, pattern, newSize);
+            rc = wh_Client_NvmAddObjectRequest(client, hotId, WH_NVM_ACCESS_ANY,
+                                               WH_NVM_FLAGS_USAGE_ANY, 0, NULL,
+                                               newSize, data);
             if (rc != WH_ERROR_OK) {
                 return rc;
             }
@@ -1763,47 +2117,40 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
         /* DMA: Add DMA vs Read */
         case PHASE_NVM_ADD_DMA_VS_READ:
             if (role == ROLE_OP_A)
-                return doNvmAddObjectDma(pair, HOT_NVM_ID, iteration);
+                return doNvmAddObjectDma(pair, hotId, pattern);
             else
-                return doNvmRead(client, HOT_NVM_ID);
+                return doNvmRead(client, hotId, readExpect);
 
         /* DMA: Read DMA vs Destroy */
         case PHASE_NVM_READ_DMA_VS_DESTROY:
             if (role == ROLE_OP_A)
-                return doNvmReadDma(pair, HOT_NVM_ID);
+                return doNvmReadDma(pair, hotId, readExpect);
             else
-                return doNvmDestroy(client, HOT_NVM_ID);
+                return doNvmDestroy(client, hotId);
 
         /* NVM Read DMA vs Resize */
         case PHASE_NVM_READ_DMA_VS_RESIZE:
             if (role == ROLE_OP_A) {
                 /* DMA Read operation */
-                return doNvmReadDma(pair, HOT_NVM_ID);
+                return doNvmReadDma(pair, hotId, NVM_EXPECT_NONE);
             }
             else {
                 /* Resize operation: destroy and re-add with different size */
-                int           rc;
-                uint8_t       data[NVM_OBJECT_DATA_SIZE];
-                int32_t       out_rc;
-                whNvmSize     newSize = (iteration % 2 == 0)
-                                            ? NVM_OBJECT_DATA_SIZE
-                                            : (NVM_OBJECT_DATA_SIZE / 2);
-                whNvmMetadata meta;
+                int       rc;
+                uint8_t   data[NVM_OBJECT_DATA_SIZE];
+                int32_t   out_rc;
+                whNvmSize newSize = (iteration % 2 == 0)
+                                        ? NVM_OBJECT_DATA_SIZE
+                                        : (NVM_OBJECT_DATA_SIZE / 2);
 
                 /* Destroy existing object */
-                (void)doNvmDestroy(client, HOT_NVM_ID);
+                (void)doNvmDestroy(client, hotId);
 
                 /* Re-add with new size */
-                memset(data, (uint8_t)(iteration & 0xFF), newSize);
-                memset(&meta, 0, sizeof(meta));
-                meta.id     = HOT_NVM_ID;
-                meta.access = WH_NVM_ACCESS_ANY;
-                meta.flags  = WH_NVM_FLAGS_USAGE_ANY;
-                meta.len    = newSize;
-
+                memset(data, pattern, newSize);
                 rc = wh_Client_NvmAddObjectRequest(
-                    client, HOT_NVM_ID, WH_NVM_ACCESS_ANY,
-                    WH_NVM_FLAGS_USAGE_ANY, 0, NULL, newSize, data);
+                    client, hotId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_USAGE_ANY, 0,
+                    NULL, newSize, data);
                 if (rc != WH_ERROR_OK) {
                     return rc;
                 }
@@ -1828,11 +2175,81 @@ static int executePhaseOperation(ClientServerPair* pair, ContentionPhase phase,
  * RESULT VALIDATION
  * ========================================================================== */
 
-static int isAcceptableResult(ContentionPhase phase, int rc)
+static int isAcceptableResult(ContentionPhase phase, ClientRole role,
+                              int globalSide, int rc)
 {
     /* Always acceptable */
     if (rc == WH_ERROR_OK)
         return 1;
+
+    /* Local namespace error checks */
+    if (!globalSide) {
+        switch (phase) {
+            case PHASE_NVM_CONCURRENT_ADD:
+                return (rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_ADD_VS_READ:
+                return (role == ROLE_OP_A) && (rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_ADD_VS_DESTROY:
+                return (role == ROLE_OP_A) ? (rc == WH_ERROR_NOSPACE)
+                                           : (rc == WH_ERROR_NOTFOUND);
+
+            case PHASE_NVM_READ_VS_DESTROY:
+                return (role == ROLE_OP_B) && (rc == WH_ERROR_NOTFOUND);
+
+            case PHASE_NVM_CONCURRENT_READ:
+                return 0;
+
+            case PHASE_NVM_LIST_DURING_MODIFY:
+                return (role == ROLE_OP_A) &&
+                       (rc == WH_ERROR_NOSPACE || rc == WH_ERROR_NOTFOUND);
+
+            case PHASE_NVM_CONCURRENT_DESTROY:
+                return (rc == WH_ERROR_NOTFOUND);
+
+            case PHASE_NVM_READ_VS_RESIZE:
+                return (role == ROLE_OP_B) &&
+                       (rc == WH_ERROR_NOTFOUND || rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_CONCURRENT_RESIZE:
+                return (rc == WH_ERROR_NOTFOUND || rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_ADD_WITH_RECLAIM:
+                return (rc == WH_ERROR_NOSPACE || rc == WH_ERROR_ACCESS);
+
+            case PHASE_NVM_GETAVAILABLE_VS_ADD:
+                return (role == ROLE_OP_B) && (rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_GETMETADATA_VS_DESTROY:
+                return (role == ROLE_OP_B) && (rc == WH_ERROR_NOTFOUND);
+
+#ifdef WOLFHSM_CFG_DMA
+            case PHASE_NVM_ADD_DMA_VS_READ:
+                return (role == ROLE_OP_A) && (rc == WH_ERROR_NOSPACE);
+
+            case PHASE_NVM_READ_DMA_VS_DESTROY:
+                return (role == ROLE_OP_B) && (rc == WH_ERROR_NOTFOUND);
+
+            case PHASE_NVM_READ_DMA_VS_RESIZE:
+                return (role == ROLE_OP_B) &&
+                       (rc == WH_ERROR_NOTFOUND || rc == WH_ERROR_NOSPACE);
+#endif
+
+            default:
+                break;
+        }
+    }
+
+    /* Counter phases: accept NOSPACE */
+    switch (phase) {
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+            return (rc == WH_ERROR_NOSPACE);
+        case PHASE_COUNTER_INCREMENT_VS_READ:
+            return (role == ROLE_OP_A) && (rc == WH_ERROR_NOSPACE);
+        default:
+            break;
+    }
 
     switch (phase) {
         /* Cache operations: NOSPACE acceptable (cache full) */
@@ -1901,13 +2318,6 @@ static int isAcceptableResult(ContentionPhase phase, int rc)
         case PHASE_NVM_GETMETADATA_VS_DESTROY:
             return (rc == WH_ERROR_NOTFOUND);
 
-        /* Counter phases - NOTFOUND marked acceptable to prevent test abort,
-         * but validation will catch it as a bug (counter < expectedMin).
-         * NOTFOUND shouldn't occur in CONCURRENT_INCREMENT (no destroys). */
-        case PHASE_COUNTER_CONCURRENT_INCREMENT:
-        case PHASE_COUNTER_INCREMENT_VS_READ:
-            return (rc == WH_ERROR_NOTFOUND);
-
         /* NVM Read vs Resize - NOTFOUND acceptable (object destroyed
          * during resize), NOSPACE acceptable (NVM full) */
         case PHASE_NVM_READ_VS_RESIZE:
@@ -1948,9 +2358,23 @@ static void* contentionClientThread(void* arg)
     StressTestContext* ctx  = pair->sharedCtx;
     int                rc;
     int                localIteration;
+    ContentionPhase    phase;
+    NamespaceVariant   variant;
+    ClientRole         role;
+    whKeyId            keyId;
+    int                globalSide;
 
     /* Wait for all threads to start */
     pthread_barrier_wait(&ctx->startBarrier);
+
+    /* Register this client's id with its server. Without this the server
+     * treats every request as USER=0 (the shared global namespace) and
+     * per-client isolation is never engaged. */
+    rc = doCommInit(pair);
+    if (rc != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Client %d: CommInit failed: %d\n", pair->clientId, rc);
+        pair->commInitFailed = 1;
+    }
 
     /* Always call barrier first, then check exit flag - prevents deadlock */
     while (1) {
@@ -1961,16 +2385,18 @@ static void* contentionClientThread(void* arg)
             pthread_barrier_wait(&ctx->setupCompleteBarrier);
             pthread_barrier_wait(&ctx->streamStartBarrier);
             pthread_barrier_wait(&ctx->streamEndBarrier);
+            pthread_barrier_wait(&ctx->cleanupStartBarrier);
             break;
         }
 
-        /* Only client 0 does setup */
-        if (pair->clientId == 0) {
-            rc = doPhaseSetup(pair, ctx->currentPhase, ctx->currentKeyId);
-            if (rc != WH_ERROR_OK) {
-                WH_ERROR_PRINT("Setup failed for phase %d: %d\n",
-                               ctx->currentPhase, rc);
-            }
+        phase   = ctx->currentPhase;
+        variant = ctx->currentVariant;
+
+        /* Run per-client setup */
+        rc = doPhaseSetup(pair, phase, variant);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Client %d setup failed for phase %d (%s): %d\n",
+                           pair->clientId, phase, variantName(variant), rc);
         }
 
         pthread_barrier_wait(&ctx->setupCompleteBarrier);
@@ -1978,22 +2404,31 @@ static void* contentionClientThread(void* arg)
         /* ===== STREAMING PHASE (tight loop, no barriers) ===== */
         pthread_barrier_wait(&ctx->streamStartBarrier);
 
-        ContentionPhase phase = ctx->currentPhase;
-        whKeyId         keyId = ctx->currentKeyId;
-        ClientRole      role  = ctx->clientRoles[pair->clientId];
-        localIteration        = 0;
+        role           = ctx->clientRoles[pair->clientId];
+        globalSide     = isGlobalSide(pair, variant);
+        keyId          = selectKeyIdForPhase(phase, variant, globalSide);
+        localIteration = 0;
 
         /* Stream requests until phaseRunning becomes 0 */
         while (ATOMIC_LOAD_INT(&ctx->phaseRunning)) {
-            rc =
-                executePhaseOperation(pair, phase, role, localIteration, keyId);
+            if (pair->commInitFailed) {
+                /* Fail if CommInit failed */
+                rc = WH_ERROR_ABORTED;
+            }
+            else {
+                rc = executePhaseOperation(pair, phase, role, localIteration,
+                                           keyId, variant);
+            }
 
             /* Count iteration */
             localIteration++;
             ATOMIC_ADD_INT(&pair->iterationCount, 1);
 
-            /* Track unexpected errors */
-            if (!isAcceptableResult(phase, rc)) {
+            /* Track successes (counter validation) and unexpected errors */
+            if (rc == WH_ERROR_OK) {
+                ATOMIC_ADD_INT(&pair->successCount, 1);
+            }
+            else if (!isAcceptableResult(phase, role, globalSide, rc)) {
                 ATOMIC_ADD_INT(&pair->errorCount, 1);
             }
 
@@ -2002,6 +2437,10 @@ static void* contentionClientThread(void* arg)
 
         /* Wait for all clients to finish streaming */
         pthread_barrier_wait(&ctx->streamEndBarrier);
+
+        /* Wait for validation to complete before cleanup */
+        pthread_barrier_wait(&ctx->cleanupStartBarrier);
+        doPhaseCleanup(pair, phase, variant);
     }
 
     return NULL;
@@ -2022,51 +2461,59 @@ static int allClientsReachedIterations(StressTestContext* ctx, int target)
     return 1;
 }
 
-/* Post-phase validation for applicable tests
- * Returns WH_ERROR_OK if validation passes, error code otherwise */
-static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
-                               int totalIterations, int totalErrors)
+/* Post-phase validation for applicable tests */
+static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase)
 {
-    int rc;
-
     switch (phase) {
-        case PHASE_COUNTER_CONCURRENT_INCREMENT: {
-            /* Validate counter value matches expected increments */
-            uint32_t counter = 0;
+        case PHASE_COUNTER_CONCURRENT_INCREMENT:
+        case PHASE_COUNTER_INCREMENT_VS_READ: {
+            /* Validate counter value against successful increments */
+            NamespaceVariant variant  = ctx->currentVariant;
+            int              failed   = 0;
+            int              expected = 0;
+            int              sharedTotal = 0;
+            int              i;
 
-            /* Read final counter value using client 0 */
-            rc = doCounterRead(&ctx->pairs[0].client, HOT_COUNTER_ID, &counter);
-            if (rc != WH_ERROR_OK) {
-                WH_ERROR_PRINT(
-                    "    VALIDATION FAILED: Counter read failed: %d\n", rc);
-                return WH_ERROR_ABORTED;
+            for (i = 0; i < NUM_CLIENTS; i++) {
+                if (isGlobalSide(&ctx->pairs[i], variant) &&
+                    (phase == PHASE_COUNTER_CONCURRENT_INCREMENT ||
+                     ctx->clientRoles[i] == ROLE_OP_A)) {
+                    sharedTotal += ATOMIC_LOAD_INT(&ctx->pairs[i].successCount);
+                }
             }
 
-            /* Calculate expected value: iterations per client × number of
-             * incrementing clients Each incrementing client did
-             * config->iterations increments
-             * Account for errors: totalIterations counts all attempts,
-             * but totalErrors counts unacceptable failures that didn't
-             * increment */
-            uint32_t expectedMin = totalIterations - totalErrors;
+            for (i = 0; i < NUM_CLIENTS; i++) {
+                uint32_t counter = 0;
+                int      rc;
 
-            WH_TEST_PRINT("    Counter validation: value=%u, expected_min=%u "
-                          "(iters=%d, errors=%d)\n",
-                          counter, expectedMin, totalIterations, totalErrors);
+                /* Reader roles never increment their counter */
+                if (phase == PHASE_COUNTER_INCREMENT_VS_READ &&
+                    ctx->clientRoles[i] != ROLE_OP_A) {
+                    continue;
+                }
 
-            /* Counter must equal expectedMin. If counter < expectedMin, this
-             * indicates either:
-             * 1. Lost increments due to locking bug (race condition)
-             * 2. NOTFOUND occurred (shouldn't happen - no concurrent destroys)
-             */
-            if (counter < expectedMin) {
-                WH_ERROR_PRINT("    VALIDATION FAILED: Counter value %u < "
-                               "expected min %u\n",
-                               counter, expectedMin);
-                return WH_ERROR_ABORTED;
+                rc = doCounterRead(&ctx->pairs[i].client,
+                                   nvmIdFor(&ctx->pairs[i], variant,
+                                            HOT_COUNTER_ID),
+                                   &counter);
+                expected = isGlobalSide(&ctx->pairs[i], variant)
+                               ? sharedTotal
+                               : ATOMIC_LOAD_INT(&ctx->pairs[i].successCount);
+
+                if (rc != WH_ERROR_OK || counter != (uint32_t)expected) {
+                    WH_ERROR_PRINT("    VALIDATION FAILED: client %d counter "
+                                   "value=%u expected=%d (read rc=%d)\n",
+                                   i, counter, expected, rc);
+                    failed = 1;
+                }
+                else {
+                    WH_TEST_PRINT("    Counter validation: client %d "
+                                  "value=%u expected=%d\n",
+                                  i, counter, expected);
+                }
             }
 
-            return WH_ERROR_OK;
+            return failed ? WH_ERROR_ABORTED : WH_ERROR_OK;
         }
 
         /* Other phases don't need special validation yet */
@@ -2075,47 +2522,51 @@ static int validatePhaseResult(StressTestContext* ctx, ContentionPhase phase,
     }
 }
 
-/* Select the appropriate keyId for a phase.
- * Revoke-related phases need unique key IDs because revoked keys can't be
- * erased or re-cached. Each phase type that might leave a key revoked needs
- * its own key ID to avoid conflicts.
- */
-static whKeyId selectKeyIdForPhase(ContentionPhase phase, int isGlobal)
+/* Select key ID for phase and namespace variant */
+static whKeyId selectKeyIdForPhase(ContentionPhase  phase,
+                                   NamespaceVariant variant, int globalSide)
 {
     switch (phase) {
         case PHASE_KS_REVOKE_VS_CACHE:
-            return isGlobal ? REVOKE_CACHE_KEY_GLOBAL : REVOKE_CACHE_KEY_LOCAL;
+            if (variant == VARIANT_MIXED) {
+                return globalSide ? REVOKE_CACHE_KEY_MIXED_GLOBAL
+                                  : REVOKE_CACHE_KEY_MIXED_LOCAL;
+            }
+            return globalSide ? REVOKE_CACHE_KEY_GLOBAL
+                              : REVOKE_CACHE_KEY_LOCAL;
         case PHASE_KS_REVOKE_VS_EXPORT:
-            return isGlobal ? REVOKE_EXPORT_KEY_GLOBAL
-                            : REVOKE_EXPORT_KEY_LOCAL;
+            if (variant == VARIANT_MIXED) {
+                return globalSide ? REVOKE_EXPORT_KEY_MIXED_GLOBAL
+                                  : REVOKE_EXPORT_KEY_MIXED_LOCAL;
+            }
+            return globalSide ? REVOKE_EXPORT_KEY_GLOBAL
+                              : REVOKE_EXPORT_KEY_LOCAL;
         /* Freshen uses HOT_KEY_ID (not unique IDs) so it can reuse keys that
          * are already committed by earlier phases - avoids NVM space issues */
         default:
-            return isGlobal ? HOT_KEY_ID_GLOBAL : HOT_KEY_ID_LOCAL;
+            return globalSide ? HOT_KEY_ID_GLOBAL : HOT_KEY_ID_LOCAL;
     }
 }
 
 static int runPhase(StressTestContext* ctx, const PhaseConfig* config,
-                    whKeyId keyId)
+                    NamespaceVariant variant)
 {
     int i;
     int rc;
 #ifdef WOLFHSM_CFG_TEST_STRESS_PHASE_TIMEOUT_SEC
     time_t phaseStart;
 #endif
-    int         totalIterations = 0;
-    int         totalErrors     = 0;
-    int         timedOut        = 0;
-    const char* keyScope =
-        (keyId & WH_KEYID_CLIENT_GLOBAL_FLAG) ? "global" : "local";
+    int totalIterations = 0;
+    int totalErrors     = 0;
+    int timedOut        = 0;
 
-    WH_TEST_PRINT("  Phase: %s (%s key)\n", config->name, keyScope);
+    WH_TEST_PRINT("  Phase: %s (%s)\n", config->name, variantName(variant));
 
     /* 1. Set phase info for all clients */
-    ctx->currentPhase = config->phase;
-    ctx->currentKeyId = keyId;
+    ctx->currentPhase   = config->phase;
+    ctx->currentVariant = variant;
     for (i = 0; i < NUM_CLIENTS; i++) {
-        ctx->clientRoles[i] = config->roles[i];
+        ctx->clientRoles[i] = roleFor(config, variant, i);
     }
 
     /* 2. Signal clients to run setup */
@@ -2128,6 +2579,7 @@ static int runPhase(StressTestContext* ctx, const PhaseConfig* config,
     for (i = 0; i < NUM_CLIENTS; i++) {
         ATOMIC_STORE_INT(&ctx->pairs[i].iterationCount, 0);
         ATOMIC_STORE_INT(&ctx->pairs[i].errorCount, 0);
+        ATOMIC_STORE_INT(&ctx->pairs[i].successCount, 0);
     }
 
     /* 5. Signal clients to start streaming */
@@ -2171,7 +2623,11 @@ static int runPhase(StressTestContext* ctx, const PhaseConfig* config,
                   totalErrors);
 
     /* 10. Run phase-specific validation */
-    rc = validatePhaseResult(ctx, config->phase, totalIterations, totalErrors);
+    rc = validatePhaseResult(ctx, config->phase);
+
+    /* 11. Release clients to run per-phase cleanup */
+    pthread_barrier_wait(&ctx->cleanupStartBarrier);
+
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -2209,6 +2665,10 @@ int whTest_ThreadSafeStress(void)
     int               testResult   = 0;
     int               phasesFailed = 0;
     size_t            phaseIdx;
+    int               variantIdx;
+
+    static const NamespaceVariant variants[VARIANT_COUNT] = {
+        VARIANT_GLOBAL, VARIANT_LOCAL, VARIANT_MIXED};
 
     memset(&ctx, 0, sizeof(ctx));
 
@@ -2216,7 +2676,7 @@ int whTest_ThreadSafeStress(void)
     WH_TEST_PRINT("Clients: %d, Phases: %zu, Iterations per phase: %d\n",
                   NUM_CLIENTS, sizeof(phases) / sizeof(phases[0]),
                   PHASE_ITERATIONS);
-    WH_TEST_PRINT("Key scopes: global, local\n");
+    WH_TEST_PRINT("Namespace variants: global, local, mixed\n");
 
     /* Initialize wolfCrypt */
     rc = wolfCrypt_Init();
@@ -2282,6 +2742,13 @@ int whTest_ThreadSafeStress(void)
         goto cleanup;
     }
 
+    rc = pthread_barrier_init(&ctx.cleanupStartBarrier, NULL, NUM_CLIENTS + 1);
+    if (rc != 0) {
+        WH_ERROR_PRINT("Failed to init cleanupStart barrier: %d\n", rc);
+        testResult = rc;
+        goto cleanup;
+    }
+
     WH_TEST_PRINT("Starting %d server threads and %d client threads...\n",
                   NUM_CLIENTS, NUM_CLIENTS);
 
@@ -2313,30 +2780,20 @@ int whTest_ThreadSafeStress(void)
     pthread_barrier_wait(&ctx.startBarrier);
     WH_TEST_PRINT("All threads started, running phases...\n\n");
 
-    /* Run all phases */
+    /* Run all phases, each once per namespace variant */
     for (phaseIdx = 0; phaseIdx < sizeof(phases) / sizeof(phases[0]);
          phaseIdx++) {
-        whKeyId globalKey = selectKeyIdForPhase(phases[phaseIdx].phase, 1);
-        whKeyId localKey  = selectKeyIdForPhase(phases[phaseIdx].phase, 0);
-
-        rc = runPhase(&ctx, &phases[phaseIdx], globalKey);
-        if (rc != WH_ERROR_OK) {
-            WH_ERROR_PRINT("Phase %zu (global) failed: %d\n", phaseIdx, rc);
-            phasesFailed++;
-            if (testResult == 0) {
-                testResult = rc; /* Record first error */
+        for (variantIdx = 0; variantIdx < VARIANT_COUNT; variantIdx++) {
+            rc = runPhase(&ctx, &phases[phaseIdx], variants[variantIdx]);
+            if (rc != WH_ERROR_OK) {
+                WH_ERROR_PRINT("Phase %zu (%s) failed: %d\n", phaseIdx,
+                               variantName(variants[variantIdx]), rc);
+                phasesFailed++;
+                if (testResult == 0) {
+                    testResult = rc; /* Record first error */
+                }
+                /* Continue to next phase - don't break */
             }
-            /* Continue to next phase - don't break */
-        }
-
-        rc = runPhase(&ctx, &phases[phaseIdx], localKey);
-        if (rc != WH_ERROR_OK) {
-            WH_ERROR_PRINT("Phase %zu (local) failed: %d\n", phaseIdx, rc);
-            phasesFailed++;
-            if (testResult == 0) {
-                testResult = rc; /* Record first error */
-            }
-            /* Continue to next phase - don't break */
         }
     }
 
@@ -2350,6 +2807,7 @@ int whTest_ThreadSafeStress(void)
     ATOMIC_STORE_INT(&ctx.phaseRunning, 0);
     pthread_barrier_wait(&ctx.streamStartBarrier);
     pthread_barrier_wait(&ctx.streamEndBarrier);
+    pthread_barrier_wait(&ctx.cleanupStartBarrier);
 
 join_threads:
     /* Signal stop for servers */
@@ -2379,6 +2837,7 @@ join_threads:
     pthread_barrier_destroy(&ctx.setupCompleteBarrier);
     pthread_barrier_destroy(&ctx.streamStartBarrier);
     pthread_barrier_destroy(&ctx.streamEndBarrier);
+    pthread_barrier_destroy(&ctx.cleanupStartBarrier);
 
 cleanup:
     /* Cleanup client-server pairs */

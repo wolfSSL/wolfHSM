@@ -190,6 +190,9 @@ static int _SetupServer(TestCtx* t, int useConfig, int readOnly)
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(t->crypto->rng, NULL, INVALID_DEVID));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(t->server, t->s_conf));
 
+    /* Set client ID for direct handler invocation. */
+    t->server->comm->client_id = 1;
+
     return WH_ERROR_OK;
 }
 

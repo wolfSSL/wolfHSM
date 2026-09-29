@@ -620,25 +620,30 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
         return WH_TEST_FAIL;
     }
 
-    /* (b) A client that provisions an NVM object carrying
-     * WH_NVM_FLAGS_TRUSTED at a crypto-key id (keys and NVM objects share
-     * the id space) must not obtain a trusted KEK either: the checked NVM
-     * add path strips the flag. */
+    /* (b) A client provisioning an NVM object with WH_NVM_FLAGS_TRUSTED
+     * at a crypto key ID must not obtain a trusted KEK. */
     {
-        whKeyId nvmForgeId = WH_TEST_KEKID + 2;
-        whNvmId nvmObjId   = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
-                                           client->comm->client_id, nvmForgeId);
-        int32_t nvmRc      = 0;
+        whKeyId nvmForgeId    = WH_TEST_KEKID + 2;
+        whNvmId nvmObjId      = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                              client->comm->client_id, nvmForgeId);
+        int32_t nvmRc         = 0;
+        int32_t expectedAddRc = 0;
+        int     expectedRc;
+
+#ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+        expectedAddRc = WH_ERROR_BADARGS;
+#endif
 
         ret = wh_Client_NvmAddObject(
             client, nvmObjId, WH_NVM_ACCESS_ANY,
             WH_NVM_FLAGS_TRUSTED | WH_NVM_FLAGS_USAGE_WRAP, sizeof(label),
             label, sizeof(srcKey), srcKey, &nvmRc);
-        if (ret != 0 || nvmRc != 0) {
-            WH_ERROR_PRINT("trusted-kek: NvmAddObject failed ret=%d rc=%d\n",
-                           ret, (int)nvmRc);
+        if (ret != 0 || nvmRc != expectedAddRc) {
+            WH_ERROR_PRINT("trusted-kek: NvmAddObject expected rc=%d, got "
+                           "ret=%d rc=%d\n",
+                           (int)expectedAddRc, ret, (int)nvmRc);
             (void)wh_Client_KeyEvict(client, srcKeyId);
-            return (ret != 0) ? ret : (int)nvmRc;
+            return (ret != 0) ? ret : WH_TEST_FAIL;
         }
         wrappedKeySz = sizeof(wrappedKey);
         ret = wh_Client_KeyWrapExport(client, WC_CIPHER_AES_GCM, srcKeyId,
@@ -648,10 +653,17 @@ static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
             int32_t destroyRc = 0;
             (void)wh_Client_NvmDestroyObjects(client, 1, &nvmObjId, &destroyRc);
         }
-        if (ret != WH_ERROR_ACCESS) {
+#ifdef WOLFHSM_CFG_LEGACY_CLIENT_NVM
+        /* In legacy flat ID mode, TRUSTED flag is stripped on add */
+        expectedRc = WH_ERROR_ACCESS;
+#else
+        /* In translated mode, adding with crypto key type is rejected */
+        expectedRc = WH_ERROR_NOTFOUND;
+#endif
+        if (ret != expectedRc) {
             WH_ERROR_PRINT("trusted-kek: wrap-export with NVM-forged KEK "
-                           "expected ACCESS, got %d\n",
-                           ret);
+                           "expected %d, got %d\n",
+                           expectedRc, ret);
             (void)wh_Client_KeyEvict(client, srcKeyId);
             return WH_TEST_FAIL;
         }

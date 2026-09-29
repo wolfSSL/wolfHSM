@@ -1582,7 +1582,14 @@ int wh_Client_DataUnwrapResponse(whClientContext*   ctx,
                                  enum wc_CipherType cipherType, void* dataOut,
                                  uint32_t* dataSz);
 
-/* Counter functions */
+/* Counter functions
+ *
+ * Counter IDs use client-facing key ID encoding. Bits 0 to 7 hold the
+ * counter number from 1 to 255 (0 is invalid). Bit 8
+ * (WH_KEYID_CLIENT_GLOBAL_FLAG) selects the shared global namespace when
+ * WOLFHSM_CFG_GLOBAL_KEYS is enabled. Standard IDs are private to the calling
+ * client. IDs with other bits set, or with the global flag when global keys are
+ * disabled, return WH_ERROR_BADARGS. Any client can access global counters. */
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter);
 int wh_Client_CounterInitResponse(whClientContext* c, uint32_t* counter);
@@ -1660,6 +1667,37 @@ int wh_Client_CounterDestroyResponse(whClientContext* c);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
+
+/**
+ * @section client_nvm_id_namespace Client NVM ID semantics
+ *
+ * The id parameter passed to these NVM functions uses the client-facing
+ * key ID encoding (see wolfhsm/wh_keyid.h).
+ *
+ *   - Bits 0 to 7 (WH_KEYID_MASK): numeric ID from 1 to 255. ID 0 is
+ *     reserved as the erased sentinel and is rejected by AddObject.
+ *   - Bit 8 (WH_KEYID_CLIENT_GLOBAL_FLAG): selects the shared global NVM
+ *     namespace when WOLFHSM_CFG_GLOBAL_KEYS is enabled. Otherwise, requests
+ *     with this flag return WH_ERROR_BADARGS.
+ *   - Bits 9 and 10 (WH_KEYID_CLIENT_WRAPPED_FLAG and WH_KEYID_CLIENT_HW_FLAG):
+ *     invalid for NVM objects. Requests with these flags return
+ * WH_ERROR_BADARGS.
+ *   - Bits 11 to 15: must be zero.
+ *
+ * The server translates each request ID into internal TYPE/USER/ID encoding,
+ * providing private per-client namespaces (1 to 255) and an optional global
+ * namespace. The client ID is assigned during wh_Client_CommInit(). Requests
+ * outside the COMM group sent before COMM INIT are rejected with
+ * WH_ERROR_ACCESS.
+ *
+ * With WOLFHSM_CFG_GLOBAL_KEYS enabled, wh_Client_NvmList() uses the global
+ * flag on startId to select the target namespace. Returned IDs retain the
+ * flag for pagination.
+ *
+ * Defining WOLFHSM_CFG_LEGACY_CLIENT_NVM disables translation for the NVM
+ * group, restoring the flat 16-bit ID space. Key, counter, and certificate
+ * IDs remain translated.
+ */
 
 /** NVM functions */
 /**
@@ -2701,7 +2739,15 @@ int wh_Client_AuthUserSetCredentials(
     whClientContext* c, whUserId user_id, whAuthMethod method,
     const void* current_credentials, uint16_t current_credentials_len,
     const void* new_credentials, uint16_t new_credentials_len, int32_t* out_rc);
-/* Certificate functions */
+/* Certificate functions
+ *
+ * Certificate IDs use client-facing key ID encoding. Bits 0 to 7 name a root
+ * from 1 to 255 in the client trust store. Bit 8 (WH_KEYID_CLIENT_GLOBAL_FLAG)
+ * selects the shared global trust store when WOLFHSM_CFG_GLOBAL_KEYS is
+ * enabled. Roots are stored as NVM objects of type WH_KEYTYPE_CERT. IDs with
+ * other bits set, ID 0, or the global flag when global keys are disabled return
+ * WH_ERROR_BADARGS. Build-time provisioned roots must use internal encoding
+ * (see Trusted Root Storage in documentation). */
 
 /**
  * @brief Sends a request to initialize the certificate manager on the server.
