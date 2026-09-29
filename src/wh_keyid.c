@@ -77,6 +77,12 @@ int wh_KeyId_CheckClientObjectId(whKeyId reqId)
         0) {
         return WH_ERROR_BADARGS;
     }
+#ifndef WOLFHSM_CFG_GLOBAL_KEYS
+    /* Reject global flag when global keys are disabled */
+    if ((reqId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+#endif
     return WH_ERROR_OK;
 }
 
@@ -86,12 +92,6 @@ int wh_KeyId_CheckClientObjectIdForCreate(whKeyId reqId)
     if (WH_KEYID_ISERASED(reqId)) {
         return WH_ERROR_BADARGS;
     }
-#ifndef WOLFHSM_CFG_GLOBAL_KEYS
-    /* Reject global flag when global keys are disabled */
-    if ((reqId & WH_KEYID_CLIENT_GLOBAL_FLAG) != 0) {
-        return WH_ERROR_BADARGS;
-    }
-#endif
     return wh_KeyId_CheckClientObjectId(reqId);
 }
 

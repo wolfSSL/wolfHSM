@@ -602,6 +602,11 @@ static int whTest_CertPerClientIsolation(whServerConfig* serverCfg)
         WH_TEST_RETURN_ON_FAIL(
             wh_Nvm_DestroyObjects(server->nvm, 1, &globalCert));
     }
+#else
+    /* The global flag is rejected, not mapped to client 1's own cert */
+    WH_TEST_ASSERT_RETURN(
+        _certReadRc(server, magic, 5 | WH_KEYID_CLIENT_GLOBAL_FLAG, req_packet,
+                    resp_packet) == WH_ERROR_BADARGS);
 #endif
 
     /* Clean up and restore client ID */

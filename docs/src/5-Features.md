@@ -230,7 +230,7 @@ This translation requires the client ID assigned during COMM INIT. The server re
 Client-facing NVM IDs use the same encoding as client-facing `whKeyId` values.
 
 - **Bits 0 to 7** contain the numeric object ID from 1 to 255. ID 0 is reserved as an erased sentinel and is rejected by `wh_Client_NvmAddObject`.
-- **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`) selects the shared global namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is defined. Without that define, `wh_Client_NvmAddObject` rejects IDs with this flag set, while other NVM functions ignore the flag and use the caller's private namespace.
+- **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`) selects the shared global namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is defined. Without that define, every NVM function rejects IDs with this flag set and returns `WH_ERROR_BADARGS`.
 - **Bits 9 and 10** represent wrapped and hardware key flags. These are invalid for NVM objects, and NVM functions reject IDs with these bits set. Bits above bit 10 are also rejected.
 
 On each request, the server expands the client ID to include TYPE = `WH_KEYTYPE_NVM` and USER set to the connection client ID (or 0 for global objects). Responses translate IDs back to the client format.
@@ -239,7 +239,7 @@ On each request, the server expands the client ID to include TYPE = `WH_KEYTYPE_
 - Setting TYPE = `WH_KEYTYPE_NVM` prevents the client NVM API from accessing keys, counters, SHE slots, or server-internal storage.
 - When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, objects in the global namespace can be accessed by any client setting the global flag. Factory images from the [NVM provisioning tool](6-Utilities.md#nvm-provisioning-tool) place plain `obj` entries with IDs up to 255 into this namespace. Without this define, USER 0 objects cannot be reached through the client NVM API.
 
-When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, `wh_Client_NvmList` uses the global flag on `startId` to select which namespace to enumerate. Pass 0 to list the client's own objects, or `WH_KEYID_CLIENT_GLOBAL_FLAG` to list global objects. Returned IDs include the flag so callers can pass them back as `startId`. Without `WOLFHSM_CFG_GLOBAL_KEYS`, the flag is ignored and the function lists the caller's private namespace.
+When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, `wh_Client_NvmList` uses the global flag on `startId` to select which namespace to enumerate. Pass 0 to list the client's own objects, or `WH_KEYID_CLIENT_GLOBAL_FLAG` to list global objects. Returned IDs include the flag so callers can pass them back as `startId`. Without `WOLFHSM_CFG_GLOBAL_KEYS`, a `startId` with the flag set returns `WH_ERROR_BADARGS`.
 
 Access permissions and policy checks apply after translation. Server-local code using `wh_Nvm_*` directly continues to use internal IDs without translation.
 
@@ -506,7 +506,7 @@ Under the hood, chain verification is delegated to wolfSSL's `WOLFSSL_CERT_MANAG
 
 Trusted root certificates are stored as NVM objects (see [Non-Volatile Memory](#non-volatile-memory-nvm)) with TYPE `WH_KEYTYPE_CERT`. Each root is a DER-encoded X.509 certificate written into NVM with `whNvmMetadata` access bits, flags, and label so that standard access controls apply.
 
-Client-supplied certificate IDs use the same per-client scheme as [keys](#key-cache-key-ids-and-nvm-backing-store), [NVM objects](#client-nvm-access-and-per-client-namespaces), and counters. An ID from 1 to 255 names a root in the client's own trust store. When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, `WH_KEYID_CLIENT_GLOBAL_FLAG` selects the shared global trust store. The server expands IDs to TYPE `WH_KEYTYPE_CERT`, USER set to the client ID (or 0 for global), and the requested numeric ID. IDs with extra bits set, invalid flags (wrapped or hardware), or ID 0 on creation return `WH_ERROR_BADARGS`. `WOLFHSM_CFG_LEGACY_CLIENT_NVM` does not affect certificate IDs.
+Client-supplied certificate IDs use the same per-client scheme as [keys](#key-cache-key-ids-and-nvm-backing-store), [NVM objects](#client-nvm-access-and-per-client-namespaces), and counters. An ID from 1 to 255 names a root in the client's own trust store. When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, `WH_KEYID_CLIENT_GLOBAL_FLAG` selects the shared global trust store. The server expands IDs to TYPE `WH_KEYTYPE_CERT`, USER set to the client ID (or 0 for global), and the requested numeric ID. IDs with extra bits set, invalid flags (wrapped or hardware), the global flag when `WOLFHSM_CFG_GLOBAL_KEYS` is not defined, or ID 0 on creation return `WH_ERROR_BADARGS`. `WOLFHSM_CFG_LEGACY_CLIENT_NVM` does not affect certificate IDs.
 
 Server-internal components like the [image manager](#image-manager) reference roots by full internal ID using `WH_MAKE_KEYID(WH_KEYTYPE_CERT, user, id)`. Roots provisioned at build time must use this format as well (see the [NVM provisioning tool](6-Utilities.md#nvm-provisioning-tool)).
 
@@ -867,7 +867,7 @@ Every mutating operation is committed by the NVM layer before the response is re
 
 ### Counter Identifiers and Storage
 
-Counters use client-facing IDs where bits 0 to 7 specify the counter number from 1 to 255 (`WH_KEYID_ERASED`, 0, is invalid). When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, bit 8 (`WH_KEYID_CLIENT_GLOBAL_FLAG`) selects the shared global namespace. The server encodes counters as `whKeyId` values with TYPE = `WH_KEYTYPE_COUNTER`, USER set to the client ID (or 0 for global), and the numeric ID. This isolates counters per client, and keeps counter 5 distinct from key 5. IDs with extra bits or key flags (wrapped or hardware) return `WH_ERROR_BADARGS`. When `WOLFHSM_CFG_GLOBAL_KEYS` is disabled, initialization with the global flag also returns `WH_ERROR_BADARGS`.
+Counters use client-facing IDs where bits 0 to 7 specify the counter number from 1 to 255 (`WH_KEYID_ERASED`, 0, is invalid). When `WOLFHSM_CFG_GLOBAL_KEYS` is defined, bit 8 (`WH_KEYID_CLIENT_GLOBAL_FLAG`) selects the shared global namespace. The server encodes counters as `whKeyId` values with TYPE = `WH_KEYTYPE_COUNTER`, USER set to the client ID (or 0 for global), and the numeric ID. This isolates counters per client, and keeps counter 5 distinct from key 5. IDs with extra bits or key flags (wrapped or hardware) return `WH_ERROR_BADARGS`. When `WOLFHSM_CFG_GLOBAL_KEYS` is disabled, any counter request with the global flag also returns `WH_ERROR_BADARGS`.
 
 Global counters are shared across all clients. Any client can initialize, increment, read, or destroy a global counter. Only use global counters when shared access is required.
 

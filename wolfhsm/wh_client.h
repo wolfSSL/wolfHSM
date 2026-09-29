@@ -1677,16 +1677,18 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
  *   - Bits 0 to 7 (WH_KEYID_MASK): numeric ID from 1 to 255. ID 0 is
  *     reserved as the erased sentinel and is rejected by AddObject.
  *   - Bit 8 (WH_KEYID_CLIENT_GLOBAL_FLAG): selects the shared global NVM
- *     namespace when WOLFHSM_CFG_GLOBAL_KEYS is enabled. Otherwise, the ID
- *     targets the calling client's private namespace.
+ *     namespace when WOLFHSM_CFG_GLOBAL_KEYS is enabled. Otherwise, requests
+ *     with this flag return WH_ERROR_BADARGS.
  *   - Bits 9 and 10 (WH_KEYID_CLIENT_WRAPPED_FLAG and WH_KEYID_CLIENT_HW_FLAG):
- *     invalid for NVM objects. Requests with these flags return WH_ERROR_BADARGS.
+ *     invalid for NVM objects. Requests with these flags return
+ * WH_ERROR_BADARGS.
  *   - Bits 11 to 15: must be zero.
  *
  * The server translates each request ID into internal TYPE/USER/ID encoding,
  * providing private per-client namespaces (1 to 255) and an optional global
  * namespace. The client ID is assigned during wh_Client_CommInit(). Requests
- * outside the COMM group sent before COMM INIT are rejected with WH_ERROR_ACCESS.
+ * outside the COMM group sent before COMM INIT are rejected with
+ * WH_ERROR_ACCESS.
  *
  * With WOLFHSM_CFG_GLOBAL_KEYS enabled, wh_Client_NvmList() uses the global
  * flag on startId to select the target namespace. Returned IDs retain the
@@ -2741,10 +2743,11 @@ int wh_Client_AuthUserSetCredentials(
  *
  * Certificate IDs use client-facing key ID encoding. Bits 0 to 7 name a root
  * from 1 to 255 in the client trust store. Bit 8 (WH_KEYID_CLIENT_GLOBAL_FLAG)
- * selects the shared global trust store when WOLFHSM_CFG_GLOBAL_KEYS is enabled.
- * Roots are stored as NVM objects of type WH_KEYTYPE_CERT. IDs with other bits
- * set or ID 0 return WH_ERROR_BADARGS. Build-time provisioned roots must use
- * internal encoding (see Trusted Root Storage in documentation). */
+ * selects the shared global trust store when WOLFHSM_CFG_GLOBAL_KEYS is
+ * enabled. Roots are stored as NVM objects of type WH_KEYTYPE_CERT. IDs with
+ * other bits set, ID 0, or the global flag when global keys are disabled return
+ * WH_ERROR_BADARGS. Build-time provisioned roots must use internal encoding
+ * (see Trusted Root Storage in documentation). */
 
 /**
  * @brief Sends a request to initialize the certificate manager on the server.

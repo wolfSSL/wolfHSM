@@ -1481,6 +1481,63 @@ static int _runGlobalKeysTests(whClientContext* client1,
     return 0;
 }
 
+#else /* !WOLFHSM_CFG_GLOBAL_KEYS */
+
+/* Counter API must reject the GLOBAL flag when global keys are disabled. */
+static int _testCounterGlobalFlagDisabled(whClientContext* client1,
+                                          whServerContext* server1,
+                                          whClientContext* client2,
+                                          whServerContext* server2)
+{
+    const whNvmId ctr     = 7;
+    const whNvmId flagged = WH_CLIENT_KEYID_MAKE_GLOBAL(7);
+    uint32_t      val     = 0;
+    int           ret;
+
+    (void)client2;
+    (void)server2;
+
+    WH_TEST_PRINT("Test: Counter GLOBAL flag with global keys disabled\n");
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterInitRequest(client1, ctr, 41));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterInitResponse(client1, &val));
+    WH_TEST_ASSERT_RETURN(val == 41);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterInitRequest(client1, flagged, 5));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_CounterInitResponse(client1, &val);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterIncrementRequest(client1, flagged));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_CounterIncrementResponse(client1, &val);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReadRequest(client1, flagged));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_CounterReadResponse(client1, &val);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterDestroyRequest(client1, flagged));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    ret = wh_Client_CounterDestroyResponse(client1);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+
+    /* The caller's own counter is unchanged */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReadRequest(client1, ctr));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterReadResponse(client1, &val));
+    WH_TEST_ASSERT_RETURN(val == 41);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterDestroyRequest(client1, ctr));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CounterDestroyResponse(client1));
+
+    WH_TEST_PRINT("  PASS: Counter GLOBAL flag rejected\n");
+    return 0;
+}
+
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
 #ifndef WOLFHSM_CFG_LEGACY_CLIENT_NVM
@@ -1907,8 +1964,7 @@ static int _testNvmGlobalNamespaceList(whClientContext* client1,
 #else /* !WOLFHSM_CFG_GLOBAL_KEYS */
 
 /*
- * When global keys are disabled, AddObject must reject the GLOBAL flag
- * and other verbs must resolve to the caller's own namespace.
+ * When global keys are disabled, every NVM API must reject the GLOBAL flag.
  */
 static int _testNvmGlobalFlagDisabled(whClientContext* client1,
                                       whServerContext* server1,
@@ -1967,23 +2023,43 @@ static int _testNvmGlobalFlagDisabled(whClientContext* client1,
                                             NVM_ISOLATION_PAYLOAD_A, &out_rc));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
 
-    cur = WH_KEYID_CLIENT_GLOBAL_FLAG;
+    out_rc = 0;
+    cur    = WH_KEYID_CLIENT_GLOBAL_FLAG;
     WH_TEST_RETURN_ON_FAIL(
         _nvmListViaServer(client1, server1, cur, &out_rc, &count, &cur));
-    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(count == 1);
-    WH_TEST_ASSERT_RETURN(cur == own_id);
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
 
+    out_rc = 0;
     WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
         client1, server1, own_id | WH_KEYID_CLIENT_GLOBAL_FLAG, sizeof(buf),
         &out_rc, &out_len, buf));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmGetMetadataViaServer(
+        client1, server1, planted_id | WH_KEYID_CLIENT_GLOBAL_FLAG, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+
+#ifdef WOLFHSM_CFG_DMA
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadDmaRequest(
+        client1, own_id | WH_KEYID_CLIENT_GLOBAL_FLAG, 0, sizeof(buf), buf));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmReadDmaResponse(client1, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+#endif
+
+    /* A rejected destroy must leave the caller's own object in place */
+    out_rc = 0;
+    WH_TEST_RETURN_ON_FAIL(_nvmDestroyViaServer(
+        client1, server1, own_id | WH_KEYID_CLIENT_GLOBAL_FLAG, &out_rc));
+    WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_BADARGS);
+
+    WH_TEST_RETURN_ON_FAIL(_nvmReadViaServer(
+        client1, server1, own_id, sizeof(buf), &out_rc, &out_len, buf));
     WH_TEST_ASSERT_RETURN(out_rc == WH_ERROR_OK);
     WH_TEST_ASSERT_RETURN(out_len == sizeof(NVM_ISOLATION_PAYLOAD_A));
     WH_TEST_ASSERT_RETURN(memcmp(buf, NVM_ISOLATION_PAYLOAD_A, out_len) == 0);
-
-    WH_TEST_RETURN_ON_FAIL(_nvmGetMetadataViaServer(
-        client1, server1, planted_id | WH_KEYID_CLIENT_GLOBAL_FLAG, &out_rc));
-    WH_TEST_ASSERT_RETURN(out_rc != WH_ERROR_OK);
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(
@@ -3091,6 +3167,9 @@ static int whTest_MultiClientSequential(void)
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     WH_TEST_RETURN_ON_FAIL(
         _runGlobalKeysTests(client1, server1, client2, server2));
+#else
+    WH_TEST_RETURN_ON_FAIL(
+        _testCounterGlobalFlagDisabled(client1, server1, client2, server2));
 #endif
 
 #if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_NO_CRYPTO)

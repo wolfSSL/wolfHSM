@@ -170,8 +170,8 @@ whKeyId wh_KeyId_TranslateObjectIdFromClient(uint16_t type, uint16_t clientId,
  * @brief Check a client-supplied fixed-type object ID before translating it.
  *
  * Validates object IDs for NVM objects, counters, and certificates. Rejects
- * bits above valid ID and flag ranges, as well as wrapped and hardware flags.
- * The global flag and ID 0 are permitted.
+ * bits above valid ID and flag ranges, wrapped and hardware flags, and the
+ * global flag when WOLFHSM_CFG_GLOBAL_KEYS is disabled. ID 0 is permitted.
  *
  * @param reqId Requested ID from the client.
  * @return WH_ERROR_OK if valid, or WH_ERROR_BADARGS otherwise.
@@ -181,8 +181,8 @@ int wh_KeyId_CheckClientObjectId(whKeyId reqId);
 /**
  * @brief Check a client-supplied ID for creating a fixed-type object.
  *
- * Validates client object ID for creation by requiring a non-zero ID and
- * rejecting the global flag when WOLFHSM_CFG_GLOBAL_KEYS is disabled.
+ * Applies the checks from wh_KeyId_CheckClientObjectId() and also requires a
+ * non-zero ID.
  *
  * @param reqId Requested ID from the client.
  * @return WH_ERROR_OK if valid for creation, or WH_ERROR_BADARGS otherwise.
