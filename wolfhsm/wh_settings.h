@@ -36,6 +36,12 @@
  *  WOLFHSM_CFG_SHE_EXTENSION - If defined, include AutoSAR SHE functionality
  *      Default: Not defined
  *
+ *  WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT - If defined, include SHE test
+ *  key-management helpers (pre-program and destroy) that bypass the M1 to M5
+ *  update protocol. For test and provisioning builds only. Requires
+ *  WOLFHSM_CFG_SHE_EXTENSION.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_GLOBAL_KEYS - If defined, enable global key support allowing
  *  keys to be shared across multiple clients
  *      Default: Not defined
@@ -54,6 +60,12 @@
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP - If defined, include the key wrap functionality
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_LEGACY_CLIENT_NVM - If defined, client NVM requests use
+ *  untranslated 16-bit IDs across all clients. Only applies to the NVM group.
+ *  Key, counter, and certificate IDs remain translated. By default, NVM IDs
+ *  are translated into per-client namespaces (1 to 255).
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE - The maximum size (in bytes) of a key that

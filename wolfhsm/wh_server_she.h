@@ -89,6 +89,23 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                                void* resp_packet);
 
 /**
+ * @brief Format an action-specific SHE error response.
+ *
+ * Formats a response buffer with the expected layout when a SHE request
+ * fails before its handler runs, such as before COMM INIT. Standard SHE
+ * actions translate rc to a SHE error code, while test key management
+ * actions report rc directly.
+ *
+ * @param magic Request magic for endianness translation.
+ * @param action SHE action to format.
+ * @param rc Error code to report.
+ * @param resp_packet Output response buffer.
+ * @return Size of the response, or 0 if the action is unknown.
+ */
+uint16_t wh_Server_SheFormatErrorResponse(uint16_t magic, uint16_t action,
+                                          int rc, void* resp_packet);
+
+/**
  * @brief Register SHE UID storage callbacks at runtime.
  *
  * Replaces callbacks previously set via whServerConfig.sheConfig or by a prior

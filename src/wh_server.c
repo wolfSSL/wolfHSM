@@ -42,6 +42,8 @@
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_comm.h"
 #include "wolfhsm/wh_message_nvm.h"
+#include "wolfhsm/wh_message_counter.h"
+#include "wolfhsm/wh_message_keystore.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_message_auth.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
@@ -235,11 +237,17 @@ int wh_Server_SetConnected(whServerContext *server, whCommConnected connected)
         if (rc != WH_ERROR_OK) {
             WH_LOG(&server->log, WH_LOG_LEVEL_SECEVENT,
                    "Failed to clear auth session on disconnect");
-            server->connected = connected;
+            server->comm->client_id = 0;
+            server->connected       = connected;
             return rc;
         }
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
+
+    /* Clear client ID on disconnect so subsequent requests require COMM INIT */
+    if (connected == WH_COMM_DISCONNECTED) {
+        server->comm->client_id = 0;
+    }
 
     server->connected = connected;
     return WH_ERROR_OK;
@@ -282,17 +290,13 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
         wh_MessageComm_TranslateInitRequest(magic,
                 (whMessageCommInitRequest*)req_packet, &req);
 
-        if (req.client_id > WH_CLIENT_ID_MAX) {
+        /* Client ID 0 is reserved for global objects and cannot be bound by a
+         * client */
+        if ((req.client_id == WH_KEYUSER_GLOBAL) ||
+            (req.client_id > WH_CLIENT_ID_MAX)) {
             *out_resp_size = 0;
             return WH_ERROR_BADARGS;
         }
-#ifdef WOLFHSM_CFG_GLOBAL_KEYS
-        /* USER=0 is reserved for global keys, client_id must be non-zero */
-        if (req.client_id == WH_KEYUSER_GLOBAL) {
-            *out_resp_size = 0;
-            return WH_ERROR_BADARGS;
-        }
-#endif
 
         /* Process the init action */
         server->comm->client_id = req.client_id;
@@ -397,22 +401,34 @@ static int _wh_Server_HandlePkcs11Request(whServerContext* server,
     return rc;
 }
 
-#ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
-/* Helper to format an authorization error response for any group/action.
- * All response structures have int32_t rc as the first field.
- * Returns the response size to send. */
-static uint16_t _FormatAuthErrorResponse(uint16_t magic, uint16_t group,
-                                         uint16_t action, int32_t error_code,
-                                         void* resp_packet)
+/* Zero a response of the given size and store the translated error code in
+ * its leading rc field. Only for replies that start with a 32-bit rc; the
+ * keystore DMA replies lead with a DMA address status and must be built
+ * through their structs instead. */
+static uint16_t _FormatRcOnlyResponse(uint16_t magic, int32_t error_code,
+                                      uint16_t size, void* resp_packet)
 {
-    uint16_t resp_size = sizeof(int32_t); /* Minimum: just the rc field */
+    int32_t translated_rc =
+        (int32_t)wh_Translate32(magic, (uint32_t)error_code);
+
+    memset(resp_packet, 0, size);
+    memcpy(resp_packet, &translated_rc, sizeof(translated_rc));
+    return size;
+}
+
+/* Format an error response for a request refused before its handler runs.
+ * Response size matches the group and action expected by the client. */
+static uint16_t _FormatErrorResponse(uint16_t magic, uint16_t group,
+                                     uint16_t action, int32_t error_code,
+                                     void* resp_packet)
+{
+    uint16_t resp_size = sizeof(int32_t);
 
     if (resp_packet == NULL) {
         return 0;
     }
 
-    /* Write error code to first int32_t (rc field) - all responses start with
-     * this. Use memcpy since resp_packet may be only byte-aligned. */
+    /* Write translated error code into first 32-bit word */
     {
         int32_t translated_rc =
             (int32_t)wh_Translate32(magic, (uint32_t)error_code);
@@ -554,6 +570,113 @@ static uint16_t _FormatAuthErrorResponse(uint16_t magic, uint16_t group,
             break;
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
 
+        case WH_MESSAGE_GROUP_COUNTER:
+            resp_size = _FormatRcOnlyResponse(
+                magic, error_code, sizeof(whMessageCounter_ReadResponse),
+                resp_packet);
+            break;
+
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        case WH_MESSAGE_GROUP_KEY: {
+            /* Keystore error responses differ in size. DMA responses include
+             * badAddr status before the return code. */
+            uint16_t size = 0;
+            switch (action) {
+                case WH_KEY_CACHE:
+                case WH_KEY_CACHE_RANDOM:
+                    size = sizeof(whMessageKeystore_CacheResponse);
+                    break;
+                case WH_KEY_EVICT:
+                    size = sizeof(whMessageKeystore_EvictResponse);
+                    break;
+                case WH_KEY_COMMIT:
+                    size = sizeof(whMessageKeystore_CommitResponse);
+                    break;
+                case WH_KEY_ERASE:
+                    size = sizeof(whMessageKeystore_EraseResponse);
+                    break;
+                case WH_KEY_REVOKE:
+                    size = sizeof(whMessageKeystore_RevokeResponse);
+                    break;
+                case WH_KEY_EXPORT:
+                    size = sizeof(whMessageKeystore_ExportResponse);
+                    break;
+                case WH_KEY_EXPORT_PUBLIC:
+                    size = sizeof(whMessageKeystore_ExportPublicResponse);
+                    break;
+#ifdef WOLFHSM_CFG_DMA
+                case WH_KEY_CACHE_DMA: {
+                    whMessageKeystore_CacheDmaResponse resp = {0};
+                    resp.rc                                 = error_code;
+                    memset(resp_packet, 0, sizeof(resp));
+                    (void)wh_MessageKeystore_TranslateCacheDmaResponse(
+                        magic, &resp,
+                        (whMessageKeystore_CacheDmaResponse*)resp_packet);
+                    resp_size = sizeof(resp);
+                } break;
+                case WH_KEY_EXPORT_DMA: {
+                    whMessageKeystore_ExportDmaResponse resp = {0};
+                    resp.rc                                  = error_code;
+                    memset(resp_packet, 0, sizeof(resp));
+                    (void)wh_MessageKeystore_TranslateExportDmaResponse(
+                        magic, &resp,
+                        (whMessageKeystore_ExportDmaResponse*)resp_packet);
+                    resp_size = sizeof(resp);
+                } break;
+                case WH_KEY_EXPORT_PUBLIC_DMA: {
+                    whMessageKeystore_ExportPublicDmaResponse resp = {0};
+                    resp.rc                                        = error_code;
+                    memset(resp_packet, 0, sizeof(resp));
+                    (void)wh_MessageKeystore_TranslateExportPublicDmaResponse(
+                        magic, &resp,
+                        (whMessageKeystore_ExportPublicDmaResponse*)
+                            resp_packet);
+                    resp_size = sizeof(resp);
+                } break;
+#endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_KEYWRAP
+                case WH_KEY_KEYWRAP:
+                    size = sizeof(whMessageKeystore_KeyWrapResponse);
+                    break;
+                case WH_KEY_KEYWRAPEXPORT:
+                    size = sizeof(whMessageKeystore_KeyWrapExportResponse);
+                    break;
+                case WH_KEY_KEYUNWRAPEXPORT:
+                    size = sizeof(whMessageKeystore_KeyUnwrapAndExportResponse);
+                    break;
+                case WH_KEY_KEYUNWRAPCACHE:
+                    size = sizeof(whMessageKeystore_KeyUnwrapAndCacheResponse);
+                    break;
+                case WH_KEY_DATAWRAP:
+                    size = sizeof(whMessageKeystore_DataWrapResponse);
+                    break;
+                case WH_KEY_DATAUNWRAP:
+                    size = sizeof(whMessageKeystore_DataUnwrapResponse);
+                    break;
+#endif /* WOLFHSM_CFG_KEYWRAP */
+                default:
+                    size = sizeof(int32_t);
+                    break;
+            }
+            if (size != 0) {
+                resp_size =
+                    _FormatRcOnlyResponse(magic, error_code, size, resp_packet);
+            }
+        } break;
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+
+#ifdef WOLFHSM_CFG_SHE_EXTENSION
+        case WH_MESSAGE_GROUP_SHE:
+            /* SHE replies carry SHE error codes in action-specific layouts */
+            resp_size = wh_Server_SheFormatErrorResponse(magic, action,
+                                                         error_code,
+                                                         resp_packet);
+            if (resp_size == 0) {
+                resp_size = sizeof(int32_t);
+            }
+            break;
+#endif /* WOLFHSM_CFG_SHE_EXTENSION */
+
         default:
             /* For other groups, use minimum size (just rc field).
              * Most response structures have int32_t rc as first field, so
@@ -566,7 +689,6 @@ static uint16_t _FormatAuthErrorResponse(uint16_t magic, uint16_t group,
 
     return resp_size;
 }
-#endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
 
 
 int wh_Server_HandleRequestMessage(whServerContext* server)
@@ -600,6 +722,25 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
         group = WH_MESSAGE_GROUP(kind);
         action = WH_MESSAGE_ACTION(kind);
 
+        /* Require COMM INIT before serving requests that resolve client IDs */
+        if ((group != WH_MESSAGE_GROUP_COMM) &&
+            (server->comm->client_id == WH_KEYUSER_GLOBAL)) {
+            uint16_t resp_size = _FormatErrorResponse(
+                magic, group, action, WH_ERROR_ACCESS, data);
+
+            do {
+                rc = wh_CommServer_SendResponse(server->comm, magic, kind, seq,
+                                                resp_size, data);
+            } while (rc == WH_ERROR_NOTREADY);
+
+            WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR,
+                              WH_ERROR_ACCESS,
+                              "Request before COMM INIT refused (group=%d, "
+                              "action=%d, seq=%d)",
+                              group, action, seq);
+            return rc;
+        }
+
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
         /* General authentication check for if user has permissions for the
          * group and action requested. When dealing with key ID's there should
@@ -611,7 +752,7 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                 /* Authorization failed - format and send error response to
                  * client */
                 int32_t  error_code = (int32_t)WH_AUTH_PERMISSION_ERROR;
-                uint16_t resp_size  = _FormatAuthErrorResponse(
+                uint16_t resp_size  = _FormatErrorResponse(
                     magic, group, action, error_code, data);
 
                 /* Send error response to client */

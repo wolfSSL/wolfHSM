@@ -35,13 +35,15 @@
 
 #define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
 
-/* Enable global keys feature for testing */
+/* Disable global keys if WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS is set */
+#ifndef WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
 #define WOLFHSM_CFG_GLOBAL_KEYS
+#endif
 
 /* Enable logging feature for testing */
 #define WOLFHSM_CFG_LOGGING
 
-#define WOLFHSM_CFG_NVM_OBJECT_COUNT 30
+#define WOLFHSM_CFG_NVM_OBJECT_COUNT 64
 #define WOLFHSM_CFG_SERVER_KEYCACHE_COUNT 9
 #define WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE 300
 #define WOLFHSM_CFG_DMAADDR_COUNT 8
@@ -63,6 +65,9 @@
 
 /* Allow persistent NVM artifacts in tests */
 #define WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS
+
+/* Test-only SHE key management APIs. Bypass authenticated update protocols. */
+#define WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
 
 #define WOLFHSM_CFG_ENABLE_TIMEOUT
 

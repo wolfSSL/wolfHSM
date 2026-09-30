@@ -131,6 +131,14 @@ static int _GetId(whServerContext* server, uint16_t magic, uint16_t req_size,
                   const void* req_packet, uint16_t* out_resp_size,
                   void* resp_packet);
 static uint8_t _BuildSreg(whServerContext* server);
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+static int _PreProgramKey(whServerContext* server, uint16_t magic,
+                          uint16_t req_size, const void* req_packet,
+                          uint16_t* out_resp_size, void* resp_packet);
+static int _DestroyKey(whServerContext* server, uint16_t magic,
+                       uint16_t req_size, const void* req_packet,
+                       uint16_t* out_resp_size, void* resp_packet);
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
 static int _TranslateSheReturnCode(int ret);
 static int _GetUid(whServerContext* server, uint8_t* outUid);
 static int _StoreUid(whServerContext* server, const uint8_t* uid);
@@ -1894,6 +1902,286 @@ static int _GetId(whServerContext* server, uint16_t magic, uint16_t req_size,
     return ret;
 }
 
+/* Pre-program a SHE key into NVM under the calling client's namespace */
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+static int _PreProgramKey(whServerContext* server, uint16_t magic,
+                          uint16_t req_size, const void* req_packet,
+                          uint16_t* out_resp_size, void* resp_packet)
+{
+    int                                ret  = 0;
+    whMessageShe_PreProgramKeyRequest  req  = {0};
+    whMessageShe_PreProgramKeyResponse resp = {0};
+    whNvmMetadata                      meta = {0};
+    const uint8_t*                     key_data;
+    const uint16_t                     hdr_len = sizeof(req);
+
+    if (req_size < hdr_len) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_MessageShe_TranslatePreProgramKeyRequest(magic, req_packet,
+                                                          &req);
+    }
+    /* SHE keys must be exactly WH_SHE_KEY_SZ bytes */
+    if (ret == 0 &&
+        (req.keySz != WH_SHE_KEY_SZ || req_size != hdr_len + req.keySz)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    /* Validate SHE slot ID range */
+    if (ret == 0 && req.keyId > WH_SHE_PRNG_SEED_ID) {
+        ret = WH_ERROR_BADARGS;
+    }
+    if (ret == 0) {
+        key_data = (const uint8_t*)req_packet + hdr_len;
+
+        meta.id =
+            WH_SHE_MAKE_KEYID(server->comm->client_id, (whNvmId)req.keyId);
+        meta.access = 0;
+        meta.flags  = 0;
+        meta.len    = (whNvmSize)req.keySz;
+        wh_She_Meta2Label(req.count, req.flags, meta.label);
+
+        ret = WH_SERVER_NVM_LOCK(server);
+        if (ret == WH_ERROR_OK) {
+            /* Evict cached entry before updating NVM */
+            ret = wh_Server_KeystoreEvictKey(server, meta.id);
+            if (ret == WH_ERROR_NOTFOUND) {
+                ret = WH_ERROR_OK;
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Nvm_AddObjectChecked(server->nvm, &meta,
+                                              (whNvmSize)req.keySz, key_data);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(server);
+        }
+    }
+
+    resp.rc = ret;
+    (void)wh_MessageShe_TranslatePreProgramKeyResponse(magic, &resp,
+                                                       resp_packet);
+    *out_resp_size = sizeof(resp);
+    return ret;
+}
+
+static int _DestroyKey(whServerContext* server, uint16_t magic,
+                       uint16_t req_size, const void* req_packet,
+                       uint16_t* out_resp_size, void* resp_packet)
+{
+    int                             ret  = 0;
+    whMessageShe_DestroyKeyRequest  req  = {0};
+    whMessageShe_DestroyKeyResponse resp = {0};
+    whNvmId                         id;
+
+    if (req_size < sizeof(req)) {
+        ret = WH_ERROR_BUFFER_SIZE;
+    }
+    if (ret == 0) {
+        ret = wh_MessageShe_TranslateDestroyKeyRequest(magic, req_packet, &req);
+    }
+    if (ret == 0 && req.keyId > WH_SHE_PRNG_SEED_ID) {
+        ret = WH_ERROR_BADARGS;
+    }
+    if (ret == 0) {
+        id  = WH_SHE_MAKE_KEYID(server->comm->client_id, (whNvmId)req.keyId);
+        ret = WH_SERVER_NVM_LOCK(server);
+        if (ret == WH_ERROR_OK) {
+            /* Evict cached entry */
+            ret = wh_Server_KeystoreEvictKey(server, id);
+            if (ret == WH_ERROR_NOTFOUND) {
+                ret = WH_ERROR_OK;
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &id);
+            }
+            (void)WH_SERVER_NVM_UNLOCK(server);
+        }
+    }
+
+    resp.rc = ret;
+    (void)wh_MessageShe_TranslateDestroyKeyResponse(magic, &resp, resp_packet);
+    *out_resp_size = sizeof(resp);
+    return ret;
+}
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
+
+
+/* Build action-specific error response for SHE requests. Translates rc to
+ * SHE error codes, except for test key management actions which report rc
+ * directly. */
+static void _FormatSheErrorResponse(uint16_t magic, uint16_t action, int rc,
+                                    uint16_t* out_resp_size, void* resp_packet)
+{
+    int32_t sheRc = _TranslateSheReturnCode(rc);
+
+    switch (action) {
+        case WH_SHE_SET_UID: {
+            whMessageShe_SetUidResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateSetUidResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_SECURE_BOOT_INIT: {
+            whMessageShe_SecureBootInitResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateSecureBootInitResponse(
+                magic, &resp, resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_SECURE_BOOT_UPDATE: {
+            whMessageShe_SecureBootUpdateResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateSecureBootUpdateResponse(
+                magic, &resp, resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_SECURE_BOOT_FINISH: {
+            whMessageShe_SecureBootFinishResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateSecureBootFinishResponse(
+                magic, &resp, resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_GET_STATUS: {
+            whMessageShe_GetStatusResponse resp = {0};
+            resp.rc   = sheRc;
+            resp.sreg = 0;
+            (void)wh_MessageShe_TranslateGetStatusResponse(magic, &resp,
+                                                           resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_LOAD_KEY: {
+            whMessageShe_LoadKeyResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateLoadKeyResponse(magic, &resp,
+                                                         resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_LOAD_PLAIN_KEY: {
+            whMessageShe_LoadPlainKeyResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateLoadPlainKeyResponse(magic, &resp,
+                                                              resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_EXPORT_RAM_KEY: {
+            whMessageShe_ExportRamKeyResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateExportRamKeyResponse(magic, &resp,
+                                                              resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_INIT_RND: {
+            whMessageShe_InitRngResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateInitRngResponse(magic, &resp,
+                                                         resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_RND: {
+            whMessageShe_RndResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateRndResponse(magic, &resp,
+                                                     resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_EXTEND_SEED: {
+            whMessageShe_ExtendSeedResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateExtendSeedResponse(magic, &resp,
+                                                            resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_ENC_ECB: {
+            whMessageShe_EncEcbResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateEncEcbResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_ENC_CBC: {
+            whMessageShe_EncCbcResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateEncCbcResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_DEC_ECB: {
+            whMessageShe_DecEcbResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateDecEcbResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_DEC_CBC: {
+            whMessageShe_DecCbcResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateDecCbcResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_GEN_MAC: {
+            whMessageShe_GenMacResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateGenMacResponse(magic, &resp,
+                                                        resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_VERIFY_MAC: {
+            whMessageShe_VerifyMacResponse resp = {0};
+            resp.rc     = sheRc;
+            resp.status = 1; /* Verification failed */
+            (void)wh_MessageShe_TranslateVerifyMacResponse(magic, &resp,
+                                                           resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_GET_ID: {
+            whMessageShe_GetIdResponse resp = {0};
+            resp.rc = sheRc;
+            (void)wh_MessageShe_TranslateGetIdResponse(magic, &resp,
+                                                       resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+        /* The test key-management actions report wolfHSM error codes
+         * unchanged */
+        case WH_SHE_PRE_PROGRAM_KEY: {
+            whMessageShe_PreProgramKeyResponse resp = {0};
+            resp.rc                                 = rc;
+            (void)wh_MessageShe_TranslatePreProgramKeyResponse(
+                magic, &resp, resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+        case WH_SHE_DESTROY_KEY: {
+            whMessageShe_DestroyKeyResponse resp = {0};
+            resp.rc                              = rc;
+            (void)wh_MessageShe_TranslateDestroyKeyResponse(magic, &resp,
+                                                            resp_packet);
+            *out_resp_size = sizeof(resp);
+            break;
+        }
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
+    }
+}
 
 /* TODO: This is terrible, but without implementing a SHE sub-protocol like we
  * do for crypto layer, there is no way to return non-request specific error
@@ -1911,6 +2199,10 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
         /* Status read is always permitted per AUTOSAR spec, even before boot
          * or UID setup. The UID store is deliberately not consulted so a
          * failing backend still leaves status readable. */
+    }
+    else if (action == WH_SHE_PRE_PROGRAM_KEY || action == WH_SHE_DESTROY_KEY) {
+        /* Key pre-programming and destruction are provisioning-time
+         * operations: allowed before UID setup and secure boot. */
     }
     else {
         int provisioned = _UidIsProvisioned(server);
@@ -1949,157 +2241,23 @@ static int _ReportInvalidSheState(whServerContext* server, uint16_t magic,
 
     if (ret != 0) {
         /* State is invalid, create an error response based on the action */
-        switch (action) {
-            case WH_SHE_SET_UID: {
-                whMessageShe_SetUidResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateSetUidResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_INIT: {
-                whMessageShe_SecureBootInitResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateSecureBootInitResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_UPDATE: {
-                whMessageShe_SecureBootUpdateResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateSecureBootUpdateResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_SECURE_BOOT_FINISH: {
-                whMessageShe_SecureBootFinishResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateSecureBootFinishResponse(
-                    magic, &resp, resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_GET_STATUS: {
-                whMessageShe_GetStatusResponse resp;
-                resp.rc   = WH_SHE_ERC_SEQUENCE_ERROR;
-                resp.sreg = 0;
-                (void)wh_MessageShe_TranslateGetStatusResponse(magic, &resp,
-                                                               resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_LOAD_KEY: {
-                whMessageShe_LoadKeyResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateLoadKeyResponse(magic, &resp,
-                                                             resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_LOAD_PLAIN_KEY: {
-                whMessageShe_LoadPlainKeyResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateLoadPlainKeyResponse(magic, &resp,
-                                                                  resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_EXPORT_RAM_KEY: {
-                whMessageShe_ExportRamKeyResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateExportRamKeyResponse(magic, &resp,
-                                                                  resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_INIT_RND: {
-                whMessageShe_InitRngResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateInitRngResponse(magic, &resp,
-                                                             resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_RND: {
-                whMessageShe_RndResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateRndResponse(magic, &resp,
-                                                         resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_EXTEND_SEED: {
-                whMessageShe_ExtendSeedResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateExtendSeedResponse(magic, &resp,
-                                                                resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_ENC_ECB: {
-                whMessageShe_EncEcbResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateEncEcbResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_ENC_CBC: {
-                whMessageShe_EncCbcResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateEncCbcResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_DEC_ECB: {
-                whMessageShe_DecEcbResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateDecEcbResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_DEC_CBC: {
-                whMessageShe_DecCbcResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateDecCbcResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_GEN_MAC: {
-                whMessageShe_GenMacResponse resp;
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateGenMacResponse(magic, &resp,
-                                                            resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_VERIFY_MAC: {
-                whMessageShe_VerifyMacResponse resp;
-                resp.rc     = _TranslateSheReturnCode(ret);
-                resp.status = 1; /* Verification failed */
-                (void)wh_MessageShe_TranslateVerifyMacResponse(magic, &resp,
-                                                               resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-            case WH_SHE_GET_ID: {
-                whMessageShe_GetIdResponse resp = {0};
-                resp.rc = _TranslateSheReturnCode(ret);
-                (void)wh_MessageShe_TranslateGetIdResponse(magic, &resp,
-                                                           resp_packet);
-                *out_resp_size = sizeof(resp);
-                break;
-            }
-        }
+        _FormatSheErrorResponse(magic, action, ret, out_resp_size,
+                                resp_packet);
     }
 
     return ret;
+}
+
+uint16_t wh_Server_SheFormatErrorResponse(uint16_t magic, uint16_t action,
+                                          int rc, void* resp_packet)
+{
+    uint16_t resp_size = 0;
+
+    if (resp_packet == NULL) {
+        return 0;
+    }
+    _FormatSheErrorResponse(magic, action, rc, &resp_size, resp_packet);
+    return resp_size;
 }
 
 int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
@@ -2254,6 +2412,16 @@ int wh_Server_HandleSheRequest(whServerContext* server, uint16_t magic,
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
             break;
+#ifdef WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT
+        case WH_SHE_PRE_PROGRAM_KEY:
+            ret = _PreProgramKey(server, magic, req_size, req_packet,
+                                 out_resp_size, resp_packet);
+            break;
+        case WH_SHE_DESTROY_KEY:
+            ret = _DestroyKey(server, magic, req_size, req_packet,
+                              out_resp_size, resp_packet);
+            break;
+#endif /* WOLFHSM_CFG_SHE_ENABLE_TEST_KEY_MGMT */
         default:
             ret = WH_ERROR_BADARGS;
             break;

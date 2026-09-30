@@ -68,10 +68,18 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             (void)wh_MessageCounter_TranslateInitRequest(
                 magic, (whMessageCounter_InitRequest*)req_packet, &req);
 
-            /* write 0 to nvm with the supplied id and user_id */
-            meta->id = WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                     (uint16_t)server->comm->client_id,
-                                     (uint16_t)req.counterId);
+            ret = wh_KeyId_CheckClientObjectIdForCreate(req.counterId);
+            if (ret != WH_ERROR_OK) {
+                resp.rc = ret;
+                (void)wh_MessageCounter_TranslateInitResponse(
+                    magic, &resp, (whMessageCounter_InitResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
+            /* Write initial counter value to NVM */
+            meta->id = wh_KeyId_TranslateObjectIdFromClient(
+                WH_KEYTYPE_COUNTER, server->comm->client_id, req.counterId);
             /* use the label buffer to hold the counter value */
             *counter = req.counter;
 
@@ -109,15 +117,23 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             (void)wh_MessageCounter_TranslateIncrementRequest(
                 magic, (whMessageCounter_IncrementRequest*)req_packet, &req);
 
+            ret = wh_KeyId_CheckClientObjectId(req.counterId);
+            if (ret != WH_ERROR_OK) {
+                resp.rc = ret;
+                (void)wh_MessageCounter_TranslateIncrementResponse(
+                    magic, &resp,
+                    (whMessageCounter_IncrementResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
+            counterId = wh_KeyId_TranslateObjectIdFromClient(
+                WH_KEYTYPE_COUNTER, server->comm->client_id, req.counterId);
+
             ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
                 /* read the counter, stored in the metadata label */
-                ret = wh_Nvm_GetMetadata(
-                    server->nvm,
-                    WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                  (uint16_t)server->comm->client_id,
-                                  (uint16_t)req.counterId),
-                    meta);
+                ret = wh_Nvm_GetMetadata(server->nvm, counterId, meta);
 
                 /* increment and write the counter back */
                 if (ret == WH_ERROR_OK) {
@@ -164,15 +180,22 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             (void)wh_MessageCounter_TranslateReadRequest(
                 magic, (whMessageCounter_ReadRequest*)req_packet, &req);
 
+            ret = wh_KeyId_CheckClientObjectId(req.counterId);
+            if (ret != WH_ERROR_OK) {
+                resp.rc = ret;
+                (void)wh_MessageCounter_TranslateReadResponse(
+                    magic, &resp, (whMessageCounter_ReadResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
+            counterId = wh_KeyId_TranslateObjectIdFromClient(
+                WH_KEYTYPE_COUNTER, server->comm->client_id, req.counterId);
+
             ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {
                 /* read the counter, stored in the metadata label */
-                ret = wh_Nvm_GetMetadata(
-                    server->nvm,
-                    WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                  (uint16_t)server->comm->client_id,
-                                  (uint16_t)req.counterId),
-                    meta);
+                ret = wh_Nvm_GetMetadata(server->nvm, counterId, meta);
 
                 /* return counter to the caller */
                 if (ret == WH_ERROR_OK) {
@@ -206,9 +229,18 @@ int wh_Server_HandleCounter(whServerContext* server, uint16_t magic,
             (void)wh_MessageCounter_TranslateDestroyRequest(
                 magic, (whMessageCounter_DestroyRequest*)req_packet, &req);
 
-            counterId = WH_MAKE_KEYID(WH_KEYTYPE_COUNTER,
-                                      (uint16_t)server->comm->client_id,
-                                      (uint16_t)req.counterId);
+            ret = wh_KeyId_CheckClientObjectId(req.counterId);
+            if (ret != WH_ERROR_OK) {
+                resp.rc = ret;
+                (void)wh_MessageCounter_TranslateDestroyResponse(
+                    magic, &resp,
+                    (whMessageCounter_DestroyResponse*)resp_packet);
+                *out_resp_size = sizeof(resp);
+                break;
+            }
+
+            counterId = wh_KeyId_TranslateObjectIdFromClient(
+                WH_KEYTYPE_COUNTER, server->comm->client_id, req.counterId);
 
             ret = WH_SERVER_NVM_LOCK(server);
             if (ret == WH_ERROR_OK) {

@@ -65,7 +65,10 @@ static int _whTest_CertReadTrustedOversized(whServerContext* server)
     /* Static filler: an automatic copy would double this stack frame on the
      * embedded targets these suites also run on */
     static uint8_t oversized_cert[WH_TEST_CERT_STAGED_LEN + 1];
-    const whNvmId  certId        = 20;
+    /* Plant the cert in the client's cert namespace. */
+    const whNvmId reqId  = 20;
+    const whNvmId certId =
+        WH_MAKE_KEYID(WH_KEYTYPE_CERT, server->comm->client_id, reqId);
     const uint32_t oversized_len = (uint32_t)WH_TEST_CERT_STAGED_LEN + 1;
     uint16_t       resp_size     = 0;
     int            handler_rc;
@@ -79,7 +82,7 @@ static int _whTest_CertReadTrustedOversized(whServerContext* server)
 
     /* Poison makes bytes the handler never staged detectable */
     memset(respPkt.bytes, 0xA5, sizeof(respPkt.bytes));
-    req->id = certId;
+    req->id = reqId;
 
     /* The server transmits regardless of this return, so out_resp_size is
      * what actually reaches the client */
@@ -105,7 +108,7 @@ static int _whTest_CertReadTrustedOversized(whServerContext* server)
         oversized_cert, oversized_len - 1));
 
     memset(respPkt.bytes, 0xA5, sizeof(respPkt.bytes));
-    req->id = certId;
+    req->id = reqId;
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleCertRequest(
         server, WH_COMM_MAGIC_NATIVE, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0,
@@ -131,16 +134,18 @@ static int _whTest_CertReadTrustedDenied(whServerContext* server)
         whMessageCert_ReadTrustedResponse resp;
         uint8_t                           bytes[WOLFHSM_CFG_COMM_DATA_LEN];
     } respPkt;
-    const whNvmId certId    = 21;
-    uint16_t      resp_size = 0;
-    int           handler_rc;
+    const whNvmId reqId  = 21;
+    const whNvmId certId =
+        WH_MAKE_KEYID(WH_KEYTYPE_CERT, server->comm->client_id, reqId);
+    uint16_t resp_size = 0;
+    int      handler_rc;
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
         server, certId, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONEXPORTABLE, NULL, 0,
         ROOT_A_CERT, ROOT_A_CERT_len));
 
     memset(respPkt.bytes, 0xA5, sizeof(respPkt.bytes));
-    req->id = certId;
+    req->id = reqId;
 
     handler_rc = wh_Server_HandleCertRequest(
         server, WH_COMM_MAGIC_NATIVE, WH_MESSAGE_CERT_ACTION_READTRUSTED, 0,
@@ -158,12 +163,19 @@ static int _whTest_CertReadTrustedDenied(whServerContext* server)
 int whTest_CertReadTrusted(whServerContext* ctx)
 {
     whServerContext* server = (whServerContext*)ctx;
+    int              rc;
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CertReadTrustedOversized(server));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CertReadTrustedDenied(server));
 
-    return 0;
+    /* Set client ID for handler testing */
+    server->comm->client_id = 1;
+    rc = _whTest_CertReadTrustedOversized(server);
+    if (rc == WH_ERROR_OK) {
+        rc = _whTest_CertReadTrustedDenied(server);
+    }
+    server->comm->client_id = 0;
+
+    return rc;
 }
 
 

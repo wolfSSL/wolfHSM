@@ -107,17 +107,7 @@ enum {
  * destroy key API since SHE keys are supposed to be fixed hardware keys */
 static int _destroySheKey(whClientContext* client, whNvmId clientSheKeyId)
 {
-    int rc = 0;
-    int32_t serverRc = 0;
-
-    whNvmId id = WH_SHE_MAKE_KEYID(client->comm->client_id, clientSheKeyId);
-
-    rc = wh_Client_NvmDestroyObjects(client, 1, &id, &serverRc);
-    if (rc == WH_ERROR_OK) {
-        rc = serverRc;
-    }
-
-    return rc;
+    return wh_Client_SheDestroyKey(client, clientSheKeyId);
 }
 
 int whTest_SheClientConfig(whClientConfig* config)
@@ -255,12 +245,15 @@ int whTest_SheClientConfig(whClientConfig* config)
         goto exit;
     }
     /* store cmac key */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, key, sizeof(key))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                          key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* store cmac digest */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, bootMacDigest, sizeof(bootMacDigest))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
+                                          bootMacDigest,
+                                          sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -289,12 +282,14 @@ int whTest_SheClientConfig(whClientConfig* config)
     }
     WH_TEST_PRINT("SHE secure boot SUCCESS\n");
     /* load the secret key using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey, sizeof(secretKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                          secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
     /* load the prng seed using pre program */
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, prngSeed, sizeof(prngSeed))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_PRNG_SEED_ID, 0, 0,
+                                          prngSeed, sizeof(prngSeed))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit;
     }
@@ -423,9 +418,9 @@ int whTest_SheClientConfig(whClientConfig* config)
          * to the M2 layout overlap between flags and count). Then
          * re-load the slot with an all-zero UID; the server must
          * accept it because the stored flags contain WILDCARD. */
-        if ((ret = wh_Client_ShePreProgramKey(client,
-                SHE_WILDCARD_KEY_ID, WH_SHE_FLAG_WILDCARD, vectorRawKey,
-                sizeof(vectorRawKey))) != 0) {
+        if ((ret = wh_Client_ShePreProgramKey(
+                 client, SHE_WILDCARD_KEY_ID, 0, WH_SHE_FLAG_WILDCARD,
+                 vectorRawKey, sizeof(vectorRawKey))) != 0) {
             WH_ERROR_PRINT("Failed to preload wildcard key %d\n", ret);
             goto exit;
         }
@@ -745,9 +740,7 @@ int whTest_SheClientConfig(whClientConfig* config)
         uint8_t       ecbIn[WH_SHE_KEY_SZ];
         uint8_t       ecbOut[WH_SHE_KEY_SZ];
         uint8_t       ecbBack[WH_SHE_KEY_SZ];
-        uint16_t      outId    = 0;
-        int32_t       serverRc = 0;
-        uint8_t       ctrLabel[WH_NVM_LABEL_LEN];
+        uint16_t      outId = 0;
 
         /* Wrap-export the cached RAM key (slot 14) by id; the blob must keep
          * TYPE=SHE and be the expected size. */
@@ -898,13 +891,8 @@ int whTest_SheClientConfig(whClientConfig* config)
         /* Counter guard on the SHE unwrap-and-cache path: seed an NVM SHE
          * slot with counter=5, then check a lower-counter prime is rejected
          * and an equal-counter prime is accepted. */
-        wh_She_Meta2Label(5, 0, ctrLabel);
-        ret = wh_Client_NvmAddObject(
-            client, WH_SHE_MAKE_KEYID(client->comm->client_id, SHE_CTR_SLOT), 0,
-            0, sizeof(ctrLabel), ctrLabel, sizeof(sheKey), sheKey, &serverRc);
-        if (ret == 0) {
-            ret = serverRc;
-        }
+        ret = wh_Client_ShePreProgramKey(client, SHE_CTR_SLOT, 5, 0, sheKey,
+                                         sizeof(sheKey));
         if (ret != 0) {
             WH_ERROR_PRINT("SHE interop: seed counter slot failed %d\n", ret);
             goto exit;
@@ -1234,12 +1222,12 @@ static int whTest_SheClientConfigBoundarySecureBoot(whClientConfig* config)
         goto exit_boundary;
     }
 
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           key, sizeof(key))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
         goto exit_boundary;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
                                           bootMacDigest,
                                           sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT("Failed to wh_Client_ShePreProgramKey %d\n", ret);
@@ -1393,16 +1381,16 @@ static int whTest_SheWriteProtect(whClientConfig* config)
     }
 
     /* pre-program boot MAC key and digest for secure boot */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_BOOT_MAC_KEY_ID, 0,
-             bootMacKey, sizeof(bootMacKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
+                                          bootMacKey, sizeof(bootMacKey))) !=
+        0) {
         WH_ERROR_PRINT(
             "Failed to pre-program boot MAC key %d\n", ret);
         goto exit_wp;
     }
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_BOOT_MAC, 0,
-             bootMacDigest, sizeof(bootMacDigest))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0,
+                                          bootMacDigest,
+                                          sizeof(bootMacDigest))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program boot MAC digest %d\n",
             ret);
@@ -1426,19 +1414,17 @@ static int whTest_SheWriteProtect(whClientConfig* config)
     }
 
     /* pre-program the secret key as auth key */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WH_SHE_SECRET_KEY_ID, 0,
-             secretKey, sizeof(secretKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                          secretKey, sizeof(secretKey))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program secret key %d\n", ret);
         goto exit_wp;
     }
 
     /* pre-program the target key WITH write protect flag */
-    if ((ret = wh_Client_ShePreProgramKey(
-             client, WP_TEST_KEY_ID,
-             WH_SHE_FLAG_WRITE_PROTECT,
-             rawKey, sizeof(rawKey))) != 0) {
+    if ((ret = wh_Client_ShePreProgramKey(client, WP_TEST_KEY_ID, 0,
+                                          WH_SHE_FLAG_WRITE_PROTECT, rawKey,
+                                          sizeof(rawKey))) != 0) {
         WH_ERROR_PRINT(
             "Failed to pre-program write-protected key %d\n",
             ret);
@@ -1598,6 +1584,114 @@ static void* _whServerTask(void* cf)
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
     defined(WOLFHSM_CFG_ENABLE_SERVER)
+/* Verify SHE requests are rejected before COMM INIT */
+static int whTest_ShePreInitKeyMgmtRejected(whClientConfig* config)
+{
+    int             ret                = 0;
+    whClientContext client[1]          = {0};
+    uint8_t         key[WH_SHE_KEY_SZ] = {0};
+    uint32_t        outClientId        = 0;
+    uint32_t        outServerId        = 0;
+
+    if (config == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, config));
+
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, key,
+                                     sizeof(key));
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("pre-init ShePreProgramKey: expected ACCESS, got %d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit_preinit;
+    }
+    ret = wh_Client_SheDestroyKey(client, WH_SHE_BOOT_MAC_KEY_ID);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("pre-init SheDestroyKey: expected ACCESS, got %d\n",
+                       ret);
+        ret = WH_ERROR_ABORTED;
+        goto exit_preinit;
+    }
+
+    /* Verify SET_UID and GET_ID are also rejected before COMM INIT */
+    {
+        uint8_t uid[WH_SHE_UID_SZ]       = {0};
+        uint8_t challenge[WH_SHE_KEY_SZ] = {0};
+        uint8_t outUid[WH_SHE_UID_SZ]    = {0};
+        uint8_t sreg                     = 0;
+        uint8_t mac[WH_SHE_KEY_SZ]       = {0};
+
+        ret = wh_Client_SheSetUid(client, uid, sizeof(uid));
+        if (ret != WH_SHE_ERC_GENERAL_ERROR) {
+            WH_ERROR_PRINT(
+                "pre-init SheSetUid: expected GENERAL_ERROR, got %d\n", ret);
+            ret = WH_ERROR_ABORTED;
+            goto exit_preinit;
+        }
+        ret = wh_Client_SheGetId(client, challenge, sizeof(challenge), outUid,
+                                 &sreg, mac);
+        if (ret != WH_SHE_ERC_GENERAL_ERROR) {
+            WH_ERROR_PRINT(
+                "pre-init SheGetId: expected GENERAL_ERROR, got %d\n", ret);
+            ret = WH_ERROR_ABORTED;
+            goto exit_preinit;
+        }
+    }
+
+    /* After COMM INIT all of them must succeed */
+    ret = wh_Client_CommInit(client, &outClientId, &outServerId);
+    if (ret != 0) {
+        goto exit_preinit;
+    }
+    {
+        uint8_t uid[WH_SHE_UID_SZ] = {0};
+
+        ret = wh_Client_SheSetUid(client, uid, sizeof(uid));
+        if (ret != 0) {
+            WH_ERROR_PRINT("post-init SheSetUid failed %d\n", ret);
+            goto exit_preinit;
+        }
+    }
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0, key,
+                                     sizeof(key));
+    if (ret != 0) {
+        WH_ERROR_PRINT("post-init ShePreProgramKey failed %d\n", ret);
+        goto exit_preinit;
+    }
+    ret = wh_Client_SheDestroyKey(client, WH_SHE_BOOT_MAC_KEY_ID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("post-init SheDestroyKey failed %d\n", ret);
+        goto exit_preinit;
+    }
+    {
+        uint8_t challenge[WH_SHE_KEY_SZ] = {0};
+        uint8_t outUid[WH_SHE_UID_SZ]    = {0};
+        uint8_t sreg                     = 0;
+        uint8_t mac[WH_SHE_KEY_SZ]       = {0};
+
+        ret = wh_Client_SheGetId(client, challenge, sizeof(challenge), outUid,
+                                 &sreg, mac);
+        if (ret != 0) {
+            WH_ERROR_PRINT("post-init SheGetId failed %d\n", ret);
+        }
+    }
+
+exit_preinit:
+    /* Tell server to close */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommClose(client));
+
+    if (ret == 0) {
+        WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+    }
+    else {
+        wh_Client_Cleanup(client);
+    }
+
+    return ret;
+}
+
 static void _whClientServerThreadTest(whClientConfig*   c_conf,
                                       whServerConfig*   s_conf,
                                       whTestSheClientFn clientFn)
@@ -1911,6 +2005,9 @@ static int wh_She_TestReqSizeChecking(void)
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, s_conf->devId));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    /* Set mock client ID for direct handler invocation */
+    server->comm->client_id = 1;
 
     /*
      * Set SHE state so _ReportInvalidSheState allows requests through.
@@ -2583,6 +2680,9 @@ static int wh_She_TestGetId(void)
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
     WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
 
+    /* Set mock client ID for direct handler invocation */
+    server->comm->client_id = 1;
+
     /* UID is set (GET_ID returns it), but NO MASTER_ECU_KEY is ever loaded, so
      * the identity MAC must fall back to an all-zero key. */
     server->she->uidSet = 1;
@@ -2836,6 +2936,175 @@ static int wh_She_TestPrngSeedPersistence(void)
     return ret;
 }
 
+/* Verify LoadKey rejects slots whose NVM objects are not exactly WH_SHE_KEY_SZ
+ */
+static int wh_She_TestLoadKeyOversizedSlot(void)
+{
+    int      ret       = 0;
+    uint16_t resp_size = 0;
+
+    uint8_t req_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    uint8_t resp_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+
+    uint8_t                     reqBuf[BUFFER_SIZE]  = {0};
+    uint8_t                     respBuf[BUFFER_SIZE] = {0};
+    whTransportMemConfig        tmcf[1]              = {{
+                            .req       = (whTransportMemCsr*)reqBuf,
+                            .req_size  = sizeof(reqBuf),
+                            .resp      = (whTransportMemCsr*)respBuf,
+                            .resp_size = sizeof(respBuf),
+    }};
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 126,
+    }};
+
+    static uint8_t   memory[FLASH_RAM_SIZE];
+    whFlashRamsimCtx fc[1]                  = {0};
+    whFlashRamsimCfg fc_conf[1]             = {{0}};
+    const whFlashCb  fcb[1]                 = {WH_FLASH_RAMSIM_CB};
+
+    whNvmFlashConfig  nf_conf[1] = {{
+         .cb      = fcb,
+         .context = fc,
+         .config  = fc_conf,
+    }};
+    whNvmFlashContext nfc[1]     = {0};
+    whNvmCb           nfcb[1]    = {WH_NVM_FLASH_CB};
+    whNvmConfig       n_conf[1]  = {{
+               .cb      = nfcb,
+               .context = nfc,
+               .config  = nf_conf,
+    }};
+    whNvmContext      nvm[1]     = {{0}};
+
+    whServerCryptoContext crypto[1] = {0};
+    whServerSheContext    she[1];
+    whServerContext       server[1] = {0};
+
+    whServerConfig s_conf[1] = {{
+        .comm_config = cs_conf,
+        .nvm         = nvm,
+        .crypto      = crypto,
+        .she         = she,
+        .devId       = INVALID_DEVID,
+    }};
+
+    const uint8_t SLOT_AUTH                = 8;
+    const uint8_t SLOT_TARGET              = 9;
+    uint8_t       uid[WH_SHE_UID_SZ]       = {0};
+    uint8_t       secretKey[WH_SHE_KEY_SZ] = {
+        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t       rawKey[WH_SHE_KEY_SZ] = {
+        0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08,
+        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00};
+    uint8_t       oversize[WH_SHE_KEY_SZ * 2];
+    uint8_t       m4[WH_SHE_M4_SZ];
+    uint8_t       m5[WH_SHE_M5_SZ];
+    whNvmMetadata meta  = {0};
+    whNvmMetadata check = {0};
+    uint32_t      count = 0;
+    uint32_t      flags = 0;
+    whNvmId       secretId;
+    whNvmId       authId;
+    whNvmId       targetId;
+    whMessageShe_LoadKeyRequest* req =
+        (whMessageShe_LoadKeyRequest*)req_packet;
+    whMessageShe_LoadKeyResponse* resp =
+        (whMessageShe_LoadKeyResponse*)resp_packet;
+
+    memset(she, 0, sizeof(she));
+    memset(memory, 0, sizeof(memory));
+    memset(oversize, 0x5A, sizeof(oversize));
+
+    fc_conf->size       = FLASH_RAM_SIZE;
+    fc_conf->sectorSize = FLASH_SECTOR_SIZE;
+    fc_conf->pageSize   = FLASH_PAGE_SIZE;
+    fc_conf->erasedByte = ~(uint8_t)0;
+    fc_conf->memory     = memory;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
+    WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(crypto->rng, NULL, s_conf->devId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+
+    /* Set mock client ID and state for direct handler invocation */
+    server->comm->client_id = 1;
+    server->she->uidSet     = 1;
+    server->she->sbState    = TEST_SHE_SB_STATE_SUCCESS;
+
+    secretId = WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_SECRET_KEY_ID);
+    authId   = WH_SHE_MAKE_KEYID(server->comm->client_id, SLOT_AUTH);
+    targetId = WH_SHE_MAKE_KEYID(server->comm->client_id, SLOT_TARGET);
+
+    meta.id     = secretId;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = WH_SHE_KEY_SZ;
+    wh_She_Meta2Label(0, 0, meta.label);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, WH_SHE_KEY_SZ, secretKey));
+
+    meta.id  = authId;
+    meta.len = sizeof(oversize);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(oversize), oversize));
+
+    meta.id = targetId;
+    wh_She_Meta2Label(0, WH_SHE_FLAG_WRITE_PROTECT, meta.label);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &meta, sizeof(oversize), oversize));
+
+    /* Test oversized auth key slot */
+    WH_TEST_RETURN_ON_FAIL(wh_She_GenerateLoadableKey(
+        SLOT_AUTH, SLOT_AUTH, 1, 0, uid, rawKey, oversize, req->messageOne,
+        req->messageTwo, req->messageThree, m4, m5));
+    memset(resp, 0, sizeof(*resp));
+    ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                                     WH_SHE_LOAD_KEY, sizeof(*req), req_packet,
+                                     &resp_size, resp_packet);
+    WH_TEST_ASSERT_RETURN(ret == 0);
+    WH_TEST_ASSERT_RETURN(resp_size == sizeof(*resp));
+    WH_TEST_ASSERT_RETURN(resp->rc == WH_SHE_ERC_KEY_INVALID);
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server->nvm, authId, &check) ==
+                          WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(oversize));
+    WH_TEST_PRINT("SHE oversized auth key SUCCESS\n");
+
+    /* Test oversized target key slot */
+    WH_TEST_RETURN_ON_FAIL(wh_She_GenerateLoadableKey(
+        SLOT_TARGET, WH_SHE_SECRET_KEY_ID, 1, 0, uid, rawKey, secretKey,
+        req->messageOne, req->messageTwo, req->messageThree, m4, m5));
+    memset(resp, 0, sizeof(*resp));
+    ret = wh_Server_HandleSheRequest(server, WH_COMM_MAGIC_NATIVE,
+                                     WH_SHE_LOAD_KEY, sizeof(*req), req_packet,
+                                     &resp_size, resp_packet);
+    WH_TEST_ASSERT_RETURN(ret == 0);
+    WH_TEST_ASSERT_RETURN(resp_size == sizeof(*resp));
+    WH_TEST_ASSERT_RETURN(resp->rc == WH_SHE_ERC_KEY_INVALID);
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server->nvm, targetId, &check) ==
+                          WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(check.len == sizeof(oversize));
+    wh_She_Label2Meta(check.label, &count, &flags);
+    WH_TEST_ASSERT_RETURN((flags & WH_SHE_FLAG_WRITE_PROTECT) != 0);
+    WH_TEST_PRINT("SHE oversized target key SUCCESS\n");
+
+    WH_TEST_PRINT("SHE LoadKey oversized slot test SUCCESS\n");
+
+    wh_Server_Cleanup(server);
+    wh_Nvm_Cleanup(nvm);
+    wc_FreeRng(crypto->rng);
+    wolfCrypt_Cleanup();
+
+    return 0;
+}
+
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_TEST_POSIX) && defined(WOLFHSM_CFG_ENABLE_CLIENT) && \
@@ -2908,12 +3177,12 @@ static int _SheInteropSecureBoot(whClientContext* client)
         return ret;
     }
 
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC_KEY_ID, 0, 0,
                                           bootMacKey, sizeof(bootMacKey))) !=
         0) {
         return ret;
     }
-    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, digest,
+    if ((ret = wh_Client_ShePreProgramKey(client, WH_SHE_BOOT_MAC, 0, 0, digest,
                                           sizeof(digest))) != 0) {
         return ret;
     }
@@ -2977,8 +3246,8 @@ static int _SheInteropProvision(whClientConfig* config)
 
     /* Provision the secret key, then load the master ECU key (auth=secret) and
      * the target key (auth=master ECU) using offline-generated M1/M2/M3. */
-    ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, secretKey,
-                                     sizeof(secretKey));
+    ret = wh_Client_ShePreProgramKey(client, WH_SHE_SECRET_KEY_ID, 0, 0,
+                                     secretKey, sizeof(secretKey));
     if (ret != 0) {
         goto exit;
     }
@@ -3088,6 +3357,7 @@ exit:
 
 /* Drive the two sessions back-to-back. Each MemThreadTest call uses a fresh
  * server + NVM, modeling the power cycle between provision and restore. */
+
 static int wh_She_TestWrappedInterop(void)
 {
     int ret;
@@ -3117,6 +3387,7 @@ int whTest_She(void)
     WH_TEST_RETURN_ON_FAIL(wh_She_TestGetId());
     WH_TEST_PRINT("Testing SHE: PRNG seed persistence...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestPrngSeedPersistence());
+    WH_TEST_RETURN_ON_FAIL(wh_She_TestLoadKeyOversizedSlot());
     WH_TEST_PRINT("Testing SHE: (pthread) mem core flow...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheClientConfig));
@@ -3126,6 +3397,9 @@ int whTest_She(void)
     WH_TEST_PRINT("Testing SHE: (pthread) mem write protect...\n");
     WH_TEST_RETURN_ON_FAIL(
         wh_ClientServer_MemThreadTest(whTest_SheWriteProtect));
+    WH_TEST_PRINT("Testing SHE: (pthread) mem pre-init key mgmt gate...\n");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_ClientServer_MemThreadTest(whTest_ShePreInitKeyMgmtRejected));
 #if defined(WOLFHSM_CFG_KEYWRAP) && defined(HAVE_AESGCM)
     WH_TEST_PRINT("Testing SHE: (pthread) wrapped-key reboot interop...\n");
     WH_TEST_RETURN_ON_FAIL(wh_She_TestWrappedInterop());
