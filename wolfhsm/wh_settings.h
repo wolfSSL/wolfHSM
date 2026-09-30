@@ -169,6 +169,10 @@
  *  POD.
  *      Default: 8
  *
+ *  WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT - Number of trusted-certificate
+ *  verification results held by the optional verification cache.
+ *      Default: 16
+ *
  *  WOLFHSM_CFG_IS_TEST_SERVER - If defined, the client-side unit tests assume
  * the server will be running custom server-side test instrumentation meant to
  * test additional edge cases that could otherwise not be triggered when running
@@ -353,6 +357,11 @@
 #define WOLFHSM_CFG_NVM_OBJECT_COUNT 32
 #endif
 
+/* Smallest programmable flash unit in bytes */
+#ifndef WOLFHSM_CFG_FLASH_UNIT_SIZE
+#define WOLFHSM_CFG_FLASH_UNIT_SIZE 8
+#endif
+
 /* Number of RAM keys */
 #ifndef WOLFHSM_CFG_SERVER_KEYCACHE_COUNT
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
@@ -432,6 +441,11 @@
  * a fixed-size POD. Default 8; overridable at build time. */
 #ifndef WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS
 #define WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS 8
+#endif
+
+/* Number of trusted-certificate verification cache entries */
+#ifndef WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT
+#define WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT 16
 #endif
 
 /*-----------------------------------------------------------------------------

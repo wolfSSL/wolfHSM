@@ -46,9 +46,9 @@
 #include "port/posix/posix_flash_file.h"
 #endif
 
-#define FLASH_RAM_SIZE (1024 * 1024) /* 1MB */
-#define FLASH_SECTOR_SIZE (4096)     /* 4KB */
 #define FLASH_PAGE_SIZE WHFU_BYTES_PER_UNIT
+#define FLASH_SECTOR_SIZE (512 * FLASH_PAGE_SIZE)
+#define FLASH_RAM_SIZE (256 * FLASH_SECTOR_SIZE)
 
 #if defined(WOLFHSM_CFG_DEBUG_VERBOSE)
 static void _HexDump(const char* p, size_t data_len)
@@ -518,12 +518,12 @@ int whTest_NvmFlash_RamSim(void)
     uint8_t memory[FLASH_RAM_SIZE] = {0};
     const whFlashCb  myCb[1]          = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx myHalFlashCtx[1] = {0};
-    whFlashRamsimCfg myHalFlashCfg[1] = {{
-        .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
-        .sectorSize = FLASH_SECTOR_SIZE, /* 4KB  Sector Size */
-        .pageSize   = FLASH_PAGE_SIZE,
-        .erasedByte = (uint8_t)0,
-        .memory     = memory,
+    whFlashRamsimCfg myHalFlashCfg[1]       = {{
+              .size       = FLASH_RAM_SIZE,
+              .sectorSize = FLASH_SECTOR_SIZE,
+              .pageSize   = FLASH_PAGE_SIZE,
+              .erasedByte = (uint8_t)0,
+              .memory     = memory,
     }};
 
     WH_TEST_RETURN_ON_FAIL(whTest_Flash(myCb, myHalFlashCtx, myHalFlashCfg));
@@ -541,6 +541,7 @@ int whTest_NvmFlash_RamSim(void)
         whTest_NvmFlashCfg(&myNvmCfg, nvmFlashCtx, nvmFlashCb));
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    myHalFlashCfg[0].sectorSize  = WH_NVM_FLASH_LOG_PARTITION_SIZE;
     whNvmFlashLogConfig myLogCfg = {
         .flash_cb  = myCb,
         .flash_ctx = myHalFlashCtx,
@@ -751,8 +752,8 @@ simulateFailureAndRecover(int failAfter, int* dataSize,
     const whFlashCb        flashCb[1]  = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx       flashCtx[1] = {0};
     whFlashRamsimCfg       flashCfg[1] = {{
-              .size       = FLASH_RAM_SIZE,    /* 1MB  Flash */
-              .sectorSize = FLASH_SECTOR_SIZE, /* 4KB  Sector Size */
+              .size       = FLASH_RAM_SIZE,
+              .sectorSize = FLASH_SECTOR_SIZE,
               .pageSize   = FLASH_PAGE_SIZE,
               .erasedByte = (uint8_t)0,
               .memory     = memory,

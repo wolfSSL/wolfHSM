@@ -43,10 +43,6 @@
 #include "wolfhsm/wh_utils.h"
 
 /* Flash unit size in bytes. Must be a power of two and at least 8 bytes. */
-#ifndef WOLFHSM_CFG_FLASH_UNIT_SIZE
-    #define WOLFHSM_CFG_FLASH_UNIT_SIZE 8
-#endif
-
 #if (WOLFHSM_CFG_FLASH_UNIT_SIZE < 8) || \
     ((WOLFHSM_CFG_FLASH_UNIT_SIZE & \
       (WOLFHSM_CFG_FLASH_UNIT_SIZE - 1)) != 0)
