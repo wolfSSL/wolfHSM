@@ -74,10 +74,6 @@
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
 
-#ifndef WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT
-#define WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT 16
-#endif
-
 #define WH_CERT_VERIFY_CACHE_HASH_LEN 32 /* SHA-256 digest size */
 
 typedef struct whCertVerifyCacheSlot {

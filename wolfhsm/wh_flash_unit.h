@@ -36,20 +36,49 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "wolfhsm/wh_flash.h"
+#include "wolfhsm/wh_utils.h"
 
-/* Smallest programmable unit/size.  Alignment as well */
-typedef uint64_t whFlashUnit;
-
-#define WHFU_BYTES_PER_UNIT sizeof(whFlashUnit)
+/* Flash unit size in bytes. Must be a power of two and at least 8 bytes. */
+#if (WOLFHSM_CFG_FLASH_UNIT_SIZE < 8) || \
+    ((WOLFHSM_CFG_FLASH_UNIT_SIZE & \
+      (WOLFHSM_CFG_FLASH_UNIT_SIZE - 1)) != 0)
+    #error "WOLFHSM_CFG_FLASH_UNIT_SIZE must be a power of two at least 8"
+#endif
 
 /* Helper to round up at compile time */
-#define WHFU_DIV_ROUND_UP(_n, _d) (((_n)/(_d)) + !!((_n)%(_d)))
+#define WHFU_DIV_ROUND_UP(_n, _d) (((_n) / (_d)) + !!((_n) % (_d)))
 
-#define WHFU_BYTES2UNITS(_b) (((_b)/WHFU_BYTES_PER_UNIT) + \
-                              !!((_b)%WHFU_BYTES_PER_UNIT))
+#define WHFU_U64_PER_UNIT WHFU_DIV_ROUND_UP(WOLFHSM_CFG_FLASH_UNIT_SIZE, 8)
+#define WHFU_U32_PER_UNIT WHFU_DIV_ROUND_UP(WOLFHSM_CFG_FLASH_UNIT_SIZE, 4)
+#define WHFU_U16_PER_UNIT WHFU_DIV_ROUND_UP(WOLFHSM_CFG_FLASH_UNIT_SIZE, 2)
+
+typedef union whFlashUnit_t {
+    WH_ALIGN8 uint64_t u64[WHFU_U64_PER_UNIT];
+    uint32_t u32[WHFU_U32_PER_UNIT];
+    uint16_t u16[WHFU_U16_PER_UNIT];
+} whFlashUnit;
+
+#define WHFU_BYTES_PER_UNIT sizeof(whFlashUnit)
+/* Reject unsupported layouts at compile time. */
+
+struct whFlashUnitAlignmentCheck {
+    uint8_t     byte;
+    whFlashUnit unit;
+};
+
+WH_UTILS_STATIC_ASSERT(sizeof(whFlashUnit) == WOLFHSM_CFG_FLASH_UNIT_SIZE,
+                       "whFlashUnit size mismatch");
+WH_UTILS_STATIC_ASSERT(
+    (offsetof(struct whFlashUnitAlignmentCheck, unit) >= 8) &&
+        ((offsetof(struct whFlashUnitAlignmentCheck, unit) % 8) == 0),
+    "whFlashUnit must be aligned to 8 bytes");
+
+#define WHFU_BYTES2UNITS(_b) (((_b) / WHFU_BYTES_PER_UNIT) + \
+                              !!((_b) % WHFU_BYTES_PER_UNIT))
 typedef union {
     whFlashUnit unit;
     uint8_t bytes[WHFU_BYTES_PER_UNIT];

@@ -101,6 +101,10 @@ ifeq ($(NVM_FLASH_CRC),1)
 	CFLAGS += -DWOLFHSM_CFG_NVM_FLASH_CRC16
 endif
 
+ifneq ($(FLASH_UNIT_SIZE),)
+	CFLAGS += -DWOLFHSM_CFG_FLASH_UNIT_SIZE=$(FLASH_UNIT_SIZE)
+endif
+
 ifeq ($(ASAN), 1)
 	CFLAGS_EXTRA += -fsanitize=address
 endif
@@ -134,7 +138,10 @@ test-invalid: $(OUT) | test-gen
 # Run the test suite, which requires first generating the test NVM image
 check: test
 test: $(OUT) test-gen test-invalid
-	$(MAKE) -C test/ CFLAGS_EXTRA="-DFLASH_ERASED_BYTE=0x00 $(CFLAGS_EXTRA)" WOLFSSL_DIR=$$(realpath $(WOLFSSL_DIR))
+	$(MAKE) -C test/ \
+		CFLAGS_EXTRA="-DFLASH_ERASED_BYTE=0x00 $(CFLAGS_EXTRA)" \
+		FLASH_UNIT_SIZE=$(FLASH_UNIT_SIZE) \
+		WOLFSSL_DIR=$$(realpath $(WOLFSSL_DIR))
 	cd test && ./test_whnvmtool
 
 analyze: $(SRC)

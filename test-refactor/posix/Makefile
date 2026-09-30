@@ -117,6 +117,10 @@ ifeq ($(NVM_FLASH_CRC),1)
     DEF += -DWOLFHSM_CFG_NVM_FLASH_CRC16
 endif
 
+ifneq ($(FLASH_UNIT_SIZE),)
+    DEF += -DWOLFHSM_CFG_FLASH_UNIT_SIZE=$(FLASH_UNIT_SIZE)
+endif
+
 # Build LMS/XMSS in verify-only mode (omits private-key, sign, and keygen
 # paths). May be combined to exercise the mixed (one verify-only) case.
 ifeq ($(LMS_VERIFY_ONLY),1)

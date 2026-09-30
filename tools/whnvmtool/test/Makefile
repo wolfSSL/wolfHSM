@@ -68,6 +68,10 @@ ifeq ($(NVM_FLASH_CRC),1)
 	CFLAGS += -DWOLFHSM_CFG_NVM_FLASH_CRC16
 endif
 
+ifneq ($(FLASH_UNIT_SIZE),)
+	CFLAGS += -DWOLFHSM_CFG_FLASH_UNIT_SIZE=$(FLASH_UNIT_SIZE)
+endif
+
 # Targets
 all: $(OUT)
 

@@ -81,6 +81,11 @@ jobs:
     - name: Build and test NVM flash CRC ASAN
       run: cd test && make clean && make -j NVM_FLASH_CRC=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test with 16-byte flash programming units
+    - name: Build and test 16-byte NVM flash units
+      if: matrix.group == 'base'
+      run: cd test && make clean && make -j FLASH_UNIT_SIZE=16 NVM_FLASH_CRC=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test with LMS and XMSS both in verify-only mode
     - name: Build and test DMA ASAN LMS/XMSS verify-only
       if: matrix.group == 'pq-dma'

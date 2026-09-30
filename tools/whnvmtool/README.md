@@ -136,9 +136,12 @@ she 1 4 0 0x00 path/to/she_key.bin
 
 The generated NVM image is a binary file that can be used to initialize an instance of `whNvmFlash` or loaded directly into device memory at a device-specific address. In order for a generated NVM image to be compatible with a wolfHSM server implementation, the following must be true:
 
-1. `whnvmtool` must be compiled against the same version of wolfHSM as the server, and be compiled to use the same value of `WOLFHSM_CFG_NVM_OBJECT_COUNT` and the same `WOLFHSM_CFG_NVM_FLASH_CRC16` setting (build with `NVM_FLASH_CRC=1` to match a CRC-enabled server; a CRC-enabled server treats every object in a non-CRC image as corrupt and discards them at the first compaction, while a non-CRC server loads a CRC image but ignores its CRCs)
+1. `whnvmtool` must be compiled against the same version of wolfHSM as the server, and be compiled to use the same values of `WOLFHSM_CFG_NVM_OBJECT_COUNT`, `WOLFHSM_CFG_FLASH_UNIT_SIZE`, and `WOLFHSM_CFG_NVM_FLASH_CRC16`. Build with `FLASH_UNIT_SIZE=16` for a 16-byte server. Changing the flash unit size requires erasing or migrating existing NVM. Build with `NVM_FLASH_CRC=1` to match a CRC-enabled server; a CRC-enabled server treats every object in a non-CRC image as corrupt and discards them at the first compaction, while a non-CRC server loads a CRC image but ignores its CRCs.
 2. The partition size specified for the NVM image must match that of the server's `whNvmFlash` provider
 3. If using a real flash implementation, the binary NVM image must be programmed to the correct address
+4. The image must use the server's byte order. When building `whnvmtool` on a host with the opposite byte order, set `WH_BIG_ENDIAN` to the server's order (1 for big endian, 0 for little endian), for example with `CFLAGS_EXTRA=-DWH_BIG_ENDIAN=1`. This converts NVM state and metadata; object data is stored as supplied, so any structured object data must already use the target's format.
+
+The state magic is only a nonblank marker. `nfMemState_Read` checks whether each entire state unit is erased and does not compare the magic value. Its byte order does not affect that check, but epochs, offsets, counts, metadata, and CRC fields still require the server's byte order.
 
 ### Generating an Intel HEX File
 
