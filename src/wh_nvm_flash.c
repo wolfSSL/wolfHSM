@@ -56,6 +56,7 @@ enum {
     #define NF_STATE_CRC16_OFFSET   4
 #endif
 
+/* Nonblank marker only; nfMemState_Read does not validate its value. */
 #define NF_STATE_MAGIC_VALUE 0x12345678U
 
 #ifdef WOLFHSM_CFG_NVM_FLASH_CRC16

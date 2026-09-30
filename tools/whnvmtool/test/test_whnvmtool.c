@@ -460,6 +460,17 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
     whNvmContext      nvmCtx[1];
     whServerContext   serverCtx[1];
     uint8_t*          initData = NULL;
+#if WH_BIG_ENDIAN
+    const uint8_t expectedEpoch[8] = {0x12, 0x34, 0x56, 0x78,
+                                      0, 0, 0, 0};
+    const uint8_t swappedMagic[4] = {0x78, 0x56, 0x34, 0x12};
+    const size_t magicOffset = 0;
+#else
+    const uint8_t expectedEpoch[8] = {0, 0, 0, 0,
+                                      0x78, 0x56, 0x34, 0x12};
+    const uint8_t swappedMagic[4] = {0x12, 0x34, 0x56, 0x78};
+    const size_t magicOffset = 4;
+#endif
 
     /* If this is the RamSim configuration, set the initData config field to the
      * contents of the NVM image */
@@ -493,6 +504,20 @@ int _initAndCheckNvmFlashCfg(whNvmFlashConfig* nvmFlashCfg)
             free(initData);
             return WH_ERROR_ABORTED;
         }
+
+        if ((bytesRead < 4 * WHFU_BYTES_PER_UNIT) ||
+            (memcmp(initData, expectedEpoch, sizeof(expectedEpoch)) != 0)) {
+            fprintf(stderr, "Error: NVM image state byte order mismatch\n");
+            free(initData);
+            return WH_ERROR_ABORTED;
+        }
+
+        /* A marker byte swap must not affect partition or object loading. */
+        memcpy(initData + magicOffset, swappedMagic, sizeof(swappedMagic));
+        memcpy(initData + 3 * WHFU_BYTES_PER_UNIT + magicOffset,
+               swappedMagic, sizeof(swappedMagic));
+        WOLFHSM_CFG_PRINTF("Checking byte-swapped partition and object "
+                           "epoch magic\n");
 
         ((whFlashRamsimCfg*)nvmFlashCfg->config)->initData = initData;
     }

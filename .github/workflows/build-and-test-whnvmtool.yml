@@ -60,6 +60,16 @@ jobs:
     - name: Build and test NVM tool with 16-byte flash units
       run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl FLASH_UNIT_SIZE=16 NVM_FLASH_CRC=1 ASAN=1
 
+    - name: Build and test NVM tool with big-endian images
+      run: |
+        cd tools/whnvmtool
+        for unit_size in 8 16; do
+          for nvm_crc in 0 1; do
+            make clean
+            make check WOLFSSL_DIR=../../wolfssl FLASH_UNIT_SIZE=$unit_size NVM_FLASH_CRC=$nvm_crc CFLAGS_EXTRA=-DWH_BIG_ENDIAN=1
+          done
+        done
+
     # Build and test with DEBUG=1
     - name: Build and test NVM tool with DEBUG
       run: cd tools/whnvmtool && make clean && make check WOLFSSL_DIR=../../wolfssl DEBUG=1

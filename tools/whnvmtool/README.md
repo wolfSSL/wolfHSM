@@ -141,6 +141,8 @@ The generated NVM image is a binary file that can be used to initialize an insta
 3. If using a real flash implementation, the binary NVM image must be programmed to the correct address
 4. The image must use the server's byte order. When building `whnvmtool` on a host with the opposite byte order, set `WH_BIG_ENDIAN` to the server's order (1 for big endian, 0 for little endian), for example with `CFLAGS_EXTRA=-DWH_BIG_ENDIAN=1`. This converts NVM state and metadata; object data is stored as supplied, so any structured object data must already use the target's format.
 
+The state magic is only a nonblank marker. `nfMemState_Read` checks whether each entire state unit is erased and does not compare the magic value. Its byte order does not affect that check, but epochs, offsets, counts, metadata, and CRC fields still require the server's byte order.
+
 ### Generating an Intel HEX File
 
 Passing `--hex[=<file>]` generates an Intel HEX version of the NVM image alongside the binary, ready to be loaded by a flash programmer:
