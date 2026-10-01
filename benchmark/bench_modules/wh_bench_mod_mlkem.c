@@ -161,8 +161,8 @@ static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
     }
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_PK_ITERS && ret == WH_ERROR_OK; i++) {
-        word32 ctLen = sizeof(ct);
-        word32 ssLen = sizeof(ss);
+        uint32_t ctLen = sizeof(ct);
+        uint32_t ssLen = sizeof(ss);
         int    benchStartRet;
         int    benchStopRet;
 
@@ -209,8 +209,8 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
     byte     ssEnc[WC_ML_KEM_SS_SZ];
     byte     ssDec[WC_ML_KEM_SS_SZ];
-    word32   ctLen = sizeof(ct);
-    word32   ssEncLen = sizeof(ssEnc);
+    uint32_t ctLen = sizeof(ct);
+    uint32_t ssEncLen = sizeof(ssEnc);
     whKeyId  keyId = WH_KEYID_ERASED;
 
     (void)wh_Client_SetDmaMode(client, useDma);
@@ -245,7 +245,7 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     }
 
     for (i = 0; i < WOLFHSM_CFG_BENCH_PK_ITERS && ret == WH_ERROR_OK; i++) {
-        word32 ssDecLen = sizeof(ssDec);
+        uint32_t ssDecLen = sizeof(ssDec);
         int    benchStartRet;
         int    benchStopRet;
 
