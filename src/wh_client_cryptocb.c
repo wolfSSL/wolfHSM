@@ -844,10 +844,10 @@ static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
     int ret = CRYPTOCB_UNAVAILABLE;
 
     /* Extract info parameters */
-    byte*  ciphertext    = info->pk.pqc_encaps.ciphertext;
-    word32 ciphertextLen = info->pk.pqc_encaps.ciphertextLen;
-    byte*  sharedSecret  = info->pk.pqc_encaps.sharedSecret;
-    word32 sharedSecLen  = info->pk.pqc_encaps.sharedSecretLen;
+    byte*     ciphertext    = info->pk.pqc_encaps.ciphertext;
+    uint32_t  ciphertextLen = info->pk.pqc_encaps.ciphertextLen;
+    byte*     sharedSecret  = info->pk.pqc_encaps.sharedSecret;
+    uint32_t  sharedSecLen  = info->pk.pqc_encaps.sharedSecretLen;
     void*  key           = info->pk.pqc_encaps.key;
     int    type          = info->pk.pqc_encaps.type;
 
@@ -901,9 +901,9 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
 
     /* Extract info parameters */
     const byte* ciphertext    = info->pk.pqc_decaps.ciphertext;
-    word32      ciphertextLen = info->pk.pqc_decaps.ciphertextLen;
+    uint32_t    ciphertextLen = info->pk.pqc_decaps.ciphertextLen;
     byte*       sharedSecret  = info->pk.pqc_decaps.sharedSecret;
-    word32      sharedSecLen  = info->pk.pqc_decaps.sharedSecretLen;
+    uint32_t    sharedSecLen  = info->pk.pqc_decaps.sharedSecretLen;
     void*       key           = info->pk.pqc_decaps.key;
     int         type          = info->pk.pqc_decaps.type;
 
