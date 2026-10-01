@@ -427,6 +427,8 @@ int wh_Client_EccSetKeyId(ecc_key* key, whKeyId keyId);
  * This function gets the device context of a Ecc key that was previously
  * set by either the crypto callback layer or wh_Client_EccSetKeyId.
  *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
+ *
  * @param[in] key Pointer to the Ecc key structure.
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -1178,6 +1180,8 @@ int wh_Client_RsaSetKeyId(RsaKey* key, whNvmId keyId);
  * This function gets the device context of a RSA key that was previously
  * set by either the crypto callback layer or wh_Client_SetKeyRsa.
  *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
+ *
  * @param[in] key Pointer to the RSA key structure.
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -1609,6 +1613,8 @@ int wh_Client_AesSetKeyId(Aes* key, whNvmId keyId);
  *
  * This function gets the device context of a AES key that was previously
  * set by either the crypto callback layer or wh_Client_SetKeyAes.
+ *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
  *
  * @param[in] key Pointer to the AES key structure.
  * @param[out] outId Pointer to the key ID to return.
@@ -2219,7 +2225,8 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
  * Key handling: if key/keyLen are provided, the bytes are cached client-side
  * so subsequent Update/Final calls can replay them. If using an HSM-cached
  * key, set it via wh_Client_CmacSetKeyId before the first Update and pass
- * NULL / 0 for key/keyLen.
+ * NULL / 0 for key/keyLen. A key id bound through wh_Client_CmacSetKeyId or
+ * wc_InitCmac_Id takes precedence, and key/keyLen are then ignored.
  *
  * @param[in] ctx          Client context.
  * @param[in,out] cmac     CMAC context (full state round-tripped on success,
@@ -2234,7 +2241,7 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
  *                         the request header and key bytes.
  * @param[out] requestSent Set to true if a server request was sent and a
  *                         matching Response call is required; false only
- *                         when inLen == 0 and keyLen == 0 (no-op).
+ *                         when inLen == 0 and no key bytes are sent (no-op).
  * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments or
  *         when inLen exceeds the per-call capacity.
  */
@@ -2295,6 +2302,8 @@ int wh_Client_CmacSetKeyId(Cmac* key, whNvmId keyId);
  *
  * This function gets the device context of a CMAC key that was previously
  * set by either the crypto callback layer or wh_Client_SetKeyCmac.
+ *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
  *
  * @param[in] key Pointer to the CMAC key structure.
  * @param[out] outId Pointer to the key ID to return.
@@ -2373,8 +2382,9 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
  * Contract: at most one outstanding async request may be in flight per
  * whClientContext. If *requestSent is true, the caller MUST keep in valid
  * and call wh_Client_CmacDmaUpdateResponse before issuing any other async
- * Request. *requestSent is false only when inLen == 0 and keyLen == 0
- * (no-op).
+ * Request. *requestSent is false only when inLen == 0 and no key bytes are
+ * sent (no-op). key/keyLen are ignored when a key id is bound, as for
+ * wh_Client_CmacUpdateRequest.
  */
 int wh_Client_CmacDmaUpdateRequest(whClientContext* ctx, Cmac* cmac,
                                    CmacType type, const uint8_t* key,
@@ -3002,6 +3012,8 @@ int wh_Client_MlDsaSetKeyId(wc_MlDsaKey* key, whKeyId keyId);
  * This function gets the device context of a ML-DSA key that was previously
  * set by either the crypto callback layer or wh_Client_MlDsaSetKeyId.
  *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
+ *
  * @param[in] key Pointer to the ML-DSA key structure.
  * @param[out] outId Pointer to the key ID to return.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3391,6 +3403,8 @@ int wh_Client_MlKemSetKeyId(MlKemKey* key, whKeyId keyId);
 /**
  * @brief Retrieve the key ID associated with a ML-KEM key.
  *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
+ *
  * @param[in] key Pointer to the ML-KEM key structure.
  * @param[out] outId Pointer to store the retrieved key ID.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3717,6 +3731,8 @@ int wh_Client_LmsSetKeyId(LmsKey* key, whKeyId keyId);
 /**
  * @brief Read the wolfHSM keyId stored in an LmsKey's devCtx.
  *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
+ *
  * @param[in]  key   LmsKey to query.
  * @param[out] outId Receives the keyId held in key->devCtx.
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3848,6 +3864,8 @@ int wh_Client_XmssSetKeyId(XmssKey* key, whKeyId keyId);
 
 /**
  * @brief Read the wolfHSM keyId stored in an XmssKey's devCtx.
+ *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
  *
  * @param[in]  key   XmssKey to query.
  * @param[out] outId Receives the keyId held in key->devCtx.
