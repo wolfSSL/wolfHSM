@@ -1056,13 +1056,16 @@ int wh_MessageCrypto_TranslateSha3Response(
  * (168 for SHAKE128, 136 for SHAKE256). The client buffers any partial-block
  * tail locally in sha->t[] and only sends it on Final with isLastBlock=1.
  */
+#define WH_MESSAGE_CRYPTO_SHAKE_OP_HASH 0    /* update, or final on the tail */
+#define WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB 1  /* pad the tail into the state */
+#define WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE 2 /* whole blocks out, no input */
+
 typedef struct {
     uint32_t isLastBlock;
     uint32_t inSz;
-    /* Bytes of output wanted; ignored when isLastBlock is 0. A SHAKE has no
-     * natural digest length, so there is nothing to infer this from. */
+    /* Bytes of output wanted on a final or squeeze */
     uint32_t outSz;
-    uint8_t  WH_PAD[4];
+    uint32_t                  op; /* WH_MESSAGE_CRYPTO_SHAKE_OP_* */
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_ShakeRequest;
 
@@ -1071,11 +1074,10 @@ typedef struct {
  * Wire layout in the comm buffer:
  *   whMessageCrypto_GenericResponseHeader
  *   whMessageCrypto_ShakeResponse
- *   uint8_t out[outSz]   (finalize only; outSz is 0 on an update)
+ *   uint8_t out[outSz]   (final or squeeze; outSz is 0 otherwise)
  *
- * On a non-final update the state carries the sponge to resume from and no
- * output follows. Sized to match the request so the outgoing data starts
- * where the incoming data did. */
+ * Except after a final, the state carries the sponge to resume from. Sized to
+ * match the request so the outgoing data starts where the incoming data did. */
 typedef struct {
     whMessageCrypto_Sha3State resumeState;
     uint32_t                  outSz;

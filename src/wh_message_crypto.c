@@ -796,6 +796,7 @@ int wh_MessageCrypto_TranslateShakeRequest(
     WH_T32(magic, dest, src, isLastBlock);
     WH_T32(magic, dest, src, inSz);
     WH_T32(magic, dest, src, outSz);
+    WH_T32(magic, dest, src, op);
     return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
                                                &dest->resumeState);
 }
