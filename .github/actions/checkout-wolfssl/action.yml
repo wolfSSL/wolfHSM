@@ -8,11 +8,9 @@ description: >
 inputs:
   ref:
     description: >
-      wolfSSL git ref to check out: a tag, a branch, or a full 40-character
-      commit SHA (actions/checkout does not resolve abbreviated SHAs).
+      wolfSSL git ref to check out
     required: false
-    # wolfSSL tag or commit SHA to checkout:
-    default: '339aa5779f7f5fc3a94109558161926dd2eb4748'
+    default: 'v5.9.4-stable'
 
 runs:
   using: 'composite'

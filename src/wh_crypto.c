@@ -684,6 +684,7 @@ int wh_Crypto_LmsDeserializeKey(const uint8_t* buffer, uint16_t size,
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pub, p, pubLen);
+    key->pubSet = 1;
 #ifndef WOLFSSL_LMS_VERIFY_ONLY
     if (privLen > 0) {
         p += pubLen;
@@ -896,6 +897,7 @@ int wh_Crypto_XmssDeserializeKey(const uint8_t* buffer, uint16_t size,
 
     p = buffer + WH_CRYPTO_STATEFUL_SIG_HEADER_SZ + paramLen;
     memcpy(key->pk, p, pubLen);
+    key->pubSet = 1;
     /* The private key (if any) is left in the slot blob; downstream paths
      * read it via the slot ReadCb against the cached slot (sk is allocated
      * by Reload, not by deserialize). */
