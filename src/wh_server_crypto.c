@@ -5183,6 +5183,8 @@ typedef struct {
     int (*initFn)(wc_Shake* sha, void* heap, int devId);
     int (*updateFn)(wc_Shake* sha, const byte* data, word32 len);
     int (*finalFn)(wc_Shake* sha, byte* out, word32 outLen);
+    int (*absorbFn)(wc_Shake* sha, const byte* data, word32 len);
+    int (*squeezeFn)(wc_Shake* sha, byte* out, word32 blockCnt);
     void (*freeFn)(wc_Shake* sha);
 } _ShakeVariantOps;
 
@@ -5195,6 +5197,8 @@ static int _ShakeLookupOps(int hashType, _ShakeVariantOps* ops)
             ops->initFn    = wc_InitShake128;
             ops->updateFn  = wc_Shake128_Update;
             ops->finalFn   = wc_Shake128_Final;
+            ops->absorbFn  = wc_Shake128_Absorb;
+            ops->squeezeFn = wc_Shake128_SqueezeBlocks;
             ops->freeFn    = wc_Shake128_Free;
             return 0;
 #endif
@@ -5204,12 +5208,44 @@ static int _ShakeLookupOps(int hashType, _ShakeVariantOps* ops)
             ops->initFn    = wc_InitShake256;
             ops->updateFn  = wc_Shake256_Update;
             ops->finalFn   = wc_Shake256_Final;
+            ops->absorbFn  = wc_Shake256_Absorb;
+            ops->squeezeFn = wc_Shake256_SqueezeBlocks;
             ops->freeFn    = wc_Shake256_Free;
             return 0;
 #endif
         default:
             return WH_ERROR_BADARGS;
     }
+}
+
+/* Check the input and output sizes against what the op allows */
+static int _ShakeCheckRequest(const whMessageCrypto_ShakeRequest* req,
+                              uint32_t                            blockSize)
+{
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ;
+    int            ok     = 0;
+
+    switch (req->op) {
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_HASH:
+            if (req->isLastBlock) {
+                ok = (req->inSz < blockSize) && (req->outSz != 0) &&
+                     (req->outSz <= maxOut);
+            }
+            else {
+                ok = ((req->inSz % blockSize) == 0) && (req->outSz == 0);
+            }
+            break;
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB:
+            ok = (req->inSz < blockSize) && (req->outSz == 0);
+            break;
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE:
+            ok = (req->inSz == 0) && (req->outSz != 0) &&
+                 ((req->outSz % blockSize) == 0) && (req->outSz <= maxOut);
+            break;
+        default:
+            break;
+    }
+    return ok ? WH_ERROR_OK : WH_ERROR_BADARGS;
 }
 
 static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
@@ -5223,6 +5259,7 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     const uint8_t*                inData;
     uint8_t*                      outData;
     _ShakeVariantOps              ops;
+    int                           isFinal;
 
     (void)ctx;
 
@@ -5244,18 +5281,11 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
         (uint32_t)(inSize - sizeof(whMessageCrypto_ShakeRequest))) {
         return WH_ERROR_BADARGS;
     }
-    if (!req.isLastBlock && (req.inSz % ops.blockSize) != 0) {
-        return WH_ERROR_BADARGS;
+    ret = _ShakeCheckRequest(&req, ops.blockSize);
+    if (ret != 0) {
+        return ret;
     }
-    if (req.isLastBlock && req.inSz >= ops.blockSize) {
-        return WH_ERROR_BADARGS;
-    }
-    if (req.isLastBlock) {
-        if ((req.outSz == 0) ||
-            (req.outSz > WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ)) {
-            return WH_ERROR_BADARGS;
-        }
-    }
+    isFinal = (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) && req.isLastBlock;
 
     inData = (const uint8_t*)cryptoDataIn +
              sizeof(whMessageCrypto_ShakeRequest);
@@ -5270,26 +5300,29 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     /* Return intermediate state to the client; the server is stateless */
     memcpy(shake->s, req.resumeState.s, sizeof(shake->s));
 
-    if (req.inSz > 0) {
+    if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
+        ret = ops.absorbFn(shake, inData, req.inSz);
+    }
+    else if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE) {
+        ret = ops.squeezeFn(shake, outData, req.outSz / ops.blockSize);
+    }
+    else if (req.inSz > 0) {
         ret = ops.updateFn(shake, inData, req.inSz);
     }
     if (ret == 0) {
-        if (req.isLastBlock) {
+        if (isFinal) {
             ret = ops.finalFn(shake, outData, req.outSz);
-            if (ret == 0) {
-                res.outSz = req.outSz;
-            }
+        }
+        /* Only the sponge goes back, so no partial block may be left. */
+        else if (shake->i != 0) {
+            ret = WH_ERROR_ABORTED;
         }
         else {
-            /* Post-condition: whole-block input must leave i == 0. */
-            if (shake->i != 0) {
-                ret = WH_ERROR_ABORTED;
-            }
-            else {
-                res.outSz = 0;
-                memcpy(res.resumeState.s, shake->s, sizeof(res.resumeState.s));
-            }
+            memcpy(res.resumeState.s, shake->s, sizeof(res.resumeState.s));
         }
+    }
+    if (ret == 0) {
+        res.outSz = req.outSz;
     }
 
     ops.freeFn(shake);

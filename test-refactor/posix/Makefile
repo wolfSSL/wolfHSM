@@ -56,11 +56,6 @@ endif
 ifeq ($(SHAKE256_ONLY),1)
     DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128
 endif
-# Dispatch SHAKE absorb and squeeze to the crypto callback. Needs a wolfSSL
-# with hash.shakeOp in wc_CryptoInfo.
-ifeq ($(SHAKE_XOF),1)
-    DEF += -DWOLF_CRYPTO_CB_SHAKE_XOF
-endif
 
 # C standard
 CSTD        ?= -std=c90
@@ -192,6 +187,8 @@ endif
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
+    # Some wolfCrypt tests read ./certs, so point them at the wolfSSL tree
+    DEF += -DCERT_PREFIX=\"$(abspath $(WOLFSSL_DIR))/\"
 endif
 
 # Add code coverage option

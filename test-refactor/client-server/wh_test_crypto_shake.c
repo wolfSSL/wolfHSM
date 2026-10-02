@@ -71,18 +71,24 @@ typedef struct {
     int (*absorbFn)(wc_Shake* sha, const byte* in, word32 inSz);
     int (*squeezeFn)(wc_Shake* sha, byte* out, word32 blockCnt);
     void (*freeFn)(wc_Shake* sha);
+    int (*clientAbsorbFn)(whClientContext* ctx, wc_Shake* sha,
+                          const uint8_t* in, uint32_t inLen);
+    int (*clientSqueezeFn)(whClientContext* ctx, wc_Shake* sha, uint8_t* out,
+                           uint32_t blockCnt);
 } shakeTestVariant;
 
 static const shakeTestVariant shakeTestVariants[] = {
 #ifdef WOLFSSL_SHAKE128
     {WC_HASH_TYPE_SHAKE128, 168u, "SHAKE128", wc_InitShake128,
      wc_Shake128_Update, wc_Shake128_Final, wc_Shake128_Absorb,
-     wc_Shake128_SqueezeBlocks, wc_Shake128_Free},
+     wc_Shake128_SqueezeBlocks, wc_Shake128_Free, wh_Client_Shake128Absorb,
+     wh_Client_Shake128SqueezeBlocks},
 #endif
 #ifdef WOLFSSL_SHAKE256
     {WC_HASH_TYPE_SHAKE256, 136u, "SHAKE256", wc_InitShake256,
      wc_Shake256_Update, wc_Shake256_Final, wc_Shake256_Absorb,
-     wc_Shake256_SqueezeBlocks, wc_Shake256_Free},
+     wc_Shake256_SqueezeBlocks, wc_Shake256_Free, wh_Client_Shake256Absorb,
+     wh_Client_Shake256SqueezeBlocks},
 #endif
 };
 
@@ -310,49 +316,114 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
     return WH_ERROR_OK;
 }
 
-/* Absorb once, then squeeze several times on a device-bound object. Each
- * squeeze must continue the sponge. */
-#define SHAKE_TEST_SQUEEZE_CALLS 3u
-#define SHAKE_TEST_SQUEEZE_BLOCKS 2u
+/* Ways to drive an absorb/squeeze case */
+#define SHAKE_TEST_XOF_SOFTWARE 0
+#define SHAKE_TEST_XOF_CRYPTOCB 1
+#define SHAKE_TEST_XOF_CLIENT 2
+
+/* Absorb, then squeeze 1, 2, and more blocks than one response holds */
+static int _ShakeTestXofRun(whClientContext* ctx, const shakeTestVariant* v,
+                            int path, uint32_t inLen, uint8_t* out,
+                            uint32_t* outSz)
+{
+    const uint32_t blockCnts[] = {
+        1u, 2u,
+        WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ / v->blockSize + 1u};
+    const uint32_t cnt   = sizeof(blockCnts) / sizeof(blockCnts[0]);
+    int            devId = WH_CLIENT_DEVID(ctx);
+    int            toServer;
+    uint16_t       seq;
+    wc_Shake       sha[1];
+    uint32_t       i;
+    int            ret;
+
+#ifdef WOLF_CRYPTO_CB_SHAKE_XOF
+    toServer = (path != SHAKE_TEST_XOF_SOFTWARE);
+#else
+    toServer = (path == SHAKE_TEST_XOF_CLIENT);
+#endif
+    if (path == SHAKE_TEST_XOF_SOFTWARE) {
+        devId = INVALID_DEVID;
+    }
+
+    *outSz = 0;
+    for (i = 0; i < cnt; i++) {
+        *outSz += blockCnts[i] * v->blockSize;
+    }
+    memset(out, (path == SHAKE_TEST_XOF_SOFTWARE) ? 0xA5 : 0, *outSz);
+
+    ret = v->initFn(sha, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    seq = ctx->comm->seq;
+    if (path == SHAKE_TEST_XOF_CLIENT) {
+        ret = v->clientAbsorbFn(ctx, sha, shakeTestIn, inLen);
+    }
+    else {
+        ret = v->absorbFn(sha, shakeTestIn, inLen);
+    }
+    /* Software continues from this state, which has no partial block */
+    if ((ret == 0) && (sha->i != 0)) {
+        ret = WH_ERROR_ABORTED;
+    }
+    for (i = 0; (ret == 0) && (i < cnt); i++) {
+        if (path == SHAKE_TEST_XOF_CLIENT) {
+            ret = v->clientSqueezeFn(ctx, sha, out, blockCnts[i]);
+        }
+        else {
+            ret = v->squeezeFn(sha, out, blockCnts[i]);
+        }
+        out += blockCnts[i] * v->blockSize;
+    }
+    v->freeFn(sha);
+
+    /* A silent decline would still match software, so check where it ran */
+    if ((ret == 0) && (toServer != (seq != ctx->comm->seq))) {
+        WH_ERROR_PRINT("%s absorb/squeeze path %d server use %d expected %d\n",
+                       v->name, path, (seq != ctx->comm->seq), toServer);
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
 static int _ShakeTestAbsorbSqueeze(whClientContext*        ctx,
                                    const shakeTestVariant* v)
 {
-    wc_Shake sha[1];
-    uint32_t outSz =
-        SHAKE_TEST_SQUEEZE_CALLS * SHAKE_TEST_SQUEEZE_BLOCKS * v->blockSize;
-    uint32_t j;
-    int      ret = 0;
-    int      i;
+    /* Empty, a partial tail, and more input than one request can carry */
+    const uint32_t inLens[] = {0u, 2u * v->blockSize + 7u, SHAKE_TEST_MAX_IN};
+    const int      paths[]  = {SHAKE_TEST_XOF_CRYPTOCB, SHAKE_TEST_XOF_CLIENT};
+    const uint32_t inLenCnt = sizeof(inLens) / sizeof(inLens[0]);
+    const uint32_t pathCnt  = sizeof(paths) / sizeof(paths[0]);
+    uint32_t       swSz     = 0;
+    uint32_t       devSz    = 0;
+    uint32_t       i;
+    uint32_t       j;
+    int            ret = 0;
 
-    for (i = 0; (ret == 0) && (i < 2); i++) {
-        int      devId = (i == 0) ? WH_CLIENT_DEVID(ctx) : INVALID_DEVID;
-        uint8_t* out   = (i == 0) ? shakeTestOutDev : shakeTestOutSw;
-
-        memset(out, (i == 0) ? 0 : 0xA5, outSz);
-        ret = v->initFn(sha, NULL, devId);
-        if (ret != 0) {
-            break;
+    for (i = 0; (ret == 0) && (i < inLenCnt); i++) {
+        ret = _ShakeTestXofRun(ctx, v, SHAKE_TEST_XOF_SOFTWARE, inLens[i],
+                               shakeTestOutSw, &swSz);
+        for (j = 0; (ret == 0) && (j < pathCnt); j++) {
+            ret = _ShakeTestXofRun(ctx, v, paths[j], inLens[i], shakeTestOutDev,
+                                   &devSz);
+            if ((ret == 0) &&
+                ((devSz != swSz) ||
+                 (memcmp(shakeTestOutDev, shakeTestOutSw, swSz) != 0))) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret != 0) {
+                WH_ERROR_PRINT("%s absorb/squeeze path %d in %u failed: %d\n",
+                               v->name, paths[j], (unsigned)inLens[i], ret);
+            }
         }
-        ret = v->absorbFn(sha, shakeTestIn, 2u * v->blockSize + 7u);
-        for (j = 0; (ret == 0) && (j < SHAKE_TEST_SQUEEZE_CALLS); j++) {
-            ret = v->squeezeFn(
-                sha, out + j * SHAKE_TEST_SQUEEZE_BLOCKS * v->blockSize,
-                SHAKE_TEST_SQUEEZE_BLOCKS);
-        }
-        v->freeFn(sha);
     }
 
-    if (ret != 0) {
-        WH_ERROR_PRINT("%s absorb/squeeze failed: %d\n", v->name, ret);
-        return ret;
+    if (ret == 0) {
+        WH_TEST_PRINT("%s absorb/squeeze SUCCESS\n", v->name);
     }
-    if (memcmp(shakeTestOutDev, shakeTestOutSw, outSz) != 0) {
-        WH_ERROR_PRINT("%s absorb/squeeze device and software differ\n",
-                       v->name);
-        return WH_ERROR_ABORTED;
-    }
-    WH_TEST_PRINT("%s absorb/squeeze SUCCESS\n", v->name);
-    return WH_ERROR_OK;
+    return ret;
 }
 
 /* wolfCrypt accepts a finalize asking for zero bytes: it writes nothing and
@@ -493,6 +564,14 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
                WH_ERROR_BADARGS);
     }
 #endif
+    bad =
+        bad ||
+        (v->clientAbsorbFn(NULL, sha, buf, sizeof(buf)) != WH_ERROR_BADARGS) ||
+        (v->clientAbsorbFn(ctx, NULL, buf, sizeof(buf)) != WH_ERROR_BADARGS) ||
+        (v->clientAbsorbFn(ctx, sha, NULL, sizeof(buf)) != WH_ERROR_BADARGS) ||
+        (v->clientSqueezeFn(NULL, sha, buf, 1u) != WH_ERROR_BADARGS) ||
+        (v->clientSqueezeFn(ctx, NULL, buf, 1u) != WH_ERROR_BADARGS) ||
+        (v->clientSqueezeFn(ctx, sha, NULL, 1u) != WH_ERROR_BADARGS);
 
 #ifdef WOLFSSL_HASH_FLAGS
     /* Keccak mode is not carried on the wire, so the request helpers must
@@ -518,6 +597,8 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
                    WH_ERROR_BADARGS);
         }
 #endif
+        bad = bad || (v->clientAbsorbFn(ctx, sha, buf, sizeof(buf)) !=
+                      WH_ERROR_BADARGS);
         (void)wc_Sha3_SetFlags(sha, 0);
     }
 #endif
