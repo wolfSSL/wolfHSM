@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -41,6 +41,7 @@
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/asn.h"
 #include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/sm4.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
@@ -144,7 +145,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     /* Based on the info type, process the request */
     switch (info->algo_type)
     {
-#if !defined(NO_AES) || !defined(NO_DES3)
+#if !defined(NO_AES) || !defined(NO_DES3) || defined(WOLFSSL_SM4)
     case WC_ALGO_TYPE_CIPHER:
         switch (info->cipher.type)
         {
@@ -232,6 +233,108 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
         } break;
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
+
+#ifdef WOLFSSL_SM4
+#ifdef WOLFSSL_SM4_ECB
+        case WC_CIPHER_SM4_ECB: {
+            uint32_t       enc = info->cipher.enc;
+            wc_Sm4*        sm4 = info->cipher.sm4ecb.sm4;
+            const uint8_t* in  = info->cipher.sm4ecb.in;
+            uint32_t       len = info->cipher.sm4ecb.sz;
+            uint8_t*       out = info->cipher.sm4ecb.out;
+
+            ret = wh_Client_Sm4Ecb(ctx, sm4, enc, in, len, out);
+        } break;
+#endif /* WOLFSSL_SM4_ECB */
+
+#ifdef WOLFSSL_SM4_CBC
+        case WC_CIPHER_SM4_CBC: {
+            uint32_t       enc = info->cipher.enc;
+            wc_Sm4*        sm4 = info->cipher.sm4cbc.sm4;
+            const uint8_t* in  = info->cipher.sm4cbc.in;
+            uint32_t       len = info->cipher.sm4cbc.sz;
+            uint8_t*       out = info->cipher.sm4cbc.out;
+
+            ret = wh_Client_Sm4Cbc(ctx, sm4, enc, in, len, out);
+        } break;
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFSSL_SM4_CTR
+        case WC_CIPHER_SM4_CTR: {
+            /* CTR is its own inverse, so the direction is not carried */
+            wc_Sm4*        sm4 = info->cipher.sm4ctr.sm4;
+            const uint8_t* in  = info->cipher.sm4ctr.in;
+            uint32_t       len = info->cipher.sm4ctr.sz;
+            uint8_t*       out = info->cipher.sm4ctr.out;
+
+            ret = wh_Client_Sm4Ctr(ctx, sm4, in, len, out);
+        } break;
+#endif /* WOLFSSL_SM4_CTR */
+
+#ifdef WOLFSSL_SM4_GCM
+        case WC_CIPHER_SM4_GCM: {
+            uint32_t enc = info->cipher.enc;
+            wc_Sm4*  sm4 = (enc == 0) ? info->cipher.sm4gcm_dec.sm4
+                                      : info->cipher.sm4gcm_enc.sm4;
+            uint32_t len = (enc == 0) ? info->cipher.sm4gcm_dec.sz
+                                      : info->cipher.sm4gcm_enc.sz;
+            uint32_t iv_len     = (enc == 0) ? info->cipher.sm4gcm_dec.nonceSz
+                                             : info->cipher.sm4gcm_enc.nonceSz;
+            uint32_t authin_len = (enc == 0) ? info->cipher.sm4gcm_dec.authInSz
+                                             : info->cipher.sm4gcm_enc.authInSz;
+            uint32_t tag_len    = (enc == 0) ? info->cipher.sm4gcm_dec.authTagSz
+                                             : info->cipher.sm4gcm_enc.authTagSz;
+            const uint8_t* in   = (enc == 0) ? info->cipher.sm4gcm_dec.in
+                                             : info->cipher.sm4gcm_enc.in;
+            const uint8_t* iv   = (enc == 0) ? info->cipher.sm4gcm_dec.nonce
+                                             : info->cipher.sm4gcm_enc.nonce;
+            const uint8_t* authin = (enc == 0)
+                                        ? info->cipher.sm4gcm_dec.authIn
+                                        : info->cipher.sm4gcm_enc.authIn;
+            uint8_t* out          = (enc == 0) ? info->cipher.sm4gcm_dec.out
+                                               : info->cipher.sm4gcm_enc.out;
+            /* The decrypt tag is const on the wolfCrypt side; the client only
+             * writes a tag back when encrypting. */
+            uint8_t* tag =
+                (enc == 0) ? (uint8_t*)info->cipher.sm4gcm_dec.authTag
+                           : info->cipher.sm4gcm_enc.authTag;
+
+            ret = wh_Client_Sm4Gcm(ctx, sm4, enc, in, len, iv, iv_len, authin,
+                                   authin_len, tag, tag_len, out);
+        } break;
+#endif /* WOLFSSL_SM4_GCM */
+
+#ifdef WOLFSSL_SM4_CCM
+        case WC_CIPHER_SM4_CCM: {
+            uint32_t enc = info->cipher.enc;
+            wc_Sm4*  sm4 = (enc == 0) ? info->cipher.sm4ccm_dec.sm4
+                                      : info->cipher.sm4ccm_enc.sm4;
+            uint32_t len = (enc == 0) ? info->cipher.sm4ccm_dec.sz
+                                      : info->cipher.sm4ccm_enc.sz;
+            uint32_t iv_len     = (enc == 0) ? info->cipher.sm4ccm_dec.nonceSz
+                                             : info->cipher.sm4ccm_enc.nonceSz;
+            uint32_t authin_len = (enc == 0) ? info->cipher.sm4ccm_dec.authInSz
+                                             : info->cipher.sm4ccm_enc.authInSz;
+            uint32_t tag_len    = (enc == 0) ? info->cipher.sm4ccm_dec.authTagSz
+                                             : info->cipher.sm4ccm_enc.authTagSz;
+            const uint8_t* in   = (enc == 0) ? info->cipher.sm4ccm_dec.in
+                                             : info->cipher.sm4ccm_enc.in;
+            const uint8_t* iv   = (enc == 0) ? info->cipher.sm4ccm_dec.nonce
+                                             : info->cipher.sm4ccm_enc.nonce;
+            const uint8_t* authin = (enc == 0)
+                                        ? info->cipher.sm4ccm_dec.authIn
+                                        : info->cipher.sm4ccm_enc.authIn;
+            uint8_t* out          = (enc == 0) ? info->cipher.sm4ccm_dec.out
+                                               : info->cipher.sm4ccm_enc.out;
+            uint8_t* tag =
+                (enc == 0) ? (uint8_t*)info->cipher.sm4ccm_dec.authTag
+                           : info->cipher.sm4ccm_enc.authTag;
+
+            ret = wh_Client_Sm4Ccm(ctx, sm4, enc, in, len, iv, iv_len, authin,
+                                   authin_len, tag, tag_len, out);
+        } break;
+#endif /* WOLFSSL_SM4_CCM */
+#endif /* WOLFSSL_SM4 */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -563,6 +666,73 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             break;
 
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
+
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+        case WC_PK_TYPE_SM2_SIGN: {
+            ecc_key*    key      = info->pk.sm2sign.key;
+            const byte* in       = info->pk.sm2sign.in;
+            word32      in_len   = info->pk.sm2sign.inlen;
+            byte*       out      = info->pk.sm2sign.out;
+            word32*     out_len  = info->pk.sm2sign.outlen;
+            uint16_t    sig_len  = 0;
+
+            /* Convert to a uint16_t local to support big endian. Saturate
+             * rather than truncate: a capacity of 65536 would otherwise wrap
+             * to zero and fail a request the output easily fits. */
+            if (out_len != NULL) {
+                sig_len = (*out_len > UINT16_MAX) ? UINT16_MAX
+                                                  : (uint16_t)(*out_len);
+            }
+
+            if (in_len > UINT16_MAX) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else {
+                ret = wh_Client_Sm2Sign(ctx, key, in, (uint16_t)in_len, out,
+                                        &sig_len);
+                /* Propagate the required length on BUFFER_SIZE so the caller
+                 * can retry with a large enough buffer. */
+                if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                    (out_len != NULL)) {
+                    *out_len = sig_len;
+                }
+            }
+        } break;
+
+        case WC_PK_TYPE_SM2_VERIFY: {
+            word32 sig_len  = info->pk.sm2verify.siglen;
+            word32 hash_len = info->pk.sm2verify.hashlen;
+
+            if ((sig_len > UINT16_MAX) || (hash_len > UINT16_MAX)) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else {
+                ret = wh_Client_Sm2Verify(
+                    ctx, info->pk.sm2verify.key, info->pk.sm2verify.sig,
+                    (uint16_t)sig_len, info->pk.sm2verify.hash,
+                    (uint16_t)hash_len, info->pk.sm2verify.res);
+            }
+        } break;
+
+        case WC_PK_TYPE_SM2_SHARED_SECRET: {
+            word32*  out_len = info->pk.sm2dh.outlen;
+            uint16_t sec_len = 0;
+
+            /* Saturate rather than truncate, as above. */
+            if (out_len != NULL) {
+                sec_len = (*out_len > UINT16_MAX) ? UINT16_MAX
+                                                  : (uint16_t)(*out_len);
+            }
+
+            ret = wh_Client_Sm2SharedSecret(ctx, info->pk.sm2dh.private_key,
+                                            info->pk.sm2dh.public_key,
+                                            info->pk.sm2dh.out, &sec_len);
+            if (((ret == WH_ERROR_OK) || (ret == WH_ERROR_BUFFER_SIZE)) &&
+                (out_len != NULL)) {
+                *out_len = sec_len;
+            }
+        } break;
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
 
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
@@ -1655,7 +1825,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     } break;
 #endif
 
-#if !defined(NO_AES) || !defined(NO_DES3)
+#if !defined(NO_AES) || !defined(NO_DES3) || defined(WOLFSSL_SM4)
     case WC_ALGO_TYPE_CIPHER:
         switch (info->cipher.type) {
 #ifndef NO_AES
@@ -1729,6 +1899,106 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             } break;
 #endif /* HAVE_AES_ECB */
 #endif /* !NO_AES */
+#ifdef WOLFSSL_SM4
+#ifdef WOLFSSL_SM4_ECB
+            case WC_CIPHER_SM4_ECB: {
+                uint32_t       enc = info->cipher.enc;
+                wc_Sm4*        sm4 = info->cipher.sm4ecb.sm4;
+                const uint8_t* in  = info->cipher.sm4ecb.in;
+                uint32_t       len = info->cipher.sm4ecb.sz;
+                uint8_t*       out = info->cipher.sm4ecb.out;
+
+                ret = wh_Client_Sm4EcbDma(ctx, sm4, enc, in, len, out);
+            } break;
+#endif /* WOLFSSL_SM4_ECB */
+#ifdef WOLFSSL_SM4_CBC
+            case WC_CIPHER_SM4_CBC: {
+                uint32_t       enc = info->cipher.enc;
+                wc_Sm4*        sm4 = info->cipher.sm4cbc.sm4;
+                const uint8_t* in  = info->cipher.sm4cbc.in;
+                uint32_t       len = info->cipher.sm4cbc.sz;
+                uint8_t*       out = info->cipher.sm4cbc.out;
+
+                ret = wh_Client_Sm4CbcDma(ctx, sm4, enc, in, len, out);
+            } break;
+#endif /* WOLFSSL_SM4_CBC */
+#ifdef WOLFSSL_SM4_CTR
+            case WC_CIPHER_SM4_CTR: {
+                wc_Sm4*        sm4 = info->cipher.sm4ctr.sm4;
+                const uint8_t* in  = info->cipher.sm4ctr.in;
+                uint32_t       len = info->cipher.sm4ctr.sz;
+                uint8_t*       out = info->cipher.sm4ctr.out;
+
+                ret = wh_Client_Sm4CtrDma(ctx, sm4, in, len, out);
+            } break;
+#endif /* WOLFSSL_SM4_CTR */
+#ifdef WOLFSSL_SM4_GCM
+            case WC_CIPHER_SM4_GCM: {
+                uint32_t enc = info->cipher.enc;
+                wc_Sm4*  sm4 = (enc == 0) ? info->cipher.sm4gcm_dec.sm4
+                                          : info->cipher.sm4gcm_enc.sm4;
+                uint32_t len = (enc == 0) ? info->cipher.sm4gcm_dec.sz
+                                          : info->cipher.sm4gcm_enc.sz;
+                uint32_t iv_len = (enc == 0) ? info->cipher.sm4gcm_dec.nonceSz
+                                             : info->cipher.sm4gcm_enc.nonceSz;
+                uint32_t authin_len =
+                    (enc == 0) ? info->cipher.sm4gcm_dec.authInSz
+                               : info->cipher.sm4gcm_enc.authInSz;
+                uint32_t tag_len =
+                    (enc == 0) ? info->cipher.sm4gcm_dec.authTagSz
+                               : info->cipher.sm4gcm_enc.authTagSz;
+                const uint8_t* in = (enc == 0) ? info->cipher.sm4gcm_dec.in
+                                               : info->cipher.sm4gcm_enc.in;
+                const uint8_t* iv = (enc == 0) ? info->cipher.sm4gcm_dec.nonce
+                                               : info->cipher.sm4gcm_enc.nonce;
+                const uint8_t* authin =
+                    (enc == 0) ? info->cipher.sm4gcm_dec.authIn
+                               : info->cipher.sm4gcm_enc.authIn;
+                uint8_t* out = (enc == 0) ? info->cipher.sm4gcm_dec.out
+                                          : info->cipher.sm4gcm_enc.out;
+                uint8_t* tag =
+                    (enc == 0) ? (uint8_t*)info->cipher.sm4gcm_dec.authTag
+                               : info->cipher.sm4gcm_enc.authTag;
+
+                ret = wh_Client_Sm4GcmDma(ctx, sm4, enc, in, len, iv, iv_len,
+                                          authin, authin_len, tag, tag_len,
+                                          out);
+            } break;
+#endif /* WOLFSSL_SM4_GCM */
+#ifdef WOLFSSL_SM4_CCM
+            case WC_CIPHER_SM4_CCM: {
+                uint32_t enc = info->cipher.enc;
+                wc_Sm4*  sm4 = (enc == 0) ? info->cipher.sm4ccm_dec.sm4
+                                          : info->cipher.sm4ccm_enc.sm4;
+                uint32_t len = (enc == 0) ? info->cipher.sm4ccm_dec.sz
+                                          : info->cipher.sm4ccm_enc.sz;
+                uint32_t iv_len = (enc == 0) ? info->cipher.sm4ccm_dec.nonceSz
+                                             : info->cipher.sm4ccm_enc.nonceSz;
+                uint32_t authin_len =
+                    (enc == 0) ? info->cipher.sm4ccm_dec.authInSz
+                               : info->cipher.sm4ccm_enc.authInSz;
+                uint32_t tag_len =
+                    (enc == 0) ? info->cipher.sm4ccm_dec.authTagSz
+                               : info->cipher.sm4ccm_enc.authTagSz;
+                const uint8_t* in = (enc == 0) ? info->cipher.sm4ccm_dec.in
+                                               : info->cipher.sm4ccm_enc.in;
+                const uint8_t* iv = (enc == 0) ? info->cipher.sm4ccm_dec.nonce
+                                               : info->cipher.sm4ccm_enc.nonce;
+                const uint8_t* authin =
+                    (enc == 0) ? info->cipher.sm4ccm_dec.authIn
+                               : info->cipher.sm4ccm_enc.authIn;
+                uint8_t* out = (enc == 0) ? info->cipher.sm4ccm_dec.out
+                                          : info->cipher.sm4ccm_enc.out;
+                uint8_t* tag =
+                    (enc == 0) ? (uint8_t*)info->cipher.sm4ccm_dec.authTag
+                               : info->cipher.sm4ccm_enc.authTag;
+
+                ret = wh_Client_Sm4CcmDma(ctx, sm4, enc, in, len, iv, iv_len,
+                                          authin, authin_len, tag, tag_len,
+                                          out);
+            } break;
+#endif /* WOLFSSL_SM4_CCM */
+#endif /* WOLFSSL_SM4 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;

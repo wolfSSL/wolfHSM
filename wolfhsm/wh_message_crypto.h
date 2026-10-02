@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -310,6 +310,279 @@ int wh_MessageCrypto_TranslateAesGcmRequest(
 int wh_MessageCrypto_TranslateAesGcmResponse(
     uint16_t magic, const whMessageCrypto_AesGcmResponse* src,
     whMessageCrypto_AesGcmResponse* dest);
+
+
+/*
+ * SM2
+ *
+ * SM2 keys are ecc_key values on the SM2 curve, so they travel through the
+ * existing ECC key cache and DER serialization. Only the three operations
+ * need their own messages.
+ */
+
+/* SM2 Sign Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t sz;
+    /* Data follows:
+     * uint8_t in[sz];
+     */
+} whMessageCrypto_Sm2SignRequest;
+
+/* SM2 Sign Response */
+typedef struct {
+    uint32_t sz;
+    /* Pad to ensure overlap for input and output buffers: the signature is
+     * written while the hash is still being read from the shared buffer, so
+     * the payload must start at the same offset in both directions. */
+    uint8_t WH_PAD[sizeof(whMessageCrypto_Sm2SignRequest) - sizeof(uint32_t)];
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_Sm2SignResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm2SignRequest) ==
+        sizeof(whMessageCrypto_Sm2SignResponse),
+    "Sm2SignRequest and Sm2SignResponse must be the same size");
+
+int wh_MessageCrypto_TranslateSm2SignRequest(
+    uint16_t magic, const whMessageCrypto_Sm2SignRequest* src,
+    whMessageCrypto_Sm2SignRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2SignResponse(
+    uint16_t magic, const whMessageCrypto_Sm2SignResponse* src,
+    whMessageCrypto_Sm2SignResponse* dest);
+
+/* SM2 Verify Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2VERIFY_OPTIONS_EVICT (1 << 0)
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t hashSz;
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     * uint8_t hash[hashSz];
+     */
+} whMessageCrypto_Sm2VerifyRequest;
+
+/* SM2 Verify Response */
+typedef struct {
+    uint32_t res;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_Sm2VerifyResponse;
+
+int wh_MessageCrypto_TranslateSm2VerifyRequest(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyRequest* src,
+    whMessageCrypto_Sm2VerifyRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2VerifyResponse(
+    uint16_t magic, const whMessageCrypto_Sm2VerifyResponse* src,
+    whMessageCrypto_Sm2VerifyResponse* dest);
+
+/* SM2 Shared Secret Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB (1 << 0)
+#define WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV (1 << 1)
+    uint32_t privateKeyId;
+    uint32_t publicKeyId;
+} whMessageCrypto_Sm2DhRequest;
+
+/* SM2 Shared Secret Response */
+typedef struct {
+    uint32_t sz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_Sm2DhResponse;
+
+int wh_MessageCrypto_TranslateSm2DhRequest(
+    uint16_t magic, const whMessageCrypto_Sm2DhRequest* src,
+    whMessageCrypto_Sm2DhRequest* dest);
+
+int wh_MessageCrypto_TranslateSm2DhResponse(
+    uint16_t magic, const whMessageCrypto_Sm2DhResponse* src,
+    whMessageCrypto_Sm2DhResponse* dest);
+
+
+/*
+ * SM4
+ *
+ * SM4 has a single 16-byte key size, so keyLen is carried only so the server
+ * can reject a malformed request rather than to select a variant. Each request
+ * carries both an inline key and a key id: the server prefers the key id when
+ * it is not erased, exactly as the AES handlers do.
+ */
+
+/* SM4 ECB Request */
+typedef struct {
+    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     */
+} whMessageCrypto_Sm4EcbRequest;
+
+/* SM4 ECB Response */
+typedef struct {
+    uint32_t sz; /* Size of output data */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t WH_PAD[sizeof(whMessageCrypto_Sm4EcbRequest) - sizeof(uint32_t)];
+    /* Data follows:
+     * uint8_t out[sz]
+     */
+} whMessageCrypto_Sm4EcbResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm4EcbRequest) ==
+        sizeof(whMessageCrypto_Sm4EcbResponse),
+    "Sm4EcbRequest and Sm4EcbResponse must be the same size");
+
+int wh_MessageCrypto_TranslateSm4EcbRequest(
+    uint16_t magic, const whMessageCrypto_Sm4EcbRequest* src,
+    whMessageCrypto_Sm4EcbRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4EcbResponse(
+    uint16_t magic, const whMessageCrypto_Sm4EcbResponse* src,
+    whMessageCrypto_Sm4EcbResponse* dest);
+
+/* SM4 CBC Request */
+typedef struct {
+    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     * uint8_t iv[SM4_IV_SIZE]
+     */
+} whMessageCrypto_Sm4CbcRequest;
+
+/* SM4 CBC Response */
+typedef struct {
+    uint32_t sz; /* Size of output data */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t WH_PAD[sizeof(whMessageCrypto_Sm4CbcRequest) - sizeof(uint32_t)];
+    /* Data follows:
+     * uint8_t out[sz]
+     * uint8_t iv[SM4_IV_SIZE]
+     */
+} whMessageCrypto_Sm4CbcResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm4CbcRequest) ==
+        sizeof(whMessageCrypto_Sm4CbcResponse),
+    "Sm4CbcRequest and Sm4CbcResponse must be the same size");
+
+int wh_MessageCrypto_TranslateSm4CbcRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CbcRequest* src,
+    whMessageCrypto_Sm4CbcRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4CbcResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CbcResponse* src,
+    whMessageCrypto_Sm4CbcResponse* dest);
+
+/* SM4 CTR Request. The keystream makes encrypt and decrypt the same
+ * operation, so there is no direction field. */
+typedef struct {
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint32_t unused;    /* Keystream bytes left over from the last call */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     * uint8_t iv[SM4_IV_SIZE]
+     * uint8_t tmp[SM4_BLOCK_SIZE]
+     */
+} whMessageCrypto_Sm4CtrRequest;
+
+/* SM4 CTR Response */
+typedef struct {
+    uint32_t sz;     /* Size of output data */
+    uint32_t unused; /* Keystream bytes left over after this call */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t
+        WH_PAD[sizeof(whMessageCrypto_Sm4CtrRequest) - (sizeof(uint32_t) * 2)];
+    /* Data follows:
+     * uint8_t out[sz]
+     * uint8_t iv[SM4_IV_SIZE]
+     * uint8_t tmp[SM4_BLOCK_SIZE]
+     */
+} whMessageCrypto_Sm4CtrResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm4CtrRequest) ==
+        sizeof(whMessageCrypto_Sm4CtrResponse),
+    "Sm4CtrRequest and Sm4CtrResponse must be the same size");
+
+int wh_MessageCrypto_TranslateSm4CtrRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CtrRequest* src,
+    whMessageCrypto_Sm4CtrRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4CtrResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CtrResponse* src,
+    whMessageCrypto_Sm4CtrResponse* dest);
+
+/* SM4 authenticated cipher request, shared by GCM and CCM. The two modes take
+ * the same arguments and differ only in the handler that runs them, so they
+ * share one wire shape; the crypto type in the generic header tells them
+ * apart. */
+typedef struct {
+    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
+    uint32_t keyLen;    /* Length of key in bytes */
+    uint32_t sz;        /* Size of input data */
+    uint32_t ivSz;      /* Size of nonce */
+    uint32_t authInSz;  /* Size of auth data */
+    uint32_t authTagSz; /* Size of auth tag */
+    uint16_t keyId;     /* Key ID if using stored key */
+    uint8_t  WH_PAD[2]; /* Padding for alignment */
+    /* Data follows:
+     * uint8_t in[sz]
+     * uint8_t key[keyLen]
+     * uint8_t iv[ivSz]
+     * uint8_t authIn[authInSz]
+     * uint8_t authTag[authTagSz]
+     */
+} whMessageCrypto_Sm4AuthRequest;
+
+/* SM4 authenticated cipher response, shared by GCM and CCM */
+typedef struct {
+    uint32_t sz;        /* Size of output data */
+    uint32_t authTagSz; /* Size of auth tag */
+    /* Pad to ensure overlap for input and output buffers */
+    uint8_t
+        WH_PAD[sizeof(whMessageCrypto_Sm4AuthRequest) - (sizeof(uint32_t) * 2)];
+    /* Data follows:
+     * uint8_t out[sz]
+     * uint8_t authTag[authTagSz]
+     */
+} whMessageCrypto_Sm4AuthResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_Sm4AuthRequest) ==
+        sizeof(whMessageCrypto_Sm4AuthResponse),
+    "Sm4AuthRequest and Sm4AuthResponse must be the same size");
+
+int wh_MessageCrypto_TranslateSm4AuthRequest(
+    uint16_t magic, const whMessageCrypto_Sm4AuthRequest* src,
+    whMessageCrypto_Sm4AuthRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4AuthResponse(
+    uint16_t magic, const whMessageCrypto_Sm4AuthResponse* src,
+    whMessageCrypto_Sm4AuthResponse* dest);
 
 /*
  * RSA
@@ -1601,6 +1874,134 @@ int wh_MessageCrypto_TranslateAesGcmDmaRequest(
 int wh_MessageCrypto_TranslateAesGcmDmaResponse(
     uint16_t magic, const whMessageCrypto_AesGcmDmaResponse* src,
     whMessageCrypto_AesGcmDmaResponse* dest);
+
+/* SM4-ECB DMA Request - only the bulk data moves by DMA. The key travels
+ * inline because it is at most 16 bytes, and keySz of 0 means use keyId. */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;
+    whMessageCrypto_DmaBuffer output;
+    uint32_t                  enc;
+    uint32_t                  keyId;
+    uint32_t                  keySz;
+    uint8_t                   WH_PAD[4];
+    /* Trailing data: uint8_t key[keySz] */
+} whMessageCrypto_Sm4EcbDmaRequest;
+
+/* SM4-ECB DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint8_t                       WH_PAD[4];
+} whMessageCrypto_Sm4EcbDmaResponse;
+
+int wh_MessageCrypto_TranslateSm4EcbDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4EcbDmaRequest* src,
+    whMessageCrypto_Sm4EcbDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4EcbDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4EcbDmaResponse* src,
+    whMessageCrypto_Sm4EcbDmaResponse* dest);
+
+/* SM4-CBC DMA Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;
+    whMessageCrypto_DmaBuffer output;
+    uint32_t                  enc;
+    uint32_t                  keyId;
+    uint32_t                  keySz;
+    uint8_t                   WH_PAD[4];
+    /* Trailing data:
+     *     uint8_t iv[SM4_IV_SIZE]
+     *     uint8_t key[keySz]
+     */
+} whMessageCrypto_Sm4CbcDmaRequest;
+
+/* SM4-CBC DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint8_t                       WH_PAD[4];
+    /* Trailing data: uint8_t iv[SM4_IV_SIZE] */
+} whMessageCrypto_Sm4CbcDmaResponse;
+
+int wh_MessageCrypto_TranslateSm4CbcDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CbcDmaRequest* src,
+    whMessageCrypto_Sm4CbcDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4CbcDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CbcDmaResponse* src,
+    whMessageCrypto_Sm4CbcDmaResponse* dest);
+
+/* SM4-CTR DMA Request. No direction field, and the leftover keystream state
+ * rides along so a split stream resumes exactly, as in the non-DMA form. */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;
+    whMessageCrypto_DmaBuffer output;
+    uint32_t                  unused;
+    uint32_t                  keyId;
+    uint32_t                  keySz;
+    uint8_t                   WH_PAD[4];
+    /* Trailing data:
+     *     uint8_t iv[SM4_IV_SIZE]
+     *     uint8_t tmp[SM4_BLOCK_SIZE]
+     *     uint8_t key[keySz]
+     */
+} whMessageCrypto_Sm4CtrDmaRequest;
+
+/* SM4-CTR DMA Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint32_t                      unused;
+    /* Trailing data:
+     *     uint8_t iv[SM4_IV_SIZE]
+     *     uint8_t tmp[SM4_BLOCK_SIZE]
+     */
+} whMessageCrypto_Sm4CtrDmaResponse;
+
+int wh_MessageCrypto_TranslateSm4CtrDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4CtrDmaRequest* src,
+    whMessageCrypto_Sm4CtrDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4CtrDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4CtrDmaResponse* src,
+    whMessageCrypto_Sm4CtrDmaResponse* dest);
+
+/* SM4 authenticated cipher DMA request, shared by GCM and CCM. The AAD moves
+ * by DMA alongside the payload; the nonce and tag stay inline because both
+ * are small and the tag has to come back in the response. */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;
+    whMessageCrypto_DmaBuffer output;
+    whMessageCrypto_DmaBuffer aad;
+    uint32_t                  enc;
+    uint32_t                  keyId;
+    uint32_t                  keySz;
+    uint32_t                  ivSz;
+    uint32_t                  authTagSz;
+    uint8_t                   WH_PAD[4];
+    /* Trailing data:
+     *     uint8_t iv[ivSz]
+     *     uint8_t authTag[authTagSz]
+     *     uint8_t key[keySz]
+     */
+} whMessageCrypto_Sm4AuthDmaRequest;
+
+/* SM4 authenticated cipher DMA response, shared by GCM and CCM */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint32_t                      authTagSz;
+    /* Trailing data: uint8_t authTag[authTagSz] */
+} whMessageCrypto_Sm4AuthDmaResponse;
+
+int wh_MessageCrypto_TranslateSm4AuthDmaRequest(
+    uint16_t magic, const whMessageCrypto_Sm4AuthDmaRequest* src,
+    whMessageCrypto_Sm4AuthDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSm4AuthDmaResponse(
+    uint16_t magic, const whMessageCrypto_Sm4AuthDmaResponse* src,
+    whMessageCrypto_Sm4AuthDmaResponse* dest);
 
 /* ML-DSA DMA Key Generation Request */
 typedef struct {
