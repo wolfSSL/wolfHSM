@@ -484,7 +484,7 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
               len + key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req->enc    = enc;
@@ -826,7 +826,7 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
               len + key_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req->enc    = enc;
@@ -1159,7 +1159,7 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
               len + key_len + iv_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req->enc    = enc;
@@ -1507,7 +1507,7 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
               len + key_len + iv_len + authin_len + ((enc == 0) ? tag_len : 0);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req->enc       = enc;
@@ -1635,15 +1635,17 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
                                const uint8_t* authin, uint32_t authin_len,
                                const uint8_t* dec_tag, uint32_t tag_len)
 {
-    int                               ret     = WH_ERROR_OK;
-    whMessageCrypto_AesGcmDmaRequest* req     = NULL;
-    uint8_t*                          dataPtr = NULL;
-    uintptr_t                         inAddr  = 0;
-    uintptr_t                         outAddr = 0;
-    uintptr_t                         aadAddr = 0;
-    bool                              inAcq   = false;
-    bool                              outAcq  = false;
-    bool                              aadAcq  = false;
+    int                               ret       = WH_ERROR_OK;
+    whMessageCrypto_AesGcmDmaRequest* req       = NULL;
+    uint8_t*                          dataPtr   = NULL;
+    uintptr_t                         inAddr    = 0;
+    uintptr_t                         outAddr   = 0;
+    uintptr_t                         aadAddr   = 0;
+    bool                              inAcq     = false;
+    bool                              outAcq    = false;
+    bool                              aadAcq    = false;
+    bool                              aadInline = false;
+    uint8_t*                          req_aad;
     uint8_t*                          req_iv;
     uint8_t*                          req_tag;
     uint8_t*                          req_key;
@@ -1687,6 +1689,16 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         req_len += req->keySz;
     }
 
+    /* DMA would demand the AAD live in memory the server can address, which a
+     * TLS record header on the caller's stack often does not. */
+    req_aad = req_key + req->keySz;
+    if ((authin != NULL) && (authin_len > 0) &&
+        (authin_len <= WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE) &&
+        ((req_len + authin_len) <= WOLFHSM_CFG_COMM_DATA_LEN)) {
+        aadInline = true;
+        req_len += authin_len;
+    }
+
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -1699,6 +1711,9 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     }
     if (req->keySz > 0) {
         memcpy(req_key, (const uint8_t*)(aes->devKey), req->keySz);
+    }
+    if (aadInline) {
+        memcpy(req_aad, authin, authin_len);
     }
 
     if (in != NULL && len > 0) {
@@ -1725,12 +1740,18 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
 
     if (ret == WH_ERROR_OK && authin != NULL && authin_len > 0) {
         req->aad.sz = authin_len;
-        ret         = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)authin, (void**)&aadAddr, req->aad.sz,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        if (ret == WH_ERROR_OK) {
-            aadAcq        = true;
-            req->aad.addr = aadAddr;
+        if (aadInline) {
+            /* addr 0 with a non-zero size means "follows the key inline". */
+            req->aad.addr = 0;
+        }
+        else {
+            ret = wh_Client_DmaProcessClientAddress(
+                ctx, (uintptr_t)authin, (void**)&aadAddr, req->aad.sz,
+                WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+            if (ret == WH_ERROR_OK) {
+                aadAcq        = true;
+                req->aad.addr = aadAddr;
+            }
         }
     }
 

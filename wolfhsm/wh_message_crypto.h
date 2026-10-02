@@ -1582,6 +1582,7 @@ typedef struct {
      *     uint8_t iv[ivSz]
      *     uint8_t authTag[authTagSz]
      *     uint8_t key[keySz]
+     *     uint8_t aad[aad.sz]         only when aad.addr == 0
      */
 } whMessageCrypto_AesGcmDmaRequest;
 

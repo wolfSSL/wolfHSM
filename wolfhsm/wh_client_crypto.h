@@ -2087,11 +2087,14 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
 /**
  * @brief Send an AES-GCM DMA request to the server (non-blocking)
  *
- * Performs PRE address translation for the input, output, and AAD buffers,
- * stashes the translated addresses in ctx->dma.asyncCtx.aes for POST
- * cleanup, and sends the DMA request to the server. Does NOT wait for a
- * reply. The IV, auth tag (for decrypt), and key are passed inline. Caller
- * must keep in, out, and authin valid until the matching
+ * Performs PRE address translation for the input and output buffers, stashes
+ * the translated addresses in ctx->dma.asyncCtx.aes for POST cleanup, and
+ * sends the DMA request to the server. Does NOT wait for a reply. The IV,
+ * auth tag (for decrypt), and key are passed inline. An AAD of at most
+ * WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE bytes is copied inline as well, and is
+ * therefore neither address-translated nor passed to the DMA callbacks; a
+ * larger AAD is translated and cleaned up like the other buffers. Caller must
+ * keep in, out, and authin valid until the matching
  * wh_Client_AesGcmDmaResponse completes.
  *
  * Contract: at most one outstanding async request may be in flight per
@@ -2115,8 +2118,9 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
  * Single-shot RecvResponse; returns WH_ERROR_NOTREADY if the server has not
  * yet replied. The output data is written by the server directly to the
  * client buffer passed to wh_Client_AesGcmDmaRequest; for encrypt the auth
- * tag is returned inline and copied into enc_tag. POST DMA cleanup for
- * input, output, and AAD buffers is performed on every non-NOTREADY return.
+ * tag is returned inline and copied into enc_tag. POST DMA cleanup is
+ * performed on every non-NOTREADY return for the input and output buffers,
+ * and for the AAD buffer when it was passed over DMA rather than inline.
  *
  * @param[in]  ctx     Pointer to the client context
  * @param[in]  aes     Pointer to the AES structure
