@@ -61,6 +61,11 @@
 #include "wolfhsm/wh_message_crypto.h"
 
 
+#if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
+    (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
+static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info);
+#endif
+
 #if defined(WOLFSSL_HAVE_MLKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma);
@@ -738,10 +743,8 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
 #endif
 #ifdef WOLF_CRYPTO_CB_SHAKE_XOF
-                /* Absorb and squeeze are not offloaded yet. Declining is
-                 * safe because the host wc_Shake state is still current. */
                 if (info->hash.shakeOp != WC_SHAKE_OP_NONE) {
-                    ret = CRYPTOCB_UNAVAILABLE;
+                    ret = _handleShakeXof(ctx, info);
                     break;
                 }
 #endif
@@ -772,7 +775,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                         break;
 #endif
                 }
-                /* Requested output size is too big, surface error. */
+                /* Output too big for one response; let software produce it */
                 if (ret == WH_ERROR_NOSPACE) {
                     ret = CRYPTOCB_UNAVAILABLE;
                 }
@@ -850,6 +853,49 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     }
     return ret;
 }
+
+#if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
+    (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
+/* Declining an unknown op is safe as the wc_Shake state is still current */
+static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    wc_Shake* sha = info->hash.sha3;
+    int       op  = info->hash.shakeOp;
+    int       ret = CRYPTOCB_UNAVAILABLE;
+
+    switch (info->hash.type) {
+#ifdef WOLFSSL_SHAKE128
+        case WC_HASH_TYPE_SHAKE128:
+            if (op == WC_SHAKE_OP_ABSORB) {
+                ret = wh_Client_Shake128Absorb(ctx, sha, info->hash.in,
+                                               info->hash.inSz);
+            }
+            else if (op == WC_SHAKE_OP_SQUEEZE) {
+                ret = wh_Client_Shake128SqueezeBlocks(
+                    ctx, sha, info->hash.digest,
+                    info->hash.outSz / (WC_SHA3_128_COUNT * 8u));
+            }
+            break;
+#endif
+#ifdef WOLFSSL_SHAKE256
+        case WC_HASH_TYPE_SHAKE256:
+            if (op == WC_SHAKE_OP_ABSORB) {
+                ret = wh_Client_Shake256Absorb(ctx, sha, info->hash.in,
+                                               info->hash.inSz);
+            }
+            else if (op == WC_SHAKE_OP_SQUEEZE) {
+                ret = wh_Client_Shake256SqueezeBlocks(
+                    ctx, sha, info->hash.digest,
+                    info->hash.outSz / (WC_SHA3_256_COUNT * 8u));
+            }
+            break;
+#endif
+        default:
+            break;
+    }
+    return ret;
+}
+#endif /* WOLF_CRYPTO_CB_SHAKE_XOF */
 
 #if defined(WOLFSSL_HAVE_MLKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,

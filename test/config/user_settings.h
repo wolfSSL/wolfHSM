@@ -143,6 +143,8 @@
 #ifndef WOLFHSM_CFG_TEST_NO_SHAKE256
 #define WOLFSSL_SHAKE256
 #endif
+/* Also dispatch SHAKE absorb and squeeze to the crypto callback */
+#define WOLF_CRYPTO_CB_SHAKE_XOF
 
 /* ML-DSA and ML-KEM both hash with SHAKE128 and SHAKE256. */
 #if !defined(WOLFHSM_CFG_TEST_NO_SHAKE128) && \
