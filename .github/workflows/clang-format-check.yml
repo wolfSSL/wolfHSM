@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   clang-format-check:
-    name: Check PR formatting with clang-format-15
+    name: Check PR formatting with clang-format-18
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -23,9 +23,15 @@ jobs:
       with:
         fetch-depth: 0  # Need full history to compare with main branch
 
-    - name: Install clang-format-15
+    - name: Verify clang-format-18
       run: |
-        sudo apt-get install -y clang-format-15
+        # 18 is preinstalled on ubuntu-latest. use it to avoid an update+install
+        command -v clang-format-18 >/dev/null || {
+          echo "clang-format-18 is missing from the runner image"; exit 1; }
+        command -v git-clang-format-18 >/dev/null || {
+          echo "git-clang-format-18 is missing from the runner image"; exit 1; }
+        clang-format-18 --version
+        clang-format --version || true
 
     - name: Fetch base branch
       env:
@@ -35,44 +41,8 @@ jobs:
 
     - name: Check formatting
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
-        echo "Running git-clang-format-15 to check for formatting issues..."
         echo "Comparing against base branch: $BASE_REF"
-
-        # Create a temporary file for the diff and ensure cleanup
-        DIFF_FILE="$(mktemp)"
-        trap 'rm -f "$DIFF_FILE"' EXIT
-
-        # Run git-clang-format against the PR base commit and capture status safely under set -e
-        if git-clang-format-15 "$BASE_REF" > "$DIFF_FILE"; then
-          status=0
-        else
-          status=$?
-        fi
-
-        if [ "$status" -eq 0 ]; then
-          echo "✅ Code is properly formatted!"
-          exit 0
-        elif [ "$status" -eq 1 ]; then
-          echo "❌ Code formatting issues detected!"
-          echo ""
-          echo "The following changes would be made by clang-format-15:"
-          echo "=================================================="
-          cat "$DIFF_FILE"
-          echo "=================================================="
-          echo ""
-          echo "Please run the following command locally on your feature branch and commit the changes:"
-          echo "  git-clang-format-15 $BASE_REF"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
-        else
-          echo "❌ git-clang-format-15 failed with exit code $status"
-          echo "Output (if any):"
-          cat "$DIFF_FILE"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
-        fi
+        # Same script the pre-commit hook runs, so local and CI agree.
+        .github/scripts/clang-format-check.sh "$BASE_REF"

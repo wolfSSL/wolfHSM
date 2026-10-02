@@ -20,6 +20,18 @@ PKCS11 and AUTOSAR SHE.
 For a technical overview of wolfHSM and instructions on using wolfHSM in your application,
 please refer to the following resources.
 
+## Formatting
+
+Changed lines must be clang-format clean. CI checks this on every pull
+request, and the same check can be run locally:
+
+    sudo apt-get install -y clang-format-18
+    .github/scripts/clang-format-check.sh
+
+To run it on every commit, install it as a hook in your own clone:
+
+    ln -s ../../.github/scripts/clang-format-check.sh .git/hooks/pre-commit
+
 ## Resources
 
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
