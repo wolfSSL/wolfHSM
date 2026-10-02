@@ -506,7 +506,8 @@ static int _whTest_CryptoKeyUsagePolicies(whClientContext* client)
 
 #if !defined(NO_AES) && defined(HAVE_AES_CBC) && \
     defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
-static int whTest_RevocationTryAESEncrypt(whKeyId keyId, WC_RNG* rng,
+static int whTest_RevocationTryAESEncrypt(whClientContext* client,
+                                          whKeyId keyId, WC_RNG* rng,
                                           int* encryptRes)
 {
     int     ret;
@@ -584,7 +585,7 @@ static int _whTest_CryptoKeyRevocationAesCbc(whClientContext* client)
         return ret;
     }
 
-    ret = whTest_RevocationTryAESEncrypt(keyId, rng, &encryptRes);
+    ret = whTest_RevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to encrypt with unrevoked AES key: %d\n", ret);
         (void)wh_Client_KeyEvict(client, keyId);
@@ -605,7 +606,7 @@ static int _whTest_CryptoKeyRevocationAesCbc(whClientContext* client)
         return ret;
     }
 
-    ret = whTest_RevocationTryAESEncrypt(keyId, rng, &encryptRes);
+    ret = whTest_RevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
     if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
         WH_ERROR_PRINT(
             "Encrypt with revoked AES key should fail (%d), got %d\n",
@@ -621,7 +622,7 @@ static int _whTest_CryptoKeyRevocationAesCbc(whClientContext* client)
         return ret;
     }
 
-    ret = whTest_RevocationTryAESEncrypt(keyId, rng, &encryptRes);
+    ret = whTest_RevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
     if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
         WH_ERROR_PRINT(
             "Encrypt with revoked AES key should fail (%d), got %d\n",
@@ -653,7 +654,7 @@ static int _whTest_CryptoKeyRevocationAesCbc(whClientContext* client)
         (void)wc_FreeRng(rng);
         return ret;
     }
-    ret = whTest_RevocationTryAESEncrypt(keyId, rng, &encryptRes);
+    ret = whTest_RevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
     if (ret != 0 || encryptRes != 0) {
         WH_ERROR_PRINT(
             "Failed to encrypt with unrevoked AES key (2nd time): %d\n", ret);
@@ -673,7 +674,7 @@ static int _whTest_CryptoKeyRevocationAesCbc(whClientContext* client)
         (void)wc_FreeRng(rng);
         return ret;
     }
-    ret = whTest_RevocationTryAESEncrypt(keyId, rng, &encryptRes);
+    ret = whTest_RevocationTryAESEncrypt(client, keyId, rng, &encryptRes);
     if (ret != 0 || encryptRes != WH_ERROR_USAGE) {
         WH_ERROR_PRINT(
             "Encrypt with revoked AES key should fail (%d), got %d\n",

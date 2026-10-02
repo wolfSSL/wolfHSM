@@ -154,6 +154,7 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
     whNvmMetadata* cacheMeta = NULL;
     whNvmMetadata  nvmMeta;
     whNvmFlags     flags;
+    whNvmFlags     denyMask;
     int            ret;
     int            foundInCache = 0;
     int            foundInNvm   = 0;
@@ -247,7 +248,25 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
 
         case WH_KS_OP_COMMIT:
         case WH_KS_OP_REVOKE:
-            /* Always allowed */
+            /* Both rewrite the stored object from the cache slot, so the
+             * stored flags decide; a cached copy cannot launder them. */
+            if (!foundInNvm && (server->nvm != NULL)) {
+                ret = wh_Nvm_GetMetadata(server->nvm, keyId, &nvmMeta);
+                if (ret == WH_ERROR_OK) {
+                    foundInNvm = 1;
+                }
+                else if (ret != WH_ERROR_NOTFOUND) {
+                    return ret; /* unreadable flags: deny the write */
+                }
+            }
+            /* Revoke leaves NONMODIFIABLE permitted so an already-revoked key
+             * can be revoked again. */
+            denyMask = (op == WH_KS_OP_COMMIT)
+                           ? (WH_NVM_FLAGS_NONMODIFIABLE | WH_NVM_FLAGS_TRUSTED)
+                           : WH_NVM_FLAGS_TRUSTED;
+            if (foundInNvm && ((nvmMeta.flags & denyMask) != 0)) {
+                return WH_ERROR_ACCESS;
+            }
             break;
         default:
             /* unknown operation */
