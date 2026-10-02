@@ -2138,7 +2138,8 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
  *
  * This function performs a CMAC operation with the specified parameters.
  * It can be used for initialization, update, or finalization of CMAC
- * operations, depending on the input arguments.
+ * operations, depending on the input arguments. Input larger than one comm
+ * buffer message is split into multiple Update requests.
  *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in,out] cmac Pointer to the CMAC structure.
@@ -2231,12 +2232,16 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
  *                         AES_256_KEY_SIZE; 0 for cached/HSM key).
  * @param[in] in           Input data (may be NULL only if inLen == 0).
  * @param[in] inLen        Input length. Must fit in the comm buffer alongside
- *                         the request header and key bytes.
+ *                         the request header and key bytes. Any length up to
+ *                         WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ always
+ *                         fits; larger inputs must be split by the caller.
  * @param[out] requestSent Set to true if a server request was sent and a
- *                         matching Response call is required; false only
- *                         when inLen == 0 and keyLen == 0 (no-op).
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments or
- *         when inLen exceeds the per-call capacity.
+ *                         matching Response call is required; false when the
+ *                         input fits in the partial block buffer and was
+ *                         absorbed locally (including key-only calls).
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments, an
+ *         invalid AES key length on a local absorb, or when inLen exceeds the
+ *         per-call capacity.
  */
 int wh_Client_CmacUpdateRequest(whClientContext* ctx, Cmac* cmac, CmacType type,
                                 const uint8_t* key, uint32_t keyLen,
@@ -2260,7 +2265,7 @@ int wh_Client_CmacUpdateResponse(whClientContext* ctx, Cmac* cmac);
  * @brief Async request half of a non-DMA CMAC streaming Final.
  *
  * Sends a Final request with no inline input — the round-tripped
- * resumeState carries the current cmac->buffer (0..AES_BLOCK_SIZE-1 bytes)
+ * resumeState carries the current cmac->buffer (0..AES_BLOCK_SIZE bytes)
  * as the trailing partial block for the server to finalize. Key material
  * travels with the request when available.
  */
@@ -2365,16 +2370,17 @@ int wh_Client_CmacGenerateDmaResponse(whClientContext* ctx, Cmac* cmac,
  *
  * Performs PRE address translation for the input buffer, round-trips the
  * full CMAC state to the server via resumeState, and sends every byte of
- * the input via DMA. No client-side partial-block buffering and no inline
- * trailing data — the server runs wc_CmacUpdate against the round-tripped
- * state. Stashes the translated input address for POST cleanup in the
- * matching Response. Does NOT wait for a reply.
+ * the input via DMA. No inline trailing data — the server runs
+ * wc_CmacUpdate against the round-tripped state. Stashes the translated
+ * input address for POST cleanup in the matching Response. Does NOT wait
+ * for a reply.
  *
  * Contract: at most one outstanding async request may be in flight per
  * whClientContext. If *requestSent is true, the caller MUST keep in valid
  * and call wh_Client_CmacDmaUpdateResponse before issuing any other async
- * Request. *requestSent is false only when inLen == 0 and keyLen == 0
- * (no-op).
+ * Request. *requestSent is false when the input fits in the partial block
+ * buffer and was absorbed locally (including key-only calls); no DMA
+ * mapping is made in that case.
  */
 int wh_Client_CmacDmaUpdateRequest(whClientContext* ctx, Cmac* cmac,
                                    CmacType type, const uint8_t* key,

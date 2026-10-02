@@ -1084,6 +1084,10 @@ typedef struct {
      (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
      (uint32_t)sizeof(whMessageCrypto_CmacAesRequest) - 32u)
 
+/* Max bytes per update with any key size. No alignment is required. */
+#define WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ \
+    WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ
+
 int wh_MessageCrypto_TranslateCmacAesState(
     uint16_t magic, const whMessageCrypto_CmacAesState* src,
     whMessageCrypto_CmacAesState* dest);

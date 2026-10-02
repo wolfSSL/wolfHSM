@@ -1759,6 +1759,14 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
         break;
     }
 
+    /* Translate codes to wolfCrypt */
+    if (ret == WH_ERROR_BADARGS) {
+        ret = BAD_FUNC_ARG;
+    }
+    else if (ret == WH_ERROR_BUFFER_SIZE) {
+        ret = BUFFER_E;
+    }
+
     if (ret == CRYPTOCB_UNAVAILABLE) {
         WH_DEBUG_CLIENT("X not implemented: algo->type:%d\n", info->algo_type);
     } else {
