@@ -239,6 +239,35 @@ static int _HandleMlKemDecapsDma(whServerContext* ctx, uint16_t magic,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+static int _HandleFrodoKemKeyGen(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+static int _HandleFrodoKemEncaps(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+static int _HandleFrodoKemDecaps(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize);
+#ifdef WOLFHSM_CFG_DMA
+static int _HandleFrodoKemKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize);
+static int _HandleFrodoKemEncapsDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize);
+static int _HandleFrodoKemDecapsDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize);
+#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 static void _CryptoEvictKeyLocked(whServerContext* ctx, whKeyId keyId)
 {
     int ret;
@@ -1120,6 +1149,100 @@ static int _MlKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* The cache import below always requests a max-size slot. FrodoKEM private
+ * keys are far larger than any other supported key (19,888 bytes at 640,
+ * 43,088 at 1344), so a build that enables FrodoKEM without sizing the big
+ * cache buffer to match has no working cache keygen or import. */
+WH_UTILS_STATIC_ASSERT(
+    WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >= FRODOKEM_MAX_PRIVATE_KEY_SIZE,
+    "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for FrodoKEM key");
+
+int wh_Server_FrodoKemKeyCacheImport(whServerContext* ctx, FrodoKemKey* key,
+                                     whKeyId keyId, whNvmFlags flags,
+                                     uint16_t label_len, uint8_t* label)
+{
+    int            ret = WH_ERROR_OK;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       keySize = FRODOKEM_MAX_PRIVATE_KEY_SIZE;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > sizeof(cacheMeta->label)))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
+                                                &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FrodoKemSerializeKey(key, keySize, cacheBuf, &keySize);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = keySize;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+
+int wh_Server_FrodoKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                     FrodoKemKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret = WH_ERROR_OK;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FrodoKemDeserializeKey(cacheBuf, cacheMeta->len, key);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+    }
+    return ret;
+}
+
+static int _FrodoKemKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                          whNvmFlags   requiredUsage,
+                                          FrodoKemKey* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Freshen, check usage and deserialize under one hold of the NVM lock so
+     * the policy verdict, the metadata length and the key bytes all come from
+     * the same snapshot of the shared cache slot. */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta, requiredUsage);
+        }
+        if (ret == WH_ERROR_OK) {
+            ret =
+                wh_Crypto_FrodoKemDeserializeKey(cacheBuf, cacheMeta->len, key);
+            WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+        }
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+    } /* WH_SERVER_NVM_LOCK() */
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
 /* The sign path (and its slot callbacks) is unavailable in verify-only builds;
  * gate on at least one non-verify-only stateful algorithm being enabled. */
@@ -5881,6 +6004,382 @@ cleanup:
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* A FrodoKEM key type is a base parameter set optionally combined with the AES
+ * and ephemeral modifiers. Reject anything outside that shape early; the base
+ * set is still checked against what the build compiled in. */
+static int _IsFrodoKemTypeSupported(int type)
+{
+    int ret = 0;
+
+    if ((type & ~(FRODOKEM_BASE_MASK | FRODOKEM_AES | FRODOKEM_EPHEMERAL)) !=
+        0) {
+        return 0;
+    }
+#ifndef WOLFSSL_FRODOKEM_AES
+    if ((type & FRODOKEM_AES) != 0) {
+        return 0;
+    }
+#endif
+#ifndef WOLFSSL_FRODOKEM_EPHEMERAL
+    if ((type & FRODOKEM_EPHEMERAL) != 0) {
+        return 0;
+    }
+#endif
+
+    switch (type & FRODOKEM_BASE_MASK) {
+#ifdef WOLFSSL_WC_FRODOKEM_640
+        case WC_FRODOKEM_640:
+            ret = 1;
+            break;
+#endif
+#ifdef WOLFSSL_WC_FRODOKEM_976
+        case WC_FRODOKEM_976:
+            ret = 1;
+            break;
+#endif
+#ifdef WOLFSSL_WC_FRODOKEM_1344
+        case WC_FRODOKEM_1344:
+            ret = 1;
+            break;
+#endif
+        default:
+            ret = 0;
+            break;
+    }
+
+    return ret;
+}
+
+static int _HandleFrodoKemKeyGen(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_MAKE_KEY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                    ret = WH_ERROR_OK;
+    FrodoKemKey                            key[1];
+    whMessageCrypto_FrodoKemKeyGenRequest  req;
+    whMessageCrypto_FrodoKemKeyGenResponse res;
+    uint16_t                               res_size = 0;
+    uint8_t*                               res_out;
+    uint16_t                               max_size;
+    whKeyId                                key_id;
+    uint16_t                               label_size = WH_NVM_LABEL_LEN;
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemKeyGenRequest(
+        magic, (whMessageCrypto_FrodoKemKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    res_out = (uint8_t*)cryptoDataOut +
+              sizeof(whMessageCrypto_FrodoKemKeyGenResponse);
+    /* cryptoDataOut already points past the generic response header, so the
+     * space left in the comm buffer is the total minus BOTH headers. */
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          sizeof(whMessageCrypto_GenericResponseHeader) -
+                          sizeof(whMessageCrypto_FrodoKemKeyGenResponse));
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+    if (ret == 0) {
+        ret = wc_FrodoKemKey_MakeKey(key, ctx->crypto->rng);
+        if (ret == 0) {
+            if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+                key_id = WH_KEYID_ERASED;
+                ret    = wh_Crypto_FrodoKemSerializeKey(key, max_size, res_out,
+                                                        &res_size);
+            }
+            else {
+                /* Hold the NVM lock so id allocation and cache import are
+                 * atomic with respect to other server contexts under
+                 * THREADSAFE. */
+                ret = WH_SERVER_NVM_LOCK(ctx);
+                if (ret == WH_ERROR_OK) {
+                    if (WH_KEYID_ISERASED(key_id)) {
+                        ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret = wh_Server_FrodoKemKeyCacheImport(
+                            ctx, key, key_id, req.flags, label_size, req.label);
+                    }
+                    (void)WH_SERVER_NVM_UNLOCK(ctx);
+                } /* WH_SERVER_NVM_LOCK() */
+                if (ret == WH_ERROR_OK) {
+                    /* Best-effort public key export, as for ML-KEM. A FrodoKEM
+                     * public key is at least 9,616 bytes, so this only fits
+                     * when WOLFHSM_CFG_COMM_DATA_LEN has been raised a long
+                     * way; otherwise the body is left empty and the cached key
+                     * stands. */
+                    word32 pubSize = 0;
+                    if ((wc_FrodoKemKey_PublicKeySize(key, &pubSize) == 0) &&
+                        ((uint32_t)pubSize <= (uint32_t)max_size) &&
+                        (wc_FrodoKemKey_EncodePublicKey(key, res_out,
+                                                        pubSize) == 0)) {
+                        res_size = (uint16_t)pubSize;
+                    }
+                    else {
+                        res_size = 0;
+                    }
+                }
+            }
+        }
+        wc_FrodoKemKey_Free(key);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
+        res.len   = res_size;
+        (void)wh_MessageCrypto_TranslateFrodoKemKeyGenResponse(
+            magic, &res,
+            (whMessageCrypto_FrodoKemKeyGenResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_FrodoKemKeyGenResponse) + res_size;
+    }
+
+    return ret;
+#endif /* WOLFSSL_FRODOKEM_NO_MAKE_KEY */
+}
+
+static int _HandleFrodoKemEncaps(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_ENCAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                    ret = WH_ERROR_OK;
+    FrodoKemKey                            key[1];
+    whMessageCrypto_FrodoKemEncapsRequest  req;
+    whMessageCrypto_FrodoKemEncapsResponse res;
+    whKeyId                                key_id;
+    uint8_t*                               res_ct;
+    uint8_t*                               res_ss;
+    word32                                 ct_len;
+    word32                                 ss_len;
+    word32                                 max_out;
+    int                                    evict     = 0;
+    int                                    keyInited = 0;
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemEncapsRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemEncapsRequest(
+        magic, (whMessageCrypto_FrodoKemEncapsRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_FRODOKEM_ENCAPS_OPTIONS_EVICT);
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+    if (ret == 0) {
+        keyInited = 1;
+        /* Export the key, enforcing the derive usage policy against the same
+         * locked snapshot that is exported */
+        ret = _FrodoKemKeyCacheExportEnforce(ctx, key_id,
+                                             WH_NVM_FLAGS_USAGE_DERIVE, key);
+    }
+
+    /* Verify the exported key matches the requested type */
+    if (ret == WH_ERROR_OK && key->type != (int)req.type) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_CipherTextSize(key, &ct_len);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_FrodoKemKey_SharedSecretSize(key, &ss_len);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res_ct = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemEncapsResponse);
+        res_ss = res_ct + ct_len;
+        /* Both headers come out of the comm buffer, not just this one. */
+        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                           sizeof(whMessageCrypto_GenericResponseHeader) -
+                           sizeof(whMessageCrypto_FrodoKemEncapsResponse));
+        if (ct_len + ss_len > max_out) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_Encapsulate(key, res_ct, res_ss, ctx->crypto->rng);
+        if (ret == WH_ERROR_OK) {
+            res.ctSz = ct_len;
+            res.ssSz = ss_len;
+            (void)wh_MessageCrypto_TranslateFrodoKemEncapsResponse(
+                magic, &res,
+                (whMessageCrypto_FrodoKemEncapsResponse*)cryptoDataOut);
+            *outSize = sizeof(whMessageCrypto_FrodoKemEncapsResponse) + ct_len +
+                       ss_len;
+        }
+        else {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ss_len);
+        }
+    }
+
+    if (keyInited) {
+        wc_FrodoKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+    return ret;
+#endif /* WOLFSSL_FRODOKEM_NO_ENCAPSULATE */
+}
+
+static int _HandleFrodoKemDecaps(whServerContext* ctx, uint16_t magic,
+                                 int devId, const void* cryptoDataIn,
+                                 uint16_t inSize, void* cryptoDataOut,
+                                 uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_DECAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                    ret = WH_ERROR_OK;
+    FrodoKemKey                            key[1];
+    whMessageCrypto_FrodoKemDecapsRequest  req;
+    whMessageCrypto_FrodoKemDecapsResponse res;
+    whKeyId                                key_id;
+    byte*                                  req_ct;
+    byte*                                  res_ss;
+    uint32_t                               available;
+    word32                                 ss_len;
+    word32                                 max_out;
+    int                                    evict     = 0;
+    int                                    keyInited = 0;
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemDecapsRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemDecapsRequest(
+        magic, (whMessageCrypto_FrodoKemDecapsRequest*)cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_FRODOKEM_DECAPS_OPTIONS_EVICT);
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    available = inSize - sizeof(whMessageCrypto_FrodoKemDecapsRequest);
+    if (req.ctSz > available) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+    req_ct = (byte*)cryptoDataIn +
+             sizeof(whMessageCrypto_FrodoKemDecapsRequest);
+
+    ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        /* Export the key, enforcing the derive usage policy against the same
+         * locked snapshot that is exported */
+        ret = _FrodoKemKeyCacheExportEnforce(ctx, key_id,
+                                             WH_NVM_FLAGS_USAGE_DERIVE, key);
+    }
+
+    /* Verify the exported key matches the requested type */
+    if (ret == WH_ERROR_OK && key->type != (int)req.type) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_SharedSecretSize(key, &ss_len);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res_ss = (byte*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemDecapsResponse);
+        /* Both headers come out of the comm buffer, not just this one. */
+        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                           sizeof(whMessageCrypto_GenericResponseHeader) -
+                           sizeof(whMessageCrypto_FrodoKemDecapsResponse));
+        if (ss_len > max_out) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_Decapsulate(key, res_ss, req_ct, req.ctSz);
+        if (ret == WH_ERROR_OK) {
+            res.ssSz = ss_len;
+            (void)wh_MessageCrypto_TranslateFrodoKemDecapsResponse(
+                magic, &res,
+                (whMessageCrypto_FrodoKemDecapsResponse*)cryptoDataOut);
+            *outSize = sizeof(whMessageCrypto_FrodoKemDecapsResponse) + ss_len;
+        }
+        else {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ss_len);
+        }
+    }
+
+    if (keyInited) {
+        wc_FrodoKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+    return ret;
+#endif /* WOLFSSL_FRODOKEM_NO_DECAPSULATE */
+}
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 #if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
 static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
@@ -5931,7 +6430,7 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
 }
 #endif
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
 static int _HandlePqcKemAlgorithm(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
                                   uint16_t cryptoInSize, void* cryptoDataOut,
@@ -5941,6 +6440,7 @@ static int _HandlePqcKemAlgorithm(whServerContext* ctx, uint16_t magic,
     int ret = WH_ERROR_NOHANDLER;
 
     switch (pqAlgoType) {
+#ifdef WOLFSSL_HAVE_MLKEM
         case WC_PQC_KEM_TYPE_KYBER: {
             switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
@@ -5963,6 +6463,31 @@ static int _HandlePqcKemAlgorithm(whServerContext* ctx, uint16_t magic,
                     break;
             }
         } break;
+#endif /* WOLFSSL_HAVE_MLKEM */
+#ifdef WOLFSSL_HAVE_FRODOKEM
+        case WC_PQC_KEM_TYPE_FRODOKEM: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                    ret = _HandleFrodoKemKeyGen(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                    ret = _HandleFrodoKemEncaps(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret = _HandleFrodoKemDecaps(ctx, magic, devId, cryptoDataIn,
+                                                cryptoInSize, cryptoDataOut,
+                                                cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_FRODOKEM */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -6168,7 +6693,7 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
                 case WC_PK_TYPE_PQC_KEM_ENCAPS:
                 case WC_PK_TYPE_PQC_KEM_DECAPS:
@@ -7381,7 +7906,8 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
 }
 #endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
+#ifdef WOLFSSL_HAVE_MLKEM
 static int _HandleMlKemKeyGenDma(whServerContext* ctx, uint16_t magic,
                                  int devId, const void* cryptoDataIn,
                                  uint16_t inSize, void* cryptoDataOut,
@@ -7774,6 +8300,424 @@ cleanup:
     return ret;
 #endif
 }
+#endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+static int _HandleFrodoKemKeyGenDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_MAKE_KEY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                       ret           = WH_ERROR_OK;
+    FrodoKemKey                               key[1];
+    void*                                     clientOutAddr = NULL;
+    uint16_t                                  keySize       = 0;
+    whMessageCrypto_FrodoKemKeyGenDmaRequest  req;
+    whMessageCrypto_FrodoKemKeyGenDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemKeyGenDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemKeyGenDmaRequest(
+        magic, (whMessageCrypto_FrodoKemKeyGenDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    else {
+        ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_FrodoKemKey_MakeKey(key, ctx->crypto->rng);
+            if (ret == WH_ERROR_OK) {
+                if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+                    ret = wh_Server_DmaProcessClientAddress(
+                        ctx, req.key.addr, &clientOutAddr, req.key.sz,
+                        WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+                    if (ret == WH_ERROR_OK) {
+                        /* PRE succeeded, so exactly one POST must follow on
+                         * every path below. Keep the serialize error: the POST
+                         * is cleanup and must not overwrite it. */
+                        int postRet;
+
+                        ret = wh_Crypto_FrodoKemSerializeKey(
+                            key, req.key.sz, (uint8_t*)clientOutAddr, &keySize);
+                        if (ret == WH_ERROR_OK) {
+                            res.keyId   = WH_KEYID_ERASED;
+                            res.keySize = keySize;
+                        }
+                        else {
+                            /* Nothing was written; unmap the region asked for */
+                            keySize = (uint16_t)req.key.sz;
+                        }
+                        postRet = wh_Server_DmaProcessClientAddress(
+                            ctx, req.key.addr, &clientOutAddr, keySize,
+                            WH_DMA_OPER_CLIENT_WRITE_POST,
+                            (whServerDmaFlags){0});
+                        if (ret == WH_ERROR_OK) {
+                            ret = postRet;
+                        }
+                        if (ret != WH_ERROR_OK) {
+                            keySize = 0;
+                        }
+                    }
+                }
+                else {
+                    whKeyId keyId = wh_KeyId_TranslateFromClient(
+                        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
+
+                    /* Hold the NVM lock so id allocation and cache import are
+                     * atomic with respect to other server contexts under
+                     * THREADSAFE. */
+                    ret = WH_SERVER_NVM_LOCK(ctx);
+                    if (ret == WH_ERROR_OK) {
+                        if (WH_KEYID_ISERASED(keyId)) {
+                            ret = wh_Server_KeystoreGetUniqueId(ctx, &keyId);
+                        }
+                        if (ret == WH_ERROR_OK) {
+                            ret = wh_Server_FrodoKemKeyCacheImport(
+                                ctx, key, keyId, req.flags, req.labelSize,
+                                req.label);
+                        }
+                        (void)WH_SERVER_NVM_UNLOCK(ctx);
+                    } /* WH_SERVER_NVM_LOCK() */
+                    /* Stream the public key back through the client's DMA
+                     * buffer so it gets the pubkey without a separate
+                     * ExportPublicKey call. A freshly generated key must
+                     * serialize, so treat a failure as fatal: evict the
+                     * just-committed key and propagate the error. */
+                    if (ret == WH_ERROR_OK) {
+                        word32 pubSize = 0;
+                        if ((wc_FrodoKemKey_PublicKeySize(key, &pubSize) !=
+                             0) ||
+                            ((uint64_t)pubSize > req.key.sz)) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            ret = wh_Server_DmaProcessClientAddress(
+                                ctx, req.key.addr, &clientOutAddr, pubSize,
+                                WH_DMA_OPER_CLIENT_WRITE_PRE,
+                                (whServerDmaFlags){0});
+                            if (ret == WH_ERROR_OK) {
+                                int encRet = wc_FrodoKemKey_EncodePublicKey(
+                                    key, (uint8_t*)clientOutAddr, pubSize);
+
+                                if (encRet == 0) {
+                                    keySize = (uint16_t)pubSize;
+                                }
+                                else {
+                                    ret = WH_ERROR_ABORTED;
+                                }
+                                /* One POST per PRE, over the region that was
+                                 * mapped rather than a keySize still zero from
+                                 * a failed encode. */
+                                (void)wh_Server_DmaProcessClientAddress(
+                                    ctx, req.key.addr, &clientOutAddr,
+                                    (uint32_t)pubSize,
+                                    WH_DMA_OPER_CLIENT_WRITE_POST,
+                                    (whServerDmaFlags){0});
+                            }
+                        }
+                        if (ret != WH_ERROR_OK) {
+                            _CryptoEvictKeyLocked(ctx, keyId);
+                        }
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        res.keyId   = wh_KeyId_TranslateToClient(keyId);
+                        res.keySize = keySize;
+                    }
+                }
+            }
+            wc_FrodoKemKey_Free(key);
+        }
+    }
+
+    if (ret == WH_ERROR_ACCESS) {
+        res.dmaAddrStatus.badAddr = req.key;
+    }
+
+    (void)wh_MessageCrypto_TranslateFrodoKemKeyGenDmaResponse(
+        magic, &res, (whMessageCrypto_FrodoKemKeyGenDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res);
+    return ret;
+#endif
+}
+
+static int _HandleFrodoKemEncapsDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_ENCAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                       ret       = WH_ERROR_OK;
+    FrodoKemKey                               key[1];
+    void*                                     ctAddr    = NULL;
+    word32                                    ctLen     = 0;
+    word32                                    ssLen     = 0;
+    whKeyId                                   key_id;
+    int                                       evict     = 0;
+    int                                       keyInited = 0;
+    uint8_t*                                  res_ss;
+    word32                                    max_ss;
+    whMessageCrypto_FrodoKemEncapsDmaRequest  req;
+    whMessageCrypto_FrodoKemEncapsDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemEncapsDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemEncapsDmaRequest(
+        magic, (whMessageCrypto_FrodoKemEncapsDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_FRODOKEM_ENCAPS_OPTIONS_EVICT);
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        /* Export the key, enforcing the derive usage policy against the same
+         * locked snapshot that is exported */
+        ret = _FrodoKemKeyCacheExportEnforce(ctx, key_id,
+                                             WH_NVM_FLAGS_USAGE_DERIVE, key);
+    }
+
+    /* Verify the exported key matches the requested type */
+    if (ret == WH_ERROR_OK && key->type != (int)req.type) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_CipherTextSize(key, &ctLen);
+    }
+    if (ret == WH_ERROR_OK && ctLen > req.ct.sz) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup_key;
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_SharedSecretSize(key, &ssLen);
+    }
+
+    /* Validate that the inline shared secret fits in the comm buffer */
+    if (ret == WH_ERROR_OK) {
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemEncapsDmaResponse);
+        /* Both headers come out of the comm buffer, not just this one. */
+        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          sizeof(whMessageCrypto_GenericResponseHeader) -
+                          sizeof(whMessageCrypto_FrodoKemEncapsDmaResponse));
+        if (ssLen > max_ss) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, ctLen,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.ct;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Shared secret goes inline in response, not via DMA */
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemEncapsDmaResponse);
+        ret = wc_FrodoKemKey_Encapsulate(key, (byte*)ctAddr, res_ss,
+                                         ctx->crypto->rng);
+        if (ret != WH_ERROR_OK) {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ssLen);
+        }
+    }
+
+    if (ctAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, ctLen,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.ctLen = ctLen;
+        res.ssLen = ssLen;
+    }
+
+cleanup_key:
+    if (keyInited) {
+        wc_FrodoKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    (void)wh_MessageCrypto_TranslateFrodoKemEncapsDmaResponse(
+        magic, &res, (whMessageCrypto_FrodoKemEncapsDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res) + ssLen;
+    return ret;
+#endif
+}
+
+static int _HandleFrodoKemDecapsDma(whServerContext* ctx, uint16_t magic,
+                                    int devId, const void* cryptoDataIn,
+                                    uint16_t inSize, void* cryptoDataOut,
+                                    uint16_t* outSize)
+{
+#ifdef WOLFSSL_FRODOKEM_NO_DECAPSULATE
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                       ret       = WH_ERROR_OK;
+    FrodoKemKey                               key[1];
+    void*                                     ctAddr    = NULL;
+    word32                                    ssLen     = 0;
+    whKeyId                                   key_id;
+    int                                       evict     = 0;
+    int                                       keyInited = 0;
+    uint8_t*                                  res_ss;
+    word32                                    max_ss;
+    whMessageCrypto_FrodoKemDecapsDmaRequest  req;
+    whMessageCrypto_FrodoKemDecapsDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
+
+    if (inSize < sizeof(whMessageCrypto_FrodoKemDecapsDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFrodoKemDecapsDmaRequest(
+        magic, (whMessageCrypto_FrodoKemDecapsDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_FRODOKEM_DECAPS_OPTIONS_EVICT);
+
+    if (!_IsFrodoKemTypeSupported((int)req.type)) {
+        ret = WH_ERROR_BADARGS;
+        goto cleanup;
+    }
+
+    ret = wc_FrodoKemKey_Init(key, (int)req.type, NULL, devId);
+    if (ret == WH_ERROR_OK) {
+        keyInited = 1;
+        /* Export the key, enforcing the derive usage policy against the same
+         * locked snapshot that is exported */
+        ret = _FrodoKemKeyCacheExportEnforce(ctx, key_id,
+                                             WH_NVM_FLAGS_USAGE_DERIVE, key);
+    }
+
+    /* Verify the exported key matches the requested type */
+    if (ret == WH_ERROR_OK && key->type != (int)req.type) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_SharedSecretSize(key, &ssLen);
+    }
+
+    /* Validate that the inline shared secret fits in the comm buffer */
+    if (ret == WH_ERROR_OK) {
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemDecapsDmaResponse);
+        /* Both headers come out of the comm buffer, not just this one. */
+        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          sizeof(whMessageCrypto_GenericResponseHeader) -
+                          sizeof(whMessageCrypto_FrodoKemDecapsDmaResponse));
+        if (ssLen > max_ss) {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, req.ct.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.ct;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        /* Shared secret goes inline in response, not via DMA */
+        res_ss = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_FrodoKemDecapsDmaResponse);
+        ret = wc_FrodoKemKey_Decapsulate(key, res_ss, (const byte*)ctAddr,
+                                         (word32)req.ct.sz);
+        if (ret != WH_ERROR_OK) {
+            /* Zero sensitive data on failure */
+            wc_ForceZero(res_ss, ssLen);
+        }
+    }
+
+    if (ctAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, (uintptr_t)req.ct.addr, &ctAddr, req.ct.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.ssLen = ssLen;
+    }
+
+    if (keyInited) {
+        wc_FrodoKemKey_Free(key);
+    }
+cleanup:
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    (void)wh_MessageCrypto_TranslateFrodoKemDecapsDmaResponse(
+        magic, &res, (whMessageCrypto_FrodoKemDecapsDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(res) + ssLen;
+    return ret;
+#endif
+}
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
 static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
                                      int devId, const void* cryptoDataIn,
@@ -7784,6 +8728,7 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
     int ret = WH_ERROR_NOHANDLER;
 
     switch (pqAlgoType) {
+#ifdef WOLFSSL_HAVE_MLKEM
         case WC_PQC_KEM_TYPE_KYBER: {
             switch (pkAlgoType) {
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
@@ -7806,6 +8751,34 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
                     break;
             }
         } break;
+#endif /* WOLFSSL_HAVE_MLKEM */
+#ifdef WOLFSSL_HAVE_FRODOKEM
+        case WC_PQC_KEM_TYPE_FRODOKEM: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_KEM_KEYGEN:
+                    ret = _HandleFrodoKemKeyGenDma(ctx, magic, devId,
+                                                   cryptoDataIn, cryptoInSize,
+                                                   cryptoDataOut,
+                                                   cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_ENCAPS:
+                    ret = _HandleFrodoKemEncapsDma(ctx, magic, devId,
+                                                   cryptoDataIn, cryptoInSize,
+                                                   cryptoDataOut,
+                                                   cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_KEM_DECAPS:
+                    ret = _HandleFrodoKemDecapsDma(ctx, magic, devId,
+                                                   cryptoDataIn, cryptoInSize,
+                                                   cryptoDataOut,
+                                                   cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_FRODOKEM */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;
@@ -7813,7 +8786,7 @@ static int _HandlePqcKemAlgorithmDma(whServerContext* ctx, uint16_t magic,
 
     return ret;
 }
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 /* Decode the slot blob's header lengths into the context struct. Sign-path
@@ -9355,7 +10328,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         rqstHeader.algoSubType);
                     break;
 #endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
                 case WC_PK_TYPE_PQC_KEM_KEYGEN:
                 case WC_PK_TYPE_PQC_KEM_ENCAPS:
                 case WC_PK_TYPE_PQC_KEM_DECAPS:
@@ -9364,7 +10337,7 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                         cryptoDataOut, &cryptoOutSize, rqstHeader.algoType,
                         rqstHeader.algoSubType);
                     break;
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
                 case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
                 case WC_PK_TYPE_PQC_STATEFUL_SIG_SIGN:

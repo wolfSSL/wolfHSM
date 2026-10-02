@@ -1279,6 +1279,101 @@ int wh_MessageCrypto_TranslateMlKemDecapsResponse(
     uint16_t magic, const whMessageCrypto_MlKemDecapsResponse* src,
     whMessageCrypto_MlKemDecapsResponse* dest);
 
+/*
+ * FrodoKEM
+ *
+ * Mirrors the ML-KEM messages. The parameter set travels in "type", which is a
+ * wolfCrypt FrodoKEM key type: a base set (640/976/1344) optionally combined
+ * with the AES matrix-A and ephemeral modifier bits.
+ *
+ * Every FrodoKEM object is far larger than the default comm data length, so
+ * these inline messages only fit when WOLFHSM_CFG_COMM_DATA_LEN is raised well
+ * above its default; otherwise the client reports WH_ERROR_BADARGS and the DMA
+ * messages below are the usable path.
+ */
+
+/* FrodoKEM Key Generation Request */
+typedef struct {
+    uint32_t type;
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint8_t  label[WH_NVM_LABEL_LEN];
+} whMessageCrypto_FrodoKemKeyGenRequest;
+
+/* FrodoKEM Key Generation Response */
+typedef struct {
+    uint32_t keyId;
+    uint32_t len;
+    /* Data follows:
+     * uint8_t out[len];
+     */
+} whMessageCrypto_FrodoKemKeyGenResponse;
+
+int wh_MessageCrypto_TranslateFrodoKemKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenRequest* src,
+    whMessageCrypto_FrodoKemKeyGenRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenResponse* src,
+    whMessageCrypto_FrodoKemKeyGenResponse* dest);
+
+/* FrodoKEM Encapsulation Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_FRODOKEM_ENCAPS_OPTIONS_EVICT (1 << 0)
+    uint32_t type;
+    uint32_t keyId;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_FrodoKemEncapsRequest;
+
+/* FrodoKEM Encapsulation Response */
+typedef struct {
+    uint32_t ctSz;
+    uint32_t ssSz;
+    /* Data follows:
+     * uint8_t ct[ctSz];
+     * uint8_t ss[ssSz];
+     */
+} whMessageCrypto_FrodoKemEncapsResponse;
+
+int wh_MessageCrypto_TranslateFrodoKemEncapsRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsRequest* src,
+    whMessageCrypto_FrodoKemEncapsRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemEncapsResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsResponse* src,
+    whMessageCrypto_FrodoKemEncapsResponse* dest);
+
+/* FrodoKEM Decapsulation Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_FRODOKEM_DECAPS_OPTIONS_EVICT (1 << 0)
+    uint32_t type;
+    uint32_t keyId;
+    uint32_t ctSz;
+    /* Data follows:
+     * uint8_t ct[ctSz];
+     */
+} whMessageCrypto_FrodoKemDecapsRequest;
+
+/* FrodoKEM Decapsulation Response */
+typedef struct {
+    uint32_t ssSz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t ss[ssSz];
+     */
+} whMessageCrypto_FrodoKemDecapsResponse;
+
+int wh_MessageCrypto_TranslateFrodoKemDecapsRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsRequest* src,
+    whMessageCrypto_FrodoKemDecapsRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemDecapsResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsResponse* src,
+    whMessageCrypto_FrodoKemDecapsResponse* dest);
+
 
 /*
  * DMA-based crypto messages
@@ -1776,6 +1871,97 @@ int wh_MessageCrypto_TranslateMlKemDecapsDmaRequest(
 int wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
     uint16_t magic, const whMessageCrypto_MlKemDecapsDmaResponse* src,
     whMessageCrypto_MlKemDecapsDmaResponse* dest);
+
+/* FrodoKEM DMA messages. These mirror the ML-KEM DMA messages and are the only
+ * usable path at the default comm data length, since every FrodoKEM key and
+ * ciphertext is larger than the inline buffer. */
+
+/* FrodoKEM DMA Key Generation Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer key;
+    uint32_t                  type;
+    uint32_t                  flags;
+    uint32_t                  keyId;
+    uint32_t                  access; /* Key access permissions */
+    uint32_t                  labelSize;
+    uint8_t                   label[WH_NVM_LABEL_LEN];
+    uint8_t                   WH_PAD2[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_FrodoKemKeyGenDmaRequest;
+
+/* FrodoKEM DMA Key Generation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      keyId;
+    uint32_t                      keySize;
+} whMessageCrypto_FrodoKemKeyGenDmaResponse;
+
+/* FrodoKEM DMA Encapsulation Request
+ * Note: The shared secret is transferred inline in the response (not via DMA)
+ * since it is at most 32 bytes, as for ML-KEM.
+ */
+typedef struct {
+    whMessageCrypto_DmaBuffer ct;
+    uint32_t                  options;
+    uint32_t                  type;
+    uint32_t                  keyId;
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_FrodoKemEncapsDmaRequest;
+
+/* FrodoKEM DMA Encapsulation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      ctLen;
+    uint32_t                      ssLen;
+    /* Data follows:
+     * uint8_t ss[ssLen];
+     */
+} whMessageCrypto_FrodoKemEncapsDmaResponse;
+
+/* FrodoKEM DMA Decapsulation Request
+ * Note: The shared secret is transferred inline in the response (not via DMA).
+ */
+typedef struct {
+    whMessageCrypto_DmaBuffer ct;
+    uint32_t                  options;
+    uint32_t                  type;
+    uint32_t                  keyId;
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_FrodoKemDecapsDmaRequest;
+
+/* FrodoKEM DMA Decapsulation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      ssLen;
+    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
+    /* Data follows:
+     * uint8_t ss[ssLen];
+     */
+} whMessageCrypto_FrodoKemDecapsDmaResponse;
+
+/* FrodoKEM DMA translation functions */
+int wh_MessageCrypto_TranslateFrodoKemKeyGenDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenDmaRequest* src,
+    whMessageCrypto_FrodoKemKeyGenDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemKeyGenDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenDmaResponse* src,
+    whMessageCrypto_FrodoKemKeyGenDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemEncapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsDmaRequest* src,
+    whMessageCrypto_FrodoKemEncapsDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemEncapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsDmaResponse* src,
+    whMessageCrypto_FrodoKemEncapsDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemDecapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsDmaRequest* src,
+    whMessageCrypto_FrodoKemDecapsDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateFrodoKemDecapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsDmaResponse* src,
+    whMessageCrypto_FrodoKemDecapsDmaResponse* dest);
 
 /* Stateful hash-based signature (LMS / XMSS) DMA messages.
  *

@@ -184,6 +184,10 @@ enum WH_KEY_ALGO_ENUM {
     WH_KEY_ALGO_MLKEM      = 6,
     WH_KEY_ALGO_LMS        = 7,
     WH_KEY_ALGO_XMSS       = 8,
+    /* 9 is reserved for FrodoKEM. It is deliberately not defined yet: the
+     * public-key export switches in wh_server_keystore.c have no FrodoKEM
+     * case, so publishing the selector would only ever yield
+     * WH_ERROR_BADARGS. Define it together with that implementation. */
 };
 
 #endif /* !WOLFHSM_WH_COMMON_H_ */
