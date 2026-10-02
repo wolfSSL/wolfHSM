@@ -68,17 +68,21 @@ typedef struct {
     int (*initFn)(wc_Shake* sha, void* heap, int devId);
     int (*updateFn)(wc_Shake* sha, const byte* in, word32 inSz);
     int (*finalFn)(wc_Shake* sha, byte* out, word32 outSz);
+    int (*absorbFn)(wc_Shake* sha, const byte* in, word32 inSz);
+    int (*squeezeFn)(wc_Shake* sha, byte* out, word32 blockCnt);
     void (*freeFn)(wc_Shake* sha);
 } shakeTestVariant;
 
 static const shakeTestVariant shakeTestVariants[] = {
 #ifdef WOLFSSL_SHAKE128
     {WC_HASH_TYPE_SHAKE128, 168u, "SHAKE128", wc_InitShake128,
-     wc_Shake128_Update, wc_Shake128_Final, wc_Shake128_Free},
+     wc_Shake128_Update, wc_Shake128_Final, wc_Shake128_Absorb,
+     wc_Shake128_SqueezeBlocks, wc_Shake128_Free},
 #endif
 #ifdef WOLFSSL_SHAKE256
     {WC_HASH_TYPE_SHAKE256, 136u, "SHAKE256", wc_InitShake256,
-     wc_Shake256_Update, wc_Shake256_Final, wc_Shake256_Free},
+     wc_Shake256_Update, wc_Shake256_Final, wc_Shake256_Absorb,
+     wc_Shake256_SqueezeBlocks, wc_Shake256_Free},
 #endif
 };
 
@@ -306,6 +310,51 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
     return WH_ERROR_OK;
 }
 
+/* Absorb once, then squeeze several times on a device-bound object. Each
+ * squeeze must continue the sponge. */
+#define SHAKE_TEST_SQUEEZE_CALLS 3u
+#define SHAKE_TEST_SQUEEZE_BLOCKS 2u
+static int _ShakeTestAbsorbSqueeze(whClientContext*        ctx,
+                                   const shakeTestVariant* v)
+{
+    wc_Shake sha[1];
+    uint32_t outSz =
+        SHAKE_TEST_SQUEEZE_CALLS * SHAKE_TEST_SQUEEZE_BLOCKS * v->blockSize;
+    uint32_t j;
+    int      ret = 0;
+    int      i;
+
+    for (i = 0; (ret == 0) && (i < 2); i++) {
+        int      devId = (i == 0) ? WH_CLIENT_DEVID(ctx) : INVALID_DEVID;
+        uint8_t* out   = (i == 0) ? shakeTestOutDev : shakeTestOutSw;
+
+        memset(out, (i == 0) ? 0 : 0xA5, outSz);
+        ret = v->initFn(sha, NULL, devId);
+        if (ret != 0) {
+            break;
+        }
+        ret = v->absorbFn(sha, shakeTestIn, 2u * v->blockSize + 7u);
+        for (j = 0; (ret == 0) && (j < SHAKE_TEST_SQUEEZE_CALLS); j++) {
+            ret = v->squeezeFn(
+                sha, out + j * SHAKE_TEST_SQUEEZE_BLOCKS * v->blockSize,
+                SHAKE_TEST_SQUEEZE_BLOCKS);
+        }
+        v->freeFn(sha);
+    }
+
+    if (ret != 0) {
+        WH_ERROR_PRINT("%s absorb/squeeze failed: %d\n", v->name, ret);
+        return ret;
+    }
+    if (memcmp(shakeTestOutDev, shakeTestOutSw, outSz) != 0) {
+        WH_ERROR_PRINT("%s absorb/squeeze device and software differ\n",
+                       v->name);
+        return WH_ERROR_ABORTED;
+    }
+    WH_TEST_PRINT("%s absorb/squeeze SUCCESS\n", v->name);
+    return WH_ERROR_OK;
+}
+
 /* wolfCrypt accepts a finalize asking for zero bytes: it writes nothing and
  * resets the context. Enabling the offload must not turn that into an error. */
 static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
@@ -500,6 +549,7 @@ int whTest_Crypto_Shake(whClientContext* ctx)
         WH_TEST_RETURN_ON_FAIL(_ShakeTestAsync(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestLongOutput(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestZeroLengthFinal(ctx, v));
+        WH_TEST_RETURN_ON_FAIL(_ShakeTestAbsorbSqueeze(ctx, v));
 #ifdef WOLFSSL_HASH_FLAGS
         WH_TEST_RETURN_ON_FAIL(_ShakeTestKeccakFlag(ctx, v));
 #endif

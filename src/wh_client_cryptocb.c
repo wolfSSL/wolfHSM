@@ -737,6 +737,14 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                     break;
                 }
 #endif
+#ifdef WOLF_CRYPTO_CB_SHAKE_XOF
+                /* Absorb and squeeze are not offloaded yet. Declining is
+                 * safe because the host wc_Shake state is still current. */
+                if (info->hash.shakeOp != WC_SHAKE_OP_NONE) {
+                    ret = CRYPTOCB_UNAVAILABLE;
+                    break;
+                }
+#endif
 
                 /* wolfCrypt accepts a finalize with outSz=0, but only the
                  * context is updated. Decline it and let the software path
