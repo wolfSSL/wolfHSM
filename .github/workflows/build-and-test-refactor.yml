@@ -163,6 +163,19 @@ jobs:
       if: matrix.group == 'base'
       run: cd test-refactor/posix && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Build and test with only one SHAKE variant, or none
+    - name: Build and test refactor SHAKE128 only
+      if: matrix.group == 'base'
+      run: cd test-refactor/posix && make clean && make -j SHAKE128_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    - name: Build and test refactor SHAKE256 only
+      if: matrix.group == 'base'
+      run: cd test-refactor/posix && make clean && make -j SHAKE256_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
+
+    - name: Build and test refactor no SHAKE
+      if: matrix.group == 'base'
+      run: cd test-refactor/posix && make clean && make -j NO_SHAKE=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test in multithreaded mode with everything enabled
     - name: Build and test refactor with THREADSAFE and everything
       if: matrix.group == 'threadsafe'

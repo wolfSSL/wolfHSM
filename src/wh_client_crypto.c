@@ -9660,19 +9660,19 @@ typedef struct {
     int      hashType; /* WC_HASH_TYPE_SHAKE* (also algoType on the wire) */
     uint32_t blockSize;
     uint32_t maxInlineSz;
-    /* Only initFn is used client-side (context reset after Final). */
-    int (*initFn)(wc_Shake* sha, void* heap, int devId);
+    /* Restores the context after Final, keeping heap and devId */
+    int (*resetFn)(wc_Shake* sha);
 } whShakeVariant;
 
 #ifdef WOLFSSL_SHAKE128
 static const whShakeVariant whShake128 = {
     WC_HASH_TYPE_SHAKE128, 168u,
-    WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ, wc_InitShake128};
+    WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ, wc_Shake128_Reset};
 #endif
 #ifdef WOLFSSL_SHAKE256
 static const whShakeVariant whShake256 = {
     WC_HASH_TYPE_SHAKE256, 136u,
-    WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ, wc_InitShake256};
+    WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ, wc_Shake256_Reset};
 #endif
 
 /* Maximum data size for a single UpdateRequest: inline wire capacity
@@ -9897,8 +9897,6 @@ static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
 {
     int                            ret;
     whMessageCrypto_ShakeResponse* res = NULL;
-    void*                          savedHeap;
-    int                            savedDevId;
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
@@ -9914,10 +9912,7 @@ static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
             memcpy(out, (uint8_t*)(res + 1), outSz);
         }
         if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) {
-            /* Reset state, preserving heap and devId, dropping devCtx. */
-            savedHeap  = sha->heap;
-            savedDevId = sha->devId;
-            (void)v->initFn(sha, savedHeap, savedDevId);
+            ret = v->resetFn(sha);
         }
         else {
             memcpy(sha->s, res->resumeState.s, sizeof(sha->s));

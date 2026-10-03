@@ -433,8 +433,17 @@ static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
 {
     int      devId = WH_CLIENT_DEVID(ctx);
     int      ret;
+    int      i;
     wc_Shake sha[1];
     uint8_t  out[1] = {0xA5};
+    uint8_t  again[32];
+    uint8_t  expected[32];
+
+    ret = _ShakeTestHash(INVALID_DEVID, v, shakeTestIn, 4u, 0u, expected,
+                         sizeof(expected));
+    if (ret != 0) {
+        return ret;
+    }
 
     ret = v->initFn(sha, NULL, devId);
     if (ret != 0) {
@@ -449,12 +458,15 @@ static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
         WH_ERROR_PRINT("%s zero-length final wrote output\n", v->name);
         ret = WH_ERROR_ABORTED;
     }
-    /* The context must be reusable afterwards, as a reset implies */
-    if (ret == 0) {
-        uint8_t again[32];
+    /* Reuse after the software reset, then after the offload reset */
+    for (i = 0; (ret == 0) && (i < 2); i++) {
         ret = v->updateFn(sha, shakeTestIn, 4u);
         if (ret == 0) {
             ret = v->finalFn(sha, again, sizeof(again));
+        }
+        if ((ret == 0) && (memcmp(again, expected, sizeof(again)) != 0)) {
+            WH_ERROR_PRINT("%s reuse %d differs from software\n", v->name, i);
+            ret = WH_ERROR_ABORTED;
         }
     }
 
@@ -612,6 +624,126 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
     WH_TEST_PRINT("%s bad-args SUCCESS\n", v->name);
     return WH_ERROR_OK;
 }
+
+/* A raw request; dropSz bytes are cut from the end to make it short */
+typedef struct {
+    uint32_t op;
+    uint32_t isLastBlock;
+    uint32_t inSz;
+    uint32_t outSz;
+    uint32_t dropSz;
+} shakeTestRequest;
+
+/* Send each request as-is and require the server to return expected */
+static int _ShakeTestRawRequests(whClientContext*        ctx,
+                                 const shakeTestVariant* v,
+                                 const shakeTestRequest* reqs, uint32_t cnt,
+                                 int expected)
+{
+    uint8_t*                              dataPtr;
+    whMessageCrypto_GenericRequestHeader* hdr;
+    whMessageCrypto_ShakeRequest*         req;
+    uint16_t                              group;
+    uint16_t                              action;
+    uint16_t                              dataSz;
+    uint32_t                              i;
+    int                                   rc;
+    int                                   ret = WH_ERROR_OK;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    hdr = (whMessageCrypto_GenericRequestHeader*)dataPtr;
+    req = (whMessageCrypto_ShakeRequest*)(hdr + 1);
+
+    for (i = 0; (ret == WH_ERROR_OK) && (i < cnt); i++) {
+        const shakeTestRequest* r = &reqs[i];
+
+        memset(hdr, 0, sizeof(*hdr));
+        memset(req, 0, sizeof(*req));
+        hdr->algoType    = (whMessageCrypto_AlgoType)v->hashType;
+        hdr->affinity    = ctx->cryptoAffinity;
+        req->op          = r->op;
+        req->isLastBlock = r->isLastBlock;
+        req->inSz        = r->inSz;
+        req->outSz       = r->outSz;
+        memcpy((uint8_t*)(req + 1), shakeTestIn, r->inSz);
+
+        ret = wh_Client_SendRequest(
+            ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
+            (uint16_t)(sizeof(*hdr) + sizeof(*req) + r->inSz - r->dropSz),
+            dataPtr);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret =
+                    wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                           WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == WH_ERROR_OK) {
+            rc = ((whMessageCrypto_GenericResponseHeader*)dataPtr)->rc;
+            if (rc != expected) {
+                WH_ERROR_PRINT("%s raw request %u returned %d, expected %d\n",
+                               v->name, (unsigned)i, rc, expected);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+    return ret;
+}
+
+/* The server must check requests itself rather than trust the client */
+static int _ShakeTestServerRequests(whClientContext*        ctx,
+                                    const shakeTestVariant* v)
+{
+    const uint32_t rate   = v->blockSize;
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ;
+    const uint32_t maxSqz = (maxOut / rate) * rate;
+    /* Each limit is accepted, and crossing it is rejected below */
+    const shakeTestRequest accepted[] = {
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, rate, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, rate - 1u, maxOut, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, rate - 1u, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, maxSqz, 0},
+    };
+    const shakeTestRequest rejected[] = {
+        /* Shorter than the request struct, then shorter than inSz */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, 32u, 1u},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 10u, 32u, 1u},
+        /* Non-final input not whole blocks, or asking for output */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, 1u, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, rate, 32u, 0},
+        /* Final with a full-block tail, no output, or too much output */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, rate, 32u, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, maxOut + 1u, 0},
+        /* Absorb with a full-block tail, or asking for output */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, rate, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, 0, rate, 0},
+        /* Squeeze with input, no output, a partial block, or too much */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 1u, rate, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, 0, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, rate + 1u, 0},
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, maxSqz + rate, 0},
+        /* Unknown op */
+        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE + 1u, 1, 0, 32u, 0},
+    };
+    int ret;
+
+    ret = _ShakeTestRawRequests(
+        ctx, v, accepted, sizeof(accepted) / sizeof(accepted[0]), WH_ERROR_OK);
+    if (ret == WH_ERROR_OK) {
+        ret = _ShakeTestRawRequests(ctx, v, rejected,
+                                    sizeof(rejected) / sizeof(rejected[0]),
+                                    WH_ERROR_BADARGS);
+    }
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_PRINT("%s server request checks SUCCESS\n", v->name);
+    }
+    return ret;
+}
+
 int whTest_Crypto_Shake(whClientContext* ctx)
 {
     const uint32_t variantCnt =
@@ -626,6 +758,7 @@ int whTest_Crypto_Shake(whClientContext* ctx)
         const shakeTestVariant* v = &shakeTestVariants[i];
 
         WH_TEST_RETURN_ON_FAIL(_ShakeTestBadArgs(ctx, v));
+        WH_TEST_RETURN_ON_FAIL(_ShakeTestServerRequests(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestVariant(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestAsync(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestLongOutput(ctx, v));
