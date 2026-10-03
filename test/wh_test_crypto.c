@@ -17958,10 +17958,7 @@ int whTest_CryptoKeyRevocationAesCbc(whClientContext* client, WC_RNG* rng)
 #endif /* !NO_AES && HAVE_AES_CBC && \
           WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS */
 
-/* Negative tests: every cache-and-export keygen function must reject
- * WH_NVM_FLAGS_EPHEMERAL, a NULL inout_key_id, and a NULL pub with
- * WH_ERROR_BADARGS, before contacting the server. level is passed as 0 for the
- * PQC calls since the argument guards run before any level validation. */
+/* Cache keygen must reject EPHEMERAL flags and NULL args with BADARGS */
 static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
 {
     int     ret   = 0;
@@ -18010,9 +18007,12 @@ static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
 #ifdef HAVE_CURVE25519
     if (ret == 0) {
         curve25519_key cv[1] = {0};
-        if (wh_Client_Curve25519MakeCacheKeyAndExportPublic(
-                ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_EPHEMERAL, NULL, 0,
-                cv) != WH_ERROR_BADARGS ||
+        if (wh_Client_Curve25519MakeCacheKey(ctx, CURVE25519_KEYSIZE, &keyId,
+                                             WH_NVM_FLAGS_EPHEMERAL, NULL,
+                                             0) != WH_ERROR_BADARGS ||
+            wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+                ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_EPHEMERAL, NULL,
+                0, cv) != WH_ERROR_BADARGS ||
             wh_Client_Curve25519MakeCacheKeyAndExportPublic(
                 ctx, CURVE25519_KEYSIZE, NULL, WH_NVM_FLAGS_NONE, NULL, 0,
                 cv) != WH_ERROR_BADARGS ||
@@ -18027,11 +18027,14 @@ static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
 #ifdef HAVE_ED25519
     if (ret == 0) {
         ed25519_key ed[1] = {0};
-        if (wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+        if (wh_Client_Ed25519MakeCacheKey(ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL,
+                                          0, NULL) != WH_ERROR_BADARGS ||
+            wh_Client_Ed25519MakeCacheKeyAndExportPublic(
                 ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, ed) !=
                 WH_ERROR_BADARGS ||
             wh_Client_Ed25519MakeCacheKeyAndExportPublic(
-                ctx, NULL, WH_NVM_FLAGS_NONE, 0, NULL, ed) != WH_ERROR_BADARGS ||
+                ctx, NULL, WH_NVM_FLAGS_NONE, 0, NULL, ed) !=
+                WH_ERROR_BADARGS ||
             wh_Client_Ed25519MakeCacheKeyAndExportPublic(
                 ctx, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
                 WH_ERROR_BADARGS) {
@@ -18043,7 +18046,19 @@ static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
 #ifdef WOLFSSL_MLDSA_PUBLIC_KEY
     if (ret == 0) {
         wc_MlDsaKey mldsa[1] = {0};
-        if (wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+        /* Valid level so the server level check cannot mask the gate */
+        const int mldsaLevel =
+#if !defined(WOLFSSL_NO_ML_DSA_44)
+            WC_ML_DSA_44;
+#elif !defined(WOLFSSL_NO_ML_DSA_65)
+            WC_ML_DSA_65;
+#else
+            WC_ML_DSA_87;
+#endif
+        if (wh_Client_MlDsaMakeCacheKey(ctx, 0, mldsaLevel, &keyId,
+                                        WH_NVM_FLAGS_EPHEMERAL, 0,
+                                        NULL) != WH_ERROR_BADARGS ||
+            wh_Client_MlDsaMakeCacheKeyAndExportPublic(
                 ctx, 0, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mldsa) !=
                 WH_ERROR_BADARGS ||
             wh_Client_MlDsaMakeCacheKeyAndExportPublic(
@@ -18075,7 +18090,19 @@ static int whTest_CryptoMakeCacheKeyExportPublicArgs(whClientContext* ctx)
 #ifdef WOLFSSL_HAVE_MLKEM
     if (ret == 0) {
         MlKemKey mlkem[1] = {0};
-        if (wh_Client_MlKemMakeCacheKeyAndExportPublic(
+        /* Valid level so the server level check cannot mask the gate */
+        const int mlkemLevel =
+#if !defined(WOLFSSL_NO_ML_KEM_512)
+            WC_ML_KEM_512;
+#elif !defined(WOLFSSL_NO_ML_KEM_768)
+            WC_ML_KEM_768;
+#else
+            WC_ML_KEM_1024;
+#endif
+        if (wh_Client_MlKemMakeCacheKey(ctx, mlkemLevel, &keyId,
+                                        WH_NVM_FLAGS_EPHEMERAL, 0,
+                                        NULL) != WH_ERROR_BADARGS ||
+            wh_Client_MlKemMakeCacheKeyAndExportPublic(
                 ctx, 0, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, mlkem) !=
                 WH_ERROR_BADARGS ||
             wh_Client_MlKemMakeCacheKeyAndExportPublic(

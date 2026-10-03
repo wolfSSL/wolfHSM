@@ -3404,6 +3404,11 @@ int wh_Client_Curve25519MakeCacheKey(whClientContext* ctx, uint16_t size,
         return WH_ERROR_BADARGS;
     }
 
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
     return _Curve25519MakeKey(ctx, size, inout_key_id, flags, label, label_len,
                               NULL);
 }
@@ -3917,6 +3922,11 @@ int wh_Client_Ed25519MakeCacheKey(whClientContext* ctx, whKeyId* inout_key_id,
                                   uint8_t* label)
 {
     if (inout_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -10324,6 +10334,11 @@ int wh_Client_MlDsaMakeCacheKey(whClientContext* ctx, int size, int level,
         return WH_ERROR_BADARGS;
     }
 
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+        return WH_ERROR_BADARGS;
+    }
+
     return _MlDsaMakeKey(ctx, size, level, inout_key_id, flags, label_len,
                          label, NULL);
 }
@@ -11500,6 +11515,11 @@ int wh_Client_MlKemMakeCacheKey(whClientContext* ctx, int level,
                                 uint16_t label_len, uint8_t* label)
 {
     if (inout_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if (flags & WH_NVM_FLAGS_EPHEMERAL) {
         return WH_ERROR_BADARGS;
     }
 
