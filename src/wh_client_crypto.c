@@ -11375,6 +11375,7 @@ int wh_Client_SlhDsaImportKey(whClientContext* ctx, SlhDsaKey* key,
     whKeyId  key_id = WH_KEYID_ERASED;
     byte     buffer[WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE];
     uint16_t buffer_len = 0;
+    uint8_t* dataPtr    = NULL;
 
     if ((ctx == NULL) || (key == NULL) ||
         ((label_len != 0) && (label == NULL))) {
@@ -11393,6 +11394,11 @@ int wh_Client_SlhDsaImportKey(whClientContext* ctx, SlhDsaKey* key,
                                  buffer_len, &key_id);
         if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
             *inout_keyId = key_id;
+        }
+        /* The request copied the DER into the shared packet buffer */
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr != NULL) {
+            wc_ForceZero(dataPtr, WOLFHSM_CFG_COMM_DATA_LEN);
         }
     }
 
@@ -11608,12 +11614,28 @@ int wh_Client_SlhDsaMakeCacheKey(whClientContext* ctx, int param,
                                  whKeyId* inout_key_id, whNvmFlags flags,
                                  uint16_t label_len, uint8_t* label)
 {
-    if (inout_key_id == NULL) {
+    if ((inout_key_id == NULL) || (flags & WH_NVM_FLAGS_EPHEMERAL)) {
         return WH_ERROR_BADARGS;
     }
 
     return _SlhDsaMakeKey(ctx, param, NULL, 0, inout_key_id, flags, label_len,
                           label, NULL, NULL);
+}
+
+/* Make pub a handle to the cached key, or evict a key the server cached */
+static int _SlhDsaCacheKeyFinish(whClientContext* ctx, int ret, int committed,
+                                 whKeyId* inout_key_id, SlhDsaKey* pub)
+{
+    if (ret >= 0) {
+        /* Set again: the public-key deserialize re-inits pub and clears it */
+        wh_Client_SlhDsaSetKeyId(pub, *inout_key_id);
+        pub->devId = WH_CLIENT_DEVID(ctx);
+    }
+    else if (committed && !WH_KEYID_ISERASED(*inout_key_id)) {
+        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
+        *inout_key_id = WH_KEYID_ERASED;
+    }
+    return ret;
 }
 
 int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
@@ -11634,21 +11656,7 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
 
     ret = _SlhDsaMakeKey(ctx, param, NULL, 0, inout_key_id, flags, label_len,
                          label, pub, &committed);
-    if (ret >= 0) {
-        /* Stamp the cached keyId and the client's HSM devId so pub is
-         * immediately usable as a handle to the cached private key. The keyId
-         * is set here as well because the public-key deserialize re-inits
-         * pub and clears it. */
-        wh_Client_SlhDsaSetKeyId(pub, *inout_key_id);
-        pub->devId = WH_CLIENT_DEVID(ctx);
-    }
-    else if (committed && !WH_KEYID_ISERASED(*inout_key_id)) {
-        /* Gated on the commit latch: the response-frame check also reports
-         * ABORTED, before any key id has been read. */
-        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
-        *inout_key_id = WH_KEYID_ERASED;
-    }
-    return ret;
+    return _SlhDsaCacheKeyFinish(ctx, ret, committed, inout_key_id, pub);
 }
 
 int wh_Client_SlhDsaMakeExportKey(whClientContext* ctx, int param,
@@ -11680,7 +11688,8 @@ int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
                                          whNvmFlags flags, uint16_t label_len,
                                          uint8_t* label)
 {
-    if ((inout_key_id == NULL) || (seed == NULL) || (seedSz == 0)) {
+    if ((inout_key_id == NULL) || (seed == NULL) || (seedSz == 0) ||
+        (flags & WH_NVM_FLAGS_EPHEMERAL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -12195,7 +12204,8 @@ int wh_Client_SlhDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
 static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
                              word32 seedSz, whKeyId* inout_key_id,
                              whNvmFlags flags, uint16_t label_len,
-                             const uint8_t* label, SlhDsaKey* key)
+                             const uint8_t* label, SlhDsaKey* key,
+                             int* out_committed)
 {
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
@@ -12214,6 +12224,10 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     uint16_t                                 res_len     = 0;
     uint16_t                                 group;
     uint16_t                                 action;
+
+    if (out_committed != NULL) {
+        *out_committed = 0;
+    }
 
     if ((ctx == NULL) || ((seed == NULL) && (seedSz > 0))) {
         return WH_ERROR_BADARGS;
@@ -12331,6 +12345,9 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
             if (ret >= 0) {
                 /* Key is cached on server or is ephemeral */
                 key_id = (whKeyId)(res->keyId);
+                if (out_committed != NULL) {
+                    *out_committed = 1;
+                }
 
                 /* Update output variable if requested */
                 if (inout_key_id != NULL) {
@@ -12380,7 +12397,7 @@ int wh_Client_SlhDsaMakeExportKeyDma(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKeyDma(ctx, param, NULL, 0, NULL, WH_NVM_FLAGS_EPHEMERAL,
-                             0, NULL, key);
+                             0, NULL, key, NULL);
 }
 
 int wh_Client_SlhDsaMakeExportKeyFromSeedDma(whClientContext* ctx, int param,
@@ -12392,7 +12409,7 @@ int wh_Client_SlhDsaMakeExportKeyFromSeedDma(whClientContext* ctx, int param,
     }
 
     return _SlhDsaMakeKeyDma(ctx, param, seed, seedSz, NULL,
-                             WH_NVM_FLAGS_EPHEMERAL, 0, NULL, key);
+                             WH_NVM_FLAGS_EPHEMERAL, 0, NULL, key, NULL);
 }
 
 int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
@@ -12400,8 +12417,8 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
                                     uint16_t label_len, const uint8_t* label,
                                     SlhDsaKey* pub)
 {
-    int     ret;
-    whKeyId in_keyId;
+    int ret;
+    int committed = 0;
 
     if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
         return WH_ERROR_BADARGS;
@@ -12412,20 +12429,9 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
         return WH_ERROR_BADARGS;
     }
 
-    in_keyId = *inout_key_id;
     ret = _SlhDsaMakeKeyDma(ctx, param, NULL, 0, inout_key_id, flags, label_len,
-                            label, pub);
-    if (ret >= 0) {
-        wh_Client_SlhDsaSetKeyId(pub, *inout_key_id);
-        pub->devId = WH_CLIENT_DEVID(ctx);
-    }
-    else if (WH_KEYID_ISERASED(in_keyId) && !WH_KEYID_ISERASED(*inout_key_id)) {
-        /* A changed key id is itself proof of commit: it moves off ERASED
-         * only once the response has been read. */
-        (void)wh_Client_KeyEvict(ctx, *inout_key_id);
-        *inout_key_id = WH_KEYID_ERASED;
-    }
-    return ret;
+                            label, pub, &committed);
+    return _SlhDsaCacheKeyFinish(ctx, ret, committed, inout_key_id, pub);
 }
 
 int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,

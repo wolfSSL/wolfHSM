@@ -3463,7 +3463,7 @@ int wh_Client_SlhDsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
  * @param[in] ctx Pointer to the client context
  * @param[in] param Parameter set to generate (enum SlhDsaParam)
  * @param[in,out] inout_key_id Pointer to key ID to use/receive
- * @param[in] flags Flags to control key persistence
+ * @param[in] flags Flags to control key persistence, must not be EPHEMERAL
  * @param[in] label_len Length of optional label
  * @param[in] label Optional label to associate with key
  * @return int Returns 0 on success or a negative error code on failure.
@@ -3528,7 +3528,7 @@ int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
  * @param[in] seed Pointer to the 3n seed bytes
  * @param[in] seedSz Length of seed in bytes
  * @param[in,out] inout_key_id Pointer to key ID to use/receive
- * @param[in] flags Flags to control key persistence
+ * @param[in] flags Flags to control key persistence, must not be EPHEMERAL
  * @param[in] label_len Length of optional label
  * @param[in] label Optional label to associate with key
  * @return int Returns 0 on success or a negative error code on failure.
