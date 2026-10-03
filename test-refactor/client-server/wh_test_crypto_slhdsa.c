@@ -1588,6 +1588,100 @@ static int _whTest_CryptoSlhDsaSeededKeyGen(whClientContext* ctx)
     wc_SlhDsaKey_Free(key);
     return ret;
 }
+
+/* EPHEMERAL returns the private key, so cache-key wrappers must refuse it */
+static int _whTest_CryptoSlhDsaCacheKeyEphemeral(whClientContext* ctx)
+{
+    int              devId = WH_CLIENT_DEVID(ctx);
+    int              ret;
+    whKeyId          keyId = WH_KEYID_ERASED;
+    SlhDsaKey        pub[1];
+    const int        param = WH_TEST_SLHDSA_KAT_PARAM;
+    const whNvmFlags flags = WH_NVM_FLAGS_EPHEMERAL;
+
+    ret = wc_SlhDsaKey_Init(pub, param, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (wh_Client_SlhDsaMakeCacheKey(ctx, param, &keyId, flags, 0, NULL) !=
+        WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("SLH-DSA cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
+    }
+    /* A valid seed, so the flag is the only reason to refuse */
+    if (wh_Client_SlhDsaMakeCacheKeyFromSeed(
+            ctx, param, whTestSlhDsaKeyGenSeed, sizeof(whTestSlhDsaKeyGenSeed),
+            &keyId, flags, 0, NULL) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("SLH-DSA seeded cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
+    }
+    if (wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
+            ctx, param, &keyId, flags, 0, NULL, pub) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("SLH-DSA cache and export accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (wh_Client_SlhDsaMakeCacheKeyDma(ctx, param, &keyId, flags, 0, NULL,
+                                        pub) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("SLH-DSA DMA cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
+    }
+#endif /* WOLFHSM_CFG_DMA */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SLH-DSA CACHE EPHEMERAL DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_SlhDsaKey_Free(pub);
+    return ret;
+}
+
+/* Importing a private key must not leave its DER in the comm buffer */
+static int _whTest_CryptoSlhDsaImportClearsComm(whClientContext* ctx)
+{
+    int            devId = WH_CLIENT_DEVID(ctx);
+    int            ret;
+    whKeyId        keyId = WH_KEYID_ERASED;
+    SlhDsaKey      key[1];
+    const uint8_t* comm = (const uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    /* The seed starts with SK.seed, which the private key DER contains */
+    const size_t skSz = sizeof(whTestSlhDsaKeyGenSeed) / 3;
+    size_t       i;
+
+    ret = wc_SlhDsaKey_Init(key, WH_TEST_SLHDSA_KAT_PARAM, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wh_Client_SlhDsaMakeExportKeyFromSeed(
+        ctx, WH_TEST_SLHDSA_KAT_PARAM, whTestSlhDsaKeyGenSeed,
+        sizeof(whTestSlhDsaKeyGenSeed), key);
+    if (ret == 0) {
+        ret = wh_Client_SlhDsaImportKey(ctx, key, &keyId,
+                                        WH_NVM_FLAGS_USAGE_SIGN, 0, NULL);
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to import an SLH-DSA private key: %d\n", ret);
+    }
+
+    for (i = 0; (ret == 0) && (i + skSz <= WOLFHSM_CFG_COMM_DATA_LEN); i++) {
+        if (memcmp(comm + i, whTestSlhDsaKeyGenSeed, skSz) == 0) {
+            WH_ERROR_PRINT("SLH-DSA private key left in the comm buffer\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SLH-DSA IMPORT CLEARS COMM DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    wc_SlhDsaKey_Free(key);
+    return ret;
+}
 #endif /* !WOLFSSL_SLHDSA_VERIFY_ONLY */
 
 /* Drives the vector through the plain wolfCrypt API, which is how an
@@ -2029,6 +2123,83 @@ done:
     }
     return ret;
 }
+
+/* Fails the client copy-back, which runs after the server has done its work */
+static int _whTest_SlhDsaFailWritePostCb(whClientContext* client,
+                                         uintptr_t clientAddr, void** ptr,
+                                         size_t len, whDmaOper oper,
+                                         whDmaFlags flags)
+{
+    (void)client;
+    (void)len;
+    (void)flags;
+    *ptr = (void*)clientAddr;
+    return (oper == WH_DMA_OPER_CLIENT_WRITE_POST) ? WH_ERROR_ABORTED
+                                                   : WH_ERROR_OK;
+}
+
+/* Evict the cached key on a client failure, even for a caller-chosen id */
+static int _whTest_CryptoSlhDsaDmaCacheKeyRollback(whClientContext* ctx)
+{
+    int                    devId = WH_CLIENT_DEVID(ctx);
+    int                    ret;
+    whKeyId                keyId      = WH_KEYID_ERASED;
+    whKeyId                explicitId = WH_KEYID_ERASED;
+    SlhDsaKey              pub[1];
+    whClientDmaClientMemCb savedCb = ctx->dma.cb;
+
+    ret = wc_SlhDsaKey_Init(pub, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Borrow an id the server knows is free */
+    ret = wh_Client_SlhDsaMakeCacheKeyDma(ctx, WH_TEST_SLHDSA_DMA_PARAM, &keyId,
+                                          WH_NVM_FLAGS_NONE, 0, NULL, pub);
+    if (ret == 0) {
+        explicitId = keyId;
+        ret        = wh_Client_KeyEvict(ctx, explicitId);
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to reserve an SLH-DSA key id: %d\n", ret);
+    }
+
+    if (ret == 0) {
+        (void)wh_Client_DmaRegisterCb(ctx, _whTest_SlhDsaFailWritePostCb);
+        ret = wh_Client_SlhDsaMakeCacheKeyDma(ctx, WH_TEST_SLHDSA_DMA_PARAM,
+                                              &keyId, WH_NVM_FLAGS_NONE, 0,
+                                              NULL, pub);
+        (void)wh_Client_DmaRegisterCb(ctx, savedCb);
+        if ((ret != WH_ERROR_ABORTED) || !WH_KEYID_ISERASED(keyId)) {
+            WH_ERROR_PRINT("SLH-DSA DMA keygen copy-back failure returned "
+                           "%d keyId 0x%X\n",
+                           ret, keyId);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* Nothing may stay cached under the caller's id */
+    if (ret == 0) {
+        ret = wh_Client_KeyEvict(ctx, explicitId);
+        if (ret != WH_ERROR_NOTFOUND) {
+            WH_ERROR_PRINT("SLH-DSA key left cached after failure: %d\n", ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SLH-DSA DMA CACHE ROLLBACK DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_SlhDsaKey_Free(pub);
+    return ret;
+}
 #endif /* WH_TEST_SLHDSA_DMA_PARAM && WOLFHSM_CFG_DMA */
 
 #ifdef WH_TEST_SLHDSA_COMM_PARAM
@@ -2098,6 +2269,8 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaNoSign(ctx));
 #else
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaSeededKeyGen(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaCacheKeyEphemeral(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaImportClearsComm(ctx));
 #endif
 #endif /* WH_TEST_SLHDSA_KAT_PARAM */
 
@@ -2131,6 +2304,7 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
 #if defined(WH_TEST_SLHDSA_DMA_PARAM) && defined(WOLFHSM_CFG_DMA)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaDmaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaDmaCachedKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSlhDsaDmaCacheKeyRollback(ctx));
 #endif
 
     (void)ctx;
