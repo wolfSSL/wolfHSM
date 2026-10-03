@@ -101,6 +101,11 @@ jobs:
       if: matrix.group == 'pq-dma'
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 MLDSA_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Verify-only drops the signing APIs, so this catches code that assumes them.
+    - name: Build and test refactor DMA ASAN SLHDSA verify-only
+      if: matrix.group == 'pq-dma'
+      run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 SLHDSA_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test refactor ASAN TESTWOLFCRYPT
       if: matrix.group == 'wolfcrypt'

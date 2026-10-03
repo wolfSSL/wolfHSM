@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -140,6 +140,14 @@
 /* Enables wc_Sha3_SetFlags so the SHA3 Keccak-mode reject/fallback paths are
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
+
+/* SLH-DSA Options. Only 128s is built: its 7856-byte signature is the one
+ * that fits WOLFHSM_CFG_COMM_DATA_LEN, so the non-DMA paths can carry it.
+ * 128f signs faster but its 17088-byte signature does not fit. */
+#define WOLFSSL_HAVE_SLHDSA
+#define WOLFSSL_SLHDSA_PARAM_NO_128F
+#define WOLFSSL_SLHDSA_PARAM_NO_192
+#define WOLFSSL_SLHDSA_PARAM_NO_256
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM

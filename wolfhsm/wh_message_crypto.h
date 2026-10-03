@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -1197,6 +1197,141 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyResponse* src,
     whMessageCrypto_MlDsaVerifyResponse* dest);
 
+
+/*
+ * SLH-DSA
+ */
+
+/* SLH-DSA Key Generation Request */
+typedef struct {
+    uint32_t sz;
+    uint32_t param;  /* enum SlhDsaParam parameter set */
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint32_t seedSz; /* 0 for random keygen, else SK.seed||SK.prf||PK.seed */
+    uint8_t  label[WH_NVM_LABEL_LEN];
+    /* Data follows:
+     * uint8_t seed[seedSz];
+     */
+} whMessageCrypto_SlhDsaKeyGenRequest;
+
+/* SLH-DSA Key Generation Response */
+typedef struct {
+    uint32_t keyId;
+    uint32_t len;
+    /* Data follows:
+     * uint8_t out[len];
+     */
+} whMessageCrypto_SlhDsaKeyGenResponse;
+
+int wh_MessageCrypto_TranslateSlhDsaKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaKeyGenRequest* src,
+    whMessageCrypto_SlhDsaKeyGenRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaKeyGenResponse* src,
+    whMessageCrypto_SlhDsaKeyGenResponse* dest);
+
+/* SLH-DSA Sign Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT (1 << 0)
+/* Input is a caller-built M', so context and pre-hash do not apply */
+#define WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_MPRIME (1 << 1)
+/* Caller asked for a hedged signature; the server supplies the randomizer */
+#define WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_RANDOMIZED (1 << 2)
+    uint32_t param;
+    uint32_t keyId;
+    uint32_t sz;
+    uint32_t contextSz;   /* FIPS 205 context length (0-255) */
+    uint32_t preHashType; /* enum wc_HashType, 0 for pure SLH-DSA */
+    uint32_t addRndSz;    /* Caller-supplied randomizer length, 0 if none */
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t in[sz];
+     * uint8_t context[contextSz];
+     * uint8_t addRnd[addRndSz];
+     */
+} whMessageCrypto_SlhDsaSignRequest;
+
+/* SLH-DSA Sign Response */
+typedef struct {
+    uint32_t sz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_SlhDsaSignResponse;
+
+int wh_MessageCrypto_TranslateSlhDsaSignRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaSignRequest* src,
+    whMessageCrypto_SlhDsaSignRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaSignResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaSignResponse* src,
+    whMessageCrypto_SlhDsaSignResponse* dest);
+
+/* SLH-DSA Verify Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT (1 << 0)
+/* Message is a caller-built M', so context and pre-hash do not apply */
+#define WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_MPRIME (1 << 2)
+    uint32_t param;
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t hashSz;
+    uint32_t contextSz;   /* FIPS 205 context length (0-255) */
+    uint32_t preHashType; /* enum wc_HashType, 0 for pure SLH-DSA */
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     * uint8_t hash[hashSz];
+     * uint8_t context[contextSz];
+     */
+} whMessageCrypto_SlhDsaVerifyRequest;
+
+/* SLH-DSA Verify Response */
+typedef struct {
+    uint32_t res;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_SlhDsaVerifyResponse;
+
+int wh_MessageCrypto_TranslateSlhDsaVerifyRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaVerifyRequest* src,
+    whMessageCrypto_SlhDsaVerifyRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaVerifyResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaVerifyResponse* src,
+    whMessageCrypto_SlhDsaVerifyResponse* dest);
+
+/* SLH-DSA Check Private Key Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT (1 << 0)
+    uint32_t param;
+    uint32_t keyId;
+    uint32_t pubSz; /* PK.seed||PK.root, 2n bytes */
+    /* Data follows:
+     * uint8_t pub[pubSz];
+     */
+} whMessageCrypto_SlhDsaCheckPrivKeyRequest;
+
+/* SLH-DSA Check Private Key Response */
+typedef struct {
+    int32_t res;
+    uint8_t WH_PAD[4];
+} whMessageCrypto_SlhDsaCheckPrivKeyResponse;
+
+int wh_MessageCrypto_TranslateSlhDsaCheckPrivKeyRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaCheckPrivKeyRequest* src,
+    whMessageCrypto_SlhDsaCheckPrivKeyRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaCheckPrivKeyResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaCheckPrivKeyResponse* src,
+    whMessageCrypto_SlhDsaCheckPrivKeyResponse* dest);
+
 /*
  * ML-KEM
  */
@@ -1693,6 +1828,96 @@ int wh_MessageCrypto_TranslateMlDsaVerifyDmaRequest(
 int wh_MessageCrypto_TranslateMlDsaVerifyDmaResponse(
     uint16_t magic, const whMessageCrypto_MlDsaVerifyDmaResponse* src,
     whMessageCrypto_MlDsaVerifyDmaResponse* dest);
+
+/* SLH-DSA DMA Key Generation Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer key;
+    whMessageCrypto_DmaBuffer seed; /* sz 0 for random keygen */
+    uint32_t                  param;
+    uint32_t                  flags;
+    uint32_t                  keyId;
+    uint32_t                  access; /* Key access permissions */
+    uint32_t                  labelSize;
+    uint8_t                   label[WH_NVM_LABEL_LEN];
+    uint8_t                   WH_PAD[4];
+} whMessageCrypto_SlhDsaKeyGenDmaRequest;
+
+/* SLH-DSA DMA Key Generation Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      keyId;   /* Assigned key ID */
+    uint32_t                      keySize; /* Actual size of generated key */
+} whMessageCrypto_SlhDsaKeyGenDmaResponse;
+
+/* SLH-DSA DMA Sign Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer msg;         /* Message buffer */
+    whMessageCrypto_DmaBuffer sig;         /* Signature buffer */
+    uint32_t                  options;     /* Same options as non-DMA version */
+    uint32_t                  param;       /* enum SlhDsaParam parameter set */
+    uint32_t                  keyId;       /* Key ID to use for signing */
+    uint32_t                  contextSz;   /* FIPS 205 context length (0-255) */
+    uint32_t                  preHashType; /* enum wc_HashType */
+    uint32_t                  addRndSz;    /* Randomizer length, 0 if none */
+    /* Data follows:
+     * uint8_t context[contextSz];
+     * uint8_t addRnd[addRndSz];
+     */
+} whMessageCrypto_SlhDsaSignDmaRequest;
+
+/* SLH-DSA DMA Sign Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      sigLen;    /* Actual signature length */
+    uint8_t                       WH_PAD[4]; /* Pad to 8-byte alignment */
+} whMessageCrypto_SlhDsaSignDmaResponse;
+
+/* SLH-DSA DMA Verify Request */
+typedef struct {
+    whMessageCrypto_DmaBuffer sig;         /* Signature buffer */
+    whMessageCrypto_DmaBuffer msg;         /* Message buffer */
+    uint32_t                  options;     /* Same options as non-DMA version */
+    uint32_t                  param;       /* enum SlhDsaParam parameter set */
+    uint32_t                  keyId;       /* Key ID to use for verification */
+    uint32_t                  contextSz;   /* FIPS 205 context length (0-255) */
+    uint32_t                  preHashType; /* enum wc_HashType */
+    uint8_t                   WH_PAD[4];   /* Pad to 8-byte alignment */
+    /* Data follows:
+     * uint8_t context[contextSz];
+     */
+} whMessageCrypto_SlhDsaVerifyDmaRequest;
+
+/* SLH-DSA DMA Verify Response */
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    int32_t                       verifyResult; /* Result of verification */
+    uint8_t                       WH_PAD[4];    /* Pad to 8-byte alignment */
+} whMessageCrypto_SlhDsaVerifyDmaResponse;
+
+/* SLH-DSA DMA translation functions */
+int wh_MessageCrypto_TranslateSlhDsaKeyGenDmaRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaKeyGenDmaRequest* src,
+    whMessageCrypto_SlhDsaKeyGenDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaKeyGenDmaResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaKeyGenDmaResponse* src,
+    whMessageCrypto_SlhDsaKeyGenDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaSignDmaRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaSignDmaRequest* src,
+    whMessageCrypto_SlhDsaSignDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaSignDmaResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaSignDmaResponse* src,
+    whMessageCrypto_SlhDsaSignDmaResponse* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaVerifyDmaRequest(
+    uint16_t magic, const whMessageCrypto_SlhDsaVerifyDmaRequest* src,
+    whMessageCrypto_SlhDsaVerifyDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateSlhDsaVerifyDmaResponse(
+    uint16_t magic, const whMessageCrypto_SlhDsaVerifyDmaResponse* src,
+    whMessageCrypto_SlhDsaVerifyDmaResponse* dest);
 
 /* ML-KEM DMA Key Generation Request */
 typedef struct {
