@@ -9652,6 +9652,508 @@ int wh_Client_Sha3_512FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 }
 #endif /* !WOLFSSL_NOSHA3_512 */
 
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+
+#define WH_SHAKE_MAX_BLOCK_SIZE 168u
+
+typedef struct {
+    int      hashType; /* WC_HASH_TYPE_SHAKE* (also algoType on the wire) */
+    uint32_t blockSize;
+    uint32_t maxInlineSz;
+    /* Restores the context after Final, keeping heap and devId */
+    int (*resetFn)(wc_Shake* sha);
+} whShakeVariant;
+
+#ifdef WOLFSSL_SHAKE128
+static const whShakeVariant whShake128 = {
+    WC_HASH_TYPE_SHAKE128, 168u,
+    WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ, wc_Shake128_Reset};
+#endif
+#ifdef WOLFSSL_SHAKE256
+static const whShakeVariant whShake256 = {
+    WC_HASH_TYPE_SHAKE256, 136u,
+    WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ, wc_Shake256_Reset};
+#endif
+
+/* Maximum data size for a single UpdateRequest: inline wire capacity
+ * plus room left in the local partial-block buffer. */
+static uint32_t _ShakeUpdatePerCallCapacity(const wc_Shake*       sha,
+                                            const whShakeVariant* v)
+{
+    return v->maxInlineSz + (uint32_t)(v->blockSize - 1u - sha->i);
+}
+
+static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                               const whShakeVariant* v, const uint8_t* in,
+                               uint32_t inLen, bool* requestSent)
+{
+    int                           ret = 0;
+    whMessageCrypto_ShakeRequest* req = NULL;
+    uint8_t*                      inlineData;
+    uint8_t*                      dataPtr = NULL;
+    uint32_t                      capacity;
+    uint32_t                      wirePos = 0;
+    uint32_t                      i       = 0;
+    /* Buffer for rollback if SendRequest fails */
+    uint32_t savedI;
+    uint8_t  savedT[WH_SHAKE_MAX_BLOCK_SIZE];
+
+    if (ctx == NULL || sha == NULL || requestSent == NULL ||
+        (in == NULL && inLen != 0)) {
+        return WH_ERROR_BADARGS;
+    }
+    *requestSent = false;
+
+    ret = _Sha3RejectKeccak(sha);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (sha->i >= v->blockSize) {
+        return WH_ERROR_BADARGS;
+    }
+
+    capacity = _ShakeUpdatePerCallCapacity(sha, v);
+    if (inLen > capacity) {
+        return WH_ERROR_BADARGS;
+    }
+    if (inLen == 0) {
+        return WH_ERROR_OK;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_ShakeRequest*)_createCryptoRequest(
+        dataPtr, v->hashType, ctx->cryptoAffinity);
+    inlineData = (uint8_t*)(req + 1);
+
+    savedI = sha->i;
+    memcpy(savedT, sha->t, sha->i);
+
+    /* Top up the local partial buffer. If it completes a full block, copy
+     * the assembled block as the first inline block. */
+    if (sha->i > 0) {
+        while (i < inLen && sha->i < v->blockSize) {
+            sha->t[sha->i++] = in[i++];
+        }
+        if (sha->i == v->blockSize) {
+            memcpy(inlineData + wirePos, sha->t, v->blockSize);
+            wirePos += v->blockSize;
+            sha->i = 0;
+        }
+    }
+
+    /* Pack as many whole input blocks as will fit inline. */
+    while ((inLen - i) >= v->blockSize &&
+           (wirePos + v->blockSize) <= v->maxInlineSz) {
+        memcpy(inlineData + wirePos, in + i, v->blockSize);
+        wirePos += v->blockSize;
+        i += v->blockSize;
+    }
+
+    /* Stash remaining tail bytes locally. */
+    while (i < inLen) {
+        sha->t[sha->i++] = in[i++];
+    }
+
+    /* Pure buffer-fill update: nothing to send. */
+    if (wirePos == 0) {
+        wc_ForceZero(savedT, sizeof(savedT));
+        return WH_ERROR_OK;
+    }
+
+    req->isLastBlock = 0;
+    req->inSz        = wirePos;
+    req->outSz       = 0;
+    req->op          = WH_MESSAGE_CRYPTO_SHAKE_OP_HASH;
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
+
+    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
+                                sizeof(whMessageCrypto_GenericRequestHeader) +
+                                    sizeof(*req) + wirePos,
+                                dataPtr);
+    if (ret == 0) {
+        *requestSent = true;
+    }
+    else {
+        /* Restore so the caller can retry without losing buffered input. */
+        sha->i = (uint8_t)savedI;
+        memcpy(sha->t, savedT, savedI);
+    }
+    wc_ForceZero(savedT, sizeof(savedT));
+    return ret;
+}
+
+/* Receive a SHAKE response and check it has exactly outSz bytes of output */
+static int _ShakeRecvResponse(whClientContext* ctx, const whShakeVariant* v,
+                              uint32_t                        outSz,
+                              whMessageCrypto_ShakeResponse** res)
+{
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action = WH_MESSAGE_ACTION_NONE;
+    uint16_t dataSz = 0;
+    uint8_t* dataPtr;
+    int      ret;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)res);
+    if ((ret >= 0) && ((dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
+                                     sizeof(**res) + outSz) ||
+                       ((*res)->outSz != outSz))) {
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
+static int _ShakeUpdateResponse(whClientContext* ctx, wc_Shake* sha,
+                                const whShakeVariant* v)
+{
+    whMessageCrypto_ShakeResponse* res = NULL;
+    int                            ret;
+
+    if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _ShakeRecvResponse(ctx, v, 0, &res);
+    if (ret == WH_ERROR_OK) {
+        memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
+    }
+    return ret;
+}
+
+/* Send the sponge, plus the tail buffered in sha->t unless squeezing */
+static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
+                              const whShakeVariant* v, uint32_t op,
+                              uint32_t outSz)
+{
+    int                           ret;
+    whMessageCrypto_ShakeRequest* req;
+    uint8_t*                      dataPtr;
+    int      isSqueeze = (op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE);
+    uint32_t inSz;
+
+    if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Only an absorb asks for no output */
+    if ((op != WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) && (outSz == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = _Sha3RejectKeccak(sha);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+    if (sha->i >= v->blockSize) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Requested output is too big for the response. Return NOSPACE and let
+     * the software fallback handle it, if available. */
+    if (outSz > WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ) {
+        return WH_ERROR_NOSPACE;
+    }
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_ShakeRequest*)_createCryptoRequest(
+        dataPtr, v->hashType, ctx->cryptoAffinity);
+
+    inSz             = isSqueeze ? 0u : sha->i;
+    req->isLastBlock = isSqueeze ? 0u : 1u;
+    req->inSz        = inSz;
+    req->outSz       = outSz;
+    req->op          = op;
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
+    if (inSz > 0) {
+        memcpy((uint8_t*)(req + 1), sha->t, inSz);
+    }
+
+    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
+                                sizeof(whMessageCrypto_GenericRequestHeader) +
+                                    sizeof(*req) + inSz,
+                                dataPtr);
+    return ret;
+}
+
+static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
+                               const whShakeVariant* v, uint32_t op,
+                               uint8_t* out, uint32_t outSz)
+{
+    int                            ret;
+    whMessageCrypto_ShakeResponse* res = NULL;
+
+    if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((op != WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) &&
+        ((out == NULL) || (outSz == 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _ShakeRecvResponse(ctx, v, outSz, &res);
+    if (ret == WH_ERROR_OK) {
+        if (outSz > 0) {
+            memcpy(out, (uint8_t*)(res + 1), outSz);
+        }
+        if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) {
+            ret = v->resetFn(sha);
+        }
+        else {
+            memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
+            /* The server padded the buffered tail into the state */
+            if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
+                sha->i = 0;
+            }
+        }
+    }
+    return ret;
+}
+
+static int _ShakeStateOp(whClientContext* ctx, wc_Shake* sha,
+                         const whShakeVariant* v, uint32_t op, uint8_t* out,
+                         uint32_t outSz)
+{
+    int ret = _ShakeStateRequest(ctx, sha, v, op, outSz);
+
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _ShakeStateResponse(ctx, sha, v, op, out, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+/* Snapshot of the streaming state the offload path mutates, so a fallback to
+ * software starts from exactly what the caller passed in. */
+typedef struct {
+    uint64_t s[25];
+    uint8_t  t[WH_SHAKE_MAX_BLOCK_SIZE];
+    uint32_t i;
+} _ShakeSavedState;
+
+static void _ShakeSaveState(const wc_Shake* sha, _ShakeSavedState* saved)
+{
+    saved->i = sha->i;
+    memcpy(saved->s, sha->s, sizeof(saved->s));
+    memcpy(saved->t, sha->t, sizeof(saved->t));
+}
+
+static void _ShakeRestoreState(wc_Shake* sha, const _ShakeSavedState* saved)
+{
+    sha->i = (uint8_t)saved->i;
+    memcpy(sha->s, saved->s, sizeof(saved->s));
+    memcpy(sha->t, saved->t, sizeof(saved->t));
+}
+
+/* Send all of in as whole-block updates, leaving any tail in sha->t */
+static int _ShakeUpdateAll(whClientContext* ctx, wc_Shake* sha,
+                           const whShakeVariant* v, const uint8_t* in,
+                           uint32_t inLen)
+{
+    int      ret      = WH_ERROR_OK;
+    uint32_t consumed = 0;
+
+    while (ret == WH_ERROR_OK && consumed < inLen) {
+        uint32_t capacity  = _ShakeUpdatePerCallCapacity(sha, v);
+        uint32_t remaining = inLen - consumed;
+        uint32_t chunk     = (remaining < capacity) ? remaining : capacity;
+        bool     sent      = false;
+
+        ret = _ShakeUpdateRequest(ctx, sha, v, in + consumed, chunk, &sent);
+        if (ret == WH_ERROR_OK && sent) {
+            do {
+                ret = _ShakeUpdateResponse(ctx, sha, v);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        consumed += chunk;
+    }
+    return ret;
+}
+
+/* Update with in, then finish with an absorb or, when out is set, a final */
+static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
+                         const whShakeVariant* v, uint32_t op,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out,
+                         uint32_t outSz)
+{
+    int              ret;
+    _ShakeSavedState saved;
+
+    /* _ShakeUpdatePerCallCapacity reads sha->i, so validate sha here rather
+     * than relying on the lower-level helper's NULL check. */
+    if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (in == NULL && inLen != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* A server without SHAKE answers NOT_COMPILED_IN, and an output too large
+     * to return is declined here; either way wolfCrypt re-runs the operation
+     * in software. Snapshot so that fallback cannot absorb any input twice. */
+    _ShakeSaveState(sha, &saved);
+
+    ret = _ShakeUpdateAll(ctx, sha, v, in, inLen);
+    if ((ret == WH_ERROR_OK) &&
+        ((op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) || (out != NULL))) {
+        ret = _ShakeStateOp(ctx, sha, v, op, out, outSz);
+    }
+
+    /* Leave sha as the caller passed it so a fallback starts clean. */
+    if (ret != WH_ERROR_OK) {
+        _ShakeRestoreState(sha, &saved);
+    }
+    /* The snapshot holds sponge state and message bytes. */
+    wc_ForceZero(&saved, sizeof(saved));
+    return ret;
+}
+
+static int _ShakeSqueeze(whClientContext* ctx, wc_Shake* sha,
+                         const whShakeVariant* v, uint8_t* out,
+                         uint32_t blockCnt)
+{
+    const uint32_t maxBlocks =
+        WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ / v->blockSize;
+    int              ret = WH_ERROR_OK;
+    _ShakeSavedState saved;
+
+    if (ctx == NULL || sha == NULL || (out == NULL && blockCnt != 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    _ShakeSaveState(sha, &saved);
+
+    /* Each response returns the state, so a long squeeze spans requests */
+    while (ret == WH_ERROR_OK && blockCnt > 0) {
+        uint32_t n = (blockCnt < maxBlocks) ? blockCnt : maxBlocks;
+
+        ret = _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE,
+                            out, n * v->blockSize);
+        out += n * v->blockSize;
+        blockCnt -= n;
+    }
+
+    if (ret != WH_ERROR_OK) {
+        _ShakeRestoreState(sha, &saved);
+    }
+    wc_ForceZero(&saved, sizeof(saved));
+    return ret;
+}
+
+/* Per-variant public APIs - thin wrappers over the shared helpers. */
+#ifdef WOLFSSL_SHAKE128
+int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz)
+{
+    return _ShakeOneshot(ctx, sha, &whShake128, WH_MESSAGE_CRYPTO_SHAKE_OP_HASH,
+                         in, inLen, out, outSz);
+}
+
+int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _ShakeUpdateRequest(ctx, sha, &whShake128, in, inLen, requestSent);
+}
+
+int wh_Client_Shake128UpdateResponse(whClientContext* ctx, wc_Shake* sha)
+{
+    return _ShakeUpdateResponse(ctx, sha, &whShake128);
+}
+
+int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz)
+{
+    return _ShakeStateRequest(ctx, sha, &whShake128,
+                              WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, outSz);
+}
+
+int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz)
+{
+    return _ShakeStateResponse(ctx, sha, &whShake128,
+                               WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, out, outSz);
+}
+
+int wh_Client_Shake128Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen)
+{
+    return _ShakeOneshot(ctx, sha, &whShake128,
+                         WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, in, inLen, NULL, 0);
+}
+
+int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt)
+{
+    return _ShakeSqueeze(ctx, sha, &whShake128, out, blockCnt);
+}
+#endif /* WOLFSSL_SHAKE128 */
+
+#ifdef WOLFSSL_SHAKE256
+int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz)
+{
+    return _ShakeOneshot(ctx, sha, &whShake256, WH_MESSAGE_CRYPTO_SHAKE_OP_HASH,
+                         in, inLen, out, outSz);
+}
+
+int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent)
+{
+    return _ShakeUpdateRequest(ctx, sha, &whShake256, in, inLen, requestSent);
+}
+
+int wh_Client_Shake256UpdateResponse(whClientContext* ctx, wc_Shake* sha)
+{
+    return _ShakeUpdateResponse(ctx, sha, &whShake256);
+}
+
+int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz)
+{
+    return _ShakeStateRequest(ctx, sha, &whShake256,
+                              WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, outSz);
+}
+
+int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz)
+{
+    return _ShakeStateResponse(ctx, sha, &whShake256,
+                               WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, out, outSz);
+}
+
+int wh_Client_Shake256Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen)
+{
+    return _ShakeOneshot(ctx, sha, &whShake256,
+                         WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, in, inLen, NULL, 0);
+}
+
+int wh_Client_Shake256SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt)
+{
+    return _ShakeSqueeze(ctx, sha, &whShake256, out, blockCnt);
+}
+#endif /* WOLFSSL_SHAKE256 */
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
+
 #ifdef WOLFHSM_CFG_DMA
 /* SHA3 DMA helpers - inline first block (assembled from partial buffer) plus
  * whole-block DMA input. Final goes inline-only. */

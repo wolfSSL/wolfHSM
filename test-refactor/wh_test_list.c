@@ -78,6 +78,7 @@ WH_TEST_DECL(whTest_Crypto_Rng);
 WH_TEST_DECL(whTest_Crypto_Rsa);
 WH_TEST_DECL(whTest_Crypto_Sha);
 WH_TEST_DECL(whTest_Crypto_Sha3);
+WH_TEST_DECL(whTest_Crypto_Shake);
 WH_TEST_DECL(whTest_Crypto_Xmss);
 WH_TEST_DECL(whTest_CryptoEcc256);
 WH_TEST_DECL(whTest_CryptoEd25519BufferTooSmall);
@@ -165,6 +166,7 @@ const whTestCase whTestsClient[] = {
     {"whTest_Crypto_Rsa", whTest_Crypto_Rsa},
     {"whTest_Crypto_Sha", whTest_Crypto_Sha},
     {"whTest_Crypto_Sha3", whTest_Crypto_Sha3},
+    {"whTest_Crypto_Shake", whTest_Crypto_Shake},
     {"whTest_Crypto_Xmss", whTest_Crypto_Xmss},
     {"whTest_CryptoEcc256", whTest_CryptoEcc256},
     {"whTest_CryptoEd25519BufferTooSmall", whTest_CryptoEd25519BufferTooSmall},

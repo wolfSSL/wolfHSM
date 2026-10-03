@@ -5024,7 +5024,6 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic, int devId,
 
 #if defined(WOLFSSL_SHA3)
 /* SHA3 - one handler dispatches all four variants on hashType. */
-
 typedef struct {
     uint32_t blockSize;
     uint32_t digestSize;
@@ -5154,6 +5153,170 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
     return ret;
 }
 #endif /* WOLFSSL_SHA3 */
+
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+/* SHAKE server handler. Mirrors _HandleSha3 above, with caller-specified
+ * output length */
+typedef struct {
+    uint32_t blockSize;
+    int (*initFn)(wc_Shake* sha, void* heap, int devId);
+    int (*updateFn)(wc_Shake* sha, const byte* data, word32 len);
+    int (*finalFn)(wc_Shake* sha, byte* out, word32 outLen);
+    int (*absorbFn)(wc_Shake* sha, const byte* data, word32 len);
+    int (*squeezeFn)(wc_Shake* sha, byte* out, word32 blockCnt);
+    void (*freeFn)(wc_Shake* sha);
+} _ShakeVariantOps;
+
+static int _ShakeLookupOps(int hashType, _ShakeVariantOps* ops)
+{
+    switch (hashType) {
+#ifdef WOLFSSL_SHAKE128
+        case WC_HASH_TYPE_SHAKE128:
+            ops->blockSize = WC_SHA3_128_COUNT * 8u;
+            ops->initFn    = wc_InitShake128;
+            ops->updateFn  = wc_Shake128_Update;
+            ops->finalFn   = wc_Shake128_Final;
+            ops->absorbFn  = wc_Shake128_Absorb;
+            ops->squeezeFn = wc_Shake128_SqueezeBlocks;
+            ops->freeFn    = wc_Shake128_Free;
+            return 0;
+#endif
+#ifdef WOLFSSL_SHAKE256
+        case WC_HASH_TYPE_SHAKE256:
+            ops->blockSize = WC_SHA3_256_COUNT * 8u;
+            ops->initFn    = wc_InitShake256;
+            ops->updateFn  = wc_Shake256_Update;
+            ops->finalFn   = wc_Shake256_Final;
+            ops->absorbFn  = wc_Shake256_Absorb;
+            ops->squeezeFn = wc_Shake256_SqueezeBlocks;
+            ops->freeFn    = wc_Shake256_Free;
+            return 0;
+#endif
+        default:
+            return WH_ERROR_BADARGS;
+    }
+}
+
+/* Check the input and output sizes against what the op allows */
+static int _ShakeCheckRequest(const whMessageCrypto_ShakeRequest* req,
+                              uint32_t                            blockSize)
+{
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ;
+    int            ok     = 0;
+
+    switch (req->op) {
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_HASH:
+            if (req->isLastBlock) {
+                ok = (req->inSz < blockSize) && (req->outSz != 0) &&
+                     (req->outSz <= maxOut);
+            }
+            else {
+                ok = ((req->inSz % blockSize) == 0) && (req->outSz == 0);
+            }
+            break;
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB:
+            ok = (req->inSz < blockSize) && (req->outSz == 0);
+            break;
+        case WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE:
+            ok = (req->inSz == 0) && (req->outSz != 0) &&
+                 ((req->outSz % blockSize) == 0) && (req->outSz <= maxOut);
+            break;
+        default:
+            break;
+    }
+    return ok ? WH_ERROR_OK : WH_ERROR_BADARGS;
+}
+
+static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
+                        int devId, const void* cryptoDataIn, uint16_t inSize,
+                        void* cryptoDataOut, uint16_t* outSize)
+{
+    int                           ret = 0;
+    wc_Shake                      shake[1];
+    whMessageCrypto_ShakeRequest  req;
+    whMessageCrypto_ShakeResponse res = {0};
+    const uint8_t*                inData;
+    uint8_t*                      outData;
+    _ShakeVariantOps              ops;
+    int                           isFinal;
+
+    (void)ctx;
+
+    ret = _ShakeLookupOps(hashType, &ops);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (inSize < sizeof(whMessageCrypto_ShakeRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateShakeRequest(magic, cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if ((uint32_t)req.inSz >
+        (uint32_t)(inSize - sizeof(whMessageCrypto_ShakeRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+    ret = _ShakeCheckRequest(&req, ops.blockSize);
+    if (ret != 0) {
+        return ret;
+    }
+    isFinal = (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) && req.isLastBlock;
+
+    inData = (const uint8_t*)cryptoDataIn +
+             sizeof(whMessageCrypto_ShakeRequest);
+    outData =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_ShakeResponse);
+
+    ret = ops.initFn(shake, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Return intermediate state to the client; the server is stateless */
+    memcpy(shake->s, req.resumeState.s, sizeof(shake->s));
+
+    if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
+        ret = ops.absorbFn(shake, inData, req.inSz);
+    }
+    else if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE) {
+        ret = ops.squeezeFn(shake, outData, req.outSz / ops.blockSize);
+    }
+    else if (req.inSz > 0) {
+        ret = ops.updateFn(shake, inData, req.inSz);
+    }
+    if (ret == 0) {
+        if (isFinal) {
+            ret = ops.finalFn(shake, outData, req.outSz);
+        }
+        /* Only the sponge goes back, so no partial block may be left. */
+        else if (shake->i != 0) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            memcpy(res.resumeState.s, shake->s, sizeof(res.resumeState.s));
+        }
+    }
+    if (ret == 0) {
+        res.outSz = req.outSz;
+    }
+
+    ops.freeFn(shake);
+
+    if (ret == 0) {
+        ret = wh_MessageCrypto_TranslateShakeResponse(magic, &res,
+                                                      cryptoDataOut);
+        if (ret == 0) {
+            *outSize = (uint16_t)(sizeof(res) + res.outSz);
+        }
+    }
+
+    return ret;
+}
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
 
@@ -6289,6 +6452,23 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     }
                     break;
 #endif /* WOLFSSL_SHA3 */
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+#ifdef WOLFSSL_SHAKE128
+                case WC_HASH_TYPE_SHAKE128:
+#endif
+#ifdef WOLFSSL_SHAKE256
+                case WC_HASH_TYPE_SHAKE256:
+#endif
+                    WH_DEBUG_SERVER("SHAKE req recv. type:%u\n",
+                                    rqstHeader.algoType);
+                    ret = _HandleShake(ctx, rqstHeader.algoType, magic, devId,
+                                       cryptoDataIn, cryptoInSize,
+                                       cryptoDataOut, &cryptoOutSize);
+                    if (ret != 0) {
+                        WH_DEBUG_SERVER("SHAKE ret = %d\n", ret);
+                    }
+                    break;
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;
