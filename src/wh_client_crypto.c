@@ -9829,7 +9829,7 @@ static int _ShakeUpdateResponse(whClientContext* ctx, wc_Shake* sha,
     }
 
     ret = _ShakeRecvResponse(ctx, v, 0, &res);
-    if (ret >= 0) {
+    if (ret == WH_ERROR_OK) {
         memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
     }
     return ret;
@@ -9907,7 +9907,7 @@ static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
     }
 
     ret = _ShakeRecvResponse(ctx, v, outSz, &res);
-    if (ret >= 0) {
+    if (ret == WH_ERROR_OK) {
         if (outSz > 0) {
             memcpy(out, (uint8_t*)(res + 1), outSz);
         }
