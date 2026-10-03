@@ -424,6 +424,9 @@ int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
         /* Clear buffer to avoid leaking partial key material on error */
         wc_ForceZero(buffer, max_size);
         *out_size = 0;
+        if (ret == 0) {
+            ret = WH_ERROR_ABORTED;
+        }
     }
     return ret;
 }
