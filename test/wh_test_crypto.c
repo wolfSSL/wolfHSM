@@ -14649,12 +14649,12 @@ static int whTestCrypto_MlKemClient(whClientContext* ctx, int devId, WC_RNG* rng
     byte   ssWrong[WC_ML_KEM_SS_SZ];
     byte   usageCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
     byte   usageSs[WC_ML_KEM_SS_SZ];
-    word32 ctLen;
-    word32 ssEncLen;
-    word32 ssDecLen;
-    word32 ssWrongLen;
-    word32 usageCtLen;
-    word32 usageSsLen;
+    uint32_t ctLen;
+    uint32_t ssEncLen;
+    uint32_t ssDecLen;
+    uint32_t ssWrongLen;
+    uint32_t usageCtLen;
+    uint32_t usageSsLen;
     const uint8_t usageLabel[] = "mlkem-no-derive";
 
     (void)rng;
@@ -14806,7 +14806,7 @@ static int whTestCrypto_MlKemClient(whClientContext* ctx, int devId, WC_RNG* rng
         /* Negative test: decapsulate with key lacking derive usage */
         if (ret == 0) {
             byte   dummyCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE] = {0};
-            word32 dummyCtLen = sizeof(dummyCt);
+            uint32_t dummyCtLen = sizeof(dummyCt);
             ret = wh_Client_MlKemDecapsulate(ctx, usageKey, dummyCt,
                                              dummyCtLen, usageSs,
                                              &usageSsLen);
@@ -14841,9 +14841,9 @@ static int whTestCrypto_MlKemClient(whClientContext* ctx, int devId, WC_RNG* rng
             byte   deriveCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
             byte   deriveSsEnc[WC_ML_KEM_SS_SZ];
             byte   deriveSsDec[WC_ML_KEM_SS_SZ];
-            word32 deriveCtLen  = sizeof(deriveCt);
-            word32 deriveSsEncLen = sizeof(deriveSsEnc);
-            word32 deriveSsDecLen = sizeof(deriveSsDec);
+            uint32_t deriveCtLen  = sizeof(deriveCt);
+            uint32_t deriveSsEncLen = sizeof(deriveSsEnc);
+            uint32_t deriveSsDecLen = sizeof(deriveSsDec);
 
             ret = wh_Client_MlKemMakeCacheKey(
                 ctx, levels[i], &usageKeyId, WH_NVM_FLAGS_USAGE_DERIVE,
@@ -14952,7 +14952,7 @@ static int whTestCrypto_MlKemExportPublic(whClientContext* ctx, int devId,
         byte     ssDec[WC_ML_KEM_SS_SZ];
         word32   ctLen    = sizeof(ct);
         word32   ssEncLen = sizeof(ssEnc);
-        word32   ssDecLen = sizeof(ssDec);
+        uint32_t   ssDecLen = sizeof(ssDec);
 
         ret = wh_Client_MlKemMakeCacheKey(
             ctx, levels[i], &keyId,
@@ -15103,7 +15103,7 @@ static int whTestCrypto_MlKemCacheKeyAndExportPublic(whClientContext* ctx,
         byte     ssDec[WC_ML_KEM_SS_SZ];
         word32   ctLen    = sizeof(ct);
         word32   ssEncLen = sizeof(ssEnc);
-        word32   ssDecLen = sizeof(ssDec);
+        uint32_t   ssDecLen = sizeof(ssDec);
         (void)devId;
 
         ret = wc_MlKemKey_Init(genPub, levels[i], NULL, INVALID_DEVID);
@@ -15227,7 +15227,7 @@ static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
         byte     ssDec[WC_ML_KEM_SS_SZ];
         word32   ctLen    = sizeof(ct);
         word32   ssEncLen = sizeof(ssEnc);
-        word32   ssDecLen = sizeof(ssDec);
+        uint32_t   ssDecLen = sizeof(ssDec);
 
         ret = wh_Client_MlKemMakeCacheKey(
             ctx, levels[i], &keyId,
@@ -15414,7 +15414,7 @@ static int whTestCrypto_MlKemCacheKeyAndExportPublicDma(whClientContext* ctx,
         byte     ssDec[WC_ML_KEM_SS_SZ];
         word32   ctLen    = sizeof(ct);
         word32   ssEncLen = sizeof(ssEnc);
-        word32   ssDecLen = sizeof(ssDec);
+        uint32_t   ssDecLen = sizeof(ssDec);
         (void)devId;
 
         ret = wc_MlKemKey_Init(genPub, levels[i], NULL, INVALID_DEVID);
@@ -15527,10 +15527,10 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
     byte     ssWrong[WC_ML_KEM_SS_SZ];
     byte     keyBuf1[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
     byte     keyBuf2[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
-    word32   ctLen;
-    word32   ssEncLen;
-    word32   ssDecLen;
-    word32   ssWrongLen;
+    uint32_t   ctLen;
+    uint32_t   ssEncLen;
+    uint32_t   ssDecLen;
+    uint32_t   ssWrongLen;
     uint16_t keyBuf1Len;
     uint16_t keyBuf2Len;
     whKeyId  keyId;
@@ -15730,8 +15730,8 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
                 ret = wh_Client_MlKemSetKeyId(usageKey, usageKeyId);
             }
             if (ret == 0) {
-                word32 tmpCtLen = sizeof(ct);
-                word32 tmpSsLen = sizeof(ssEnc);
+                uint32_t tmpCtLen = sizeof(ct);
+                uint32_t tmpSsLen = sizeof(ssEnc);
                 ret = wh_Client_MlKemEncapsulateDma(ctx, usageKey, ct,
                                                      &tmpCtLen, ssEnc,
                                                      &tmpSsLen);
@@ -15748,7 +15748,7 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
             /* Negative test: DMA decapsulate with key lacking derive usage */
             if (ret == 0) {
                 byte   dummyCt[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE] = {0};
-                word32 dummySsLen = sizeof(ssEnc);
+                uint32_t dummySsLen = sizeof(ssEnc);
                 ret = wh_Client_MlKemDecapsulateDma(
                     ctx, usageKey, dummyCt,
                     sizeof(dummyCt), ssEnc, &dummySsLen);
@@ -15784,9 +15784,9 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
             whKeyId       cachedKeyId    = WH_KEYID_ERASED;
             int           cachedInited   = 0;
             int           cachedCached   = 0;
-            word32        cachedCtLen    = sizeof(ct);
-            word32        cachedSsEncLen = sizeof(ssEnc);
-            word32        cachedSsDecLen = sizeof(ssDec);
+            uint32_t        cachedCtLen    = sizeof(ct);
+            uint32_t        cachedSsEncLen = sizeof(ssEnc);
+            uint32_t        cachedSsDecLen = sizeof(ssDec);
             const uint8_t cachedLabel[]  = "mlkem-dma-byid";
 
             memset(ct, 0, sizeof(ct));
