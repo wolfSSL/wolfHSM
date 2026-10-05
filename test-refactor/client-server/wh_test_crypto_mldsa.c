@@ -1319,6 +1319,24 @@ done:
     wc_MlDsaKey_Free(key);
     return ret;
 }
+
+/* Cache keygen must reject WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoMlDsaMakeCacheKeyEphemeral(whClientContext* ctx)
+{
+    whKeyId keyId = WH_KEYID_ERASED;
+    int     ret;
+
+    ret = wh_Client_MlDsaMakeCacheKey(ctx, 0, WC_ML_DSA_44, &keyId,
+                                      WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+    if (ret != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("MlDsaMakeCacheKey with EPHEMERAL returned %d "
+                       "(expected BADARGS)\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+    WH_TEST_PRINT("ML-DSA CACHE-KEY EPHEMERAL REJECT SUCCESS\n");
+    return 0;
+}
 #endif /* make/sign/verify && ML_DSA_44 */
 
 int whTest_Crypto_MlDsa(whClientContext* ctx)
@@ -1345,6 +1363,7 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaCacheKeyAndExportPublic(ctx));
 #endif
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaBufferTooSmall(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaMakeCacheKeyEphemeral(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaDmaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKeyDma(ctx));
