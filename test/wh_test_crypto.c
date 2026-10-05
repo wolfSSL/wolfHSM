@@ -11286,51 +11286,95 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AESGCM
-    /* GCM DMA: round-trip with AAD via DMA */
+    /* GCM DMA: inline AAD at the cap, DMA AAD one byte past it */
+#if WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE == 0
+    WH_TEST_PRINT("AES GCM DMA ASYNC: inline AAD disabled by config, only the "
+                  "DMA form of the AAD is covered\n");
+#endif
     if (ret == 0) {
-        uint8_t authin[32];
-        uint8_t enc_tag[AES_BLOCK_SIZE];
-        uint8_t dec_tag[AES_BLOCK_SIZE];
+        Aes      swAes[1];
+        uint8_t  authin[WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE + 1];
+        uint8_t  enc_tag[AES_BLOCK_SIZE];
+        uint8_t  dec_tag[AES_BLOCK_SIZE];
+        uint8_t  refCipher[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+        uint8_t  refTag[AES_BLOCK_SIZE];
+        uint32_t aadSz[2] = {WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE,
+                             WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE + 1};
+        size_t   i;
 
         memset(authin, 0x5A, sizeof(authin));
-        memset(enc_tag, 0, sizeof(enc_tag));
 
-        ret = wc_AesInit(aes, NULL, devId);
-        if (ret == 0) {
-            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
-        }
-        if (ret == 0) {
-            ret = wh_Client_AesGcmDmaRequest(
-                ctx, aes, 1, plainIn, sizeof(plainIn), cipher, iv,
-                AES_BLOCK_SIZE, authin, sizeof(authin), NULL, sizeof(enc_tag));
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesGcmDmaResponse(ctx, aes, enc_tag,
-                                                  sizeof(enc_tag));
-            } while (ret == WH_ERROR_NOTREADY);
-        }
+        for (i = 0; i < 2 && ret == 0; i++) {
+            memset(enc_tag, 0, sizeof(enc_tag));
+            memset(refCipher, 0, sizeof(refCipher));
+            memset(refTag, 0, sizeof(refTag));
 
-        if (ret == 0) {
-            memcpy(dec_tag, enc_tag, sizeof(dec_tag));
-            ret = wh_Client_AesGcmDmaRequest(
-                ctx, aes, 0, cipher, sizeof(cipher), plainOut, iv,
-                AES_BLOCK_SIZE, authin, sizeof(authin), dec_tag,
-                sizeof(dec_tag));
+            ret = wc_AesInit(swAes, NULL, INVALID_DEVID);
+            if (ret == 0) {
+                ret = wc_AesGcmSetKey(swAes, key, sizeof(key));
+                if (ret == 0) {
+                    ret = wc_AesGcmEncrypt(swAes, refCipher, plainIn,
+                                           sizeof(plainIn), iv, AES_BLOCK_SIZE,
+                                           refTag, sizeof(refTag), authin,
+                                           aadSz[i]);
+                }
+                (void)wc_AesFree(swAes);
+            }
+            if (ret != 0) {
+                WH_ERROR_PRINT("AES-GCM DMA async reference failed %d\n", ret);
+                break;
+            }
+
+            ret = wc_AesInit(aes, NULL, devId);
+            if (ret == 0) {
+                ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+            }
+            if (ret == 0) {
+                ret = wh_Client_AesGcmDmaRequest(
+                    ctx, aes, 1, plainIn, sizeof(plainIn), cipher, iv,
+                    AES_BLOCK_SIZE, authin, aadSz[i], NULL, sizeof(enc_tag));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmDmaResponse(ctx, aes, enc_tag,
+                                                      sizeof(enc_tag));
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(cipher, refCipher, sizeof(plainIn)) != 0) {
+                WH_ERROR_PRINT("AES-GCM DMA async cipher mismatch, aadSz=%u\n",
+                               (unsigned int)aadSz[i]);
+                ret = -1;
+            }
+            if (ret == 0 && memcmp(enc_tag, refTag, sizeof(refTag)) != 0) {
+                WH_ERROR_PRINT("AES-GCM DMA async tag mismatch, aadSz=%u\n",
+                               (unsigned int)aadSz[i]);
+                ret = -1;
+            }
+
+            if (ret == 0) {
+                memcpy(dec_tag, enc_tag, sizeof(dec_tag));
+                ret = wh_Client_AesGcmDmaRequest(
+                    ctx, aes, 0, cipher, sizeof(cipher), plainOut, iv,
+                    AES_BLOCK_SIZE, authin, aadSz[i], dec_tag,
+                    sizeof(dec_tag));
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_AesGcmDmaResponse(ctx, aes, NULL, 0);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+            if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
+                WH_ERROR_PRINT("AES-GCM DMA async round-trip mismatch, "
+                               "aadSz=%u\n",
+                               (unsigned int)aadSz[i]);
+                ret = -1;
+            }
+            (void)wc_AesFree(aes);
+            memset(cipher, 0, sizeof(cipher));
+            memset(plainOut, 0, sizeof(plainOut));
         }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_AesGcmDmaResponse(ctx, aes, NULL, 0);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        if (ret == 0 && memcmp(plainIn, plainOut, sizeof(plainIn)) != 0) {
-            WH_ERROR_PRINT("AES-GCM DMA async round-trip mismatch\n");
-            ret = -1;
-        }
-        (void)wc_AesFree(aes);
-        memset(cipher, 0, sizeof(cipher));
-        memset(plainOut, 0, sizeof(plainOut));
     }
+
     if (ret == 0) {
         WH_TEST_PRINT("AES GCM DMA ASYNC DEVID=0x%X SUCCESS\n", devId);
     }

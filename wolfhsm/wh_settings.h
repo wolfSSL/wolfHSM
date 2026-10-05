@@ -162,6 +162,10 @@
  * operation in DMA requests.
  *     Default: Not defined
  *
+ *  WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE - Largest AAD, in bytes, that a DMA
+ *  AEAD request carries inside the message instead of over DMA.
+ *      Default: 128
+ *
  *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
  *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the
  *  non-DMA wire request fits within WOLFHSM_CFG_COMM_DATA_LEN alongside the
@@ -772,6 +776,15 @@
 #if WOLFHSM_CFG_DMA_PTR_SIZE != WH_PTR_SIZE
 #error "wolfHSM DMA pointer size must match system pointer size"
 #endif
+#endif
+
+/* Largest AAD a DMA AEAD request carries inline rather than over DMA. */
+#ifndef WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE
+#define WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE 128
+#endif
+
+#if WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE > WOLFHSM_CFG_COMM_DATA_LEN
+#error "WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE exceeds WOLFHSM_CFG_COMM_DATA_LEN"
 #endif
 
 #endif /* WOLFHSM_CFG_DMA */
