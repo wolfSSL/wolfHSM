@@ -453,7 +453,7 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     uint8_t*                       req_key;
     uint8_t*                       req_iv;
     uint8_t*                       req_tmp;
-    uint32_t                       req_len;
+    uint64_t                       req_len;
     uint32_t                       key_len;
     whKeyId                        key_id;
 
@@ -480,8 +480,9 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     req_key = req_in + len;
     req_iv  = req_key + key_len;
     req_tmp = req_iv + AES_IV_SIZE;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + AES_IV_SIZE + AES_BLOCK_SIZE;
+    req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+              (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
+              (uint64_t)AES_IV_SIZE + (uint64_t)AES_BLOCK_SIZE;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
@@ -792,7 +793,7 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
     uint8_t*                       dataPtr;
     uint8_t*                       req_in;
     uint8_t*                       req_key;
-    uint32_t                       req_len;
+    uint64_t                       req_len;
     uint32_t                       key_len;
     whKeyId                        key_id;
     uint16_t                       blocks = len / AES_BLOCK_SIZE;
@@ -822,8 +823,8 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
         dataPtr, WC_CIPHER_AES_ECB, ctx->cryptoAffinity);
     req_in  = (uint8_t*)(req + 1);
     req_key = req_in + len;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len;
+    req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+              (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
@@ -1121,7 +1122,7 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
     uint8_t*                       req_in;
     uint8_t*                       req_key;
     uint8_t*                       req_iv;
-    uint32_t                       req_len;
+    uint64_t                       req_len;
 
     if ((ctx == NULL) || (aes == NULL) || ((len % AES_BLOCK_SIZE) != 0) ||
         (in == NULL)) {
@@ -1155,8 +1156,9 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
     req_in  = (uint8_t*)(req + 1);
     req_key = req_in + len;
     req_iv  = req_key + key_len;
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + iv_len;
+    req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+              (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
+              (uint64_t)iv_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
@@ -1470,7 +1472,7 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     uint8_t*                       req_iv;
     uint8_t*                       req_authin;
     uint8_t*                       req_tag;
-    uint32_t                       req_len;
+    uint64_t                       req_len;
     uint32_t                       key_len;
     whKeyId                        key_id;
 
@@ -1503,8 +1505,10 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     req_authin = req_iv + iv_len;
     req_tag    = req_authin + authin_len;
 
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              len + key_len + iv_len + authin_len + ((enc == 0) ? tag_len : 0);
+    req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+              (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
+              (uint64_t)iv_len + (uint64_t)authin_len +
+              (uint64_t)((enc == 0) ? tag_len : 0);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
@@ -1649,7 +1653,7 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     uint8_t*                          req_iv;
     uint8_t*                          req_tag;
     uint8_t*                          req_key;
-    uint32_t                          req_len;
+    uint64_t                          req_len;
 
     if ((ctx == NULL) || (aes == NULL) || ((in == NULL) && (len > 0)) ||
         ((out == NULL) && (len > 0)) || ((iv == NULL) && (iv_len > 0)) ||
@@ -1672,8 +1676,9 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     req_iv  = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
     req_tag = req_iv + iv_len;
     req_key = req_tag + (enc != 0 ? 0 : tag_len);
-    req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
-              iv_len + (enc != 0 ? 0 : tag_len);
+    req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+              (uint64_t)sizeof(*req) + (uint64_t)iv_len +
+              (uint64_t)(enc != 0 ? 0 : tag_len);
 
     memset(req, 0, sizeof(*req));
     req->enc       = enc;
