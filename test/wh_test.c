@@ -46,7 +46,6 @@
 #include "wh_test_timeout.h"
 #include "wh_test_dma.h"
 #include "wh_test_keystore_reqsize.h"
-#include "wh_test_crypto_reqsize.h"
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wh_test_auth.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
@@ -100,9 +99,6 @@ int whTest_Unit(void)
 #if defined(WOLFHSM_CFG_ENABLE_SERVER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     /* Keystore req_size validation */
     WH_TEST_ASSERT(0 == whTest_KeystoreReqSize());
-
-    /* Crypto request framing validation */
-    WH_TEST_ASSERT(0 == whTest_CryptoReqSize());
 #endif /* WOLFHSM_CFG_ENABLE_SERVER && !WOLFHSM_CFG_NO_CRYPTO */
 
     /* Comm tests */

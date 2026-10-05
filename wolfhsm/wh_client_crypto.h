@@ -2090,10 +2090,9 @@ int wh_Client_AesGcmResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
  * Performs PRE address translation for the input and output buffers, stashes
  * the translated addresses in ctx->dma.asyncCtx.aes for POST cleanup, and
  * sends the DMA request to the server. Does NOT wait for a reply. The IV,
- * auth tag (for decrypt), and key are passed inline. An AAD of at most
- * WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE bytes is copied inline as well, and is
- * therefore neither address-translated nor passed to the DMA callbacks; a
- * larger AAD is translated and cleaned up like the other buffers. Caller must
+ * auth tag (for decrypt), and key are passed inline. AAD up to
+ * WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE bytes is copied inline, while larger AAD
+ * is address-translated and cleaned up like the other buffers. Caller must
  * keep in, out, and authin valid until the matching
  * wh_Client_AesGcmDmaResponse completes.
  *

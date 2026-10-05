@@ -1689,8 +1689,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         req_len += req->keySz;
     }
 
-    /* DMA would demand the AAD live in memory the server can address, which a
-     * TLS record header on the caller's stack often does not. */
     req_aad = req_key + req->keySz;
     if ((authin != NULL) && (authin_len > 0) &&
         (authin_len <= WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE) &&
@@ -1700,7 +1698,7 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     }
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     if (iv_len > 0) {
@@ -1741,7 +1739,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     if (ret == WH_ERROR_OK && authin != NULL && authin_len > 0) {
         req->aad.sz = authin_len;
         if (aadInline) {
-            /* addr 0 with a non-zero size means "follows the key inline". */
             req->aad.addr = 0;
         }
         else {

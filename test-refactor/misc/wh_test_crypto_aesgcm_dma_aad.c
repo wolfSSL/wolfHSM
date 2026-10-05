@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -17,14 +17,9 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * test/wh_test_crypto_reqsize.c
+ * test-refactor/misc/wh_test_crypto_aesgcm_dma_aad.c
  *
- * Unit tests to verify _HandleAesGcmDma validates the declared inline-AAD
- * length against the received message, preventing reads past the packet.
- *
- * The client always builds a self-consistent frame, so these cases can only
- * be produced by driving wh_Server_HandleCryptoDmaRequest directly with a
- * hand-built packet.
+ * Unit tests to verify _HandleAesGcmDma rejects a malformed inline-AAD frame.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -50,6 +45,7 @@
 #endif
 
 #include "wh_test_common.h"
+#include "wh_test_list.h"
 
 #if defined(WOLFHSM_CFG_ENABLE_SERVER) && !defined(WOLFHSM_CFG_NO_CRYPTO) && \
     defined(WOLFHSM_CFG_DMA) && defined(HAVE_AESGCM)
@@ -187,8 +183,8 @@ static uint16_t _BuildInlineAadRequest(uint8_t* req_packet, uint32_t aadBytes)
 static void _DeclareSizes(uint8_t* req_packet, uint32_t ivSz, uint64_t aadSz)
 {
     whMessageCrypto_AesGcmDmaRequest* req =
-        (whMessageCrypto_AesGcmDmaRequest*)(req_packet +
-                                            sizeof(whMessageCrypto_GenericRequestHeader));
+        (whMessageCrypto_AesGcmDmaRequest*)(
+            req_packet + sizeof(whMessageCrypto_GenericRequestHeader));
 
     req->ivSz   = ivSz;
     req->aad.sz = aadSz;
@@ -215,8 +211,7 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
 
     WH_TEST_RETURN_ON_FAIL(_SetupServer(ctx));
 
-    /* Test 1: the frame declares an inline AAD, but req_size stops short of
-     * the AAD bytes it claims to carry. */
+    /* Test 1: req_size stops short of the declared inline AAD */
     req_size = _BuildInlineAadRequest(req_packet, WH_TEST_GCM_AAD_SZ);
     ret = _Dispatch(ctx, req_packet, (uint16_t)(req_size - WH_TEST_GCM_AAD_SZ),
                     resp_packet);
@@ -226,7 +221,7 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
         return -1;
     }
 
-    /* Test 2: a declared inline AAD larger than the message carrying it. */
+    /* Test 2: declared inline AAD larger than the whole message */
     req_size = _BuildInlineAadRequest(req_packet, WH_TEST_GCM_AAD_SZ);
     _DeclareSizes(req_packet, WH_TEST_GCM_IV_SZ, (uint64_t)req_size + 1);
     ret = _Dispatch(ctx, req_packet, req_size, resp_packet);
@@ -236,8 +231,7 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
         return -1;
     }
 
-    /* Test 3: a declared length whose low 32 bits match the frame exactly, so
-     * only a check made before the truncation to uint32_t rejects it. */
+    /* Test 3: declared AAD length whose low 32 bits match the frame */
     req_size = _BuildInlineAadRequest(req_packet, WH_TEST_GCM_AAD_SZ);
     _DeclareSizes(req_packet, WH_TEST_GCM_IV_SZ,
                   (uint64_t)0x100000000ull + WH_TEST_GCM_AAD_SZ);
@@ -248,8 +242,7 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
         return -1;
     }
 
-    /* Test 4: the length the unbounded 64-bit sum would have wrapped back onto
-     * req_size, paired with an ivSz the equality check would then not bound. */
+    /* Test 4: AAD and IV lengths whose sum wraps back onto req_size */
     req_size = _BuildInlineAadRequest(req_packet, WH_TEST_GCM_AAD_SZ);
     craft    = (uint64_t)(req_size -
                        sizeof(whMessageCrypto_GenericRequestHeader)) -
@@ -263,8 +256,7 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
         return -1;
     }
 
-    /* Test 5: the correctly framed encoding must clear the framing check
-     * rather than being rejected as malformed. */
+    /* Test 5: a well-formed frame is accepted */
     req_size = _BuildInlineAadRequest(req_packet, WH_TEST_GCM_AAD_SZ);
     ret      = _Dispatch(ctx, req_packet, req_size, resp_packet);
     if (ret == WH_ERROR_BADARGS) {
@@ -279,17 +271,14 @@ static int wh_Crypto_TestAesGcmDmaAadFraming(void)
     return 0;
 }
 
-int whTest_CryptoReqSize(void)
+int whTest_CryptoAesGcmDmaAad(void* ctx)
 {
-    WH_TEST_PRINT("Testing AES-GCM DMA request framing validation...\n");
-    return wh_Crypto_TestAesGcmDmaAadFraming();
+    (void)ctx;
+
+    WH_TEST_PRINT("Testing AES-GCM DMA inline-AAD framing validation...\n");
+    WH_TEST_RETURN_ON_FAIL(wh_Crypto_TestAesGcmDmaAadFraming());
+
+    return WH_ERROR_OK;
 }
 
-#else /* server && !no-crypto && DMA && AESGCM */
-
-int whTest_CryptoReqSize(void)
-{
-    return 0;
-}
-
-#endif
+#endif /* SERVER && !NO_CRYPTO && DMA && HAVE_AESGCM */

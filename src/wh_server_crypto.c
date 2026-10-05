@@ -4291,9 +4291,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     int      aadInline   = ((req.aad.sz > 0) && (req.aad.addr == 0));
     uint64_t needed_size = 0;
 
-    /* addr 0 with a non-zero size means the AAD follows the key inline; bound
-     * that length here, before it can wrap the sum below. */
-    if (req.aad.sz > (aadInline ? (uint64_t)inSize : (uint64_t)0xFFFFFFFFu)) {
+    /* addr 0 with a non-zero size means the AAD follows the key inline. Clamp
+     * length to prevent wrapping */
+    if (req.aad.sz > (aadInline ? (uint64_t)inSize : (uint64_t)UINT32_MAX)) {
         return WH_ERROR_BADARGS;
     }
     aadLen = (uint32_t)req.aad.sz;
@@ -4368,8 +4368,6 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     /* Handle AAD */
     if (ret == WH_ERROR_OK && aadLen > 0) {
         if (aadInline) {
-            /* The wire keySz, not keyLen: a keystore key contributes no bytes
-             * here, but keyLen has already been replaced by its length. */
             aadPtr = (const uint8_t*)(iv + ivLen + (enc != 0 ? 0 : tagLen) +
                                       reqKeySz);
         }

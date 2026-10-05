@@ -52,8 +52,7 @@ enum WH_ERROR_ENUM {
                   not clear this -- drain the pending response or call
                   wh_CommClient_AbortPending before issuing a new request. */
     WH_ERROR_REQUEST_SIZE =
-        -2012, /* Request does not fit WOLFHSM_CFG_COMM_DATA_LEN. No side
-                  effects: nothing was sent and no local state changed. */
+        -2012, /* Request does not fit WOLFHSM_CFG_COMM_DATA_LEN */
 
     /* NVM and keystore specific status returns */
     WH_ERROR_LOCKED      = -2100, /* Unlock and retry if necessary */

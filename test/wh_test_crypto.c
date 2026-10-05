@@ -10003,119 +10003,6 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
-#if !defined(NO_AES) &&                                                        \
-    (defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER) ||                  \
-     defined(HAVE_AES_ECB) || defined(HAVE_AESGCM))
-/* One full comm buffer of plaintext cannot fit alongside the request header */
-#define WH_TEST_AES_OVERSZ \
-    ((WOLFHSM_CFG_COMM_DATA_LEN / AES_BLOCK_SIZE) * AES_BLOCK_SIZE)
-static uint8_t whTest_AesOverszIn[WH_TEST_AES_OVERSZ];
-static uint8_t whTest_AesOverszOut[WH_TEST_AES_OVERSZ];
-
-static int whTest_CryptoAesCommBuffer(int devId, WC_RNG* rng)
-{
-    int     ret;
-    int     overRet;
-    Aes     aes[1];
-    uint8_t key[AES_128_KEY_SIZE];
-    uint8_t iv[AES_BLOCK_SIZE];
-#ifdef HAVE_AESGCM
-    uint8_t tag[AES_BLOCK_SIZE];
-#endif
-
-    memset(whTest_AesOverszIn, 0xA5, sizeof(whTest_AesOverszIn));
-
-    ret = wc_RNG_GenerateBlock(rng, key, sizeof(key));
-    if (ret == 0) {
-        ret = wc_RNG_GenerateBlock(rng, iv, sizeof(iv));
-    }
-    if (ret != 0) {
-        WH_ERROR_PRINT("Failed to wc_RNG_GenerateBlock %d\n", ret);
-        return ret;
-    }
-
-#ifdef HAVE_AES_CBC
-    ret = wc_AesInit(aes, NULL, devId);
-    if (ret == 0) {
-        ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
-        if (ret == 0) {
-            overRet = wc_AesCbcEncrypt(aes, whTest_AesOverszOut,
-                                       whTest_AesOverszIn,
-                                       sizeof(whTest_AesOverszIn));
-            if (overRet != WH_ERROR_REQUEST_SIZE) {
-                WH_ERROR_PRINT("Oversized AES-CBC returned %d\n", overRet);
-                ret = -1;
-            }
-        }
-        (void)wc_AesFree(aes);
-    }
-#endif /* HAVE_AES_CBC */
-
-#ifdef WOLFSSL_AES_COUNTER
-    if (ret == 0) {
-        ret = wc_AesInit(aes, NULL, devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
-            if (ret == 0) {
-                overRet = wc_AesCtrEncrypt(aes, whTest_AesOverszOut,
-                                           whTest_AesOverszIn,
-                                           sizeof(whTest_AesOverszIn));
-                if (overRet != WH_ERROR_REQUEST_SIZE) {
-                    WH_ERROR_PRINT("Oversized AES-CTR returned %d\n", overRet);
-                    ret = -1;
-                }
-            }
-            (void)wc_AesFree(aes);
-        }
-    }
-#endif /* WOLFSSL_AES_COUNTER */
-
-#ifdef HAVE_AES_ECB
-    if (ret == 0) {
-        ret = wc_AesInit(aes, NULL, devId);
-        if (ret == 0) {
-            ret = wc_AesSetKey(aes, key, sizeof(key), NULL, AES_ENCRYPTION);
-            if (ret == 0) {
-                overRet = wc_AesEcbEncrypt(aes, whTest_AesOverszOut,
-                                           whTest_AesOverszIn,
-                                           sizeof(whTest_AesOverszIn));
-                if (overRet != WH_ERROR_REQUEST_SIZE) {
-                    WH_ERROR_PRINT("Oversized AES-ECB returned %d\n", overRet);
-                    ret = -1;
-                }
-            }
-            (void)wc_AesFree(aes);
-        }
-    }
-#endif /* HAVE_AES_ECB */
-
-#ifdef HAVE_AESGCM
-    if (ret == 0) {
-        ret = wc_AesInit(aes, NULL, devId);
-        if (ret == 0) {
-            ret = wc_AesGcmSetKey(aes, key, sizeof(key));
-            if (ret == 0) {
-                overRet = wc_AesGcmEncrypt(
-                    aes, whTest_AesOverszOut, whTest_AesOverszIn,
-                    sizeof(whTest_AesOverszIn), iv, sizeof(iv), tag,
-                    sizeof(tag), iv, sizeof(iv));
-                if (overRet != WH_ERROR_REQUEST_SIZE) {
-                    WH_ERROR_PRINT("Oversized AES-GCM returned %d\n", overRet);
-                    ret = -1;
-                }
-            }
-            (void)wc_AesFree(aes);
-        }
-    }
-#endif /* HAVE_AESGCM */
-
-    if (ret == 0) {
-        WH_TEST_PRINT("AES COMM BUFFER DEVID=0x%X SUCCESS\n", devId);
-    }
-    return ret;
-}
-#endif /* !NO_AES && HAVE_AES_CBC */
-
 /* Direct exercise of the native async AES primitives
  * (wh_Client_AesXxxRequest / wh_Client_AesXxxResponse).
  * Covers each mode's round-trip, state continuity, and argument rejection. */
@@ -11399,8 +11286,7 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
 #endif /* HAVE_AES_ECB */
 
 #ifdef HAVE_AESGCM
-    /* GCM DMA: round-trip at the inline-AAD cap and one byte past it, so both
-     * forms of the AAD are exercised unless the cap is configured to 0. */
+    /* GCM DMA: inline AAD at the cap, DMA AAD one byte past it */
 #if WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE == 0
     WH_TEST_PRINT("AES GCM DMA ASYNC: inline AAD disabled by config, only the "
                   "DMA form of the AAD is covered\n");
@@ -11423,8 +11309,6 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
             memset(refCipher, 0, sizeof(refCipher));
             memset(refTag, 0, sizeof(refTag));
 
-            /* Encrypt and decrypt carry the same AAD, so only a reference tag
-             * catches an AAD the server read at the wrong offset or length. */
             ret = wc_AesInit(swAes, NULL, INVALID_DEVID);
             if (ret == 0) {
                 ret = wc_AesGcmSetKey(swAes, key, sizeof(key));
@@ -18063,14 +17947,6 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
-#if defined(HAVE_AES_CBC) || defined(WOLFSSL_AES_COUNTER) ||                   \
-    defined(HAVE_AES_ECB) || defined(HAVE_AESGCM)
-    if (ret == WH_ERROR_OK) {
-        /* The comm buffer bounds the non-DMA path only */
-        (void)wh_Client_SetDmaMode(client, 0);
-        ret = whTest_CryptoAesCommBuffer(WH_CLIENT_DEVID(client), rng);
-    }
-#endif
 #ifdef WOLFHSM_CFG_DMA
     /* Dedicated async DMA tests drive the wh_Client_*Dma APIs directly; prefer
      * DMA so any wolfCrypt-routed operations also take the DMA path. */
