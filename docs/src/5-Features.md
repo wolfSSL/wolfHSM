@@ -136,6 +136,17 @@ sigLen = wc_RsaSSL_Sign(msg, msgLen, sig, sizeof(sig), &rsa, &rng);
 
 The same ID can name a key the client just cached, one provisioned into NVM at the factory, or one the server generated and never exported — the client uses it the same way in every case. How IDs are assigned and structured is covered under [Keystore](#keystore).
 
+A key ID can also come from wolfCrypt's own device-key API. `wolfSSL_CTX_use_PrivateKey_Id()` and the init-by-id calls (`wc_InitRsaKey_Id`, `wc_ecc_init_id`, `wc_AesInit_Id`, `wc_InitCmac_Id`, `wc_MlDsaKey_InitId`, `wc_MlKemKey_Init_Id`, `wc_LmsKey_InitId`, `wc_XmssKey_InitId`) store an id in the key struct, and wolfHSM uses it when the struct has no `SetKeyId` binding. This is how a TLS server signs with a key that stays on the HSM:
+
+```c
+whKeyId keyId = 4; /* keyId 4 must be resident on the server */
+
+wolfSSL_CTX_use_PrivateKey_Id(ctx, (const unsigned char*)&keyId,
+                              sizeof(keyId), WH_CLIENT_DEVID(client));
+```
+
+The id must be exactly `sizeof(whKeyId)` bytes holding a `whKeyId` in host byte order, as above. An id of any other length, or one whose ID field is zero, is ignored. A bound ID takes precedence over key bytes loaded into the same struct, just as a `SetKeyId` binding does, and a later `SetKeyId` call replaces it. The exception is a one-shot CMAC (`wc_AesCmacGenerate_ex`), which uses the key passed to the call, as its contract says the struct may be uninitialized. The `GetKeyId` accessors report only the `SetKeyId` binding. The label variants (`wc_*_Label`) are not supported, and neither are Curve25519 and Ed25519, whose structs have no id field.
+
 ### Hardware Acceleration and Crypto Affinity
 
 Many of the platforms wolfHSM targets ship a dedicated crypto accelerator alongside their secure core. The server can use these accelerators per-algorithm through the same crypto callback mechanism: a port-supplied callback, registered at server init, redirects supported operations to the vendor's hardware driver, and anything not implemented in hardware falls back to wolfCrypt software. Which algorithms are accelerated depends on the silicon and is documented in each platform's port.
