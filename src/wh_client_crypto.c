@@ -6836,7 +6836,7 @@ int wh_Client_Sha256FinalResponse(whClientContext* ctx, wc_Sha256* sha,
         }
         memcpy(out, res->hash, WC_SHA256_DIGEST_SIZE);
         /* Reset state without blowing away devId */
-        (void)wc_InitSha256_ex(sha, NULL, sha->devId);
+        (void)wc_InitSha256_ex(sha, sha->heap, sha->devId);
     }
     return ret;
 }
@@ -7173,7 +7173,7 @@ int wh_Client_Sha256DmaFinalResponse(whClientContext* ctx, wc_Sha256* sha,
             }
             memcpy(out, resp->hash, WC_SHA256_DIGEST_SIZE);
             /* Reset state without blowing away devId */
-            (void)wc_InitSha256_ex(sha, NULL, sha->devId);
+            (void)wc_InitSha256_ex(sha, sha->heap, sha->devId);
         }
     }
     return ret;
@@ -7460,7 +7460,7 @@ int wh_Client_Sha224FinalResponse(whClientContext* ctx, wc_Sha224* sha,
         /* Final output is truncated to WC_SHA224_DIGEST_SIZE */
         memcpy(out, res->hash, WC_SHA224_DIGEST_SIZE);
         /* Reset state without blowing away devId */
-        (void)wc_InitSha224_ex(sha, NULL, sha->devId);
+        (void)wc_InitSha224_ex(sha, sha->heap, sha->devId);
     }
     return ret;
 }
@@ -7779,7 +7779,7 @@ int wh_Client_Sha224DmaFinalResponse(whClientContext* ctx, wc_Sha224* sha,
                 return WH_ERROR_ABORTED;
             }
             memcpy(out, resp->hash, WC_SHA224_DIGEST_SIZE);
-            (void)wc_InitSha224_ex(sha, NULL, sha->devId);
+            (void)wc_InitSha224_ex(sha, sha->heap, sha->devId);
         }
     }
     return ret;
@@ -8068,7 +8068,7 @@ int wh_Client_Sha384FinalResponse(whClientContext* ctx, wc_Sha384* sha,
         /* Final output is truncated to WC_SHA384_DIGEST_SIZE */
         memcpy(out, res->hash, WC_SHA384_DIGEST_SIZE);
         /* Reset state without blowing away devId */
-        (void)wc_InitSha384_ex(sha, NULL, sha->devId);
+        (void)wc_InitSha384_ex(sha, sha->heap, sha->devId);
     }
     return ret;
 }
@@ -8389,7 +8389,7 @@ int wh_Client_Sha384DmaFinalResponse(whClientContext* ctx, wc_Sha384* sha,
                 return WH_ERROR_ABORTED;
             }
             memcpy(out, resp->hash, WC_SHA384_DIGEST_SIZE);
-            (void)wc_InitSha384_ex(sha, NULL, sha->devId);
+            (void)wc_InitSha384_ex(sha, sha->heap, sha->devId);
         }
     }
     return ret;
@@ -8694,18 +8694,18 @@ int wh_Client_Sha512FinalResponse(whClientContext* ctx, wc_Sha512* sha,
 #ifndef WOLFSSL_NOSHA512_224
             case WC_HASH_TYPE_SHA512_224:
                 memcpy(out, res->hash, WC_SHA512_224_DIGEST_SIZE);
-                (void)wc_InitSha512_224_ex(sha, NULL, sha->devId);
+                (void)wc_InitSha512_224_ex(sha, sha->heap, sha->devId);
                 break;
 #endif
 #ifndef WOLFSSL_NOSHA512_256
             case WC_HASH_TYPE_SHA512_256:
                 memcpy(out, res->hash, WC_SHA512_256_DIGEST_SIZE);
-                (void)wc_InitSha512_256_ex(sha, NULL, sha->devId);
+                (void)wc_InitSha512_256_ex(sha, sha->heap, sha->devId);
                 break;
 #endif
             default:
                 memcpy(out, res->hash, WC_SHA512_DIGEST_SIZE);
-                (void)wc_InitSha512_ex(sha, NULL, sha->devId);
+                (void)wc_InitSha512_ex(sha, sha->heap, sha->devId);
                 break;
         }
     }
@@ -9048,18 +9048,18 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
 #ifndef WOLFSSL_NOSHA512_224
                 case WC_HASH_TYPE_SHA512_224:
                     memcpy(out, resp->hash, WC_SHA512_224_DIGEST_SIZE);
-                    (void)wc_InitSha512_224_ex(sha, NULL, sha->devId);
+                    (void)wc_InitSha512_224_ex(sha, sha->heap, sha->devId);
                     break;
 #endif
 #ifndef WOLFSSL_NOSHA512_256
                 case WC_HASH_TYPE_SHA512_256:
                     memcpy(out, resp->hash, WC_SHA512_256_DIGEST_SIZE);
-                    (void)wc_InitSha512_256_ex(sha, NULL, sha->devId);
+                    (void)wc_InitSha512_256_ex(sha, sha->heap, sha->devId);
                     break;
 #endif
                 default:
                     memcpy(out, resp->hash, WC_SHA512_DIGEST_SIZE);
-                    (void)wc_InitSha512_ex(sha, NULL, sha->devId);
+                    (void)wc_InitSha512_ex(sha, sha->heap, sha->devId);
                     break;
             }
         }

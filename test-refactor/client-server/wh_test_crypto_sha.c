@@ -597,6 +597,34 @@ static int _whTest_CryptoSha256LargeInput(whClientContext* ctx, int devId)
     return ret;
 }
 
+/* Final resets the context for reuse, so the caller's heap must survive. */
+static int _whTest_CryptoSha256KeepHeap(whClientContext* ctx, int devId)
+{
+    int           ret;
+    int           heap = 0;
+    wc_Sha256     sha256[1];
+    uint8_t       out[WC_SHA256_DIGEST_SIZE];
+    const uint8_t in[] = {'a', 'b', 'c'};
+
+    (void)ctx;
+    ret = wc_InitSha256_ex(sha256, &heap, devId);
+    if (ret == 0) {
+        ret = wc_Sha256Update(sha256, in, sizeof(in));
+        if (ret == 0) {
+            ret = wc_Sha256Final(sha256, out);
+        }
+        if (ret == 0 && sha256->heap != &heap) {
+            WH_ERROR_PRINT("SHA256 heap lost after final\n");
+            ret = -1;
+        }
+        (void)wc_Sha256Free(sha256);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("SHA256 KEEP-HEAP DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+
 static int _whTest_CryptoSha256Async(whClientContext* ctx)
 {
     int    devId = WH_CLIENT_DEVID(ctx);
@@ -2425,6 +2453,7 @@ static int _whTest_CryptoShaImpl(whClientContext* ctx, int devId)
 #ifndef NO_SHA256
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256(ctx, devId));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256LargeInput(ctx, devId));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha256KeepHeap(ctx, devId));
 #endif
 #ifdef WOLFSSL_SHA384
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha384(ctx, devId));
