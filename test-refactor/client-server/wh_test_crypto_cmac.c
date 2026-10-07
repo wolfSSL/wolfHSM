@@ -632,7 +632,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         sent = true;
         rc   = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
                                            sizeof(key), buf, maxSz + 1u, &sent);
-        if (rc != WH_ERROR_BADARGS || sent || cmac->bufferSz != 0) {
+        if (rc != WH_ERROR_REQUEST_SIZE || sent || cmac->bufferSz != 0) {
             WH_ERROR_PRINT("CMAC streaming: oversize update not rejected\n");
             ret = -1;
         }

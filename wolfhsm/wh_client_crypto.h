@@ -2185,9 +2185,9 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
  * @param[in] inLen     Input length. Must be > 0 and must not exceed
  *                      WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ.
  * @param[in] outMacLen Requested MAC length in bytes. Must be > 0.
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args or
- *         oversize input, or a negative error from the transport. On any
- *         error the cmac struct is left unchanged.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid args,
+ *         WH_ERROR_REQUEST_SIZE for oversize input, or a negative error from
+ *         the transport. On any error the cmac struct is left unchanged.
  */
 int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
                                   CmacType type, const uint8_t* key,
@@ -2243,9 +2243,9 @@ int wh_Client_CmacGenerateResponse(whClientContext* ctx, Cmac* cmac,
  *                         matching Response call is required; false when the
  *                         input fits in the partial block buffer and was
  *                         absorbed locally (including key-only calls).
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments, an
- *         invalid AES key length on a local absorb, or when inLen exceeds the
- *         per-call capacity.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS on invalid arguments or
+ *         an invalid AES key length on a local absorb, WH_ERROR_REQUEST_SIZE
+ *         when inLen exceeds the per-call capacity.
  */
 int wh_Client_CmacUpdateRequest(whClientContext* ctx, Cmac* cmac, CmacType type,
                                 const uint8_t* key, uint32_t keyLen,
@@ -2472,7 +2472,7 @@ int wh_Client_Sha256(whClientContext* ctx, wc_Sha256* sha, const uint8_t* in,
  *                         matching Response call is required; false if the
  *                         input was fully absorbed into sha->buffer and no
  *                         round-trip was issued.
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if inLen exceeds the
+ * @return WH_ERROR_OK on success, WH_ERROR_REQUEST_SIZE if inLen exceeds the
  *         per-call capacity (sha is left unchanged in that case).
  */
 int wh_Client_Sha256UpdateRequest(whClientContext* ctx, wc_Sha256* sha,
@@ -2602,7 +2602,7 @@ int wh_Client_Sha224(whClientContext* ctx, wc_Sha224* sha, const uint8_t* in,
  *                         matching Response call is required; false if the
  *                         input was fully absorbed into sha->buffer and no
  *                         round-trip was issued.
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if inLen exceeds the
+ * @return WH_ERROR_OK on success, WH_ERROR_REQUEST_SIZE if inLen exceeds the
  *         per-call capacity (sha is left unchanged in that case).
  */
 int wh_Client_Sha224UpdateRequest(whClientContext* ctx, wc_Sha224* sha,
@@ -2704,7 +2704,7 @@ int wh_Client_Sha384(whClientContext* ctx, wc_Sha384* sha, const uint8_t* in,
  *                         matching Response call is required; false if the
  *                         input was fully absorbed into sha->buffer and no
  *                         round-trip was issued.
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if inLen exceeds the
+ * @return WH_ERROR_OK on success, WH_ERROR_REQUEST_SIZE if inLen exceeds the
  *         per-call capacity (sha is left unchanged in that case).
  */
 int wh_Client_Sha384UpdateRequest(whClientContext* ctx, wc_Sha384* sha,
@@ -2806,7 +2806,7 @@ int wh_Client_Sha512(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
  *                         matching Response call is required; false if the
  *                         input was fully absorbed into sha->buffer and no
  *                         round-trip was issued.
- * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if inLen exceeds the
+ * @return WH_ERROR_OK on success, WH_ERROR_REQUEST_SIZE if inLen exceeds the
  *         per-call capacity (sha is left unchanged in that case).
  */
 int wh_Client_Sha512UpdateRequest(whClientContext* ctx, wc_Sha512* sha,

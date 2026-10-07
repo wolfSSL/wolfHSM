@@ -448,8 +448,9 @@ static int whTest_CryptoSha256AsyncImpl(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha256UpdateRequest(ctx, sha256, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA256: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA256: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -1033,8 +1034,9 @@ static int whTest_CryptoSha224AsyncImpl(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha224UpdateRequest(ctx, sha224, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA224: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA224: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -1625,8 +1627,9 @@ static int whTest_CryptoSha384AsyncImpl(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha384UpdateRequest(ctx, sha384, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA384: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA384: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -2221,8 +2224,9 @@ static int whTest_CryptoSha512AsyncImpl(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha512UpdateRequest(ctx, sha512, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA512: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA512: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
