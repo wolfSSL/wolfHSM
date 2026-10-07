@@ -30,6 +30,7 @@ typedef struct {
     const whFlashCb* realCb;
     void*            realCtx;
     int              failAfterPrograms;
+    int              failAfterReads;
 } whFlashFaultInjectCtx;
 
 typedef struct {

@@ -20,8 +20,8 @@
  * test-refactor/wh_test_flash_fault_inject.h
  *
  * Flash fault-injection wrapper. Wraps a real flash callback and
- * forces a failure on the Nth Program call, used to drive the NVM
- * recovery test on a host-sim flash backend.
+ * forces a failure on the Nth Program or Read call, used to drive the
+ * NVM recovery test on a host-sim flash backend.
  */
 #ifndef WH_FLASH_FAULTINJECT_H_
 #define WH_FLASH_FAULTINJECT_H_
@@ -37,6 +37,7 @@ typedef struct {
     const whFlashCb* realCb;
     void*            realCtx;
     int              failAfterPrograms;
+    int              failAfterReads;
 } whFlashFaultInjectCtx;
 
 typedef struct {
