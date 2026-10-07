@@ -476,10 +476,6 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesCtrRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_CTR, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
-    req_iv  = req_key + key_len;
-    req_tmp = req_iv + AES_IV_SIZE;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)AES_IV_SIZE + (uint64_t)AES_BLOCK_SIZE;
@@ -487,6 +483,11 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
+    req_iv  = req_key + key_len;
+    req_tmp = req_iv + AES_IV_SIZE;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -821,14 +822,15 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesEcbRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_ECB, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -1153,9 +1155,6 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesCbcRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
-    req_iv  = req_key + key_len;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)iv_len;
@@ -1163,6 +1162,10 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
+    req_iv  = req_key + key_len;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -1499,12 +1502,6 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     req = (whMessageCrypto_AesGcmRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
 
-    req_in     = (uint8_t*)(req + 1);
-    req_key    = req_in + len;
-    req_iv     = req_key + key_len;
-    req_authin = req_iv + iv_len;
-    req_tag    = req_authin + authin_len;
-
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)iv_len + (uint64_t)authin_len +
@@ -1513,6 +1510,12 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in     = (uint8_t*)(req + 1);
+    req_key    = req_in + len;
+    req_iv     = req_key + key_len;
+    req_authin = req_iv + iv_len;
+    req_tag    = req_authin + authin_len;
 
     req->enc       = enc;
     req->keyLen    = key_len;
@@ -1673,9 +1676,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesGcmDmaRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
-    req_iv  = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
-    req_tag = req_iv + iv_len;
-    req_key = req_tag + (enc != 0 ? 0 : tag_len);
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)iv_len +
               (uint64_t)(enc != 0 ? 0 : tag_len);
@@ -1694,7 +1694,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         req_len += req->keySz;
     }
 
-    req_aad = req_key + req->keySz;
     if ((authin != NULL) && (authin_len > 0) &&
         (authin_len <= WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE) &&
         ((req_len + authin_len) <= WOLFHSM_CFG_COMM_DATA_LEN)) {
@@ -1705,6 +1704,11 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_iv  = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
+    req_tag = req_iv + iv_len;
+    req_key = req_tag + (enc != 0 ? 0 : tag_len);
+    req_aad = req_key + req->keySz;
 
     if (iv_len > 0) {
         memcpy(req_iv, iv, iv_len);
@@ -5773,14 +5777,15 @@ int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
     req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
         dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
 
-    hdr_sz  = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + inLen;
+    hdr_sz = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (inLen > WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ ||
         keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz - inLen) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + inLen;
 
     memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->inSz  = inLen;
@@ -5905,14 +5910,15 @@ int wh_Client_CmacUpdateRequest(whClientContext* ctx, Cmac* cmac, CmacType type,
 
     req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
         dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
-    hdr_sz  = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + inLen;
+    hdr_sz = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (inLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz ||
         keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz - inLen) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + inLen;
 
     /* Wire request: input + (optional) key + full state round-trip. The
      * server may leave a partial (or whole) block in cmac->buffer after
