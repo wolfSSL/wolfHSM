@@ -64,16 +64,22 @@ int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
         return WH_ERROR_BADARGS;
     }
 
-    /* Every registered image must have both callbacks so a verify can never
-     * silently succeed without one */
+    /* Every registered image must have both callbacks and a root count that
+     * fits rootNvmIds */
     if (config->imageCount > 0) {
         size_t i;
         if (config->images == NULL) {
             return WH_ERROR_BADARGS;
         }
         for (i = 0; i < config->imageCount; i++) {
-            if (config->images[i].verifyMethod == NULL ||
-                config->images[i].verifyAction == NULL) {
+            const whServerImgMgrImg* img = &config->images[i];
+            if (img->verifyMethod == NULL || img->verifyAction == NULL ||
+                img->numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS) {
+                return WH_ERROR_BADARGS;
+            }
+            /* A cert chain image needs at least one root */
+            if (img->imgType == WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT &&
+                img->numRoots == 0) {
                 return WH_ERROR_BADARGS;
             }
         }
@@ -1326,10 +1332,10 @@ int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
         goto cleanup;
     }
 
-    /* Verify cert chain against root CA and cache the leaf pubkey */
-    ret = wh_Server_CertVerify(server, cert_chain, cert_chain_len,
-                               img->sigNvmId, WH_CERT_FLAGS_CACHE_LEAF_PUBKEY,
-                               WH_NVM_FLAGS_USAGE_VERIFY, &leafKeyId);
+    /* Verify cert chain against the root CAs and cache the leaf pubkey */
+    ret = wh_Server_CertVerifyMultiRoot(
+        server, cert_chain, cert_chain_len, img->rootNvmIds, img->numRoots,
+        WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, WH_NVM_FLAGS_USAGE_VERIFY, &leafKeyId);
     if (ret != WH_ERROR_OK) {
         goto cleanup;
     }

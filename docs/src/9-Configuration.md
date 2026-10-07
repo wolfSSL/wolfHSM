@@ -110,7 +110,7 @@ These macros size the server-side key cache. The cache is split into "regular" s
 | `WOLFHSM_CFG_CERTIFICATE_MANAGER` | Undefined | If defined, compile the server-side certificate manager (trusted-root storage, chain verification, optional leaf-public-key caching). Required by `WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT`. |
 | `WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT` | Undefined | If defined, also compile attribute-certificate (RFC 5755) support into the certificate manager. Requires wolfSSL built with `WOLFSSL_ACERT` and `WOLFSSL_ASN_TEMPLATE`. |
 | `WOLFHSM_CFG_MAX_CERT_SIZE` | `WOLFHSM_CFG_COMM_DATA_LEN`, or `4096` when `WOLFHSM_CFG_DMA` is defined | Maximum size, in bytes, of a certificate that the manager will accept. The DMA default is larger because certificate verification requests no longer have to fit inside a single comm-buffer-sized message. |
-| `WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS` | `8` | Maximum number of trusted-root NVM IDs accepted in a single `wh_Server_CertVerifyMultiRoot` request. Bounded so that the non-DMA wire request still fits within `WOLFHSM_CFG_COMM_DATA_LEN` alongside the candidate chain, and so the inline DMA request struct remains a fixed-size POD. |
+| `WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS` | `8` | Maximum number of trusted-root NVM IDs accepted in a single `wh_Server_CertVerifyMultiRoot` request. Bounded so that the non-DMA wire request still fits within `WOLFHSM_CFG_COMM_DATA_LEN` alongside the candidate chain, and so the inline DMA request struct remains a fixed-size POD. Also sets the length of the `rootNvmIds` list in every image manager image record.
 
 ## Image Manager
 

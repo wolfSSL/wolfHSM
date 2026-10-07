@@ -694,12 +694,13 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
                          sizeof(wolfboot_test_rsa4096_root_ca_cert_der),
                          wolfboot_test_rsa4096_root_ca_cert_der));
 
-    testImage.addr     = (uintptr_t)wolfboot_test_firmware;
-    testImage.size     = sizeof(wolfboot_test_firmware);
-    testImage.hdrAddr  = (uintptr_t)wolfboot_test_rsa4096_cert_chain_header;
-    testImage.hdrSize  = sizeof(wolfboot_test_rsa4096_cert_chain_header);
-    testImage.sigNvmId = rootCaNvmId;
-    testImage.imgType  = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    testImage.addr    = (uintptr_t)wolfboot_test_firmware;
+    testImage.size    = sizeof(wolfboot_test_firmware);
+    testImage.hdrAddr = (uintptr_t)wolfboot_test_rsa4096_cert_chain_header;
+    testImage.hdrSize = sizeof(wolfboot_test_rsa4096_cert_chain_header);
+    testImage.rootNvmIds[0] = rootCaNvmId;
+    testImage.numRoots      = 1;
+    testImage.imgType       = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
     testImage.verifyMethod =
         wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256;
     testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
@@ -734,6 +735,139 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
 
     WH_TEST_PRINT(
         "IMG_MGR wolfBoot Cert Chain RSA4096 Test completed successfully!\n");
+    return WH_TEST_SUCCESS;
+}
+
+extern const unsigned char ROOT_A_CERT[];
+extern const size_t        ROOT_A_CERT_len;
+
+/* Store a root CA cert in NVM */
+static int _certChainAddRoot(whNvmContext* nvm, whNvmId id, const uint8_t* cert,
+                             size_t certSz)
+{
+    whNvmMetadata meta = {0};
+
+    meta.id     = id;
+    meta.access = WH_NVM_ACCESS_ANY;
+    meta.flags  = WH_NVM_FLAGS_NONE;
+    meta.len    = (whNvmSize)certSz;
+    snprintf((char*)meta.label, WH_NVM_LABEL_LEN, "RootCA");
+    return wh_Nvm_AddObject(nvm, &meta, (whNvmSize)certSz, cert);
+}
+
+/* Verify a copy of img that uses the given root list. Both the return value
+ * and the verify method result must equal expectRc. */
+static int _certChainVerifyRoots(whServerImgMgrContext*   imgMgr,
+                                 const whServerImgMgrImg* img,
+                                 const whNvmId* roots, uint16_t numRoots,
+                                 int expectRc)
+{
+    whServerImgMgrImg          rootsImg = *img;
+    whServerImgMgrVerifyResult result;
+    int                        rc;
+
+    memcpy(rootsImg.rootNvmIds, roots, numRoots * sizeof(roots[0]));
+    rootsImg.numRoots = numRoots;
+
+    rc = wh_Server_ImgMgrVerifyImg(imgMgr, &rootsImg, &result);
+    WH_TEST_ASSERT_RETURN(rc == expectRc);
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == expectRc);
+    return WH_TEST_SUCCESS;
+}
+
+/*
+ * Test multi-root cert chain verify: the chain may anchor to any listed root,
+ * listed roots not in NVM are skipped, and verify Init copies the list into the
+ * context.
+ */
+static int
+_whTest_ServerImgMgrWolfBootCertChainMultiRoot(whServerContext* server)
+{
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          images[1];
+    whServerImgMgrVerifyResult result;
+    const whNvmId              rootCaNvmId  = 10;
+    const whNvmId              otherNvmId   = 11;
+    const whNvmId              missingNvmId = 12;
+    whNvmId                    roots[2];
+    whNvmId                    destroyIds[2];
+    uint16_t                   i;
+
+    WH_TEST_RETURN_ON_FAIL(_certChainAddRoot(
+        server->nvm, rootCaNvmId, wolfboot_test_rsa4096_root_ca_cert_der,
+        sizeof(wolfboot_test_rsa4096_root_ca_cert_der)));
+    WH_TEST_RETURN_ON_FAIL(_certChainAddRoot(server->nvm, otherNvmId,
+                                             ROOT_A_CERT, ROOT_A_CERT_len));
+
+    /* Register with the anchoring root. The cases below verify copies that
+     * use other root lists. */
+    memset(images, 0, sizeof(images));
+    images[0].addr    = (uintptr_t)wolfboot_test_firmware;
+    images[0].size    = sizeof(wolfboot_test_firmware);
+    images[0].hdrAddr = (uintptr_t)wolfboot_test_rsa4096_cert_chain_header;
+    images[0].hdrSize = sizeof(wolfboot_test_rsa4096_cert_chain_header);
+    images[0].rootNvmIds[0] = rootCaNvmId;
+    images[0].numRoots      = 1;
+    images[0].imgType       = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    images[0].verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256;
+    images[0].verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = images;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig));
+
+    /* A listed root that does not anchor the chain fails */
+    roots[0] = otherNvmId;
+    WH_TEST_RETURN_ON_FAIL(_certChainVerifyRoots(&imgMgr, &images[0], roots, 1,
+                                                 WH_ERROR_CERT_VERIFY));
+
+    /* No listed root is in NVM */
+    roots[0] = missingNvmId;
+    WH_TEST_RETURN_ON_FAIL(_certChainVerifyRoots(&imgMgr, &images[0], roots, 1,
+                                                 WH_ERROR_NOTFOUND));
+
+    /* The chain anchors to a later entry */
+    roots[0] = otherNvmId;
+    roots[1] = rootCaNvmId;
+    WH_TEST_RETURN_ON_FAIL(
+        _certChainVerifyRoots(&imgMgr, &images[0], roots, 2, WH_ERROR_OK));
+
+    /* A listed root missing from NVM is skipped */
+    roots[0] = missingNvmId;
+    WH_TEST_RETURN_ON_FAIL(
+        _certChainVerifyRoots(&imgMgr, &images[0], roots, 2, WH_ERROR_OK));
+
+    /* A full list registers, with the anchoring root in the last slot */
+    for (i = 0; i < WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - 1; i++) {
+        images[0].rootNvmIds[i] = missingNvmId;
+    }
+    images[0].rootNvmIds[i] = rootCaNvmId;
+    images[0].numRoots      = WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig));
+
+    /* Init copied the list, so changing the caller's copy has no effect */
+    images[0].rootNvmIds[i] = missingNvmId;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrVerifyImgIdx(&imgMgr, 0, &result));
+
+    /* Too many roots: Init rejects the image, and a direct verify fails
+     * without reading past the list */
+    images[0].numRoots = WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS + 1;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyImg(&imgMgr, &images[0], &result));
+
+    /* Leave NVM clean for the next suite */
+    destroyIds[0] = rootCaNvmId;
+    destroyIds[1] = otherNvmId;
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 2, destroyIds));
+
+    WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain Multi-Root Test completed "
+                  "successfully!\n");
     return WH_TEST_SUCCESS;
 }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
@@ -891,6 +1025,7 @@ static int _whTest_ServerImgMgrReturnSemantics(whServerContext* server)
 
     memset(images, 0, sizeof(images));
     images[0].imgType      = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    images[0].numRoots     = 1;
     images[0].verifyMethod = _testVerifyMethodOk;
     images[0].verifyAction = wh_Server_ImgMgrVerifyActionDefault;
     images[1]              = images[0];
@@ -1002,8 +1137,14 @@ static int _whTest_ServerImgMgrBadArgs(whServerContext* server)
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
                           wh_Server_ImgMgrInit(&imgMgr, &cfg));
 
-    /* A valid single-image context to drive the Verify* guards */
+    /* Init: a cert chain image with no roots. A RAW image needs none. */
     images[0].verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+    images[0].imgType      = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Server_ImgMgrInit(&imgMgr, &cfg));
+    images[0].imgType = WH_IMG_MGR_IMG_TYPE_RAW;
+
+    /* A valid single-image context to drive the Verify* guards */
     WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &cfg));
 
     /* VerifyImg: NULL args */
@@ -1140,6 +1281,8 @@ int whTest_ServerImgMgr(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootRsa4096(server));
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootCertChainRsa4096(server));
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_ServerImgMgrWolfBootCertChainMultiRoot(server));
 #endif
 #endif
 #ifdef HAVE_ECC
