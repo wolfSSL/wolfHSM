@@ -126,9 +126,11 @@ int wh_Client_CertAddTrustedRequest(whClientContext* c, whNvmId id,
     uint16_t                        hdr_len = sizeof(req);
     uint8_t*                        payload = buffer + hdr_len;
 
-    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
-        (cert_len > (sizeof(buffer) - hdr_len))) {
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0)) {
         return WH_ERROR_BADARGS;
+    }
+    if (cert_len > (sizeof(buffer) - hdr_len)) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Prepare request */
@@ -383,9 +385,11 @@ static int _certVerifyRequest(whClientContext* c, const uint8_t* cert,
     uint16_t                    hdr_len                           = sizeof(req);
     uint8_t*                    payload = buffer + hdr_len;
 
-    if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
-        (cert_len > (sizeof(buffer) - hdr_len))) {
+    if ((c == NULL) || (cert == NULL) || (cert_len == 0)) {
         return WH_ERROR_BADARGS;
+    }
+    if (cert_len > (sizeof(buffer) - hdr_len)) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Prepare request */
@@ -535,10 +539,12 @@ static int _certVerifyMultiRootRequest(whClientContext* c, const uint8_t* cert,
 
     if ((c == NULL) || (cert == NULL) || (cert_len == 0) ||
         (trustedRootNvmIds == NULL) || (numRoots == 0) ||
-        (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS) ||
-        (roots_bytes > sizeof(buffer) - hdr_len) ||
-        (cert_len > sizeof(buffer) - hdr_len - roots_bytes)) {
+        (numRoots > WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS)) {
         return WH_ERROR_BADARGS;
+    }
+    if ((roots_bytes > sizeof(buffer) - hdr_len) ||
+        (cert_len > sizeof(buffer) - hdr_len - roots_bytes)) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Prepare request */
@@ -1365,9 +1371,11 @@ int wh_Client_CertVerifyAcertRequest(whClientContext* c, const void* cert,
 
 
     if ((c == NULL) || (trustedRootNvmId == WH_NVM_ID_INVALID) ||
-        (cert == NULL) || (cert_len == 0) ||
-        (cert_len > (sizeof(buffer) - hdr_len))) {
+        (cert == NULL) || (cert_len == 0)) {
         return WH_ERROR_BADARGS;
+    }
+    if (cert_len > (sizeof(buffer) - hdr_len)) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req.cert_len         = cert_len;

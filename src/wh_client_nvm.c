@@ -275,9 +275,11 @@ int wh_Client_NvmAddObjectRequest(whClientContext* c,
     if (    (c == NULL) ||
             ((label == NULL) && (label_len > 0)) ||
             (label_len > WH_NVM_LABEL_LEN) ||
-            ((data == NULL) && (len > 0)) ||
-            (len > WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN) ){
+            ((data == NULL) && (len > 0)) ){
         return WH_ERROR_BADARGS;
+    }
+    if (len > WH_MESSAGE_NVM_MAX_ADDOBJECT_LEN) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     msg->id = id;
