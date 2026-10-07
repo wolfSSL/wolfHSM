@@ -2967,7 +2967,7 @@ static int _SheSaveReclaimFlow(whServerContext* server, uint8_t* secretKey,
     server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
 
     memset(req_packet, 0, sizeof(req_packet));
-    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT; i++) {
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
         /* INIT_RND runs once per boot. Clear the flag to act as a reboot. */
         server->she->rndInited = 0;
         rc = wh_She_SheActionRc(server, WH_SHE_INIT_RND, req_packet, 0,
@@ -2975,14 +2975,14 @@ static int _SheSaveReclaimFlow(whServerContext* server, uint8_t* secretKey,
         WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
     }
 
-    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT; i++) {
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
         memset(extendReq->entropy, (uint8_t)i, sizeof(extendReq->entropy));
         rc = wh_She_SheActionRc(server, WH_SHE_EXTEND_SEED, req_packet,
                                 sizeof(*extendReq), resp_packet);
         WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
     }
 
-    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT; i++) {
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
         memset(key, (uint8_t)i, sizeof(key));
         WH_TEST_RETURN_ON_FAIL(wh_She_GenerateLoadableKey(
             slot, WH_SHE_SECRET_KEY_ID, i + 1, 0, uid, key, secretKey,
