@@ -95,6 +95,7 @@ WH_TEST_DECL(whTest_SheReqSizeChecking);
 WH_TEST_DECL(whTest_SheLoadKeyOversizedSlot);
 WH_TEST_DECL(whTest_SheStateGate);
 WH_TEST_DECL(whTest_ShePrngSeedPersistence);
+WH_TEST_DECL(whTest_SheSaveReclaim);
 WH_TEST_DECL(whTest_SheUidClient);
 WH_TEST_DECL(whTest_SheUidCb);
 WH_TEST_DECL(whTest_Echo);
@@ -146,6 +147,7 @@ const whTestCase whTestsServer[] = {
     {"whTest_HwKeystoreServer", whTest_HwKeystoreServer},
     {"whTest_SheStateGate", whTest_SheStateGate},
     {"whTest_ShePrngSeedPersistence", whTest_ShePrngSeedPersistence},
+    {"whTest_SheSaveReclaim", whTest_SheSaveReclaim},
 };
 const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 
