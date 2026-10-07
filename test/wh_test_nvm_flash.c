@@ -1023,9 +1023,9 @@ static int simulateFailureWithoutReboot(int failAfter)
 /* Fail one add part way through, then fail one read of the directory reload
  * that follows. The context must refuse all use until it is reinitialized,
  * and a reboot recovers. failAfter picks the failing program as above.
- * failRead picks the failing read: 1 is the committed object's state, 3 is
- * the interrupted entry's state, which is only on flash after a data or
- * count failure. */
+ * failRead picks the failing read: 1 and 2 are the committed object's state
+ * and metadata, 3 and 4 are the interrupted entry's, which are only on flash
+ * after a data or count failure. */
 static int simulateReloadFailure(int failAfter, int failRead)
 {
     const whFlashCb       flashCb[1]         = {WH_FLASH_RAMSIM_CB};
@@ -1170,9 +1170,12 @@ int whTest_NvmFlash_Recovery(void)
     WH_TEST_PRINT("--simulate failure, then a read failure during reload\n");
     for (failAfter = 1; failAfter <= 5; failAfter++) {
         WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(failAfter, 1));
+        WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(failAfter, 2));
     }
-    WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(4, 3));
-    WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(5, 3));
+    for (failAfter = 4; failAfter <= 5; failAfter++) {
+        WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(failAfter, 3));
+        WH_TEST_RETURN_ON_FAIL(simulateReloadFailure(failAfter, 4));
+    }
 
     return 0;
 }

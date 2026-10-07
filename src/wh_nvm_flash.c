@@ -418,6 +418,12 @@ static int nfMemObject_Read(whNvmFlashContext* context,
             clear_metadata = 0;
 #endif
         }
+        else {
+            /* Metadata unreadable. Mark the entry unknown, as a failed state
+             * read does, so the directory fails to load instead of hiding
+             * the object */
+            object->state.status = NF_STATUS_UNKNOWN;
+        }
     }
     if (clear_metadata != 0){
         /* Clear the object metadata */
