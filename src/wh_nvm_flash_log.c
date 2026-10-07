@@ -555,7 +555,7 @@ int wh_NvmFlashLog_GetAvailable(void* c, uint32_t* out_avail_size,
                                 whNvmId*  out_reclaim_objects)
 {
     whNvmFlashLogContext* ctx = (whNvmFlashLogContext*)c;
-    uint8_t               count;
+    int                   count;
 
     if (ctx == NULL || !ctx->is_initialized)
         return WH_ERROR_BADARGS;
