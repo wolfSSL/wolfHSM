@@ -2642,7 +2642,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+        uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                            sizeof(*req) + hash_len;
         uint32_t options = 0;
 
@@ -2682,7 +2682,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
             }
 
             /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
                                         (uint8_t*)dataPtr);
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point. Reset evict */
@@ -2844,7 +2844,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+        uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                            sizeof(whMessageCrypto_EccVerifyRequest) + sig_len +
                            hash_len;
 
@@ -2896,7 +2896,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
             }
 
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
                                         (uint8_t*)dataPtr);
 
             if (ret == WH_ERROR_OK) {
@@ -4030,8 +4030,9 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
         return WH_ERROR_BADARGS;
     }
 
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + msgLen + contextLen;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + msgLen + contextLen;
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
@@ -4150,8 +4151,9 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
     uint8_t*                               dataPtr = NULL;
     whKeyId  key_id  = WH_DEVCTX_TO_KEYID(key->devCtx);
     int      evict     = 0;
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + sigLen + msgLen + contextLen;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + sigLen + msgLen + contextLen;
 
     if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
@@ -5309,8 +5311,9 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
         dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_HKDF, ctx->cryptoAffinity);
 
     /* Calculate request length including variable-length data */
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + inKeySz + saltSz + infoSz;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + inKeySz + saltSz + infoSz;
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
@@ -5492,8 +5495,9 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
         dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_TWOSTEP_CMAC,
         ctx->cryptoAffinity);
 
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + saltSz + zSz + fixedInfoSz;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + saltSz + zSz + fixedInfoSz;
 
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
@@ -10469,8 +10473,9 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + in_len + contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + in_len + contextLen;
         uint32_t options = 0;
 
         /* Get data pointer from the context to use as request/response storage
@@ -10610,8 +10615,9 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + sig_len + msg_len + contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + sig_len + msg_len + contextLen;
 
 
         /* Get data pointer from the context to use as request/response storage

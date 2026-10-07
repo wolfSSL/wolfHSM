@@ -793,7 +793,7 @@ int wh_Client_SheEncEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
     if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
@@ -872,7 +872,7 @@ int wh_Client_SheEncCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
         ivSz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
@@ -952,7 +952,7 @@ int wh_Client_SheDecEcbRequest(whClientContext* c, uint8_t keyId, uint8_t* in,
     if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
@@ -1030,7 +1030,7 @@ int wh_Client_SheDecCbcRequest(whClientContext* c, uint8_t keyId, uint8_t* iv,
         ivSz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
@@ -1110,7 +1110,7 @@ int wh_Client_SheGenerateMacRequest(whClientContext* c, uint8_t keyId,
     if (c == NULL || in == NULL || sz < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + sz > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
@@ -1184,7 +1184,8 @@ int wh_Client_SheVerifyMacRequest(whClientContext* c, uint8_t keyId,
         mac == NULL || macLen < WH_SHE_KEY_SZ) {
         return WH_ERROR_BADARGS;
     }
-    if (sizeof(*req) + messageLen + WH_SHE_KEY_SZ > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if ((uint64_t)sizeof(*req) + messageLen + WH_SHE_KEY_SZ >
+        WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
 
