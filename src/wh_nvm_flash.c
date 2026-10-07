@@ -1447,6 +1447,16 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
             d->reclaimable_data += d->objects[oldentry].state.count;
         }
     }
+    else {
+        /* Part of the entry may be on flash. Reload the directory so the next
+         * add skips the damaged slot, as it would after a reboot */
+        if (nfPartition_ReadParseMemDirectory(context, context->active, d) !=
+            0) {
+            /* Directory no longer matches flash. Refuse further use until
+             * the context is reinitialized */
+            context->directory_bad = 1;
+        }
+    }
     return ret;
 }
 
