@@ -4010,14 +4010,15 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
     whMessageCrypto_Ed25519SignResponse* res     = NULL;
     uint8_t*                             dataPtr = NULL;
 
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-    int     evict  = 0;
+    whKeyId key_id;
+    int     evict = 0;
 
     if ((ctx == NULL) || (key == NULL) || ((msg == NULL) && (msgLen > 0)) ||
         ((sig != NULL) && (inout_sig_len == NULL)) ||
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4149,7 +4150,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
     whMessageCrypto_Ed25519VerifyRequest*  req     = NULL;
     whMessageCrypto_Ed25519VerifyResponse* res     = NULL;
     uint8_t*                               dataPtr = NULL;
-    whKeyId  key_id  = WH_DEVCTX_TO_KEYID(key->devCtx);
+    whKeyId  key_id;
     int      evict     = 0;
     uint64_t total_len =
         (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -4159,6 +4160,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4285,7 +4287,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     uintptr_t                               msgAddr = 0;
     uintptr_t                               sigAddr = 0;
 
-    whKeyId  key_id   = WH_DEVCTX_TO_KEYID(key->devCtx);
+    whKeyId  key_id;
     int      evict    = 0;
     uint32_t inSigLen = (inout_sig_len != NULL) ? *inout_sig_len : 0;
 
@@ -4294,6 +4296,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4435,13 +4438,14 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
     uintptr_t                                 msgAddr = 0;
     uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + contextLen;
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-    int     evict  = 0;
+    whKeyId key_id;
+    int     evict = 0;
 
     if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
