@@ -151,7 +151,9 @@ int wh_Server_CertVerifyMultiRoot(whServerContext* server, const uint8_t* cert,
  * wh_Server_CertVerify, so it participates in chain verification the same way
  * a callback registered with wolfSSL_CertManagerSetVerify would. Verify-cache
  * hits (when WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE is enabled) bypass the
- * callback because they bypass wolfSSL's verify path entirely.
+ * callback because they bypass wolfSSL's verify path entirely. With
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN, a repeat of a cached chain
+ * does not call it at all.
  *
  * @param server The server context.
  * @param cb     The callback to register, or NULL to unregister.

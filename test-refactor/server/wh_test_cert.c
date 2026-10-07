@@ -32,6 +32,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
+#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_message_cert.h"
 
 #include "wh_test_common.h"
@@ -434,5 +435,115 @@ int whTest_CertPerClientIsolation(whServerContext* ctx)
 
     return 0;
 }
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+/* Counts verify-callback invocations for the full-chain cache test */
+static int _fullChainCacheCbCount = 0;
+static int _fullChainCacheVerifyCb(int preverify, WOLFSSL_X509_STORE_CTX* store)
+{
+    (void)store;
+    _fullChainCacheCbCount++;
+    return preverify;
+}
+
+/*
+ * Full-chain caching: a repeat verify of a chain skips every check, leaf
+ * included. The leaf alone, or after another chain's intermediate, still
+ * fails, a failed verify is not cached, and asking for the leaf public key
+ * on a cached chain still caches it.
+ */
+int whTest_CertVerifyCacheFullChain(whServerContext* ctx)
+{
+    whServerContext* server     = (whServerContext*)ctx;
+    VerifyCallback   savedCb    = server->cert.verifyCb;
+    const whNvmId    rootA      = 1;
+    const whNvmId    rootB      = 2;
+    whNvmId          rootsAB[2] = {rootA, rootB};
+    static uint8_t   otherChain[4096];
+    uint32_t         otherChainLen;
+    whKeyId          keyId = WH_KEYID_ERASED;
+    whNvmMetadata    meta;
+    uint8_t          pubKey[512];
+    uint32_t         pubKeyLen = sizeof(pubKey);
+    int              i;
+
+    /* Leaf A after chain B's intermediate, which did not sign it */
+    WH_TEST_ASSERT_RETURN(INTERMEDIATE_B_CERT_len + LEAF_A_CERT_len <=
+                          sizeof(otherChain));
+    memcpy(otherChain, INTERMEDIATE_B_CERT, INTERMEDIATE_B_CERT_len);
+    memcpy(otherChain + INTERMEDIATE_B_CERT_len, LEAF_A_CERT, LEAF_A_CERT_len);
+    otherChainLen = (uint32_t)(INTERMEDIATE_B_CERT_len + LEAF_A_CERT_len);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_CertSetVerifyCb(server, _fullChainCacheVerifyCb));
+    /* Start cold: in global mode the cache outlives CertInit */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyCache_Clear(server));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootA, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONMODIFIABLE, NULL, 0,
+        ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootB, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONMODIFIABLE, NULL, 0,
+        ROOT_B_CERT, ROOT_B_CERT_len));
+
+    /* Cold verify of chain A checks every cert */
+    _fullChainCacheCbCount = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    WH_TEST_ASSERT_RETURN(_fullChainCacheCbCount > 0);
+
+    /* Repeat verify hits the whole-chain entry: nothing is checked */
+    _fullChainCacheCbCount = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    WH_TEST_ASSERT_RETURN(_fullChainCacheCbCount == 0);
+
+    /* The leaf alone, and the leaf after chain B's intermediate, are
+     * checked the normal way and fail. Both roots are loaded for the second
+     * so that intermediate itself verifies. Try twice: a failed verify must
+     * not be cached. */
+    for (i = 0; i < 2; i++) {
+        _fullChainCacheCbCount = 0;
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerify(server, LEAF_A_CERT, LEAF_A_CERT_len, rootA,
+                                 WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY,
+                                 NULL));
+        WH_TEST_ASSERT_RETURN(_fullChainCacheCbCount > 0);
+
+        _fullChainCacheCbCount = 0;
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerifyMultiRoot(server, otherChain, otherChainLen,
+                                          rootsAB, 2, WH_CERT_FLAGS_NONE,
+                                          WH_NVM_FLAGS_USAGE_ANY, NULL));
+        WH_TEST_ASSERT_RETURN(_fullChainCacheCbCount > 0);
+    }
+
+    /* A cached chain still caches the leaf public key when asked */
+    _fullChainCacheCbCount = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+        WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, WH_NVM_FLAGS_USAGE_VERIFY, &keyId));
+    WH_TEST_ASSERT_RETURN(_fullChainCacheCbCount == 0);
+    WH_TEST_ASSERT_RETURN(!WH_KEYID_ISERASED(keyId));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_KeystoreReadKey(server, keyId, &meta, pubKey, &pubKeyLen));
+    WH_TEST_ASSERT_RETURN(pubKeyLen == LEAF_A_PUBKEY_len);
+    WH_TEST_ASSERT_RETURN(0 == memcmp(pubKey, LEAF_A_PUBKEY, pubKeyLen));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEvictKey(server, keyId));
+
+    /* Cleanup */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyCache_Clear(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootA));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootB));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertSetVerifyCb(server, savedCb));
+
+    return 0;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN */
 
 #endif

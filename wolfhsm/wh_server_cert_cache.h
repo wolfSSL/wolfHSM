@@ -38,6 +38,19 @@
  *     because the chain walk loads each verified CA into the cert manager
  *     before the next cert is processed.
  *
+ *     A cached CA is trusted in later requests that load the same root,
+ *     even when the certs above it are left out: after [I1, I2, L]
+ *     verifies, [I2, L] also passes. A path length constraint is only
+ *     applied when the CA that sets it is part of the request, so the
+ *     cache does not enforce path length constraints from CAs left out of
+ *     a request.
+ *
+ *     With WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN, a successful verify
+ *     also inserts the SHA-256 of the whole chain buffer. A later verify of
+ *     the exact same chain hits it and skips every signature check, leaf
+ *     included. A leaf sent alone, or with other CAs, hashes differently
+ *     and is verified normally.
+ *
  *     Soundness of the subset rule rests on X.509 verify monotonicity:
  *     adding more trusted roots can never invalidate a previously
  *     successful verify, so a chain that validated under set S still
@@ -146,7 +159,8 @@ struct whServerContext_t;
  * @param rootNvmIds Array of trusted root NVM IDs currently loaded
  *        (presented set).
  * @param numRoots Number of entries in rootNvmIds (must be > 0).
- * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert.
+ * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert, or of
+ *        the whole chain (see WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN).
  * @return WH_ERROR_OK on hit, WH_ERROR_NOTFOUND on miss,
  *         WH_ERROR_BADARGS on invalid arguments.
  */
@@ -170,7 +184,8 @@ int wh_Server_CertVerifyCache_Lookup(struct whServerContext_t* server,
  * @param rootNvmIds Array of trusted root NVM IDs loaded for the verify.
  * @param numRoots Number of entries in rootNvmIds (must be > 0 and
  *        <= WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS).
- * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert.
+ * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert, or of
+ *        the whole chain (see WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN).
  */
 void wh_Server_CertVerifyCache_Insert(struct whServerContext_t* server,
                                       const whNvmId*            rootNvmIds,

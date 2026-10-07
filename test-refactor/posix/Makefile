@@ -171,6 +171,13 @@ ifeq ($(CRYPTO_AFFINITY),1)
     DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
 endif
 
+# Also cache whole chains, leaf included, in the trusted-cert verify cache.
+# Implies the verify cache itself.
+ifeq ($(CERT_VERIFY_CACHE_FULLCHAIN),1)
+    DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+    DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+endif
+
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST

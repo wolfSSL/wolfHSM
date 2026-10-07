@@ -215,5 +215,15 @@ jobs:
       if: matrix.group == 'base'
       run: cd test && make clean && make -j CERT_VERIFY_CACHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test the trusted certificate verify cache with full-chain caching,
+    # per-client and global
+    - name: Build and test with CERT_VERIFY_CACHE_FULLCHAIN ASAN
+      if: matrix.group == 'base'
+      run: cd test && make clean && make -j CERT_VERIFY_CACHE_FULLCHAIN=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
+    - name: Build and test with CERT_VERIFY_CACHE_FULLCHAIN GLOBAL ASAN
+      if: matrix.group == 'base'
+      run: cd test && make clean && make -j CERT_VERIFY_CACHE_FULLCHAIN=1 CERT_VERIFY_CACHE_GLOBAL=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     - name: Show ccache stats
       run: ccache -s

@@ -56,6 +56,7 @@ WH_TEST_DECL(whTest_CertNvmPolicy);
 WH_TEST_DECL(whTest_CertReadRejectsServerOnly);
 WH_TEST_DECL(whTest_CertEraseCannotReachNonCert);
 WH_TEST_DECL(whTest_CertPerClientIsolation);
+WH_TEST_DECL(whTest_CertVerifyCacheFullChain);
 WH_TEST_DECL(whTest_CertReadTrusted);
 WH_TEST_DECL(whTest_HwKeystoreServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
@@ -136,6 +137,7 @@ const whTestCase whTestsServer[] = {
     {"whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly},
     {"whTest_CertEraseCannotReachNonCert", whTest_CertEraseCannotReachNonCert},
     {"whTest_CertPerClientIsolation", whTest_CertPerClientIsolation},
+    {"whTest_CertVerifyCacheFullChain", whTest_CertVerifyCacheFullChain},
     {"whTest_ServerImgMgr", whTest_ServerImgMgr},
     {"whTest_CertReadTrusted", whTest_CertReadTrusted},
     {"whTest_NvmOptional", whTest_NvmOptional},
