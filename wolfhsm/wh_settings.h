@@ -170,7 +170,7 @@
  *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the
  *  non-DMA wire request fits within WOLFHSM_CFG_COMM_DATA_LEN alongside the
  *  candidate chain, and so the inline DMA request struct stays a fixed-size
- *  POD.
+ *  POD. Also sets the size of each image manager image's root list.
  *      Default: 8
  *
  *  WOLFHSM_CFG_CERT_VERIFY_CACHE_COUNT - Number of trusted-certificate
@@ -442,7 +442,7 @@
 /* Maximum number of trusted root NVM IDs accepted in one multi-root verify
  * request. Bounded so the request fits within WOLFHSM_CFG_COMM_DATA_LEN
  * alongside the candidate chain, and so the inline DMA request struct stays
- * a fixed-size POD. Default 8; overridable at build time. */
+ * a fixed-size POD. Also sizes the image manager's per-image root list. */
 #ifndef WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS
 #define WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS 8
 #endif
@@ -465,14 +465,14 @@
     #define WOLFHSM_CFG_PRINTF printf
 #endif
 
-/* Debug levels can be enabled by defining WOLFHSM_CFG_DEBUG and/or 
+/* Debug levels can be enabled by defining WOLFHSM_CFG_DEBUG and/or
  * WOLFHSM_CFG_DEBUG_VERBOSE in wolfhsm_cfg.h or via compiler flags.
- * 
+ *
  * WOLFHSM_CFG_DEBUG - Enable basic debug output
  * WOLFHSM_CFG_DEBUG_VERBOSE - Enable verbose debug output (includes basic)
  */
 
-/* Internal print macro - do not use directly 
+/* Internal print macro - do not use directly
  * This is the base macro that all other debug macros build on top of */
 #ifdef WOLFHSM_CFG_DEBUG
     #if !defined(__CCRH__)

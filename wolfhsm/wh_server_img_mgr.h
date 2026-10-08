@@ -55,8 +55,8 @@
 typedef enum {
     WH_IMG_MGR_IMG_TYPE_RAW = 0,       /* Key from keystore, sig from NVM */
     WH_IMG_MGR_IMG_TYPE_WOLFBOOT,      /* Key from keystore, sig from header */
-    WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT, /* Root CA from NVM, cert chain + sig
-                                          from header */
+    WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT, /* Root CA(s) from NVM, cert chain +
+                                          sig from header */
 } whServerImgMgrImgType;
 
 /* Forward declaration for callback function signatures */
@@ -123,7 +123,7 @@ typedef struct whServerImgMgrImg {
                             2-byte aligned for WOLFBOOT/WOLFBOOT_CERT. */
     size_t    hdrSize;  /* wolfBoot header size (unused for RAW) */
     whKeyId   keyId;    /* RAW/WOLFBOOT: verify key ID. WOLFBOOT_CERT: unused */
-    whNvmId   sigNvmId; /* RAW: sig NVM ID. WOLFBOOT_CERT: root CA NVM ID */
+    whNvmId   sigNvmId; /* RAW: sig NVM ID. WOLFBOOT/WOLFBOOT_CERT: unused */
     whServerImgMgrImgType imgType; /* Controls framework loading behavior */
     whServerImgMgrVerifyMethod verifyMethod; /* Verification callback
                                                 (required) */
@@ -132,6 +132,10 @@ typedef struct whServerImgMgrImg {
                          (required, use
                          wh_Server_ImgMgrVerifyActionDefault
                          for a no-op) */
+    /* WOLFBOOT_CERT: list of root CA NVM IDs. */
+    whNvmId  rootNvmIds[WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS];
+    uint16_t numRoots; /* Entries used in rootNvmIds. WOLFBOOT_CERT needs at
+                          least 1 */
 } whServerImgMgrImg;
 
 /*
@@ -175,12 +179,16 @@ struct whServerImgMgrContext_t {
  * Initializes the image manager context with the provided configuration.
  * Registers the list of images to be managed. Every registered image must
  * have both a verifyMethod and a verifyAction callback (use
- * wh_Server_ImgMgrVerifyActionDefault for a no-op action).
+ * wh_Server_ImgMgrVerifyActionDefault for a no-op action). Images are copied
+ * into the context, so the caller's image array does not need to outlive
+ * this call.
  *
  * @param[in] context Image manager context to initialize
  * @param[in] config Configuration containing image list
  * @return WH_ERROR_OK on success, WH_ERROR_BADARGS if the configuration is
- * invalid or any registered image is missing a callback
+ * invalid, any registered image is missing a callback, any image's numRoots
+ * is larger than WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS, or a WOLFBOOT_CERT image
+ * has no roots
  */
 int wh_Server_ImgMgrInit(whServerImgMgrContext*      context,
                          const whServerImgMgrConfig* config);
@@ -360,7 +368,8 @@ int wh_Server_ImgMgrVerifyMethodWolfBootEcc256WithSha256(
  *
  * Verifies a wolfBoot image using RSA4096 signature with SHA256 hash,
  * where the signing key is validated through a certificate chain.
- * The root CA cert NVM ID is read from img->sigNvmId.
+ * The chain may anchor to any of the img->numRoots root CA certs listed in
+ * img->rootNvmIds. Listed roots that are not in NVM are skipped.
  * The cert chain and signature are extracted from the wolfBoot header.
  *
  * @param[in] context Image manager context
@@ -370,8 +379,9 @@ int wh_Server_ImgMgrVerifyMethodWolfBootEcc256WithSha256(
  * @param[in] keySz Unused (0)
  * @param[in] sig Unused (NULL), signature is read from wolfBoot header
  * @param[in] sigSz Unused (0)
- * @return WH_ERROR_OK on successful verification, negative error code on
- * failure
+ * @return WH_ERROR_OK on successful verification, WH_ERROR_CERT_VERIFY if the
+ * chain does not anchor to any listed root, WH_ERROR_NOTFOUND if none of the
+ * listed roots are in NVM, other negative error code on failure
  */
 int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
     whServerImgMgrContext* context, const whServerImgMgrImg* img,
