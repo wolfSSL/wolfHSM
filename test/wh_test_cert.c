@@ -639,12 +639,26 @@ static int _whTest_CertCheckWarmCount(int warmCount, int coldCount)
     return WH_ERROR_OK;
 }
 
+#ifndef NO_ASN_TIME
+/* Fake clock for the verify-cache tests, installed with wc_SetTimeCb */
+static time_t s_verifyCacheFakeNow = 0;
+static time_t whTest_verifyCacheFakeTime(time_t* t)
+{
+    if (t != NULL) {
+        *t = s_verifyCacheFakeNow;
+    }
+    return s_verifyCacheFakeNow;
+}
+#endif
+
 /* Exercises the trusted-cert verify cache directly through the server API:
  *  - repeat-verify of the same chain under the same root stays successful
  *  - cache entries are bound to the trusted root NVM ID: chain A under root B
  *    must fail even after chain A has been cached by a verify under root A
  *    (regression test against cross-root cache bypass)
- *  - clearing the cache leaves the cross-root case still failing */
+ *  - clearing the cache leaves the cross-root case still failing
+ *  - a hit skips the date check: a cached CA still verifies after it expires,
+ *    until the cache is cleared */
 static int whTest_CertServerVerifyCache(whServerConfig* serverCfg)
 {
     whServerContext server[1] = {0};
@@ -687,6 +701,34 @@ static int whTest_CertServerVerifyCache(whServerConfig* serverCfg)
                                                RAW_CERT_CHAIN_A_len, rootCertB,
                                                WH_CERT_FLAGS_NONE,
                                                WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+#ifndef NO_ASN_TIME
+    /* 4. A hit skips the date check. Cache intermediate A, then move the clock
+     * past its expiry (2031-05-08; root A lasts until 2036-05-06):
+     * intermediate A alone still verifies. Once the cache is cleared, it
+     * fails. The clock is restored before any result is checked. */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    {
+        int cachedRc;
+        int clearedRc;
+
+        s_verifyCacheFakeNow = (time_t)1988150400; /* 2033-01-01 */
+        (void)wc_SetTimeCb(whTest_verifyCacheFakeTime);
+        cachedRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        wh_Server_CertVerifyCache_Clear(server);
+        clearedRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        (void)wc_SetTimeCb(NULL);
+
+        WH_TEST_ASSERT_RETURN(cachedRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(clearedRc == WH_ERROR_CERT_VERIFY);
+    }
+#endif
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertA));
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertB));
@@ -1044,7 +1086,9 @@ static int whTest_fullChainCacheVerifyCb(int                     preverify,
  *  - the cached leaf only helps the exact chain it came in: the leaf alone,
  *    or after another chain's intermediate, still fails
  *  - a failed verify is not cached
- *  - asking for the leaf public key on a cached chain still caches it */
+ *  - asking for the leaf public key on a cached chain still caches it
+ *  - a cached chain still passes after its leaf or intermediate expires,
+ *    until the cache is cleared */
 static int whTest_CertServerVerifyCacheFullChain(whServerConfig* serverCfg)
 {
     whServerContext     server[1] = {0};
@@ -1135,6 +1179,42 @@ static int whTest_CertServerVerifyCacheFullChain(whServerConfig* serverCfg)
     WH_TEST_ASSERT_RETURN(pubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(0 == memcmp(pubKey, LEAF_A_PUBKEY, pubKeyLen));
     WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEvictKey(server, keyId));
+
+#ifndef NO_ASN_TIME
+    /* 5. A hit skips the date checks too. Past leaf A's expiry (2027-05-09),
+     * and past intermediate A's (2031-05-08; root A lasts until 2036-05-06),
+     * the cached chain still passes and the callback does not run. Once the
+     * cache is cleared, the same verify fails. The clock is restored before
+     * any result is checked. */
+    {
+        int leafExpiredRc;
+        int caExpiredRc;
+        int cbCount;
+        int clearedRc;
+
+        s_verifyCacheFakeNow = (time_t)1861920000; /* 2029-01-01 */
+        (void)wc_SetTimeCb(whTest_verifyCacheFakeTime);
+        s_fullChainCacheCb_count = 0;
+        leafExpiredRc            = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        s_verifyCacheFakeNow = (time_t)1988150400; /* 2033-01-01 */
+        caExpiredRc          = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        cbCount = s_fullChainCacheCb_count;
+        wh_Server_CertVerifyCache_Clear(server);
+        clearedRc = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        (void)wc_SetTimeCb(NULL);
+
+        WH_TEST_ASSERT_RETURN(leafExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(caExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(cbCount == 0);
+        WH_TEST_ASSERT_RETURN(clearedRc == WH_ERROR_CERT_VERIFY);
+    }
+#endif
 
     /* Cleanup */
     wh_Server_CertVerifyCache_Clear(server);

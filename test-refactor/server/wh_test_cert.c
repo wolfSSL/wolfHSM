@@ -446,11 +446,25 @@ static int _fullChainCacheVerifyCb(int preverify, WOLFSSL_X509_STORE_CTX* store)
     return preverify;
 }
 
+#ifndef NO_ASN_TIME
+/* Fake clock for the full-chain cache test, installed with wc_SetTimeCb */
+static time_t _fullChainFakeNow = 0;
+static time_t _fullChainFakeTime(time_t* t)
+{
+    if (t != NULL) {
+        *t = _fullChainFakeNow;
+    }
+    return _fullChainFakeNow;
+}
+#endif
+
 /*
  * Full-chain caching: a repeat verify of a chain skips every check, leaf
  * included. The leaf alone, or after another chain's intermediate, still
  * fails, a failed verify is not cached, and asking for the leaf public key
- * on a cached chain still caches it.
+ * on a cached chain still caches it. A cached chain, or a cached
+ * intermediate on its own, still passes after it expires, until the cache
+ * is cleared.
  */
 int whTest_CertVerifyCacheFullChain(whServerContext* ctx)
 {
@@ -535,6 +549,52 @@ int whTest_CertVerifyCacheFullChain(whServerContext* ctx)
     WH_TEST_ASSERT_RETURN(pubKeyLen == LEAF_A_PUBKEY_len);
     WH_TEST_ASSERT_RETURN(0 == memcmp(pubKey, LEAF_A_PUBKEY, pubKeyLen));
     WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEvictKey(server, keyId));
+
+#ifndef NO_ASN_TIME
+    /* A hit skips the date checks too. Past leaf A's expiry (2027-05-09),
+     * and past intermediate A's (2031-05-08; root A lasts until 2036-05-06),
+     * the cached chain still passes and the callback does not run, and so
+     * does intermediate A on its own. Once the cache is cleared, both fail.
+     * The clock is restored before any result is checked. */
+    {
+        int leafExpiredRc;
+        int caExpiredRc;
+        int caAloneRc;
+        int cbCount;
+        int clearedRc;
+        int caAloneClearedRc;
+
+        _fullChainFakeNow = (time_t)1861920000; /* 2029-01-01 */
+        (void)wc_SetTimeCb(_fullChainFakeTime);
+        _fullChainCacheCbCount = 0;
+        leafExpiredRc          = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        _fullChainFakeNow = (time_t)1988150400; /* 2033-01-01 */
+        caExpiredRc       = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        caAloneRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        cbCount = _fullChainCacheCbCount;
+        (void)wh_Server_CertVerifyCache_Clear(server);
+        clearedRc = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        caAloneClearedRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        (void)wc_SetTimeCb(NULL);
+
+        WH_TEST_ASSERT_RETURN(leafExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(caExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(caAloneRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(cbCount == 0);
+        WH_TEST_ASSERT_RETURN(clearedRc == WH_ERROR_CERT_VERIFY);
+        WH_TEST_ASSERT_RETURN(caAloneClearedRc == WH_ERROR_CERT_VERIFY);
+    }
+#endif
 
     /* Cleanup */
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerifyCache_Clear(server));

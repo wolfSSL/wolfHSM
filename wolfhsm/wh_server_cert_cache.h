@@ -28,7 +28,8 @@
  *     successfully verified, scoped to the set of trusted-root NVM IDs
  *     that were loaded when the verify ran. Hits apply across clients
  *     but require the cached root set to be a subset of the caller's
- *     currently-loaded root set.
+ *     currently-loaded root set. A hit skips every check on the cert,
+ *     dates included.
  *
  *     Only CA certs are inserted. Caching a leaf would let a future
  *     "leaf alone" verify falsely succeed via cache hit, because the
@@ -47,9 +48,11 @@
  *
  *     With WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN, a successful verify
  *     also inserts the SHA-256 of the whole chain buffer. A later verify of
- *     the exact same chain hits it and skips every signature check, leaf
- *     included. A leaf sent alone, or with other CAs, hashes differently
- *     and is verified normally.
+ *     the exact same chain hits it and skips every check, leaf included. A
+ *     leaf from a longer chain is verified normally when sent alone or with
+ *     other CAs. A leaf verified alone (signed directly by a root) has a
+ *     chain hash equal to its own hash, so it hits wherever it appears while
+ *     that root is loaded.
  *
  *     Soundness of the subset rule rests on X.509 verify monotonicity:
  *     adding more trusted roots can never invalidate a previously
