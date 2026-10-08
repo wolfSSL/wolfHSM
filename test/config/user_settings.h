@@ -143,6 +143,19 @@
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
+
+/* FrodoKEM Options. Experimental in wolfSSL. Only the SHAKE matrix-A variant
+ * is enabled: the AES variant adds parameter sets without adding coverage of
+ * the wolfHSM message and dispatch paths.
+ *
+ * Only FrodoKEM-640 is enabled. Every FrodoKEM object is large, and the server
+ * key cache slot has to hold a whole private key: 19,888 bytes at 640, but
+ * 31,296 at 976 and 43,088 at 1344. Enabling the larger sets means raising
+ * WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE to match, at three slots each. */
+#define WOLFSSL_HAVE_FRODOKEM
+#define WOLFSSL_FRODOKEM_SHAKE
+#define WOLFSSL_NO_FRODOKEM_976
+#define WOLFSSL_NO_FRODOKEM_1344
 /* LMS / HSS Options (RFC 8554, NIST SP 800-208) */
 #define WOLFSSL_HAVE_LMS
 

@@ -114,6 +114,18 @@ int wh_Server_MlKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   MlKemKey* key);
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* Store a FrodoKemKey into a server key cache with optional metadata. The slot
+ * must be able to hold a whole private key, so a FrodoKEM build needs
+ * WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE sized accordingly. */
+int wh_Server_FrodoKemKeyCacheImport(whServerContext* ctx, FrodoKemKey* key,
+                                     whKeyId keyId, whNvmFlags flags,
+                                     uint16_t label_len, uint8_t* label);
+/* Restore a FrodoKemKey from a server key cache */
+int wh_Server_FrodoKemKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                     FrodoKemKey* key);
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 /* Store raw key bytes into a server key cache slot with optional metadata.
  * Used by KDF outputs (HKDF, CMAC-KDF) and key-agreement outputs
  * (ECDH, X25519) when the caller asked for server-resident storage. */

@@ -1008,6 +1008,91 @@ int wh_MessageCrypto_TranslateMlKemDecapsResponse(
     return 0;
 }
 
+/* FrodoKEM Key Generation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenRequest* src,
+    whMessageCrypto_FrodoKemKeyGenRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, access);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+    return 0;
+}
+
+/* FrodoKEM Key Generation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenResponse* src,
+    whMessageCrypto_FrodoKemKeyGenResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, len);
+    return 0;
+}
+
+/* FrodoKEM Encapsulation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemEncapsRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsRequest* src,
+    whMessageCrypto_FrodoKemEncapsRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* FrodoKEM Encapsulation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemEncapsResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsResponse* src,
+    whMessageCrypto_FrodoKemEncapsResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, ctSz);
+    WH_T32(magic, dest, src, ssSz);
+    return 0;
+}
+
+/* FrodoKEM Decapsulation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemDecapsRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsRequest* src,
+    whMessageCrypto_FrodoKemDecapsRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, ctSz);
+    return 0;
+}
+
+/* FrodoKEM Decapsulation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemDecapsResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsResponse* src,
+    whMessageCrypto_FrodoKemDecapsResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, ssSz);
+    return 0;
+}
+
 /*
  * DMA Messages
  */
@@ -1483,6 +1568,142 @@ int wh_MessageCrypto_TranslateMlKemDecapsDmaRequest(
 int wh_MessageCrypto_TranslateMlKemDecapsDmaResponse(
     uint16_t magic, const whMessageCrypto_MlKemDecapsDmaResponse* src,
     whMessageCrypto_MlKemDecapsDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, ssLen);
+    return 0;
+}
+
+/* FrodoKEM DMA Key Generation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemKeyGenDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenDmaRequest* src,
+    whMessageCrypto_FrodoKemKeyGenDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->key, &dest->key);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, access);
+    WH_T32(magic, dest, src, labelSize);
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+    return 0;
+}
+
+/* FrodoKEM DMA Key Generation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemKeyGenDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemKeyGenDmaResponse* src,
+    whMessageCrypto_FrodoKemKeyGenDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, keySize);
+    return 0;
+}
+
+/* FrodoKEM DMA Encapsulation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemEncapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsDmaRequest* src,
+    whMessageCrypto_FrodoKemEncapsDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->ct, &dest->ct);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* FrodoKEM DMA Encapsulation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemEncapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemEncapsDmaResponse* src,
+    whMessageCrypto_FrodoKemEncapsDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, ctLen);
+    WH_T32(magic, dest, src, ssLen);
+    return 0;
+}
+
+/* FrodoKEM DMA Decapsulation Request translation */
+int wh_MessageCrypto_TranslateFrodoKemDecapsDmaRequest(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsDmaRequest* src,
+    whMessageCrypto_FrodoKemDecapsDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->ct, &dest->ct);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, type);
+    WH_T32(magic, dest, src, keyId);
+    return 0;
+}
+
+/* FrodoKEM DMA Decapsulation Response translation */
+int wh_MessageCrypto_TranslateFrodoKemDecapsDmaResponse(
+    uint16_t magic, const whMessageCrypto_FrodoKemDecapsDmaResponse* src,
+    whMessageCrypto_FrodoKemDecapsDmaResponse* dest)
 {
     int ret;
 

@@ -494,6 +494,117 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+int wh_Crypto_FrodoKemSerializeKey(FrodoKemKey* key, uint16_t max_size,
+                                   uint8_t* buffer, uint16_t* out_size)
+{
+    int    ret     = WH_ERROR_OK;
+    word32 keySize = 0;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Try the private key first. The size query succeeds whether or not a
+     * private key is present, so the encode return is what distinguishes a
+     * public-only key. */
+    ret = wc_FrodoKemKey_PrivateKeySize(key, &keySize);
+    if (ret == WH_ERROR_OK) {
+        if (keySize > max_size) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wc_FrodoKemKey_EncodePrivateKey(key, buffer, keySize);
+    }
+    if (ret != WH_ERROR_OK) {
+        /* Private key encoding failed - try public key only */
+        ret = wc_FrodoKemKey_PublicKeySize(key, &keySize);
+        if (ret == WH_ERROR_OK) {
+            if (keySize > max_size) {
+                return WH_ERROR_BADARGS;
+            }
+            ret = wc_FrodoKemKey_EncodePublicKey(key, buffer, keySize);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        *out_size = (uint16_t)keySize;
+    }
+    else {
+        /* Clear buffer to avoid leaking partial key material on error */
+        wc_ForceZero(buffer, keySize);
+    }
+
+    return ret;
+}
+
+int wh_Crypto_FrodoKemDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                     FrodoKemKey* key)
+{
+    static const int bases[] = {
+        WC_FRODOKEM_640,
+        WC_FRODOKEM_976,
+        WC_FRODOKEM_1344,
+    };
+    int    ret;
+    int    origType;
+    int    origDevId;
+    void*  origHeap;
+    int    modifiers;
+    word32 i;
+
+    if ((buffer == NULL) || (key == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    origType  = key->type;
+    origDevId = key->devId;
+    origHeap  = key->heap;
+
+    /* The AES and ephemeral modifiers do not change any encoded length, so
+     * they cannot be recovered from the buffer. Keep whatever the caller
+     * configured and only probe the base parameter set. */
+    modifiers = origType & ~FRODOKEM_BASE_MASK;
+
+    /* First, try decoding with the type already set in the key */
+    ret = wc_FrodoKemKey_DecodePrivateKey(key, buffer, size);
+    if (ret == WH_ERROR_OK) {
+        return ret;
+    }
+    ret = wc_FrodoKemKey_DecodePublicKey(key, buffer, size);
+    if (ret == WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Current type didn't work, try the other base parameter sets in place */
+    for (i = 0; i < XELEM_CNT(bases); i++) {
+        int type = bases[i] | modifiers;
+
+        if (type == origType) {
+            continue;
+        }
+        wc_FrodoKemKey_Free(key);
+        ret = wc_FrodoKemKey_Init(key, type, origHeap, origDevId);
+        if (ret != WH_ERROR_OK) {
+            continue;
+        }
+        ret = wc_FrodoKemKey_DecodePrivateKey(key, buffer, size);
+        if (ret == WH_ERROR_OK) {
+            return ret;
+        }
+        ret = wc_FrodoKemKey_DecodePublicKey(key, buffer, size);
+        if (ret == WH_ERROR_OK) {
+            return ret;
+        }
+    }
+
+    /* None of the parameter sets worked. Restore the original type; the error
+     * is reported in ret, so the Init return is not useful here. */
+    wc_FrodoKemKey_Free(key);
+    (void)wc_FrodoKemKey_Init(key, origType, origHeap, origDevId);
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 /* Stateful hash-based signature key serialization helpers (LMS / XMSS).
  *

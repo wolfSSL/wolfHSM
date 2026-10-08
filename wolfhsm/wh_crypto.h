@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/wc_frodokem.h"
 
 #include "wolfhsm/wh_message_crypto.h"
 
@@ -128,6 +129,18 @@ int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
 int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
                                   MlKemKey* key);
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* Store a FrodoKemKey to a byte sequence */
+int wh_Crypto_FrodoKemSerializeKey(FrodoKemKey* key, uint16_t max_size,
+                                   uint8_t* buffer, uint16_t* out_size);
+/* Restore a FrodoKemKey from a byte sequence. Tries the type already set in
+ * the key first, then probes the other base parameter sets. The AES and
+ * ephemeral modifiers cannot be recovered from the buffer, so the type
+ * configured by the caller supplies them. */
+int wh_Crypto_FrodoKemDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                     FrodoKemKey* key);
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 /* Fixed header of a stateful-sig (LMS/XMSS) slot blob.
