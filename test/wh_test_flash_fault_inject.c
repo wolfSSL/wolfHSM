@@ -88,6 +88,12 @@ int whFlashFaultInject_Read(void* context, uint32_t offset, uint32_t size,
 
     if ((ctx == NULL) || (ctx->realCb == NULL))
         return WH_ERROR_BADARGS;
+    /* Check if we need to simulate a failure */
+    if (ctx->failAfterReads > 0) {
+        ctx->failAfterReads--;
+        if (ctx->failAfterReads == 0)
+            return WH_ERROR_ABORTED;
+    }
 
     if (ctx->realCb->Read != NULL)
         return ctx->realCb->Read(ctx->realCtx, offset, size, data);

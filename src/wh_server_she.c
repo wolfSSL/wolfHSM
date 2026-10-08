@@ -806,8 +806,8 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
                                              req.messageTwo + WH_SHE_KEY_SZ);
         }
         else {
-            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len,
-                                   req.messageTwo + WH_SHE_KEY_SZ);
+            ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, meta->len,
+                                              req.messageTwo + WH_SHE_KEY_SZ);
             /* Evict any cached copy so the cache-first read below returns
              * the key just written, not a stale entry. */
             if (ret == 0) {
@@ -1194,7 +1194,8 @@ static int _InitRnd(whServerContext* server, uint16_t magic, uint16_t req_size,
             ret = wh_Server_KeystoreCacheKey(server, meta, cmacOutput);
         }
         else {
-            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, cmacOutput);
+            ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, meta->len,
+                                              cmacOutput);
             /* Evict stale cached seed after persisting new value. */
             if (ret == 0) {
                 ret = wh_Server_KeystoreEvictKey(server, meta->id);
@@ -1344,7 +1345,8 @@ static int _ExtendSeed(whServerContext* server, uint16_t magic,
             ret = wh_Server_KeystoreCacheKey(server, meta, kdfInput);
         }
         else {
-            ret = wh_Nvm_AddObject(server->nvm, meta, meta->len, kdfInput);
+            ret = wh_Nvm_AddObjectWithReclaim(server->nvm, meta, meta->len,
+                                              kdfInput);
             /* Evict stale cached seed after persisting new value. */
             if (ret == 0) {
                 ret = wh_Server_KeystoreEvictKey(server, meta->id);

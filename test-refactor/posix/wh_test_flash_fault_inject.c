@@ -20,8 +20,9 @@
  * test-refactor/wh_test_flash_fault_inject.c
  *
  * Flash fault-injection wrapper. Forwards every flash op to a real
- * callback but forces an abort on the Nth Program call. Used by the
- * NVM recovery test (wh_test_nvm_flash.c) to fail a write mid-object.
+ * callback but forces an abort on the Nth Program or Read call. Used by
+ * the NVM recovery test (wh_test_nvm_flash.c) to fail a write
+ * mid-object or a read during recovery.
  */
 
 /* Pick up compile-time configuration */
@@ -95,6 +96,12 @@ int whFlashFaultInject_Read(void* context, uint32_t offset, uint32_t size,
 
     if ((ctx == NULL) || (ctx->realCb == NULL))
         return WH_ERROR_BADARGS;
+    /* Check if we need to simulate a failure */
+    if (ctx->failAfterReads > 0) {
+        ctx->failAfterReads--;
+        if (ctx->failAfterReads == 0)
+            return WH_ERROR_ABORTED;
+    }
 
     if (ctx->realCb->Read != NULL)
         return ctx->realCb->Read(ctx->realCtx, offset, size, data);

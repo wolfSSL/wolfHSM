@@ -851,4 +851,128 @@ int whTest_ShePrngSeedPersistence(whServerContext* server)
     return ret;
 }
 
+/* Run each SHE command that saves to NVM (INIT_RND, EXTEND_SEED and LOAD_KEY)
+ * more times than the NVM directory has slots. Each save adds a new copy of
+ * its object, so this only passes if old copies are reclaimed. Expects
+ * SECRET_KEY and PRNG_SEED in NVM. LOAD_KEY targets the given slot. */
+static int _SheSaveReclaimFlow(whServerContext* server, uint8_t* secretKey,
+                               uint8_t slot)
+{
+    int32_t  rc;
+    uint32_t i;
+    uint32_t keySz              = WH_SHE_KEY_SZ;
+    uint8_t  uid[WH_SHE_UID_SZ] = {0x01, 0x02, 0x03, 0x04, 0x05,
+                                   0x06, 0x07, 0x08, 0x09, 0x0a,
+                                   0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+    uint8_t  key[WH_SHE_KEY_SZ];
+    uint8_t  readKey[WH_SHE_KEY_SZ];
+    uint8_t  m4[WH_SHE_M4_SZ];
+    uint8_t  m5[WH_SHE_M5_SZ];
+    uint8_t  req_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    uint8_t  resp_packet[WOLFHSM_CFG_COMM_DATA_LEN];
+    whMessageShe_ExtendSeedRequest* extendReq =
+        (whMessageShe_ExtendSeedRequest*)req_packet;
+    whMessageShe_LoadKeyRequest* loadReq =
+        (whMessageShe_LoadKeyRequest*)req_packet;
+
+    /* Pass the state gate without a full secure boot. LOAD_KEY checks M1
+     * against this UID. */
+    memcpy(server->she->uid, uid, sizeof(uid));
+    server->she->uidSet  = 1;
+    server->she->sbState = TEST_SHE_SB_STATE_SUCCESS;
+
+    memset(req_packet, 0, sizeof(req_packet));
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
+        /* INIT_RND runs once per boot. Clear the flag to act as a reboot. */
+        server->she->rndInited = 0;
+        rc = wh_She_SheActionRc(server, WH_SHE_INIT_RND, req_packet, 0,
+                                resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+    }
+
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
+        memset(extendReq->entropy, (uint8_t)i, sizeof(extendReq->entropy));
+        rc = wh_She_SheActionRc(server, WH_SHE_EXTEND_SEED, req_packet,
+                                sizeof(*extendReq), resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+    }
+
+    for (i = 0; i < WOLFHSM_CFG_NVM_OBJECT_COUNT + 1; i++) {
+        memset(key, (uint8_t)i, sizeof(key));
+        WH_TEST_RETURN_ON_FAIL(wh_She_GenerateLoadableKey(
+            slot, WH_SHE_SECRET_KEY_ID, i + 1, 0, uid, key, secretKey,
+            loadReq->messageOne, loadReq->messageTwo, loadReq->messageThree, m4,
+            m5));
+        rc = wh_She_SheActionRc(server, WH_SHE_LOAD_KEY, req_packet,
+                                sizeof(*loadReq), resp_packet);
+        WH_TEST_ASSERT_RETURN(rc == WH_SHE_ERC_NO_ERROR);
+    }
+
+    /* The slot holds the last key loaded */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreReadKey(
+        server, WH_SHE_MAKE_KEYID(server->comm->client_id, slot), NULL, readKey,
+        &keySz));
+    WH_TEST_ASSERT_RETURN(keySz == WH_SHE_KEY_SZ);
+    WH_TEST_ASSERT_RETURN(memcmp(readKey, key, sizeof(key)) == 0);
+
+    return 0;
+}
+
+/* Server-direct check that SHE NVM saves reclaim old copies instead of
+ * filling the NVM directory. See _SheSaveReclaimFlow. Provisions and then
+ * removes SECRET_KEY, PRNG_SEED and the loaded key so nothing leaks into
+ * later groups. */
+int whTest_SheSaveReclaim(whServerContext* server)
+{
+    int           ret;
+    uint32_t      i;
+    whNvmMetadata meta[1]  = {{0}};
+    const uint8_t SLOT_KEY = 4; /* KEY_1 */
+    whKeyId       ids[3];
+
+    /* SECRET_KEY and PRNG_SEED from the SHE test vectors */
+    uint8_t secretKey[WH_SHE_KEY_SZ] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+                                        0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+                                        0x09, 0xcf, 0x4f, 0x3c};
+    uint8_t prngSeed[WH_SHE_KEY_SZ]  = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40,
+                                        0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11,
+                                        0x73, 0x93, 0x17, 0x2a};
+
+    if (server == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    if (server->nvm == NULL) {
+        return WH_TEST_SKIPPED;
+    }
+
+    ids[0] = WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_SECRET_KEY_ID);
+    ids[1] = WH_SHE_MAKE_KEYID(server->comm->client_id, WH_SHE_PRNG_SEED_ID);
+    ids[2] = WH_SHE_MAKE_KEYID(server->comm->client_id, SLOT_KEY);
+
+    /* Provision the two keys INIT_RND reads straight into NVM. */
+    meta->len    = WH_SHE_KEY_SZ;
+    meta->access = WH_NVM_ACCESS_ANY;
+    meta->id     = ids[0];
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, meta, WH_SHE_KEY_SZ, secretKey));
+    meta->id = ids[1];
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, meta, WH_SHE_KEY_SZ, prngSeed));
+
+    ret = _SheSaveReclaimFlow(server, secretKey, SLOT_KEY);
+
+    /* Remove the keys from cache and NVM, and restore a clean SHE context so
+     * the poked state doesn't leak into the live request loop. */
+    for (i = 0; i < 3; i++) {
+        (void)wh_Server_KeystoreEvictKey(server, ids[i]);
+    }
+    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 3, ids));
+    memset(server->she, 0, sizeof(*server->she));
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SHE NVM save reclaim test SUCCESS\n");
+    }
+    return ret;
+}
+
 #endif /* WOLFHSM_CFG_SHE_EXTENSION && !WOLFHSM_CFG_NO_CRYPTO */

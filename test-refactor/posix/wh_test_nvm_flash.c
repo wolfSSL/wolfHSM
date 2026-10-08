@@ -720,16 +720,229 @@ static int _simulateFailureWithPrecedingObject(void)
 
 
 /*
+ * Fail one add part way through, then keep using the same context
+ * without a reboot. Later adds must land on clean flash, and the live
+ * directory must match the one a reboot rebuilds from flash. failAfter
+ * picks the failing program: 1 epoch, 2 metadata, 3 start, 4 data,
+ * 5 count.
+ */
+static int _simulateFailureWithoutReboot(int failAfter)
+{
+    const whFlashCb       flashCb[1]         = {WH_FLASH_RAMSIM_CB};
+    whFlashRamsimCtx      flashCtx[1]        = {0};
+    whFlashRamsimCfg      flashCfg[1]        = {{
+                    .size       = NVM_FLASH_SIZE,
+                    .sectorSize = NVM_FLASH_SECTOR_SZ,
+                    .pageSize   = NVM_FLASH_PAGE_SZ,
+                    .erasedByte = (uint8_t)0,
+                    .memory     = _recoveryMemory,
+    }};
+    const whFlashCb       flashFaultInjCb[1] = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx faultInjCtx[1]     = {0};
+    whFlashFaultInjectCfg faultInjCfg[1]     = {{
+            .realCb  = flashCb,
+            .realCtx = flashCtx,
+            .realCfg = flashCfg,
+    }};
+    const whNvmCb         cb[1]              = {WH_NVM_FLASH_CB};
+    whNvmFlashContext     context[1]         = {0};
+    whNvmFlashConfig      cfg                = {
+                            .cb      = flashFaultInjCb,
+                            .context = faultInjCtx,
+                            .config  = faultInjCfg,
+    };
+    whNvmMetadata keepMeta  = {.id = 60, .label = "LiveKeep"};
+    whNvmMetadata intrMeta  = {.id = 61, .label = "LiveIntr"};
+    whNvmMetadata postMeta  = {.id = 62, .label = "LivePost"};
+    whNvmMetadata checkMeta = {0};
+    /* 32 bytes takes one data program for every allowed unit size */
+    uint8_t  keepData[32];
+    uint8_t  intrData[32];
+    uint8_t  postData[32];
+    uint8_t  readBuf[32];
+    uint32_t liveAvail = 0, bootAvail = 0;
+    uint32_t liveRecl = 0, bootRecl = 0;
+    whNvmId  liveObjs = 0, bootObjs = 0;
+    whNvmId  liveObjsRecl = 0, bootObjsRecl = 0;
+    uint32_t i;
+
+    for (i = 0; i < sizeof(keepData); i++) {
+        keepData[i] = (uint8_t)(0x44 ^ (i * 7));
+        intrData[i] = (uint8_t)(0x55 ^ (i * 3));
+        postData[i] = (uint8_t)(0x66 ^ (i * 5));
+    }
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(
+        context, &keepMeta, (whNvmSize)sizeof(keepData), keepData));
+
+    faultInjCtx->failAfterPrograms = failAfter;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->AddObject(context, &intrMeta,
+                                        (whNvmSize)sizeof(intrData), intrData));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, intrMeta.id, &checkMeta));
+
+    /* A new object and an update of an existing one both still work */
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(
+        context, &postMeta, (whNvmSize)sizeof(postData), postData));
+    for (i = 0; i < sizeof(keepData); i++) {
+        keepData[i] ^= 0xFF;
+    }
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(
+        context, &keepMeta, (whNvmSize)sizeof(keepData), keepData));
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, keepMeta.id, 0,
+                                    (whNvmSize)sizeof(keepData), readBuf));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(keepData, readBuf, sizeof(keepData)));
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, &liveAvail, &liveObjs,
+                                            &liveRecl, &liveObjsRecl));
+
+    /* Reboot onto the same flash */
+    memcpy(_recoveryBackup, _recoveryMemory, NVM_FLASH_SIZE);
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    memset(_recoveryMemory, 0, NVM_FLASH_SIZE);
+    flashCfg->initData = _recoveryBackup;
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+
+    /* Both adds reached flash, and the directory matches the live one */
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, keepMeta.id, 0,
+                                    (whNvmSize)sizeof(keepData), readBuf));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(keepData, readBuf, sizeof(keepData)));
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, postMeta.id, 0,
+                                    (whNvmSize)sizeof(postData), readBuf));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(postData, readBuf, sizeof(postData)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, intrMeta.id, &checkMeta));
+    WH_TEST_RETURN_ON_FAIL(cb->GetAvailable(context, &bootAvail, &bootObjs,
+                                            &bootRecl, &bootObjsRecl));
+    WH_TEST_ASSERT_RETURN(liveAvail == bootAvail);
+    WH_TEST_ASSERT_RETURN(liveObjs == bootObjs);
+    WH_TEST_ASSERT_RETURN(liveRecl == bootRecl);
+    WH_TEST_ASSERT_RETURN(liveObjsRecl == bootObjsRecl);
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    return 0;
+}
+
+
+/*
+ * Fail one add part way through, then fail one read of the directory
+ * reload that follows. The context must refuse all use until it is
+ * reinitialized, and a reboot recovers. failAfter picks the failing
+ * program as above. failRead picks the failing read: 1 and 2 are the
+ * committed object's state and metadata, 3 and 4 are the interrupted
+ * entry's, which are only on flash after a data or count failure.
+ */
+static int _simulateReloadFailure(int failAfter, int failRead)
+{
+    const whFlashCb       flashCb[1]         = {WH_FLASH_RAMSIM_CB};
+    whFlashRamsimCtx      flashCtx[1]        = {0};
+    whFlashRamsimCfg      flashCfg[1]        = {{
+                    .size       = NVM_FLASH_SIZE,
+                    .sectorSize = NVM_FLASH_SECTOR_SZ,
+                    .pageSize   = NVM_FLASH_PAGE_SZ,
+                    .erasedByte = (uint8_t)0,
+                    .memory     = _recoveryMemory,
+    }};
+    const whFlashCb       flashFaultInjCb[1] = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx faultInjCtx[1]     = {0};
+    whFlashFaultInjectCfg faultInjCfg[1]     = {{
+            .realCb  = flashCb,
+            .realCtx = flashCtx,
+            .realCfg = flashCfg,
+    }};
+    const whNvmCb         cb[1]              = {WH_NVM_FLASH_CB};
+    whNvmFlashContext     context[1]         = {0};
+    whNvmFlashConfig      cfg                = {
+                            .cb      = flashFaultInjCb,
+                            .context = faultInjCtx,
+                            .config  = faultInjCfg,
+    };
+    whNvmMetadata keepMeta  = {.id = 60, .label = "LiveKeep"};
+    whNvmMetadata intrMeta  = {.id = 61, .label = "LiveIntr"};
+    whNvmMetadata postMeta  = {.id = 62, .label = "LivePost"};
+    whNvmMetadata checkMeta = {0};
+    /* 32 bytes takes one data program for every allowed unit size */
+    uint8_t  keepData[32];
+    uint8_t  intrData[32];
+    uint8_t  postData[32];
+    uint8_t  readBuf[32];
+    uint32_t i;
+
+    for (i = 0; i < sizeof(keepData); i++) {
+        keepData[i] = (uint8_t)(0x44 ^ (i * 7));
+        intrData[i] = (uint8_t)(0x55 ^ (i * 3));
+        postData[i] = (uint8_t)(0x66 ^ (i * 5));
+    }
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(
+        context, &keepMeta, (whNvmSize)sizeof(keepData), keepData));
+
+    faultInjCtx->failAfterPrograms = failAfter;
+    faultInjCtx->failAfterReads    = failRead;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->AddObject(context, &intrMeta,
+                                        (whNvmSize)sizeof(intrData), intrData));
+    /* The read failed during the reload */
+    WH_TEST_ASSERT_RETURN(0 == faultInjCtx->failAfterReads);
+
+    /* The directory could not be reloaded, so every operation is refused */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->GetMetadata(context, keepMeta.id, &checkMeta));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->Read(context, keepMeta.id, 0,
+                                   (whNvmSize)sizeof(keepData), readBuf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->AddObject(context, &postMeta,
+                                        (whNvmSize)sizeof(postData), postData));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ABORTED ==
+        cb->List(context, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_ANY, 0, NULL, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->GetAvailable(context, NULL, NULL, NULL, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          cb->DestroyObjects(context, 0, NULL));
+
+    /* Reboot onto the same flash */
+    memcpy(_recoveryBackup, _recoveryMemory, NVM_FLASH_SIZE);
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    memset(_recoveryMemory, 0, NVM_FLASH_SIZE);
+    flashCfg->initData = _recoveryBackup;
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+
+    /* The committed object is intact and adds work again */
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, keepMeta.id, 0,
+                                    (whNvmSize)sizeof(keepData), readBuf));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(keepData, readBuf, sizeof(keepData)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, intrMeta.id, &checkMeta));
+    WH_TEST_RETURN_ON_FAIL(cb->AddObject(
+        context, &postMeta, (whNvmSize)sizeof(postData), postData));
+    WH_TEST_RETURN_ON_FAIL(cb->Read(context, postMeta.id, 0,
+                                    (whNvmSize)sizeof(postData), readBuf));
+    WH_TEST_ASSERT_RETURN(0 == memcmp(postData, readBuf, sizeof(postData)));
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    return 0;
+}
+
+
+/*
  * Recover from a program failure at two points: writing the object
  * start (the metadata/start record only) and writing the object
  * count (after the data is on flash). Each scenario checks the
  * partial object is reclaimed and the live counts are consistent.
  * Also repeats the count-word interruption with a committed object
  * already in the partition, pinning the recovered start offset.
+ * Last, fails each program of an add and keeps using the live
+ * context without a reboot, then also fails a read while the
+ * directory reloads.
  */
 int whTest_NvmRecovery(void* ctx)
 {
     int      test_data_len;
+    int      failAfter;
     uint32_t bytesBefore, bytesAfter;
     whNvmId  objsBefore, objsAfter;
     uint32_t bytesReclBefore, bytesReclAfter;
@@ -767,6 +980,22 @@ int whTest_NvmRecovery(void* ctx)
 
     WH_TEST_PRINT("--simulate failure after a committed object\n");
     WH_TEST_RETURN_ON_FAIL(_simulateFailureWithPrecedingObject());
+
+    WH_TEST_PRINT("--simulate failure, then keep using the live context\n");
+    /* Fail each of the 5 programs an add makes */
+    for (failAfter = 1; failAfter <= 5; failAfter++) {
+        WH_TEST_RETURN_ON_FAIL(_simulateFailureWithoutReboot(failAfter));
+    }
+
+    WH_TEST_PRINT("--simulate failure, then a read failure during reload\n");
+    for (failAfter = 1; failAfter <= 5; failAfter++) {
+        WH_TEST_RETURN_ON_FAIL(_simulateReloadFailure(failAfter, 1));
+        WH_TEST_RETURN_ON_FAIL(_simulateReloadFailure(failAfter, 2));
+    }
+    for (failAfter = 4; failAfter <= 5; failAfter++) {
+        WH_TEST_RETURN_ON_FAIL(_simulateReloadFailure(failAfter, 3));
+        WH_TEST_RETURN_ON_FAIL(_simulateReloadFailure(failAfter, 4));
+    }
 
     return 0;
 }

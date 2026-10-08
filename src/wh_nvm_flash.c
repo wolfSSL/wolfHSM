@@ -418,6 +418,12 @@ static int nfMemObject_Read(whNvmFlashContext* context,
             clear_metadata = 0;
 #endif
         }
+        else {
+            /* Metadata unreadable. Mark the entry unknown, as a failed state
+             * read does, so the directory fails to load instead of hiding
+             * the object */
+            object->state.status = NF_STATUS_UNKNOWN;
+        }
     }
     if (clear_metadata != 0){
         /* Clear the object metadata */
@@ -1445,6 +1451,16 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
             d->objects[oldentry].state.status = NF_STATUS_DATA_BAD;
             d->reclaimable_entries++;
             d->reclaimable_data += d->objects[oldentry].state.count;
+        }
+    }
+    else {
+        /* Part of the entry may be on flash. Reload the directory so the next
+         * add skips the damaged slot, as it would after a reboot */
+        if (nfPartition_ReadParseMemDirectory(context, context->active, d) !=
+            0) {
+            /* Directory no longer matches flash. Refuse further use until
+             * the context is reinitialized */
+            context->directory_bad = 1;
         }
     }
     return ret;
