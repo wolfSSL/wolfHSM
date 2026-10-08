@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -40,6 +40,7 @@
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/sm4.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
 #ifdef WOLFSSL_SHA3
@@ -4469,6 +4470,1291 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
 
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+
+/* SM2 keys are ecc_key values, so these reuse the ECC key cache and its usage
+ * policy enforcement wholesale; only the wolfCrypt call differs. */
+
+static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    int                             ret;
+    ecc_key                         key[1];
+    whMessageCrypto_Sm2SignRequest  req;
+    whMessageCrypto_Sm2SignResponse res;
+    whKeyId                         key_id;
+    const byte*                     in;
+    byte*                           res_out;
+    word32                          in_len;
+    word32                          res_len;
+    int                             evict;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2SignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* The response carries padding; do not put stack bytes on the wire. */
+    memset(&res, 0, sizeof(res));
+
+    ret = wh_MessageCrypto_TranslateSm2SignRequest(
+        magic, (const whMessageCrypto_Sm2SignRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    in_len = req.sz;
+    if (in_len > (word32)(inSize - sizeof(whMessageCrypto_Sm2SignRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT);
+
+    in      = (const byte*)cryptoDataIn +
+              sizeof(whMessageCrypto_Sm2SignRequest);
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_Sm2SignResponse);
+    /* cryptoDataOut already points past the generic response header, so that
+     * header comes out of the budget too. */
+    res_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       sizeof(whMessageCrypto_Sm2SignResponse));
+
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _EccKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                        key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ecc_sm2_sign_hash(in, in_len, res_out, &res_len,
+                                       ctx->crypto->rng, key);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.sz = res_len;
+        (void)wh_MessageCrypto_TranslateSm2SignResponse(
+            magic, &res, (whMessageCrypto_Sm2SignResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2SignResponse) + res_len;
+    }
+    return ret;
+}
+
+static int _HandleSm2Verify(whServerContext* ctx, uint16_t magic, int devId,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret;
+    ecc_key                           key[1];
+    whMessageCrypto_Sm2VerifyRequest  req;
+    whMessageCrypto_Sm2VerifyResponse res;
+    whKeyId                           key_id;
+    const byte*                       req_sig;
+    const byte*                       req_hash;
+    word32                            sig_len;
+    word32                            hash_len;
+    word32                            available;
+    int                               evict;
+    int                               result = 0;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2VerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm2VerifyRequest(
+        magic, (const whMessageCrypto_Sm2VerifyRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    sig_len   = req.sigSz;
+    hash_len  = req.hashSz;
+    available = (word32)(inSize - sizeof(whMessageCrypto_Sm2VerifyRequest));
+    if ((sig_len > available) || (hash_len > (available - sig_len))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SM2VERIFY_OPTIONS_EVICT);
+
+    req_sig =
+        (const byte*)cryptoDataIn + sizeof(whMessageCrypto_Sm2VerifyRequest);
+    req_hash = req_sig + sig_len;
+
+    ret = wc_ecc_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _EccKeyCacheExportEnforce(ctx, key_id,
+                                        WH_NVM_FLAGS_USAGE_VERIFY, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_ecc_sm2_verify_hash(req_sig, sig_len, req_hash, hash_len,
+                                         &result, key);
+        }
+        wc_ecc_free(key);
+    }
+
+    if (evict != 0) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == 0) {
+        res.res = (uint32_t)result;
+        (void)wh_MessageCrypto_TranslateSm2VerifyResponse(
+            magic, &res, (whMessageCrypto_Sm2VerifyResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2VerifyResponse);
+    }
+    return ret;
+}
+
+static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
+                                  int devId, const void* cryptoDataIn,
+                                  uint16_t inSize, void* cryptoDataOut,
+                                  uint16_t* outSize)
+{
+    int                           ret;
+    ecc_key                       prv[1];
+    ecc_key                       pub[1];
+    whMessageCrypto_Sm2DhRequest  req;
+    whMessageCrypto_Sm2DhResponse res;
+    whKeyId                       prv_id;
+    whKeyId                       pub_id;
+    byte*                         res_out;
+    word32                        res_len;
+    int                           evict_prv;
+    int                           evict_pub;
+    int                           prvInit = 0;
+    int                           pubInit = 0;
+
+    if (inSize < sizeof(whMessageCrypto_Sm2DhRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm2DhRequest(
+        magic, (const whMessageCrypto_Sm2DhRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    prv_id    = wh_KeyId_TranslateFromClient(
+           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
+    pub_id    = wh_KeyId_TranslateFromClient(
+           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    evict_prv = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV);
+    evict_pub = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB);
+
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_Sm2DhResponse);
+    res_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       sizeof(whMessageCrypto_Sm2DhResponse));
+
+    ret = wc_ecc_init_ex(prv, NULL, devId);
+    if (ret == 0) {
+        prvInit = 1;
+        ret     = wc_ecc_init_ex(pub, NULL, devId);
+    }
+    if (ret == 0) {
+        pubInit = 1;
+        ret     = _EccKeyCacheExportEnforce(ctx, prv_id,
+                                            WH_NVM_FLAGS_USAGE_DERIVE, prv);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _EccKeyCacheExportEnforce(ctx, pub_id,
+                                        WH_NVM_FLAGS_USAGE_DERIVE, pub);
+    }
+    if (ret == WH_ERROR_OK) {
+        /* Point multiplication is blinded under ECC_TIMING_RESISTANT, which
+         * needs an RNG on the private key. The freshly imported key has
+         * none, so lend it the server's. */
+        ret = wc_ecc_set_rng(prv, ctx->crypto->rng);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_ecc_sm2_shared_secret(prv, pub, res_out, &res_len);
+    }
+
+    if (pubInit) {
+        wc_ecc_free(pub);
+    }
+    if (prvInit) {
+        wc_ecc_free(prv);
+    }
+
+    if (evict_prv != 0) {
+        _CryptoEvictKeyLocked(ctx, prv_id);
+    }
+    if (evict_pub != 0) {
+        _CryptoEvictKeyLocked(ctx, pub_id);
+    }
+
+    if (ret == 0) {
+        res.sz = res_len;
+        (void)wh_MessageCrypto_TranslateSm2DhResponse(
+            magic, &res, (whMessageCrypto_Sm2DhResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm2DhResponse) + res_len;
+    }
+    return ret;
+}
+
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
+#ifdef WOLFSSL_SM4
+
+/* Resolve the key for an SM4 request. A key id that is not erased wins over
+ * the inline key, and reading it enforces the usage policy against the same
+ * locked snapshot, so a key marked encrypt-only cannot be used to decrypt.
+ * SM4 has a single key size, so anything else is a malformed request. */
+static int _Sm4ResolveKey(whServerContext* ctx, whKeyId key_id, uint32_t enc,
+                          whNvmMetadata* keyMeta, uint8_t* cachedKey,
+                          const uint8_t** inout_key, uint32_t* inout_key_len)
+{
+    int ret = WH_ERROR_OK;
+
+    if (!WH_KEYID_ISERASED(key_id)) {
+        uint32_t cachedKeyLen = SM4_KEY_SIZE;
+        ret                   = wh_Server_KeystoreReadKeyEnforce(
+            ctx, key_id,
+            (enc != 0) ? WH_NVM_FLAGS_USAGE_ENCRYPT : WH_NVM_FLAGS_USAGE_DECRYPT,
+            keyMeta, cachedKey, &cachedKeyLen);
+        if (ret == WH_ERROR_OK) {
+            *inout_key     = cachedKey;
+            *inout_key_len = keyMeta->len;
+        }
+    }
+
+    if ((ret == WH_ERROR_OK) && (*inout_key_len != SM4_KEY_SIZE)) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    return ret;
+}
+
+#ifdef WOLFSSL_SM4_ECB
+static int _HandleSm4Ecb(whServerContext* ctx, uint16_t magic, int devId,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    int                            ret;
+    wc_Sm4                         sm4[1];
+    whMessageCrypto_Sm4EcbRequest  req;
+    whMessageCrypto_Sm4EcbResponse res;
+    whNvmMetadata                  keyMeta[1];
+    uint8_t                        cachedKey[SM4_KEY_SIZE];
+    uint32_t                       enc;
+    uint32_t                       key_len;
+    uint32_t                       len;
+    uint64_t                       needed;
+    whKeyId                        key_id;
+    const uint8_t*                 key;
+    uint8_t*                       in;
+    uint8_t*                       out;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4EcbRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4EcbRequest(
+        magic, (const whMessageCrypto_Sm4EcbRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    enc     = req.enc;
+    key_len = req.keyLen;
+    len     = req.sz;
+    needed  = (uint64_t)sizeof(whMessageCrypto_Sm4EcbRequest) + (uint64_t)len +
+             (uint64_t)key_len;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((len % SM4_BLOCK_SIZE) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+
+    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4EcbRequest);
+    key = in + len;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4EcbResponse);
+
+    ret = _Sm4ResolveKey(ctx, key_id, enc, keyMeta, cachedKey, &key, &key_len);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                if (enc != 0) {
+                    ret = wc_Sm4EcbEncrypt(sm4, out, in, len);
+                }
+                else {
+                    ret = wc_Sm4EcbDecrypt(sm4, out, in, len);
+                }
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.sz = len;
+        (void)wh_MessageCrypto_TranslateSm4EcbResponse(
+            magic, &res, (whMessageCrypto_Sm4EcbResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm4EcbResponse) + len;
+    }
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_ECB */
+
+#ifdef WOLFSSL_SM4_CBC
+static int _HandleSm4Cbc(whServerContext* ctx, uint16_t magic, int devId,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    int                            ret;
+    wc_Sm4                         sm4[1];
+    whMessageCrypto_Sm4CbcRequest  req;
+    whMessageCrypto_Sm4CbcResponse res;
+    whNvmMetadata                  keyMeta[1];
+    uint8_t                        cachedKey[SM4_KEY_SIZE];
+    uint32_t                       enc;
+    uint32_t                       key_len;
+    uint32_t                       len;
+    uint64_t                       needed;
+    whKeyId                        key_id;
+    const uint8_t*                 key;
+    uint8_t*                       in;
+    uint8_t*                       iv;
+    uint8_t*                       out;
+    uint8_t*                       out_iv;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4CbcRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4CbcRequest(
+        magic, (const whMessageCrypto_Sm4CbcRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    enc     = req.enc;
+    key_len = req.keyLen;
+    len     = req.sz;
+    needed  = (uint64_t)sizeof(whMessageCrypto_Sm4CbcRequest) + (uint64_t)len +
+             (uint64_t)key_len + (uint64_t)SM4_IV_SIZE;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((len % SM4_BLOCK_SIZE) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+
+    in     = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CbcRequest);
+    key    = in + len;
+    iv     = (uint8_t*)key + key_len;
+    out    = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CbcResponse);
+    out_iv = out + len;
+
+    ret = _Sm4ResolveKey(ctx, key_id, enc, keyMeta, cachedKey, &key, &key_len);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                ret = wc_Sm4SetIV(sm4, iv);
+            }
+            if (ret == WH_ERROR_OK) {
+                if (enc != 0) {
+                    ret = wc_Sm4CbcEncrypt(sm4, out, in, len);
+                }
+                else {
+                    ret = wc_Sm4CbcDecrypt(sm4, out, in, len);
+                }
+            }
+            if (ret == WH_ERROR_OK) {
+                /* Hand the chaining state back so the next call continues */
+                memcpy(out_iv, sm4->iv, SM4_IV_SIZE);
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.sz = len;
+        (void)wh_MessageCrypto_TranslateSm4CbcResponse(
+            magic, &res, (whMessageCrypto_Sm4CbcResponse*)cryptoDataOut);
+        *outSize =
+            sizeof(whMessageCrypto_Sm4CbcResponse) + len + SM4_IV_SIZE;
+    }
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFSSL_SM4_CTR
+static int _HandleSm4Ctr(whServerContext* ctx, uint16_t magic, int devId,
+                         const void* cryptoDataIn, uint16_t inSize,
+                         void* cryptoDataOut, uint16_t* outSize)
+{
+    int                            ret;
+    wc_Sm4                         sm4[1];
+    whMessageCrypto_Sm4CtrRequest  req;
+    whMessageCrypto_Sm4CtrResponse res;
+    whNvmMetadata                  keyMeta[1];
+    uint8_t                        cachedKey[SM4_KEY_SIZE];
+    uint32_t                       key_len;
+    uint32_t                       len;
+    uint64_t                       needed;
+    whKeyId                        key_id;
+    const uint8_t*                 key;
+    uint8_t*                       in;
+    uint8_t*                       iv;
+    uint8_t*                       tmp;
+    uint8_t*                       out;
+    uint8_t*                       out_iv;
+    uint8_t*                       out_tmp;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4CtrRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4CtrRequest(
+        magic, (const whMessageCrypto_Sm4CtrRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    key_len = req.keyLen;
+    len     = req.sz;
+    needed  = (uint64_t)sizeof(whMessageCrypto_Sm4CtrRequest) + (uint64_t)len +
+             (uint64_t)key_len + (uint64_t)SM4_IV_SIZE +
+             (uint64_t)SM4_BLOCK_SIZE;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    /* A leftover count must name a position inside one keystream block */
+    if (req.unused > SM4_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+
+    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CtrRequest);
+    key = in + len;
+    iv  = (uint8_t*)key + key_len;
+    tmp = iv + SM4_IV_SIZE;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CtrResponse);
+    out_iv  = out + len;
+    out_tmp = out_iv + SM4_IV_SIZE;
+
+    /* CTR uses one operation for both directions, so the usage policy is
+     * checked against encrypt. */
+    ret = _Sm4ResolveKey(ctx, key_id, 1, keyMeta, cachedKey, &key, &key_len);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                ret = wc_Sm4SetIV(sm4, iv);
+            }
+            if (ret == WH_ERROR_OK) {
+                /* Restore the partial keystream block the client was mid-way
+                 * through, then run the segment. */
+                memcpy(sm4->tmp, tmp, SM4_BLOCK_SIZE);
+                sm4->unused = (byte)req.unused;
+                ret         = wc_Sm4CtrEncrypt(sm4, out, in, len);
+            }
+            if (ret == WH_ERROR_OK) {
+                memcpy(out_iv, sm4->iv, SM4_IV_SIZE);
+                memcpy(out_tmp, sm4->tmp, SM4_BLOCK_SIZE);
+                res.unused = sm4->unused;
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.sz = len;
+        (void)wh_MessageCrypto_TranslateSm4CtrResponse(
+            magic, &res, (whMessageCrypto_Sm4CtrResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_Sm4CtrResponse) + len + SM4_IV_SIZE +
+                   SM4_BLOCK_SIZE;
+    }
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_CTR */
+
+#if defined(WOLFSSL_SM4_GCM) || defined(WOLFSSL_SM4_CCM)
+/* GCM and CCM share the request shape, so one handler parses and validates
+ * for both and the caller supplies the mode. */
+static int _HandleSm4Auth(whServerContext* ctx, uint16_t magic, int devId,
+                          int isCcm, const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    int                             ret;
+    wc_Sm4                          sm4[1];
+    whMessageCrypto_Sm4AuthRequest  req;
+    whMessageCrypto_Sm4AuthResponse res;
+    whNvmMetadata                   keyMeta[1];
+    uint8_t                         cachedKey[SM4_KEY_SIZE];
+    uint32_t                        enc;
+    uint32_t                        key_len;
+    uint32_t                        len;
+    uint32_t                        iv_len;
+    uint32_t                        authin_len;
+    uint32_t                        tag_len;
+    uint64_t                        needed;
+    uint64_t                        res_len;
+    whKeyId                         key_id;
+    const uint8_t*                  key;
+    uint8_t*                        in;
+    uint8_t*                        iv;
+    uint8_t*                        authin;
+    uint8_t*                        tag;
+    uint8_t*                        out;
+    uint8_t*                        out_tag;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4AuthRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4AuthRequest(
+        magic, (const whMessageCrypto_Sm4AuthRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    enc        = req.enc;
+    key_len    = req.keyLen;
+    len        = req.sz;
+    iv_len     = req.ivSz;
+    authin_len = req.authInSz;
+    tag_len    = req.authTagSz;
+
+    needed = (uint64_t)sizeof(whMessageCrypto_Sm4AuthRequest) + (uint64_t)len +
+             (uint64_t)key_len + (uint64_t)iv_len + (uint64_t)authin_len +
+             (uint64_t)tag_len;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* The response carries the ciphertext and the tag; refuse anything that
+     * would not fit rather than writing past the comm buffer. */
+    res_len = (uint64_t)sizeof(whMessageCrypto_Sm4AuthResponse) +
+              (uint64_t)len + (uint64_t)tag_len;
+    if (res_len > (uint64_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                             sizeof(whMessageCrypto_GenericResponseHeader))) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    if (tag_len > SM4_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+
+    in     = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4AuthRequest);
+    key    = in + len;
+    iv     = (uint8_t*)key + key_len;
+    authin = iv + iv_len;
+    tag    = authin + authin_len;
+    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4AuthResponse);
+    out_tag = out + len;
+
+    ret = _Sm4ResolveKey(ctx, key_id, enc, keyMeta, cachedKey, &key, &key_len);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            /* The tag is read before the output is written, so a decrypt that
+             * fails authentication leaves no plaintext behind. */
+            uint8_t reqTag[SM4_BLOCK_SIZE];
+            if ((enc == 0) && (tag_len > 0)) {
+                memcpy(reqTag, tag, tag_len);
+            }
+
+            if (isCcm == 0) {
+#ifdef WOLFSSL_SM4_GCM
+                ret = wc_Sm4GcmSetKey(sm4, key, key_len);
+                if (ret == WH_ERROR_OK) {
+                    if (enc != 0) {
+                        ret = wc_Sm4GcmEncrypt(sm4, out, in, len, iv, iv_len,
+                                               out_tag, tag_len, authin,
+                                               authin_len);
+                    }
+                    else {
+                        ret = wc_Sm4GcmDecrypt(sm4, out, in, len, iv, iv_len,
+                                               reqTag, tag_len, authin,
+                                               authin_len);
+                    }
+                }
+#else
+                ret = NOT_COMPILED_IN;
+#endif
+            }
+            else {
+#ifdef WOLFSSL_SM4_CCM
+                ret = wc_Sm4SetKey(sm4, key, key_len);
+                if (ret == WH_ERROR_OK) {
+                    if (enc != 0) {
+                        ret = wc_Sm4CcmEncrypt(sm4, out, in, len, iv, iv_len,
+                                               out_tag, tag_len, authin,
+                                               authin_len);
+                    }
+                    else {
+                        ret = wc_Sm4CcmDecrypt(sm4, out, in, len, iv, iv_len,
+                                               reqTag, tag_len, authin,
+                                               authin_len);
+                    }
+                }
+#else
+                ret = NOT_COMPILED_IN;
+#endif
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.sz        = len;
+        res.authTagSz = (enc != 0) ? tag_len : 0;
+        (void)wh_MessageCrypto_TranslateSm4AuthResponse(
+            magic, &res, (whMessageCrypto_Sm4AuthResponse*)cryptoDataOut);
+        *outSize = (uint16_t)(sizeof(whMessageCrypto_Sm4AuthResponse) + len +
+                              ((enc != 0) ? tag_len : 0));
+    }
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_GCM || WOLFSSL_SM4_CCM */
+
+#ifdef WOLFHSM_CFG_DMA
+
+/* Resolve the key for a DMA request. keySz of 0 means the client sent no key
+ * and the key id names one held here; anything else is the inline key. */
+static int _Sm4DmaResolveKey(whServerContext* ctx, uint32_t reqKeyId,
+                             uint32_t enc, uint8_t* inlineKey,
+                             uint32_t inlineKeyLen, whNvmMetadata* keyMeta,
+                             uint8_t* cachedKey, const uint8_t** out_key,
+                             uint32_t* out_key_len)
+{
+    int ret = WH_ERROR_OK;
+
+    if (inlineKeyLen > 0) {
+        *out_key     = inlineKey;
+        *out_key_len = inlineKeyLen;
+    }
+    else {
+        whKeyId keyId = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, reqKeyId);
+
+        if (!WH_KEYID_ISERASED(keyId)) {
+            uint32_t cachedKeyLen = SM4_KEY_SIZE;
+            ret                   = wh_Server_KeystoreReadKeyEnforce(
+                ctx, keyId,
+                (enc != 0) ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                keyMeta, cachedKey, &cachedKeyLen);
+            if (ret == WH_ERROR_OK) {
+                *out_key     = cachedKey;
+                *out_key_len = keyMeta->len;
+            }
+        }
+    }
+
+    if ((ret == WH_ERROR_OK) && (*out_key_len != SM4_KEY_SIZE)) {
+        ret = WH_ERROR_BADARGS;
+    }
+
+    return ret;
+}
+
+#ifdef WOLFSSL_SM4_ECB
+static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret = WH_ERROR_OK;
+    wc_Sm4                            sm4[1];
+    whMessageCrypto_Sm4EcbDmaRequest  req;
+    whMessageCrypto_Sm4EcbDmaResponse res;
+    whNvmMetadata                     keyMeta[1];
+    uint8_t                           cachedKey[SM4_KEY_SIZE];
+    void*                             inAddr  = NULL;
+    void*                             outAddr = NULL;
+    int                               outMapped = 0;
+    const uint8_t*                    key     = NULL;
+    uint32_t                          key_len = 0;
+    uint64_t                          needed;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4EcbDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4EcbDmaRequest(
+        magic, (const whMessageCrypto_Sm4EcbDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    needed = (uint64_t)sizeof(whMessageCrypto_Sm4EcbDmaRequest) +
+             (uint64_t)req.keySz;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((req.input.sz % SM4_BLOCK_SIZE) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    ret = _Sm4DmaResolveKey(
+        ctx, req.keyId, req.enc,
+        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4EcbDmaRequest),
+        req.keySz, keyMeta, cachedKey, &key, &key_len);
+
+    if ((ret == WH_ERROR_OK) && (req.input.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+        else {
+            outMapped = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                if (req.enc != 0) {
+                    ret = wc_Sm4EcbEncrypt(sm4, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)req.input.sz);
+                }
+                else {
+                    ret = wc_Sm4EcbDecrypt(sm4, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)req.input.sz);
+                }
+            }
+            if (ret == WH_ERROR_OK) {
+                res.outSz = req.input.sz;
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+    }
+    if (inAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    (void)wh_MessageCrypto_TranslateSm4EcbDmaResponse(
+        magic, &res, (whMessageCrypto_Sm4EcbDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(whMessageCrypto_Sm4EcbDmaResponse);
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_ECB */
+
+#ifdef WOLFSSL_SM4_CBC
+static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret = WH_ERROR_OK;
+    wc_Sm4                            sm4[1];
+    whMessageCrypto_Sm4CbcDmaRequest  req;
+    whMessageCrypto_Sm4CbcDmaResponse res;
+    whNvmMetadata                     keyMeta[1];
+    uint8_t                           cachedKey[SM4_KEY_SIZE];
+    void*                             inAddr  = NULL;
+    void*                             outAddr = NULL;
+    int                               outMapped = 0;
+    const uint8_t*                    key     = NULL;
+    uint32_t                          key_len = 0;
+    uint64_t                          needed;
+    uint8_t*                          iv;
+    uint8_t*                          out_iv;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4CbcDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4CbcDmaRequest(
+        magic, (const whMessageCrypto_Sm4CbcDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    needed = (uint64_t)sizeof(whMessageCrypto_Sm4CbcDmaRequest) +
+             (uint64_t)SM4_IV_SIZE + (uint64_t)req.keySz;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((req.input.sz % SM4_BLOCK_SIZE) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    iv = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CbcDmaRequest);
+    out_iv =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CbcDmaResponse);
+
+    ret = _Sm4DmaResolveKey(ctx, req.keyId, req.enc, iv + SM4_IV_SIZE,
+                            req.keySz, keyMeta, cachedKey, &key, &key_len);
+
+    if ((ret == WH_ERROR_OK) && (req.input.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+        else {
+            outMapped = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                ret = wc_Sm4SetIV(sm4, iv);
+            }
+            if (ret == WH_ERROR_OK) {
+                if (req.enc != 0) {
+                    ret = wc_Sm4CbcEncrypt(sm4, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)req.input.sz);
+                }
+                else {
+                    ret = wc_Sm4CbcDecrypt(sm4, (byte*)outAddr, (byte*)inAddr,
+                                           (word32)req.input.sz);
+                }
+            }
+            if (ret == WH_ERROR_OK) {
+                res.outSz = req.input.sz;
+                memcpy(out_iv, sm4->iv, SM4_IV_SIZE);
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+    }
+    if (inAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    (void)wh_MessageCrypto_TranslateSm4CbcDmaResponse(
+        magic, &res, (whMessageCrypto_Sm4CbcDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(whMessageCrypto_Sm4CbcDmaResponse) + SM4_IV_SIZE;
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFSSL_SM4_CTR
+static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
+                            const void* cryptoDataIn, uint16_t inSize,
+                            void* cryptoDataOut, uint16_t* outSize)
+{
+    int                               ret = WH_ERROR_OK;
+    wc_Sm4                            sm4[1];
+    whMessageCrypto_Sm4CtrDmaRequest  req;
+    whMessageCrypto_Sm4CtrDmaResponse res;
+    whNvmMetadata                     keyMeta[1];
+    uint8_t                           cachedKey[SM4_KEY_SIZE];
+    void*                             inAddr  = NULL;
+    void*                             outAddr = NULL;
+    int                               outMapped = 0;
+    const uint8_t*                    key     = NULL;
+    uint32_t                          key_len = 0;
+    uint64_t                          needed;
+    uint8_t*                          iv;
+    uint8_t*                          tmp;
+    uint8_t*                          out_iv;
+    uint8_t*                          out_tmp;
+
+    if (inSize < sizeof(whMessageCrypto_Sm4CtrDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4CtrDmaRequest(
+        magic, (const whMessageCrypto_Sm4CtrDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    needed = (uint64_t)sizeof(whMessageCrypto_Sm4CtrDmaRequest) +
+             (uint64_t)SM4_IV_SIZE + (uint64_t)SM4_BLOCK_SIZE +
+             (uint64_t)req.keySz;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.unused > SM4_BLOCK_SIZE) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    iv  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CtrDmaRequest);
+    tmp = iv + SM4_IV_SIZE;
+    out_iv =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CtrDmaResponse);
+    out_tmp = out_iv + SM4_IV_SIZE;
+
+    /* One operation covers both directions, so the policy is checked against
+     * encrypt, matching the comm-buffer handler. */
+    ret = _Sm4DmaResolveKey(ctx, req.keyId, 1, tmp + SM4_BLOCK_SIZE, req.keySz,
+                            keyMeta, cachedKey, &key, &key_len);
+
+    if ((ret == WH_ERROR_OK) && (req.input.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+        else {
+            outMapped = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_Sm4SetKey(sm4, key, key_len);
+            if (ret == WH_ERROR_OK) {
+                ret = wc_Sm4SetIV(sm4, iv);
+            }
+            if (ret == WH_ERROR_OK) {
+                memcpy(sm4->tmp, tmp, SM4_BLOCK_SIZE);
+                sm4->unused = (byte)req.unused;
+                ret = wc_Sm4CtrEncrypt(sm4, (byte*)outAddr, (byte*)inAddr,
+                                       (word32)req.input.sz);
+            }
+            if (ret == WH_ERROR_OK) {
+                res.outSz  = req.input.sz;
+                res.unused = sm4->unused;
+                memcpy(out_iv, sm4->iv, SM4_IV_SIZE);
+                memcpy(out_tmp, sm4->tmp, SM4_BLOCK_SIZE);
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+    }
+    if (inAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    (void)wh_MessageCrypto_TranslateSm4CtrDmaResponse(
+        magic, &res, (whMessageCrypto_Sm4CtrDmaResponse*)cryptoDataOut);
+    *outSize = sizeof(whMessageCrypto_Sm4CtrDmaResponse) + SM4_IV_SIZE +
+               SM4_BLOCK_SIZE;
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_CTR */
+
+#if defined(WOLFSSL_SM4_GCM) || defined(WOLFSSL_SM4_CCM)
+static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
+                             int isCcm, const void* cryptoDataIn,
+                             uint16_t inSize, void* cryptoDataOut,
+                             uint16_t* outSize)
+{
+    int                                ret = WH_ERROR_OK;
+    wc_Sm4                             sm4[1];
+    whMessageCrypto_Sm4AuthDmaRequest  req;
+    whMessageCrypto_Sm4AuthDmaResponse res;
+    whNvmMetadata                      keyMeta[1];
+    uint8_t                            cachedKey[SM4_KEY_SIZE];
+    void*                              inAddr  = NULL;
+    void*                              outAddr = NULL;
+    int                                outMapped = 0;
+    void*                              aadAddr = NULL;
+    const uint8_t*                     key     = NULL;
+    uint32_t                           key_len = 0;
+    uint64_t                           needed;
+    uint64_t                           res_len;
+    uint8_t*                           iv;
+    uint8_t*                           tag;
+    uint8_t*                           out_tag;
+    uint8_t                            reqTag[SM4_BLOCK_SIZE];
+
+    if (inSize < sizeof(whMessageCrypto_Sm4AuthDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateSm4AuthDmaRequest(
+        magic, (const whMessageCrypto_Sm4AuthDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    needed = (uint64_t)sizeof(whMessageCrypto_Sm4AuthDmaRequest) +
+             (uint64_t)req.ivSz + (uint64_t)req.authTagSz +
+             (uint64_t)req.keySz;
+    if (needed != inSize) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.input.sz != req.output.sz) {
+        return WH_ERROR_BADARGS;
+    }
+    if (req.authTagSz > sizeof(reqTag)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Only the tag comes back inline, but bound it anyway rather than trust
+     * the request. */
+    res_len = (uint64_t)sizeof(whMessageCrypto_Sm4AuthDmaResponse) +
+              (uint64_t)req.authTagSz;
+    if (res_len > (uint64_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                             sizeof(whMessageCrypto_GenericResponseHeader))) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    iv  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4AuthDmaRequest);
+    tag = iv + req.ivSz;
+    out_tag =
+        (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4AuthDmaResponse);
+
+    /* Take the caller's tag before the response overwrites the buffer */
+    if ((req.enc == 0) && (req.authTagSz > 0)) {
+        memcpy(reqTag, tag, req.authTagSz);
+    }
+
+    ret = _Sm4DmaResolveKey(ctx, req.keyId, req.enc, tag + req.authTagSz,
+                            req.keySz, keyMeta, cachedKey, &key, &key_len);
+
+    if ((ret == WH_ERROR_OK) && (req.input.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.output;
+        }
+        else {
+            outMapped = 1;
+        }
+    }
+    if ((ret == WH_ERROR_OK) && (req.aad.sz > 0)) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.aad.addr, &aadAddr, req.aad.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret != WH_ERROR_OK) {
+            res.dmaAddrStatus.badAddr = req.aad;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+        if (ret == WH_ERROR_OK) {
+            if (isCcm == 0) {
+#ifdef WOLFSSL_SM4_GCM
+                ret = wc_Sm4GcmSetKey(sm4, key, key_len);
+                if (ret == WH_ERROR_OK) {
+                    if (req.enc != 0) {
+                        ret = wc_Sm4GcmEncrypt(
+                            sm4, (byte*)outAddr, (byte*)inAddr,
+                            (word32)req.input.sz, iv, req.ivSz, out_tag,
+                            req.authTagSz, (const byte*)aadAddr,
+                            (word32)req.aad.sz);
+                    }
+                    else {
+                        ret = wc_Sm4GcmDecrypt(
+                            sm4, (byte*)outAddr, (byte*)inAddr,
+                            (word32)req.input.sz, iv, req.ivSz, reqTag,
+                            req.authTagSz, (const byte*)aadAddr,
+                            (word32)req.aad.sz);
+                    }
+                }
+#else
+                ret = NOT_COMPILED_IN;
+#endif
+            }
+            else {
+#ifdef WOLFSSL_SM4_CCM
+                ret = wc_Sm4SetKey(sm4, key, key_len);
+                if (ret == WH_ERROR_OK) {
+                    if (req.enc != 0) {
+                        ret = wc_Sm4CcmEncrypt(
+                            sm4, (byte*)outAddr, (byte*)inAddr,
+                            (word32)req.input.sz, iv, req.ivSz, out_tag,
+                            req.authTagSz, (const byte*)aadAddr,
+                            (word32)req.aad.sz);
+                    }
+                    else {
+                        ret = wc_Sm4CcmDecrypt(
+                            sm4, (byte*)outAddr, (byte*)inAddr,
+                            (word32)req.input.sz, iv, req.ivSz, reqTag,
+                            req.authTagSz, (const byte*)aadAddr,
+                            (word32)req.aad.sz);
+                    }
+                }
+#else
+                ret = NOT_COMPILED_IN;
+#endif
+            }
+            if (ret == WH_ERROR_OK) {
+                res.outSz     = req.input.sz;
+                res.authTagSz = (req.enc != 0) ? req.authTagSz : 0;
+            }
+            wc_Sm4Free(sm4);
+        }
+    }
+
+    /* PRE and POST are a pair: once the output mapping succeeded it must be
+     * released even if the cipher or the authentication then failed, which
+     * is a normal outcome for a decrypt. Keep the original error. */
+    if (outMapped != 0) {
+        int post_rc = wh_Server_DmaProcessClientAddress(
+            ctx, req.output.addr, &outAddr, req.output.sz,
+            WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            ret = post_rc;
+            if (ret == WH_ERROR_ACCESS) {
+                res.dmaAddrStatus.badAddr = req.output;
+            }
+        }
+    }
+    if (aadAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.aad.addr, &aadAddr, req.aad.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+    if (inAddr != NULL) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    (void)wh_MessageCrypto_TranslateSm4AuthDmaResponse(
+        magic, &res, (whMessageCrypto_Sm4AuthDmaResponse*)cryptoDataOut);
+    *outSize = (uint16_t)(sizeof(whMessageCrypto_Sm4AuthDmaResponse) +
+                          ((req.enc != 0) ? req.authTagSz : 0));
+
+    wc_ForceZero(cachedKey, sizeof(cachedKey));
+    return ret;
+}
+#endif /* WOLFSSL_SM4_GCM || WOLFSSL_SM4_CCM */
+
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFSSL_SM4 */
+
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
 /* Resolve CMAC key from request (inline key or keystore ID).
@@ -6076,6 +7362,43 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* HAVE_AESGCM */
 #endif /* !NO_AES */
+#ifdef WOLFSSL_SM4
+#ifdef WOLFSSL_SM4_ECB
+                case WC_CIPHER_SM4_ECB:
+                    ret = _HandleSm4Ecb(ctx, magic, devId, cryptoDataIn,
+                                        cryptoInSize, cryptoDataOut,
+                                        &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_ECB */
+#ifdef WOLFSSL_SM4_CBC
+                case WC_CIPHER_SM4_CBC:
+                    ret = _HandleSm4Cbc(ctx, magic, devId, cryptoDataIn,
+                                        cryptoInSize, cryptoDataOut,
+                                        &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CBC */
+#ifdef WOLFSSL_SM4_CTR
+                case WC_CIPHER_SM4_CTR:
+                    ret = _HandleSm4Ctr(ctx, magic, devId, cryptoDataIn,
+                                        cryptoInSize, cryptoDataOut,
+                                        &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CTR */
+#ifdef WOLFSSL_SM4_GCM
+                case WC_CIPHER_SM4_GCM:
+                    ret = _HandleSm4Auth(ctx, magic, devId, 0, cryptoDataIn,
+                                         cryptoInSize, cryptoDataOut,
+                                         &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_GCM */
+#ifdef WOLFSSL_SM4_CCM
+                case WC_CIPHER_SM4_CCM:
+                    ret = _HandleSm4Auth(ctx, magic, devId, 1, cryptoDataIn,
+                                         cryptoInSize, cryptoDataOut,
+                                         &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CCM */
+#endif /* WOLFSSL_SM4 */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;
@@ -6125,6 +7448,24 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                                          &cryptoOutSize);
                     break;
 #endif /* HAVE_ECC_SIGN */
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+                case WC_PK_TYPE_SM2_SIGN:
+                    ret = _HandleSm2Sign(ctx, magic, devId, cryptoDataIn,
+                                         cryptoInSize, cryptoDataOut,
+                                         &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_SM2_VERIFY:
+                    ret = _HandleSm2Verify(ctx, magic, devId, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_SM2_SHARED_SECRET:
+                    ret = _HandleSm2SharedSecret(ctx, magic, devId,
+                                                 cryptoDataIn, cryptoInSize,
+                                                 cryptoDataOut,
+                                                 &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
 #ifdef HAVE_ECC_VERIFY
                 case WC_PK_TYPE_ECDSA_VERIFY:
                     ret = _HandleEccVerify(ctx, magic, devId, cryptoDataIn,
@@ -9357,6 +10698,43 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                            &cryptoOutSize);
                     break;
 #endif /* HAVE_AES_ECB */
+#ifdef WOLFSSL_SM4
+#ifdef WOLFSSL_SM4_ECB
+                case WC_CIPHER_SM4_ECB:
+                    ret = _HandleSm4EcbDma(ctx, magic, devId, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_ECB */
+#ifdef WOLFSSL_SM4_CBC
+                case WC_CIPHER_SM4_CBC:
+                    ret = _HandleSm4CbcDma(ctx, magic, devId, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CBC */
+#ifdef WOLFSSL_SM4_CTR
+                case WC_CIPHER_SM4_CTR:
+                    ret = _HandleSm4CtrDma(ctx, magic, devId, cryptoDataIn,
+                                           cryptoInSize, cryptoDataOut,
+                                           &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CTR */
+#ifdef WOLFSSL_SM4_GCM
+                case WC_CIPHER_SM4_GCM:
+                    ret = _HandleSm4AuthDma(ctx, magic, devId, 0, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_GCM */
+#ifdef WOLFSSL_SM4_CCM
+                case WC_CIPHER_SM4_CCM:
+                    ret = _HandleSm4AuthDma(ctx, magic, devId, 1, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            &cryptoOutSize);
+                    break;
+#endif /* WOLFSSL_SM4_CCM */
+#endif /* WOLFSSL_SM4 */
                 default:
                     ret = NOT_COMPILED_IN;
                     break;
