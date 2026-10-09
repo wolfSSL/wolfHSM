@@ -44,6 +44,17 @@ DEF += -DWOLFHSM_CFG_TEST_POSIX
 DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
 DEF += -DWOLFHSM_CFG_ENABLE_SERVER
 
+# SHAKE build variants, to test each one without the other
+ifeq ($(NO_SHAKE),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128 -DWOLFHSM_CFG_TEST_NO_SHAKE256
+endif
+ifeq ($(SHAKE128_ONLY),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE256
+endif
+ifeq ($(SHAKE256_ONLY),1)
+    DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128
+endif
+
 # C standard
 CSTD        ?= -std=c90
 
@@ -174,6 +185,8 @@ endif
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
+    # Some wolfCrypt tests read ./certs, so point them at the wolfSSL tree
+    DEF += -DCERT_PREFIX=\"$(abspath $(WOLFSSL_DIR))/\"
 endif
 
 # Add code coverage option

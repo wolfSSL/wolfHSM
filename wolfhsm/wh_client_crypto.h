@@ -2989,6 +2989,42 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !WOLFSSL_NOSHA3_512 */
 
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+/* Like SHA3, plus outSz. Too large for one response gives WH_ERROR_NOSPACE */
+#ifdef WOLFSSL_SHAKE128
+int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake128UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+int wh_Client_Shake128Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen);
+int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt);
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake256UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+int wh_Client_Shake256Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen);
+int wh_Client_Shake256SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt);
+#endif /* WOLFSSL_SHAKE256 */
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
+
 #endif /* WOLFSSL_SHA3 */
 
 #ifdef WOLFSSL_HAVE_MLDSA
