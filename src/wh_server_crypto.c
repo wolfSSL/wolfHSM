@@ -5849,6 +5849,8 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     int                                  param;
     uint32_t                             available;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_SlhDsaKeyGenRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -6005,6 +6007,8 @@ static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     int                                evict;
     int                                sigLen;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_SlhDsaSignRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -6112,6 +6116,8 @@ static int _HandleSlhDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
     int                                  evict;
     int                                  result = 0;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_SlhDsaVerifyRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -6200,6 +6206,8 @@ static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
     uint32_t                                   available;
     int                                        evict;
     int                                        result = 0;
+
+    memset(&res, 0, sizeof(res));
 
     if (inSize < sizeof(whMessageCrypto_SlhDsaCheckPrivKeyRequest)) {
         return WH_ERROR_BADARGS;
