@@ -88,3 +88,30 @@ jobs:
         done
         done
         done
+
+    # The client and the server are separate binaries with separate
+    # user_settings.h, so the client can be built with no software SLH-DSA at
+    # all while the server keeps its own. That is the only way to prove the
+    # callback-only path really reaches the server: with the software stripped
+    # the client has nothing to fall back to, so a passing demo means every
+    # SLH-DSA operation was served over the wire. Only one transport needs to
+    # run it; the ONLY macro is orthogonal to the transport.
+    - name: Build and run the callback-only SLH-DSA client
+      if: ${{ matrix.transport == 'tcp' }}
+      run: |
+        WS="$(pwd)"
+        SERVER_DIR="$WS/examples/posix/wh_posix_server"
+        CLIENT_DIR="$WS/examples/posix/wh_posix_client"
+        make -C "$SERVER_DIR" clean
+        make -C "$CLIENT_DIR" clean
+        DEMO_KEK=1 make -C "$SERVER_DIR" -j WOLFSSL_DIR=../../../wolfssl
+        SLHDSA_CB_ONLY=1 make -C "$CLIENT_DIR" -j WOLFSSL_DIR=../../../wolfssl
+        rm -f "$SERVER_DIR"/*.bin
+        cd "$SERVER_DIR"
+        ./Build/wh_posix_server.elf --type tcp &
+        SERVER_PID=$!
+        sleep 1
+        cd "$CLIENT_DIR"
+        ./Build/wh_posix_client.elf --type tcp --test
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
