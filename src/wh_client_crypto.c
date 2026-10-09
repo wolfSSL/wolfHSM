@@ -476,10 +476,6 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesCtrRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_CTR, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
-    req_iv  = req_key + key_len;
-    req_tmp = req_iv + AES_IV_SIZE;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)AES_IV_SIZE + (uint64_t)AES_BLOCK_SIZE;
@@ -487,6 +483,11 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
+    req_iv  = req_key + key_len;
+    req_tmp = req_iv + AES_IV_SIZE;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -635,7 +636,7 @@ int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     }
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     memcpy(req_iv, (uint8_t*)aes->reg, AES_IV_SIZE);
@@ -821,14 +822,15 @@ int wh_Client_AesEcbRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesEcbRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_ECB, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len;
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -964,7 +966,7 @@ int wh_Client_AesEcbDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     }
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     if (req->keySz > 0) {
@@ -1153,9 +1155,6 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesCbcRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_CBC, ctx->cryptoAffinity);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + len;
-    req_iv  = req_key + key_len;
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)iv_len;
@@ -1163,6 +1162,10 @@ int wh_Client_AesCbcRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + len;
+    req_iv  = req_key + key_len;
 
     req->enc    = enc;
     req->keyLen = key_len;
@@ -1311,7 +1314,7 @@ int wh_Client_AesCbcDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     }
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     memcpy(req_iv, iv, AES_IV_SIZE);
@@ -1499,12 +1502,6 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     req = (whMessageCrypto_AesGcmRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
 
-    req_in     = (uint8_t*)(req + 1);
-    req_key    = req_in + len;
-    req_iv     = req_key + key_len;
-    req_authin = req_iv + iv_len;
-    req_tag    = req_authin + authin_len;
-
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
               (uint64_t)iv_len + (uint64_t)authin_len +
@@ -1513,6 +1510,12 @@ int wh_Client_AesGcmRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in     = (uint8_t*)(req + 1);
+    req_key    = req_in + len;
+    req_iv     = req_key + key_len;
+    req_authin = req_iv + iv_len;
+    req_tag    = req_authin + authin_len;
 
     req->enc       = enc;
     req->keyLen    = key_len;
@@ -1673,9 +1676,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
 
     req = (whMessageCrypto_AesGcmDmaRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_AES_GCM, ctx->cryptoAffinity);
-    req_iv  = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
-    req_tag = req_iv + iv_len;
-    req_key = req_tag + (enc != 0 ? 0 : tag_len);
     req_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
               (uint64_t)sizeof(*req) + (uint64_t)iv_len +
               (uint64_t)(enc != 0 ? 0 : tag_len);
@@ -1694,7 +1694,6 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         req_len += req->keySz;
     }
 
-    req_aad = req_key + req->keySz;
     if ((authin != NULL) && (authin_len > 0) &&
         (authin_len <= WOLFHSM_CFG_DMA_INLINE_AAD_MAX_SIZE) &&
         ((req_len + authin_len) <= WOLFHSM_CFG_COMM_DATA_LEN)) {
@@ -1705,6 +1704,11 @@ int wh_Client_AesGcmDmaRequest(whClientContext* ctx, Aes* aes, int enc,
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_iv  = (uint8_t*)req + sizeof(whMessageCrypto_AesGcmDmaRequest);
+    req_tag = req_iv + iv_len;
+    req_key = req_tag + (enc != 0 ? 0 : tag_len);
+    req_aad = req_key + req->keySz;
 
     if (iv_len > 0) {
         memcpy(req_iv, iv, iv_len);
@@ -2020,7 +2024,7 @@ static int _EccMakeKeyRequest(whClientContext* ctx, int size, int curveId,
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2284,7 +2288,7 @@ static int _EccSharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2527,7 +2531,7 @@ int wh_Client_EccSignRequest(whClientContext* ctx, whKeyId keyId,
     req_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) + hash_len;
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2642,7 +2646,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+        uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                            sizeof(*req) + hash_len;
         uint32_t options = 0;
 
@@ -2682,7 +2686,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
             }
 
             /* Send Request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
                                         (uint8_t*)dataPtr);
             if (ret == WH_ERROR_OK) {
                 /* Server will evict at this point. Reset evict */
@@ -2696,7 +2700,7 @@ int wh_Client_EccSign(whClientContext* ctx, ecc_key* key, const uint8_t* hash,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -2726,7 +2730,7 @@ int wh_Client_EccVerifyRequest(whClientContext* ctx, whKeyId keyId,
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) +
               sig_len + hash_len;
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -2844,7 +2848,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
+        uint32_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                            sizeof(whMessageCrypto_EccVerifyRequest) + sig_len +
                            hash_len;
 
@@ -2896,7 +2900,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
             }
 
             /* write request */
-            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+            ret = wh_Client_SendRequest(ctx, group, action, (uint16_t)req_len,
                                         (uint8_t*)dataPtr);
 
             if (ret == WH_ERROR_OK) {
@@ -2914,7 +2918,7 @@ int wh_Client_EccVerify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -3049,7 +3053,7 @@ int wh_Client_EccMakePub(whClientContext* ctx, ecc_key* key, uint8_t* pubOut,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -3196,7 +3200,7 @@ int wh_Client_EccCheckPubKey(whClientContext* ctx, ecc_key* key,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -3518,7 +3522,7 @@ _Curve25519SharedSecretRequest(whClientContext* ctx, whKeyId prv_key_id,
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -3864,7 +3868,7 @@ static int _Ed25519MakeKey(whClientContext* ctx, whKeyId* inout_key_id,
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     memset(req, 0, sizeof(*req));
@@ -4010,14 +4014,15 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
     whMessageCrypto_Ed25519SignResponse* res     = NULL;
     uint8_t*                             dataPtr = NULL;
 
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-    int     evict  = 0;
+    whKeyId key_id;
+    int     evict = 0;
 
     if ((ctx == NULL) || (key == NULL) || ((msg == NULL) && (msgLen > 0)) ||
         ((sig != NULL) && (inout_sig_len == NULL)) ||
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4030,10 +4035,11 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
         return WH_ERROR_BADARGS;
     }
 
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + msgLen + contextLen;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + msgLen + contextLen;
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     uint16_t req_len = (uint16_t)total_len;
 
@@ -4148,15 +4154,17 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
     whMessageCrypto_Ed25519VerifyRequest*  req     = NULL;
     whMessageCrypto_Ed25519VerifyResponse* res     = NULL;
     uint8_t*                               dataPtr = NULL;
-    whKeyId  key_id  = WH_DEVCTX_TO_KEYID(key->devCtx);
+    whKeyId  key_id;
     int      evict     = 0;
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + sigLen + msgLen + contextLen;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + sigLen + msgLen + contextLen;
 
     if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4170,7 +4178,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
     }
 
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     uint16_t req_len = (uint16_t)total_len;
 
@@ -4283,7 +4291,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     uintptr_t                               msgAddr = 0;
     uintptr_t                               sigAddr = 0;
 
-    whKeyId  key_id   = WH_DEVCTX_TO_KEYID(key->devCtx);
+    whKeyId  key_id;
     int      evict    = 0;
     uint32_t inSigLen = (inout_sig_len != NULL) ? *inout_sig_len : 0;
 
@@ -4292,6 +4300,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4307,7 +4316,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
     uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + contextLen;
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     if (WH_KEYID_ISERASED(key_id)) {
@@ -4433,13 +4442,14 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
     uintptr_t                                 msgAddr = 0;
     uint16_t req_len = sizeof(whMessageCrypto_GenericRequestHeader) +
                        sizeof(*req) + contextLen;
-    whKeyId key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
-    int     evict  = 0;
+    whKeyId key_id;
+    int     evict = 0;
 
     if ((ctx == NULL) || (key == NULL) || (sig == NULL) || (msg == NULL) ||
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4453,7 +4463,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
     }
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     *out_res = 0;
@@ -4695,7 +4705,7 @@ static int _RsaMakeKeyRequest(whClientContext* ctx, uint32_t size, uint32_t e,
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -4934,7 +4944,7 @@ int wh_Client_RsaFunctionRequest(whClientContext* ctx, whKeyId keyId,
     total_len =
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req) + in_len;
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     req_len = (uint16_t)total_len;
 
@@ -5112,7 +5122,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -5138,7 +5148,7 @@ int wh_Client_RsaGetSizeRequest(whClientContext* ctx, whKeyId keyId)
 
     req_len = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
@@ -5262,7 +5272,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -5309,10 +5319,11 @@ static int _HkdfMakeKey(whClientContext* ctx, int hashType, whKeyId keyIdIn,
         dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_HKDF, ctx->cryptoAffinity);
 
     /* Calculate request length including variable-length data */
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + inKeySz + saltSz + infoSz;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + inKeySz + saltSz + infoSz;
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     uint16_t req_len = (uint16_t)total_len;
 
@@ -5492,11 +5503,12 @@ static int _CmacKdfMakeKey(whClientContext* ctx, whKeyId saltKeyId,
         dataPtr, WC_ALGO_TYPE_KDF, WC_KDF_TYPE_TWOSTEP_CMAC,
         ctx->cryptoAffinity);
 
-    uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                         sizeof(*req) + saltSz + zSz + fixedInfoSz;
+    uint64_t total_len =
+        (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+        sizeof(*req) + saltSz + zSz + fixedInfoSz;
 
     if (total_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     uint16_t req_len = (uint16_t)total_len;
 
@@ -5765,14 +5777,15 @@ int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
     req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
         dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
 
-    hdr_sz  = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + inLen;
+    hdr_sz = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (inLen > WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ ||
         keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz - inLen) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + inLen;
 
     memset(&req->resumeState, 0, sizeof(req->resumeState));
     req->inSz  = inLen;
@@ -5897,14 +5910,15 @@ int wh_Client_CmacUpdateRequest(whClientContext* ctx, Cmac* cmac, CmacType type,
 
     req = (whMessageCrypto_CmacAesRequest*)_createCryptoRequest(
         dataPtr, WC_ALGO_TYPE_CMAC, ctx->cryptoAffinity);
-    hdr_sz  = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
-    req_in  = (uint8_t*)(req + 1);
-    req_key = req_in + inLen;
+    hdr_sz = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (inLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz ||
         keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz - inLen) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
+
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + inLen;
 
     /* Wire request: input + (optional) key + full state round-trip. The
      * server may leave a partial (or whole) block in cmac->buffer after
@@ -6009,7 +6023,7 @@ int wh_Client_CmacFinalRequest(whClientContext* ctx, Cmac* cmac)
     req_key = req_in;
 
     if (keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Final: no new input — server uses the round-tripped state (which
@@ -6249,7 +6263,7 @@ int wh_Client_CmacGenerateDmaRequest(whClientContext* ctx, Cmac* cmac,
     req_key = (uint8_t*)(req + 1);
 
     if (keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req->outSz      = outMacLen;
@@ -6408,7 +6422,7 @@ int wh_Client_CmacDmaUpdateRequest(whClientContext* ctx, Cmac* cmac,
     req_key = (uint8_t*)(req + 1);
 
     if (keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Wire request: full state round-trip + (optional) inline key + DMA
@@ -6536,7 +6550,7 @@ int wh_Client_CmacDmaFinalRequest(whClientContext* ctx, Cmac* cmac)
     req_key = (uint8_t*)(req + 1);
 
     if (keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Final: no new input — server uses the round-tripped state and
@@ -6723,7 +6737,7 @@ int wh_Client_Sha256UpdateRequest(whClientContext* ctx, wc_Sha256* sha,
 
     capacity = _Sha256UpdatePerCallCapacity(sha);
     if (inLen > capacity) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Empty update: nothing to send, no state to mutate. */
@@ -7343,7 +7357,7 @@ int wh_Client_Sha224UpdateRequest(whClientContext* ctx, wc_Sha224* sha,
 
     capacity = _Sha224UpdatePerCallCapacity(sha);
     if (inLen > capacity) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Empty update: nothing to send, no state to mutate. */
@@ -7949,7 +7963,7 @@ int wh_Client_Sha384UpdateRequest(whClientContext* ctx, wc_Sha384* sha,
 
     capacity = _Sha384UpdatePerCallCapacity(sha);
     if (inLen > capacity) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Empty update: nothing to send, no state to mutate. */
@@ -8560,7 +8574,7 @@ int wh_Client_Sha512UpdateRequest(whClientContext* ctx, wc_Sha512* sha,
 
     capacity = _Sha512UpdatePerCallCapacity(sha);
     if (inLen > capacity) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Empty update: nothing to send, no state to mutate. */
@@ -9284,7 +9298,7 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
 
     capacity = _Sha3UpdatePerCallCapacity(sha, v);
     if (inLen > capacity) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
     if (inLen == 0) {
         return WH_ERROR_OK;
@@ -10343,7 +10357,7 @@ static int _MlDsaMakeKey(whClientContext* ctx, int size, int level,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     return ret;
@@ -10469,8 +10483,9 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + in_len + contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + in_len + contextLen;
         uint32_t options = 0;
 
         /* Get data pointer from the context to use as request/response storage
@@ -10555,7 +10570,7 @@ int wh_Client_MlDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     } /* Evict the key manually on error */
     if (evict != 0) {
@@ -10610,8 +10625,9 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint32_t total_len = sizeof(whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + sig_len + msg_len + contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + sig_len + msg_len + contextLen;
 
 
         /* Get data pointer from the context to use as request/response storage
@@ -10696,7 +10712,7 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error */
@@ -10931,7 +10947,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
         }
     }
     else {
-        ret = WH_ERROR_BADARGS;
+        ret = WH_ERROR_REQUEST_SIZE;
     }
     return ret;
 }
@@ -11146,7 +11162,7 @@ int wh_Client_MlDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict the key manually on error if needed */
@@ -11300,7 +11316,7 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 
@@ -11464,7 +11480,7 @@ static int _MlKemMakeKey(whClientContext* ctx, int level,
 
     /* Defense in depth: ensure request fits in comm buffer */
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     memset(req, 0, sizeof(*req));
@@ -11716,7 +11732,7 @@ int wh_Client_MlKemEncapsulate(whClientContext* ctx, MlKemKey* key,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 
@@ -11839,7 +11855,7 @@ int wh_Client_MlKemDecapsulate(whClientContext* ctx, MlKemKey* key,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 
@@ -11976,7 +11992,7 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
         sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
 
     if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     memset(req, 0, sizeof(*req));
@@ -12224,7 +12240,7 @@ int wh_Client_MlKemEncapsulateDma(whClientContext* ctx, MlKemKey* key,
                 WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 
@@ -12347,7 +12363,7 @@ int wh_Client_MlKemDecapsulateDma(whClientContext* ctx, MlKemKey* key,
                 WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 
@@ -12436,7 +12452,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -12556,7 +12572,7 @@ int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -12664,7 +12680,7 @@ int wh_Client_LmsVerifyDma(whClientContext* ctx, const byte* sig, word32 sigSz,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -12758,7 +12774,7 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key)
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -12907,7 +12923,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -13037,7 +13053,7 @@ int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -13146,7 +13162,7 @@ int wh_Client_XmssVerifyDma(whClientContext* ctx, const byte* sig,
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));
@@ -13240,7 +13256,7 @@ int wh_Client_XmssSigsLeftDma(whClientContext* ctx, XmssKey* key)
         uint16_t res_len = 0;
 
         if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
-            return WH_ERROR_BADARGS;
+            return WH_ERROR_REQUEST_SIZE;
         }
 
         memset(req, 0, sizeof(*req));

@@ -745,6 +745,35 @@ static int _whTest_CryptoEd25519MakeCacheKeyEphemeral(whClientContext* ctx)
     return 0;
 }
 
+/* A NULL key must be rejected before its devCtx is read */
+static int _whTest_CryptoEd25519NullKey(whClientContext* ctx)
+{
+    const uint8_t msg[]                 = "ed25519 null key";
+    uint8_t       sig[ED25519_SIG_SIZE] = {0};
+    uint32_t      sigLen                = (uint32_t)sizeof(sig);
+    int           res                   = 0;
+    int           ret;
+
+    ret = wh_Client_Ed25519Sign(ctx, NULL, msg, (uint32_t)sizeof(msg),
+                                (uint8_t)Ed25519, NULL, 0, sig, &sigLen);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+    ret = wh_Client_Ed25519Verify(ctx, NULL, sig, (uint32_t)sizeof(sig), msg,
+                                  (uint32_t)sizeof(msg), (uint8_t)Ed25519,
+                                  NULL, 0, &res);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+#ifdef WOLFHSM_CFG_DMA
+    ret = wh_Client_Ed25519SignDma(ctx, NULL, msg, (uint32_t)sizeof(msg),
+                                   (uint8_t)Ed25519, NULL, 0, sig, &sigLen);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+    ret = wh_Client_Ed25519VerifyDma(ctx, NULL, sig, (uint32_t)sizeof(sig),
+                                     msg, (uint32_t)sizeof(msg),
+                                     (uint8_t)Ed25519, NULL, 0, &res);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
+#endif
+    WH_TEST_PRINT("Ed25519 NULL KEY REJECT SUCCESS\n");
+    return 0;
+}
+
 int whTest_Crypto_Ed25519(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Inline(ctx));
@@ -756,6 +785,7 @@ int whTest_Crypto_Ed25519(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519CacheKeyAndExportPublic(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519BufferTooSmall(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519MakeCacheKeyEphemeral(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519NullKey(ctx));
     return 0;
 }
 #endif /* HAVE_ED25519 */

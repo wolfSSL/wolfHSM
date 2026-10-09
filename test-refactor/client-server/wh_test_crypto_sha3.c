@@ -556,9 +556,9 @@ static int whTest_CryptoSha3AsyncOneVariant(whClientContext* ctx, int devId,
             saved = *sha;
             ret   = v->asyncUpdateRequest(ctx, sha, whTest_Sha3BigBuf, oversz,
                                           &sent);
-            if (ret != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("%s case D: expected BADARGS, got %d\n", v->name,
-                               ret);
+            if (ret != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("%s case D: expected REQUEST_SIZE, got %d\n",
+                               v->name, ret);
                 ret = -1;
             }
             else if (sent) {

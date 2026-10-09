@@ -76,7 +76,7 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
     }
 
     if (auth_data_len > WH_MESSAGE_AUTH_LOGIN_MAX_AUTH_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     if (auth_data_len > 0 && auth_data == NULL) {
@@ -85,7 +85,7 @@ int wh_Client_AuthLoginRequest(whClientContext* c, whAuthMethod method,
 
     msg_size = sizeof(*msg) + auth_data_len;
     if (msg_size > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Build the request directly in the comm buffer to avoid a second copy
@@ -280,12 +280,12 @@ int wh_Client_AuthUserAddRequest(whClientContext* c, const char* username,
         return WH_ERROR_BADARGS;
     }
     if (credentials_len > WH_MESSAGE_AUTH_USERADD_MAX_CREDENTIALS_LEN) {
-        return WH_ERROR_BUFFER_SIZE;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     msg_size = sizeof(*msg) + credentials_len;
     if (msg_size > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BUFFER_SIZE;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Build the request directly in the comm buffer to avoid a second copy
@@ -634,10 +634,10 @@ int wh_Client_AuthUserSetCredentialsRequest(
 
     if (current_credentials_len >
         WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
-        return WH_ERROR_BUFFER_SIZE;
+        return WH_ERROR_REQUEST_SIZE;
     }
     if (new_credentials_len > WH_MESSAGE_AUTH_SETCREDS_MAX_CREDENTIALS_LEN) {
-        return WH_ERROR_BUFFER_SIZE;
+        return WH_ERROR_REQUEST_SIZE;
     }
     if (current_credentials_len > 0 && current_credentials == NULL) {
         return WH_ERROR_BADARGS;
@@ -649,7 +649,7 @@ int wh_Client_AuthUserSetCredentialsRequest(
     /* Calculate total message size */
     total_size = sizeof(*msg) + current_credentials_len + new_credentials_len;
     if (total_size > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BUFFER_SIZE;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     /* Build the request directly in the comm buffer to avoid a second copy

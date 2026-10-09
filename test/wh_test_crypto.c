@@ -5575,8 +5575,9 @@ static int whTest_CryptoSha256Async(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha256UpdateRequest(ctx, sha256, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA256: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA256: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -6090,8 +6091,9 @@ static int whTest_CryptoSha224Async(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha224UpdateRequest(ctx, sha224, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA224: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA224: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -6612,8 +6614,9 @@ static int whTest_CryptoSha384Async(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha384UpdateRequest(ctx, sha384, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA384: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA384: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -7138,8 +7141,9 @@ static int whTest_CryptoSha512Async(whClientContext* ctx, int devId,
             sent = true;
             rc   = wh_Client_Sha512UpdateRequest(ctx, sha512, buf, cap + 1u,
                                                  &sent);
-            if (rc != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("Async SHA512: expected BADARGS, got %d\n", rc);
+            if (rc != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("Async SHA512: expected REQUEST_SIZE, got %d\n",
+                               rc);
                 ret = -1;
             }
             else if (sent != false) {
@@ -7795,9 +7799,9 @@ static int whTest_CryptoSha3AsyncOneVariant(whClientContext* ctx, int devId,
             saved = *sha;
             ret   = v->asyncUpdateRequest(ctx, sha, whTest_Sha3BigBuf, oversz,
                                           &sent);
-            if (ret != WH_ERROR_BADARGS) {
-                WH_ERROR_PRINT("%s case D: expected BADARGS, got %d\n", v->name,
-                               ret);
+            if (ret != WH_ERROR_REQUEST_SIZE) {
+                WH_ERROR_PRINT("%s case D: expected REQUEST_SIZE, got %d\n",
+                               v->name, ret);
                 ret = -1;
             }
             else if (sent) {
@@ -12855,7 +12859,7 @@ static int whTestCrypto_CmacStreaming(whClientContext* ctx, int devId,
         sent = true;
         rc   = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
                                            sizeof(key), buf, maxSz + 1u, &sent);
-        if (rc != WH_ERROR_BADARGS || sent || cmac->bufferSz != 0) {
+        if (rc != WH_ERROR_REQUEST_SIZE || sent || cmac->bufferSz != 0) {
             WH_ERROR_PRINT("CMAC streaming: oversize update not rejected\n");
             ret = -1;
         }

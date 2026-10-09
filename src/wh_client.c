@@ -620,9 +620,11 @@ int wh_Client_EchoRequest(whClientContext* c, uint16_t size, const void* data)
     uint8_t* msg = NULL;
 
     if (    (c == NULL) ||
-            ((size > 0) && (data == NULL)) ||
-            ((size > WOLFHSM_CFG_COMM_DATA_LEN) && (data != NULL)) ){
+            ((size > 0) && (data == NULL)) ){
         return WH_ERROR_BADARGS;
+    }
+    if (size > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     msg = wh_CommClient_GetDataPtr(c->comm);
@@ -807,9 +809,11 @@ int wh_Client_KeyCacheRequest_ex(whClientContext* c, uint32_t flags,
     uint8_t*                        packIn;
     uint16_t                        capSz;
 
-    if (c == NULL || in == NULL || inSz == 0 ||
-        sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
+    if (c == NULL || in == NULL || inSz == 0) {
         return WH_ERROR_BADARGS;
+    }
+    if (sizeof(*req) + inSz > WOLFHSM_CFG_COMM_DATA_LEN) {
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     req = (whMessageKeystore_CacheRequest*)wh_CommClient_GetDataPtr(c->comm);

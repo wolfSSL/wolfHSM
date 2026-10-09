@@ -123,7 +123,7 @@ int wh_CommClient_SendRequest(whCommClient* context, uint16_t magic,
 
     /* Check if the data size is within allowed limits */
     if (data_size > WOLFHSM_CFG_COMM_DATA_LEN) {
-        return WH_ERROR_BADARGS;
+        return WH_ERROR_REQUEST_SIZE;
     }
 
     context->hdr->magic = magic;

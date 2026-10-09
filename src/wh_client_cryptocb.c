@@ -774,7 +774,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
     /* Fix up error code to be wolfCrypt */
-    if (ret == WH_ERROR_BADARGS) {
+    if ((ret == WH_ERROR_BADARGS) || (ret == WH_ERROR_REQUEST_SIZE)) {
         ret = BAD_FUNC_ARG;
     }
     else if (ret == WH_ERROR_BUFFER_SIZE) {
@@ -1760,7 +1760,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     }
 
     /* Translate codes to wolfCrypt */
-    if (ret == WH_ERROR_BADARGS) {
+    if ((ret == WH_ERROR_BADARGS) || (ret == WH_ERROR_REQUEST_SIZE)) {
         ret = BAD_FUNC_ARG;
     }
     else if (ret == WH_ERROR_BUFFER_SIZE) {
