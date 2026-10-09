@@ -3441,10 +3441,8 @@ int wh_Client_SlhDsaExportKey(whClientContext* ctx, whKeyId keyId,
 /**
  * @brief Exports only the public part of a cached SLH-DSA key.
  *
- * The private key stays inside the HSM. The caller is responsible for
- * initializing key with wc_SlhDsaKey_Init; the parameter set is taken from
- * the key OID in the exported DER, so the placeholder set the caller used
- * does not have to match.
+ * The caller must initialize key with wc_SlhDsaKey_Init. The parameter set
+ * is taken from the exported DER, so any set may be used for init.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] keyId Server key ID whose public key should be exported
@@ -3475,8 +3473,7 @@ int wh_Client_SlhDsaMakeCacheKey(whClientContext* ctx, int param,
 /**
  * @brief Generate a cached SLH-DSA key and export its public part.
  *
- * On success pub is a usable handle to the cached private key: its key ID and
- * the client's HSM devId are stamped into it.
+ * On success, pub can also be used as a handle to the cached private key.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] param Parameter set to generate (enum SlhDsaParam)
@@ -3505,9 +3502,8 @@ int wh_Client_SlhDsaMakeExportKey(whClientContext* ctx, int param,
 /**
  * @brief Generate an ephemeral SLH-DSA key from a caller-supplied seed.
  *
- * The seed is the contiguous SK.seed || SK.prf || PK.seed, 3n bytes for the
- * requested parameter set. Deterministic generation makes known-answer tests
- * and reproducible provisioning possible.
+ * The seed is SK.seed || SK.prf || PK.seed, 3n bytes for the requested
+ * parameter set.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] param Parameter set to generate (enum SlhDsaParam)
@@ -3540,20 +3536,19 @@ int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
                                          uint8_t* label);
 
 /**
- * @brief Sign a message or digest with an SLH-DSA key held by the server.
+ * @brief Sign a message or digest with an SLH-DSA key on the server.
  *
- * Covers the whole FIPS 205 signing surface. preHashType selects pure
- * SLH-DSA (WC_HASH_TYPE_NONE) or HashSLH-DSA. isMPrime signs a caller-built
- * M' directly, in which case context and preHashType are ignored. A non-empty
- * addRnd supplies the randomizer explicitly; otherwise randomized selects
- * between a server-generated randomizer and deterministic signing.
+ * preHashType selects pure SLH-DSA (WC_HASH_TYPE_NONE) or HashSLH-DSA.
+ * isMPrime signs a caller-built M' and ignores context and preHashType.
+ * A non-empty addRnd sets the randomizer. Otherwise randomized selects a
+ * server-generated randomizer or deterministic signing.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] in Message, digest, or M' to sign
  * @param[in] in_len Length of in in bytes
  * @param[out] out Buffer to receive the signature
  * @param[in,out] inout_len Capacity of out on entry, signature length on exit
- * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] key Key handle, either server-resident or containing key material
  * @param[in] context FIPS 205 context string, may be NULL
  * @param[in] contextLen Length of context, 0 to 255
  * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
@@ -3570,7 +3565,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                          int randomized, int isMPrime);
 
 /**
- * @brief Verify an SLH-DSA signature with a key held by the server.
+ * @brief Verify an SLH-DSA signature with a key on the server.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] sig Signature to verify
@@ -3578,7 +3573,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
  * @param[in] msg Message, digest, or M' that was signed
  * @param[in] msg_len Length of msg in bytes
  * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
- * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] key Key handle, either server-resident or containing key material
  * @param[in] context FIPS 205 context string, may be NULL
  * @param[in] contextLen Length of context, 0 to 255
  * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
@@ -3591,11 +3586,11 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
                            byte contextLen, word32 preHashType, int isMPrime);
 
 /**
- * @brief Check that a server-held SLH-DSA private key matches a public key.
+ * @brief Check that an SLH-DSA private key on the server matches a public
+ *        key.
  *
- * Passing NULL for pubKey (with pubKeySz 0) asks the server to check its copy
- * of the private key for internal consistency, with nothing to compare it
- * against. That is what a caller holding only a key ID can ask for.
+ * Passing NULL for pubKey (with pubKeySz 0) has the server check only the
+ * internal consistency of its private key.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] key Key handle for the private key
@@ -3695,18 +3690,17 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
                                     SlhDsaKey* pub);
 
 /**
- * @brief Sign with an SLH-DSA key held by the server using DMA.
+ * @brief Sign with an SLH-DSA key on the server using DMA.
  *
- * Arguments match wh_Client_SlhDsaSign; the message and signature travel by
- * DMA rather than through the comm buffer, which is what makes the larger
- * parameter sets usable.
+ * Arguments match wh_Client_SlhDsaSign. The message and signature are
+ * passed by DMA, so the larger parameter sets fit.
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] in Message, digest, or M' to sign
  * @param[in] in_len Length of in in bytes
  * @param[out] out Buffer to receive the signature
  * @param[in,out] out_len Capacity of out on entry, signature length on exit
- * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] key Key handle, either server-resident or containing key material
  * @param[in] context FIPS 205 context string, may be NULL
  * @param[in] contextLen Length of context, 0 to 255
  * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
@@ -3732,7 +3726,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
  * @param[in] msg Message, digest, or M' that was signed
  * @param[in] msg_len Length of msg in bytes
  * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
- * @param[in] key Key handle, either server-resident or holding key material
+ * @param[in] key Key handle, either server-resident or containing key material
  * @param[in] context FIPS 205 context string, may be NULL
  * @param[in] contextLen Length of context, 0 to 255
  * @param[in] preHashType Pre-hash algorithm (enum wc_HashType)
@@ -3746,7 +3740,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                               word32 preHashType, int isMPrime);
 
 /**
- * @brief Check a server-held SLH-DSA private key against a public key.
+ * @brief Check an SLH-DSA private key on the server against a public key.
  *
  * The public key is only 2n bytes, so this forwards to the comm-buffer path.
  *

@@ -1285,7 +1285,7 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifdef WOLFSSL_HAVE_SLHDSA
         case WC_PQC_SIG_TYPE_SLHDSA: {
-            /* size carries the SlhDsaParam enum, not a byte count */
+            /* size contains the SlhDsaParam enum, not a byte count */
             const byte* seed   = info->pk.pqc_sig_kg.seed;
             word32      seedSz = info->pk.pqc_sig_kg.seedSz;
 #ifdef WOLFHSM_CFG_DMA
@@ -1323,10 +1323,8 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 }
 
 #ifdef WOLFSSL_HAVE_SLHDSA
-/* Whether the caller's key carries actual key bytes rather than being a bare
- * handle to a server-resident key. Several wolfCrypt SLH-DSA entry points read
- * PK.seed or PK.root straight out of the key struct, and for a bare handle
- * those are zeroes that the server must supply from its own copy instead. */
+/* Returns 1 if key contains key bytes, 0 if it only references a server key.
+ * Some wolfCrypt SLH-DSA routines read PK.seed or PK.root from the struct. */
 static int _SlhDsaKeyHasMaterial(const SlhDsaKey* key)
 {
     return (key != NULL) &&
@@ -1517,13 +1515,11 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 
 #ifdef WOLFSSL_HAVE_SLHDSA
         case WC_PQC_SIG_TYPE_SLHDSA: {
-            /* wc_SlhDsaKey_CheckKey takes the expected public key out of the
-             * key struct. A bare handle holds none, so drop it and let the
-             * server check its own copy for consistency instead of comparing
-             * against zeroes. */
             const byte* slhPub   = pubKey;
             word32      slhPubSz = pubKeySz;
 
+            /* If the key struct doesn't have a key, pass NULL and let the
+             * server check its own copy. */
             if (!_SlhDsaKeyHasMaterial((const SlhDsaKey*)key)) {
                 slhPub   = NULL;
                 slhPubSz = 0;
