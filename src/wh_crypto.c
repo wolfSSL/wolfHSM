@@ -400,7 +400,7 @@ int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
     /* Choose appropriate serialization based on key flags */
     if (key->flags & WC_SLHDSA_FLAG_PRIVATE) {
 #ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
-        /* RFC 9909 always carries the public key alongside the private one */
+        /* RFC 9909 always has the public key alongside the private one */
         ret = wc_SlhDsaKey_KeyToDer(key, buffer, max_size);
 #else
         ret = WH_ERROR_BADARGS;
@@ -421,7 +421,6 @@ int wh_Crypto_SlhDsaSerializeKeyDer(SlhDsaKey* key, uint16_t max_size,
         ret       = WH_ERROR_OK;
     }
     else {
-        /* Clear buffer to avoid leaking partial key material on error */
         wc_ForceZero(buffer, max_size);
         *out_size = 0;
         if (ret == 0) {

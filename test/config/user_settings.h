@@ -141,9 +141,8 @@
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
 
-/* SLH-DSA Options. Only 128s is built: its 7856-byte signature is the one
- * that fits WOLFHSM_CFG_COMM_DATA_LEN, so the non-DMA paths can carry it.
- * 128f signs faster but its 17088-byte signature does not fit. */
+/* SLH-DSA: only 128s (7856-byte signature) fits in the default
+ * WOLFHSM_CFG_COMM_DATA_LEN */
 #define WOLFSSL_HAVE_SLHDSA
 #define WOLFSSL_SLHDSA_PARAM_NO_128F
 #define WOLFSSL_SLHDSA_PARAM_NO_192

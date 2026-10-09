@@ -1107,9 +1107,8 @@ static int _SlhDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    /* Freshen, check usage and deserialize under one hold of the NVM lock so
-     * the policy verdict, the metadata length and the key bytes all come from
-     * the same snapshot of the shared cache slot. */
+    /* Lock around the freshen, check and deserialize to avoid race
+     * conditions */
     ret = WH_SERVER_NVM_LOCK(ctx);
     if (ret == WH_ERROR_OK) {
         ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
@@ -5664,12 +5663,8 @@ static int _IsSlhDsaParamSupported(int param)
     return (wc_SlhDsaKey_SigSizeFromParam((enum SlhDsaParam)param) > 0);
 }
 
-/* Initialize a key to load a cached one into. req.param is the parameter set
- * the client believes the key has; it is only a starting point, because the
- * DER the key was cached as carries the real one and the decoder switches to
- * it. It is deliberately not enforced: a caller holding nothing but a key id
- * legitimately initializes its handle with a placeholder parameter set, so a
- * mismatch here is not an error. */
+/* param is only a hint. The cached DER sets the real parameter set, so a
+ * mismatch is not an error. */
 static int _SlhDsaInitForCachedKey(SlhDsaKey* key, uint32_t param, int devId)
 {
     enum SlhDsaParam hint = (enum SlhDsaParam)param;
@@ -5715,8 +5710,7 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
     }
 
     /* The signing entry points take a randomizer pointer but no length: they
-     * read exactly n bytes. Anything else would read past what the client
-     * sent, or silently ignore the tail of what it did send. */
+     * read exactly n bytes. */
     if ((addRndSz != 0) && (addRndSz != n)) {
         return WH_ERROR_BADARGS;
     }
@@ -5727,9 +5721,7 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
                                                  addRnd);
         }
         else if (randomized) {
-            /* The internal interface has no RNG-taking entry point, so draw
-             * the randomizer here rather than quietly signing
-             * deterministically for a request that asked not to. */
+            /* The M' sign API takes no RNG, so generate the randomizer here */
             ret = wc_RNG_GenerateBlock(ctx->crypto->rng, rnd, n);
             if (ret == 0) {
                 ret = wc_SlhDsaKey_SignMsgWithRandom(key, in, in_len, sig,
@@ -5738,8 +5730,7 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
             wc_ForceZero(rnd, sizeof(rnd));
         }
         else {
-            /* The randomizer is the key's own PK.seed, which only the server
-             * copy of the key has. */
+            /* Use the server's copy of the key for randomization */
             ret = wc_SlhDsaKey_SignMsgDeterministic(key, in, in_len, sig,
                                                     sigLen);
         }
@@ -5780,9 +5771,7 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
 }
 #endif /* !WOLFSSL_SLHDSA_VERIFY_ONLY */
 
-/* Verify with whichever FIPS 205 entry point the request selected. wolfCrypt
- * reports a bad signature as an error code, but the client interface wants a
- * boolean, so translate here. */
+/* Verify using the FIPS 205 entry point the request selected */
 static int _SlhDsaVerifyDispatch(SlhDsaKey* key, uint32_t options,
                                  const byte* sig, word32 sig_len,
                                  const byte* msg, word32 msg_len,
@@ -5809,10 +5798,7 @@ static int _SlhDsaVerifyDispatch(SlhDsaKey* key, uint32_t options,
         *out_result = 1;
     }
     else if (ret == WC_NO_ERR_TRACE(SIG_VERIFY_E)) {
-        /* A signature that does not verify is a result, not a failure. Every
-         * other code, BAD_LENGTH_E in particular, describes a malformed
-         * request and is propagated so the caller can tell the two apart the
-         * same way a software-only build would. */
+        /* A bad signature is a result, not an error */
         *out_result = 0;
         ret         = 0;
     }
@@ -5880,8 +5866,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         return WH_ERROR_BADARGS;
     }
 
-    /* Response message. cryptoDataOut already points past the generic
-     * response header, so that header comes out of the budget too. */
+    /* Advance the pointer to the response data */
     res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_SlhDsaKeyGenResponse);
     max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
@@ -5921,8 +5906,6 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                 ret    = wh_Crypto_SlhDsaSerializeKeyDer(key, max_size, res_out,
                                                          &res_size);
                 if (ret != 0) {
-                    /* Zero sensitive data on failure: a partial private key
-                     * DER must not be left in the response buffer. */
                     wc_ForceZero(res_out, max_size);
                     res_size = 0;
                 }
@@ -5930,9 +5913,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
             else {
                 /* Must import the key into the cache and return keyid */
                 res_size = 0;
-                /* Hold the NVM lock so id allocation and cache import are
-                 * atomic with respect to other server contexts under
-                 * THREADSAFE. */
+                /* Lock to ensure alloc and import are atomic */
                 ret = WH_SERVER_NVM_LOCK(ctx);
                 if (ret == WH_ERROR_OK) {
                     if (WH_KEYID_ISERASED(key_id)) {
@@ -5945,9 +5926,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                     (void)WH_SERVER_NVM_UNLOCK(ctx);
                 } /* WH_SERVER_NVM_LOCK() */
                 if (ret == 0) {
-                    /* Best-effort public key export so the client can skip a
-                     * separate ExportPublicKey call. An empty body is not an
-                     * error; MakeCacheKeyAndExportPublic callers detect it. */
+                    /* Return the public key if it fits, else empty body */
                     int pub_ret =
                         wc_SlhDsaKey_PublicKeyToDer(key, res_out, max_size, 1);
                     res_size = (pub_ret > 0) ? (uint16_t)pub_ret : 0;
@@ -6047,8 +6026,7 @@ static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     req_context = (contextSz > 0) ? (in + in_len) : NULL;
     req_addRnd  = (addRndSz > 0) ? (in + in_len + contextSz) : NULL;
 
-    /* Response message. cryptoDataOut already points past the generic
-     * response header, so that header comes out of the budget too. */
+    /* Advance the pointer to the response data */
     res_out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_SlhDsaSignResponse);
     max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
@@ -6060,10 +6038,7 @@ static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == 0) {
         ret = _SlhDsaLoadKey(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN, key);
         if (ret == WH_ERROR_OK) {
-            /* SLH-DSA signatures run from 7856 to 49856 bytes, so most
-             * parameter sets cannot be returned through the comm buffer at
-             * all. Report that up front rather than as a wolfCrypt length
-             * error from inside the sign call. */
+            /* SLH-DSA sigs can be nearly 50kB. Bail early if it won't fit. */
             sigLen = wc_SlhDsaKey_SigSize(key);
             if (sigLen <= 0) {
                 ret = WH_ERROR_ABORTED;
@@ -6240,9 +6215,8 @@ static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
             ret = wc_SlhDsaKey_CheckKey(key);
         }
         if (ret == WH_ERROR_OK) {
-            /* PK.seed || PK.root sits at the end of the key data. An absent
-             * public key means the caller had none to offer, so the
-             * consistency check above is the whole answer. */
+            /* If pubKey is provided, check it too.
+             * If it's 0 len, then we are done. */
             uint32_t expected = 2U * (uint32_t)key->params->n;
             if (pubSz == 0) {
                 result = 1;
@@ -8126,8 +8100,7 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     void*     clientOutAddr  = NULL;
     void*     clientSeedAddr = NULL;
     uint16_t  keySize        = 0;
-    /* A denied access can come from either client buffer; remember which so
-     * the client is told the address it can actually act on. */
+    /* Track which buffer failed. 0 is key, non-0 is seed */
     int seedAccessFail = 0;
 
     whMessageCrypto_SlhDsaKeyGenDmaRequest  req;
@@ -8210,9 +8183,7 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                 whKeyId keyId = wh_KeyId_TranslateFromClient(
                     WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
 
-                /* Hold the NVM lock so id allocation and cache import are
-                 * atomic with respect to other server contexts under
-                 * THREADSAFE. */
+                /* Ensure alloc and import are atomic */
                 ret = WH_SERVER_NVM_LOCK(ctx);
                 if (ret == WH_ERROR_OK) {
                     if (WH_KEYID_ISERASED(keyId)) {
@@ -8226,12 +8197,7 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                     (void)WH_SERVER_NVM_UNLOCK(ctx);
                 } /* WH_SERVER_NVM_LOCK() */
 
-                /* Stream the public key back through the client's DMA buffer
-                 * so it gets the pubkey without a separate ExportPublicKey
-                 * call. A freshly generated key must serialize, so treat a
-                 * failure as fatal: evict the just-committed key and propagate
-                 * the error rather than returning a keyId with no public
-                 * key. */
+                /* Return the public key through the client's DMA buffer */
                 if (ret == 0) {
                     int postRet;
                     int rc = wh_Server_DmaProcessClientAddress(
@@ -8246,8 +8212,8 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                         else {
                             ret = (pub_ret < 0) ? pub_ret : WH_ERROR_ABORTED;
                         }
-                        /* Release the range PRE mapped, not the shorter DER
-                         * that came back, and keep a POST failure visible. */
+                        /* Release the full range PRE mapped, not the shorter
+                         * DER buffer. */
                         postRet = wh_Server_DmaProcessClientAddress(
                             ctx, req.key.addr, &clientOutAddr, req.key.sz,
                             WH_DMA_OPER_CLIENT_WRITE_POST,
@@ -8373,9 +8339,7 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                     WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
                 if (ret == 0) {
                     sigPre = 1;
-                    /* The mapping is copied back whatever happens below, so
-                     * clear it first: a failed signing must not publish
-                     * whatever the staging buffer happened to hold. */
+                    /* Clear so a failed sign does not copy back stale data */
                     memset(sigAddr, 0, (size_t)req.sig.sz);
                 }
                 else if (ret == WH_ERROR_ACCESS) {
@@ -8392,8 +8356,7 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                 }
 
                 if (sigPre) {
-                    /* Release the range PRE mapped, not the shorter signature
-                     * that came back: sigLen travels in the response. */
+                    /* Release the full range PRE mapped, not sigLen */
                     int postRet = wh_Server_DmaProcessClientAddress(
                         ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
                         WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
@@ -8608,8 +8571,7 @@ static int _HandlePqcSigAlgorithmDma(whServerContext* ctx, uint16_t magic,
                                                  cryptoDataOut, cryptoOutSize);
                     break;
                 case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
-                    /* The public key is 2n bytes, so the comm-buffer handler
-                     * carries it and there is nothing for DMA to move. */
+                    /* The 2n-byte public key fits the comm buffer */
                     ret = _HandleSlhDsaCheckPrivKey(
                         ctx, magic, devId, cryptoDataIn, cryptoInSize,
                         cryptoDataOut, cryptoOutSize);

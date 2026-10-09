@@ -89,13 +89,6 @@ jobs:
         done
         done
 
-    # The client and the server are separate binaries with separate
-    # user_settings.h, so the client can be built with no software SLH-DSA at
-    # all while the server keeps its own. That is the only way to prove the
-    # callback-only path really reaches the server: with the software stripped
-    # the client has nothing to fall back to, so a passing demo means every
-    # SLH-DSA operation was served over the wire. Only one transport needs to
-    # run it; the ONLY macro is orthogonal to the transport.
     - name: Build and run the callback-only SLH-DSA client
       if: ${{ matrix.transport == 'tcp' }}
       run: |

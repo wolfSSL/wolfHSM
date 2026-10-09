@@ -11346,8 +11346,6 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
 
 #ifdef WOLFSSL_HAVE_SLHDSA
 
-/* Parameter set the caller's key was initialized with. The server needs it to
- * rebuild the key, and it is not recoverable from the key id alone. */
 static int _SlhDsaKeyParam(const SlhDsaKey* key)
 {
     if ((key == NULL) || (key->params == NULL)) {
@@ -11415,7 +11413,7 @@ int wh_Client_SlhDsaImportKey(whClientContext* ctx, SlhDsaKey* key,
 
     WH_DEBUG_CLIENT_VERBOSE("label:%.*s ret:%d keyid:%u\n", label_len, label,
                             ret, key_id);
-    /* The DER above holds private key material. */
+    /* The DER above contains private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
@@ -11440,7 +11438,7 @@ int wh_Client_SlhDsaExportKey(whClientContext* ctx, whKeyId keyId,
 
     WH_DEBUG_CLIENT_VERBOSE("keyid:%x key:%p ret:%d label:%.*s\n", keyId, key,
                             ret, (int)label_len, label);
-    /* The DER above holds private key material. */
+    /* The DER above contains private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
@@ -11476,7 +11474,7 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
     uint8_t*                              dataPtr = NULL;
     whMessageCrypto_SlhDsaKeyGenRequest*  req     = NULL;
     whMessageCrypto_SlhDsaKeyGenResponse* res     = NULL;
-    uint16_t                              pkType;
+    uint16_t                              pkType  = WC_PK_TYPE_PQC_SIG_KEYGEN;
 
     if (out_committed != NULL) {
         *out_committed = 0;
@@ -11492,10 +11490,6 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
         return WH_ERROR_BADARGS;
     }
 
-    /* A seeded generation is an ordinary key generation carrying a seed;
-     * the server tells them apart by the seed length in the request. */
-    pkType = WC_PK_TYPE_PQC_SIG_KEYGEN;
-
     /* Setup generic header and get pointer to request data */
     req = (whMessageCrypto_SlhDsaKeyGenRequest*)_createCryptoRequestWithSubtype(
         dataPtr, pkType, WC_PQC_SIG_TYPE_SLHDSA, ctx->cryptoAffinity);
@@ -11510,8 +11504,6 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        /* Sum in 64 bits: the lengths below are caller supplied, and a
-         * 32-bit sum could wrap past the buffer check. */
         uint64_t total_len = (uint64_t)sizeof(
                                  whMessageCrypto_GenericRequestHeader) +
                              sizeof(*req) + (uint64_t)seedSz;
@@ -11546,21 +11538,15 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
+                    /* Get response pointer, validate header */
                     ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
                     if (ret >= 0) {
-                        const size_t chk_sz =
+                        const size_t min_sz =
                             sizeof(whMessageCrypto_GenericResponseHeader) +
                             sizeof(*res);
-                        /* Confirm the frame is long enough for this
-                         * response before reading any of it. A cached-key
-                         * generation passes key == NULL and would otherwise
-                         * never check, handing back whatever the buffer
-                         * held as a key id. */
-                        if (res_len < chk_sz) {
+                        if (res_len < min_sz) {
                             ret = WH_ERROR_ABORTED;
                         }
                     }
@@ -11586,12 +11572,8 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
                              * otherwise. */
                             wh_Client_SlhDsaSetKeyId(key, key_id);
 
-                            /* Response carries the exported key (EPHEMERAL) or
-                             * the public key (cached keygen). An empty body
-                             * means the caller requested key material the
-                             * server did not return; also reject a length that
-                             * does not fit the received frame before
-                             * deserializing. */
+                            /* Private key DER if EPHEMERAL, else public key
+                             * DER. Reject if empty or truncated. */
                             if (der_size == 0) {
                                 ret = WH_ERROR_ABORTED;
                             }
@@ -11613,8 +11595,6 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
             ret = WH_ERROR_BADARGS;
         }
     }
-    /* The request carried the seed and the response carried private
-     * key DER; neither may stay in the shared packet buffer. */
     if (dataPtr != NULL) {
         wc_ForceZero(dataPtr, WOLFHSM_CFG_COMM_DATA_LEN);
     }
@@ -11731,8 +11711,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         return WH_ERROR_BADARGS;
     }
 
-    /* The internal interface takes M' ready-made, so a context does not apply
-     * to it. Normalize rather than send bytes the server will ignore. */
+    /* M' already contains any context, so drop it */
     if (isMPrime != 0) {
         contextLen = 0;
     }
@@ -11760,16 +11739,12 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        /* Sum in 64 bits: the lengths below are caller supplied, and a
-         * 32-bit sum could wrap past the buffer check. */
         uint64_t total_len = (uint64_t)sizeof(
                                  whMessageCrypto_GenericRequestHeader) +
                              sizeof(*req) + (uint64_t)in_len +
                              (uint64_t)contextLen + (uint64_t)addRndSz;
         uint32_t options = 0;
 
-        /* Get data pointer from the context to use as request/response storage
-         */
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
             return WH_ERROR_BADARGS;
@@ -11819,7 +11794,6 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 uint16_t res_len = 0;
                 evict            = 0;
 
-                /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  WOLFHSM_CFG_COMM_DATA_LEN,
@@ -11827,8 +11801,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
+                    /* Get response pointer, validate header */
                     ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
@@ -11859,7 +11832,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
             ret = WH_ERROR_BADARGS;
         }
     }
-    /* Evict the key manually on error */
+    /* Evict key material on error */
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
@@ -11888,8 +11861,7 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
         return WH_ERROR_BADARGS;
     }
 
-    /* The internal interface takes M' ready-made, so a context does not apply
-     * to it. Normalize rather than send bytes the server will ignore. */
+    /* M' already contains any context, so drop it */
     if (isMPrime != 0) {
         contextLen = 0;
     }
@@ -11918,15 +11890,11 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        /* Sum in 64 bits: the lengths below are caller supplied, and a
-         * 32-bit sum could wrap past the buffer check. */
         uint64_t total_len = (uint64_t)sizeof(
                                  whMessageCrypto_GenericRequestHeader) +
                              sizeof(*req) + (uint64_t)sig_len +
                              (uint64_t)msg_len + (uint64_t)contextLen;
 
-        /* Get data pointer from the context to use as request/response storage
-         */
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
             return WH_ERROR_BADARGS;
@@ -11978,15 +11946,14 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
                 uint16_t res_len = 0;
                 evict            = 0;
 
-                /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  WOLFHSM_CFG_COMM_DATA_LEN,
                                                  (uint8_t*)dataPtr);
                 } while (ret == WH_ERROR_NOTREADY);
+
                 if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
+                    /* Get response pointer, validate header */
                     ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
@@ -12011,7 +11978,7 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
             ret = WH_ERROR_BADARGS;
         }
     }
-    /* Evict the key manually on error */
+    /* Evict key material on error */
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
@@ -12031,8 +11998,7 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
     whKeyId key_id;
     int     evict = 0;
 
-    /* A NULL public key asks the server to check its own copy of the private
-     * key for consistency, with nothing to compare it against. */
+    /* NULL public key asks the server to check its private key. */
     if ((ctx == NULL) || (key == NULL) ||
         ((pubKey == NULL) != (pubKeySz == 0))) {
         return WH_ERROR_BADARGS;
@@ -12057,8 +12023,6 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        /* Sum in 64 bits: the lengths below are caller supplied, and a
-         * 32-bit sum could wrap past the buffer check. */
         uint64_t total_len = (uint64_t)sizeof(
                                  whMessageCrypto_GenericRequestHeader) +
                              sizeof(*req) + (uint64_t)pubKeySz;
@@ -12162,7 +12126,7 @@ int wh_Client_SlhDsaImportKeyDma(whClientContext* ctx, SlhDsaKey* key,
         }
     }
 
-    /* The DER above holds private key material. */
+    /* The DER above contains private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
@@ -12186,7 +12150,7 @@ int wh_Client_SlhDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
         ret = wh_Crypto_SlhDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
 
-    /* The DER above holds private key material. */
+    /* The DER above contains private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
@@ -12221,18 +12185,18 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     int      ret    = WH_ERROR_OK;
     whKeyId  key_id = WH_KEYID_ERASED;
     byte     buffer[WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE];
-    uint8_t* dataPtr                                     = NULL;
-    whMessageCrypto_SlhDsaKeyGenDmaRequest*  req         = NULL;
-    whMessageCrypto_SlhDsaKeyGenDmaResponse* res         = NULL;
-    uintptr_t                                keyAddr     = 0;
-    uintptr_t                                seedAddr    = 0;
-    uint64_t                                 keyAddrSz   = 0;
-    int                                      keyPre      = 0;
-    int                                      postErr     = WH_ERROR_OK;
-    int                                      seedPre     = 0;
-    uint16_t                                 pkType;
+    uint8_t* dataPtr                                   = NULL;
+    whMessageCrypto_SlhDsaKeyGenDmaRequest*  req       = NULL;
+    whMessageCrypto_SlhDsaKeyGenDmaResponse* res       = NULL;
+    uintptr_t                                keyAddr   = 0;
+    uintptr_t                                seedAddr  = 0;
+    uint64_t                                 keyAddrSz = 0;
+    int                                      keyPre    = 0;
+    int                                      postErr   = WH_ERROR_OK;
+    int                                      seedPre   = 0;
+    uint16_t                                 pkType = WC_PK_TYPE_PQC_SIG_KEYGEN;
     uint16_t                                 req_len;
-    uint16_t                                 res_len     = 0;
+    uint16_t                                 res_len = 0;
     uint16_t                                 group;
     uint16_t                                 action;
 
@@ -12249,10 +12213,6 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     if (dataPtr == NULL) {
         return WH_ERROR_BADARGS;
     }
-
-    /* A seeded generation is an ordinary key generation carrying a seed;
-     * the server tells them apart by the seed length in the request. */
-    pkType = WC_PK_TYPE_PQC_SIG_KEYGEN;
 
     /* Setup generic header and get pointer to request data */
     req =
@@ -12317,10 +12277,8 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
             } while (ret == WH_ERROR_NOTREADY);
         }
 
-        /* Release only what was acquired. The error is held back rather than
-         * folded into ret here: the response below carries the key id the
-         * server may already have committed, and losing it would strand a
-         * cached key with no way to evict it. */
+        /* Release only what was acquired. Defer POST errors until the key id
+         * is read, so a committed key can still be evicted. */
         if (seedPre) {
             int rc = wh_Client_DmaProcessClientAddress(
                 ctx, (uintptr_t)seed, (void**)&seedAddr, seedSz,
@@ -12339,7 +12297,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
         }
 
         if (ret == WH_ERROR_OK) {
-            /* Get response structure pointer, validates generic header rc */
+            /* Get response pointer, validate header */
             ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
             /* wolfCrypt allows positive error codes on success in some
              * scenarios */
@@ -12347,8 +12305,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
                 const uint32_t hdr_sz =
                     sizeof(whMessageCrypto_GenericResponseHeader) +
                     sizeof(*res);
-                /* The response has no trailing payload; keySize bounds the
-                 * DMA buffer write */
+                /* The response has no trailing payload */
                 if (res_len < hdr_sz) {
                     ret = WH_ERROR_ABORTED;
                 }
@@ -12390,12 +12347,11 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     else {
         ret = WH_ERROR_BADARGS;
     }
-    /* Now that the key id has been recovered, a failed copy-back is the
-     * result: the DER in the buffer cannot be trusted. */
+    /* Report a deferred POST error */
     if ((ret >= 0) && (postErr != WH_ERROR_OK)) {
         ret = postErr;
     }
-    /* The DER above holds private key material. */
+    /* The DER above contains private key material. */
     wc_ForceZero(buffer, sizeof(buffer));
     return ret;
 }
@@ -12435,7 +12391,7 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
         return WH_ERROR_BADARGS;
     }
 
-    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    /* Ephemeral means not cached */
     if (flags & WH_NVM_FLAGS_EPHEMERAL) {
         return WH_ERROR_BADARGS;
     }
@@ -12474,15 +12430,12 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
         return WH_ERROR_BADARGS;
     }
 
-    /* The internal interface takes M' ready-made, so a context does not apply
-     * to it. Normalize rather than send bytes the server will ignore. */
+    /* M' already contains any context, so drop it */
     if (isMPrime != 0) {
         contextLen = 0;
     }
 
-    /* Caller's signature buffer capacity, before the response overwrites it */
     sigCap = *out_len;
-
     pkType = (isMPrime != 0) ? WC_PK_TYPE_PQC_SIG_SIGN_MSG
                              : WC_PK_TYPE_PQC_SIG_SIGN;
 
@@ -12588,8 +12541,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
+                    /* Get response pointer, validate header */
                     ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
@@ -12604,15 +12556,12 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
                             ret = WH_ERROR_BADARGS;
                         }
                         else {
-                            /* Update signature length */
                             *out_len = res->sigLen;
                         }
                     }
                 }
             }
 
-            /* Release only what was acquired, and do not report a good
-             * signature when the copy-back failed. */
             if (outPre) {
                 int postRet = wh_Client_DmaProcessClientAddress(
                     ctx, (uintptr_t)out, (void**)&outAddr, sigCap,
@@ -12634,7 +12583,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
             ret = WH_ERROR_BADARGS;
         }
     }
-    /* Evict the key manually on error if needed */
+    /* Evict key material on error */
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
@@ -12666,8 +12615,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
         return WH_ERROR_BADARGS;
     }
 
-    /* The internal interface takes M' ready-made, so a context does not apply
-     * to it. Normalize rather than send bytes the server will ignore. */
+    /* M' already contains any context, so drop it */
     if (isMPrime != 0) {
         contextLen = 0;
     }
@@ -12761,7 +12709,6 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 uint16_t res_len = 0;
                 evict            = 0;
 
-                /* Recv Response */
                 do {
                     ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
                                                  WOLFHSM_CFG_COMM_DATA_LEN,
@@ -12769,8 +12716,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    /* Get response structure pointer, validates generic header
-                     * rc */
+                    /* Get response pointer, validate header */
                     ret = _getCryptoResponse(dataPtr, pkType, (uint8_t**)&res);
                     /* wolfCrypt allows positive error codes on success in some
                      * scenarios */
@@ -12814,7 +12760,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
         }
     }
 
-    /* Evict the key manually on error if needed */
+    /* Evict key material on error */
     if (evict != 0) {
         (void)wh_Client_KeyEvict(ctx, key_id);
     }
@@ -12825,8 +12771,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
 int wh_Client_SlhDsaCheckPrivKeyDma(whClientContext* ctx, SlhDsaKey* key,
                                     const byte* pubKey, word32 pubKeySz)
 {
-    /* The public key is 2n bytes, so the non-DMA request always fits. There is
-     * nothing for DMA to carry, so reuse the comm-buffer path. */
+    /* The 2n-byte public key fits the comm buffer */
     return wh_Client_SlhDsaCheckPrivKey(ctx, key, pubKey, pubKeySz);
 }
 
