@@ -2990,10 +2990,7 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
 #endif /* !WOLFSSL_NOSHA3_512 */
 
 #if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
-/* SHAKE offload. Mirrors the SHA3 entry points above, with the caller's
- * chosen output length carried through: a SHAKE has no natural digest size.
- * A length larger than a response can carry returns WH_ERROR_NOSPACE so the
- * caller can finish in software from the state it still holds. */
+/* Like SHA3, plus outSz. Too large for one response gives WH_ERROR_NOSPACE */
 #ifdef WOLFSSL_SHAKE128
 int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz);

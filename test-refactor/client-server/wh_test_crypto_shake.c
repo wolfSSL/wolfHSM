@@ -53,8 +53,7 @@
 
 /* Long enough to span several comm-buffer messages at any supported size */
 #define SHAKE_TEST_MAX_IN 20000u
-/* Larger than any response can carry, so a SHAKE this long must fall back to
- * software rather than be truncated */
+/* Too big for one response, so it must fall back to software */
 #define SHAKE_TEST_LONG_OUT (WOLFHSM_CFG_COMM_DATA_LEN + 1024u)
 
 static uint8_t shakeTestIn[SHAKE_TEST_MAX_IN];
@@ -92,8 +91,7 @@ static const shakeTestVariant shakeTestVariants[] = {
 #endif
 };
 
-/* Hash inLen bytes, feeding the update in chunks of chunkSz (0 = all at once)
- * so the multi-update path and the partial-block buffering are exercised. */
+/* Hash in chunks of chunkSz bytes (0 = all at once) */
 static int _ShakeTestHash(int devId, const shakeTestVariant* v,
                           const uint8_t* in, uint32_t inLen, uint32_t chunkSz,
                           uint8_t* out, uint32_t outSz)
@@ -168,15 +166,13 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
     uint32_t i;
     uint32_t j;
     int      ret = WH_ERROR_OK;
-    /* Sizes around the block boundary, plus one long enough to need several
-     * messages */
+    /* Around the block boundary, plus one that spans several messages */
     const uint32_t inLens[]  = {0u,           1u,          rate - 1u,
                                 rate,         rate + 1u,   2u * rate,
                                 2u * rate + 7u, SHAKE_TEST_MAX_IN};
     /* All at once, then patterns that leave partial blocks buffered */
     const uint32_t chunks[]  = {0u, 1u, 7u, rate, rate + 1u};
-    /* Output lengths a SHAKE caller might pick, including ones that are not
-     * multiples of the block */
+    /* Output lengths, including some that are not block multiples */
     const uint32_t outSzs[]  = {1u, 32u, 64u, rate, rate + 5u, 3u * rate};
     const uint32_t inLenCnt  = sizeof(inLens) / sizeof(inLens[0]);
     const uint32_t chunkCnt  = sizeof(chunks) / sizeof(chunks[0]);
@@ -184,9 +180,7 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
 
     for (i = 0; (ret == WH_ERROR_OK) && (i < inLenCnt); i++) {
         for (j = 0; (ret == WH_ERROR_OK) && (j < chunkCnt); j++) {
-            /* Chunking a 20000-byte input one byte at a time is a lot of
-             * round trips for no extra coverage; the smaller inputs above
-             * already exercise the same path */
+            /* Small chunks on large inputs add time but no coverage */
             if ((inLens[i] > 4u * rate) && (chunks[j] != 0u) &&
                 (chunks[j] < rate)) {
                 continue;
@@ -206,9 +200,7 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
     return ret;
 }
 
-/* A SHAKE asked for more output than a response can carry must still produce
- * the right answer, by declining the offload and letting software finish from
- * the state the client holds. */
+/* Output too big for one response must still match software */
 static int _ShakeTestLongOutput(whClientContext* ctx, const shakeTestVariant* v)
 {
     int devId = WH_CLIENT_DEVID(ctx);
@@ -221,8 +213,7 @@ static int _ShakeTestLongOutput(whClientContext* ctx, const shakeTestVariant* v)
     return ret;
 }
 
-/* Exercise the request/response primitives directly, the way the async SHA3
- * tests do, rather than only through the wolfCrypt API. */
+/* Call the request/response helpers directly, like the async SHA3 tests */
 static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
 {
     int      devId = WH_CLIENT_DEVID(ctx);
@@ -426,8 +417,7 @@ static int _ShakeTestAbsorbSqueeze(whClientContext*        ctx,
     return ret;
 }
 
-/* wolfCrypt accepts a finalize asking for zero bytes: it writes nothing and
- * resets the context. Enabling the offload must not turn that into an error. */
+/* A zero-length finalize must succeed, as it does in software */
 static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
                                      const shakeTestVariant* v)
 {
@@ -481,8 +471,7 @@ static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
 }
 
 #ifdef WOLFSSL_HASH_FLAGS
-/* Keccak mode swaps SHAKE256's padding and the flag is not carried on the
- * wire, so the offload must decline and leave the result matching software. */
+/* Keccak mode is software only, so the result must match software */
 static int _ShakeTestKeccakFlag(whClientContext*        ctx,
                                 const shakeTestVariant* v)
 {
@@ -586,8 +575,7 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
         (v->clientSqueezeFn(ctx, sha, NULL, 1u) != WH_ERROR_BADARGS);
 
 #ifdef WOLFSSL_HASH_FLAGS
-    /* Keccak mode is not carried on the wire, so the request helpers must
-     * refuse it rather than return a digest with SHAKE padding. */
+    /* Request helpers must reject Keccak mode */
     if (!bad) {
         bool sent = false;
         (void)wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
