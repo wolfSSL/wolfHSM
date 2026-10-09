@@ -44,9 +44,7 @@ DEF += -DWOLFHSM_CFG_TEST_POSIX
 DEF += -DWOLFHSM_CFG_ENABLE_CLIENT
 DEF += -DWOLFHSM_CFG_ENABLE_SERVER
 
-# SHAKE build variants. Each variant is gated on its own so a helper that
-# assumes the other one exists fails to compile rather than silently working
-# in the build where both are enabled.
+# SHAKE build variants, to test each one without the other
 ifeq ($(NO_SHAKE),1)
     DEF += -DWOLFHSM_CFG_TEST_NO_SHAKE128 -DWOLFHSM_CFG_TEST_NO_SHAKE256
 endif
