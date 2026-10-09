@@ -1698,9 +1698,7 @@ int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext)
 
 #if defined(WOLFSSL_HAVE_SLHDSA) && !defined(WOLFSSL_SLHDSA_VERIFY_ONLY)
 
-/* Generate an SLH-DSA key that stays on the server and use it purely by key
- * id. Only the smallest parameter set produces a signature that fits the comm
- * buffer, so that is what this demo asks for. */
+/* Generate an SLH-DSA key that stays on the server and reference it by ID. */
 int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
 {
     int       ret;
@@ -1729,7 +1727,7 @@ int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
         return ret;
     }
 
-    /* The private key is generated on and never leaves the HSM; only the
+    /* The private key is generated on and never leaves the HSM. Only the
      * public key comes back. */
     ret = wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
         clientContext, SLHDSA_SHAKE128S, &keyId,
@@ -1740,15 +1738,14 @@ int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
         goto exit;
     }
 
-    /* handle holds no key material at all, just the server key id */
+    /* handle contains no key material, just the server key id */
     ret = wh_Client_SlhDsaSetKeyId(handle, keyId);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wh_Client_SlhDsaSetKeyId %d\n", ret);
         goto exit;
     }
 
-    /* The randomizer comes from the caller: the deterministic entry points
-     * read PK.seed out of the local key, which this handle does not hold. */
+    /* handle has no PK.seed, so supply the randomizer */
     ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, message,
                                       sizeof(message), signature, &sigLen,
                                       addRnd);

@@ -150,8 +150,8 @@ extern "C" {
 #define WOLFSSL_MLDSA_NO_MAKE_KEY
 #endif
 
-/* SLH-DSA Options. Only the smallest parameter set is built: its 7856-byte
- * signature is the only one that fits WOLFHSM_CFG_COMM_DATA_LEN. */
+/* SLH-DSA: only 128s (7856-byte signature) fits in the default
+ * WOLFHSM_CFG_COMM_DATA_LEN */
 #define WOLFSSL_HAVE_SLHDSA
 #define WOLFSSL_SLHDSA_PARAM_NO_128F
 #define WOLFSSL_SLHDSA_PARAM_NO_192
