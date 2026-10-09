@@ -784,8 +784,7 @@ int wh_MessageCrypto_TranslateSha3Response(
     return 0;
 }
 
-/* SHAKE Request translation. Trailing input bytes are raw and need no
- * translation. */
+/* SHAKE Request translation. Trailing input bytes need no translation. */
 int wh_MessageCrypto_TranslateShakeRequest(
     uint16_t magic, const whMessageCrypto_ShakeRequest* src,
     whMessageCrypto_ShakeRequest* dest)
