@@ -9722,8 +9722,7 @@ static const whShakeVariant whShake256 = {
     WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ, wc_Shake256_Reset};
 #endif
 
-/* Maximum data size for a single UpdateRequest: inline wire capacity
- * plus room left in the local partial-block buffer. */
+/* Max input per UpdateRequest: inline capacity plus partial-block room */
 static uint32_t _ShakeUpdatePerCallCapacity(const wc_Shake*       sha,
                                             const whShakeVariant* v)
 {
@@ -9780,8 +9779,7 @@ static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
     savedI = sha->i;
     memcpy(savedT, sha->t, sha->i);
 
-    /* Top up the local partial buffer. If it completes a full block, copy
-     * the assembled block as the first inline block. */
+    /* Fill the partial block. A completed block is sent inline first. */
     if (sha->i > 0) {
         while (i < inLen && sha->i < v->blockSize) {
             sha->t[sha->i++] = in[i++];
@@ -9907,8 +9905,7 @@ static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
     }
-    /* Requested output is too big for the response. Return NOSPACE and let
-     * the software fallback handle it, if available. */
+    /* Too big for one response. Return NOSPACE so software can finish. */
     if (outSz > WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ) {
         return WH_ERROR_NOSPACE;
     }
@@ -9986,8 +9983,7 @@ static int _ShakeStateOp(whClientContext* ctx, wc_Shake* sha,
     return ret;
 }
 
-/* Snapshot of the streaming state the offload path mutates, so a fallback to
- * software starts from exactly what the caller passed in. */
+/* State the offload changes, saved so a fallback starts clean */
 typedef struct {
     uint64_t s[25];
     uint8_t  t[WH_SHAKE_MAX_BLOCK_SIZE];
@@ -10042,8 +10038,7 @@ static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
     int              ret;
     _ShakeSavedState saved;
 
-    /* _ShakeUpdatePerCallCapacity reads sha->i, so validate sha here rather
-     * than relying on the lower-level helper's NULL check. */
+    /* Check sha here, since _ShakeUpdatePerCallCapacity reads sha->i */
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
     }
@@ -10051,9 +10046,7 @@ static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
         return WH_ERROR_BADARGS;
     }
 
-    /* A server without SHAKE answers NOT_COMPILED_IN, and an output too large
-     * to return is declined here; either way wolfCrypt re-runs the operation
-     * in software. Snapshot so that fallback cannot absorb any input twice. */
+    /* Save state so a software fallback does not absorb input twice */
     _ShakeSaveState(sha, &saved);
 
     ret = _ShakeUpdateAll(ctx, sha, v, in, inLen);

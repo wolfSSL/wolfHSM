@@ -1038,24 +1038,9 @@ int wh_MessageCrypto_TranslateSha3Response(
 
 /*
  * SHAKE
- *
- * SHAKE reuses the Keccak state above but needs its own messages: the caller
- * chooses how much output it wants, so the length has to travel with the
- * request and the output cannot sit in a fixed field the way a digest does.
- * The SHA3 messages are a released wire format and are left alone.
  */
 
-/* SHAKE Request (variable-length input data follows the struct).
- *
- * Wire layout in the comm buffer:
- *   whMessageCrypto_GenericRequestHeader
- *   whMessageCrypto_ShakeRequest
- *   uint8_t in[inSz]
- *
- * Non-final updates: inSz must be a multiple of the variant's block size
- * (168 for SHAKE128, 136 for SHAKE256). The client buffers any partial-block
- * tail locally in sha->t[] and only sends it on Final with isLastBlock=1.
- */
+/* SHAKE Request. Data follows: in[inSz], whole blocks unless isLastBlock */
 #define WH_MESSAGE_CRYPTO_SHAKE_OP_HASH 0    /* update, or final on the tail */
 #define WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB 1  /* pad the tail into the state */
 #define WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE 2 /* whole blocks out, no input */
@@ -1069,15 +1054,7 @@ typedef struct {
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_ShakeRequest;
 
-/* SHAKE Response.
- *
- * Wire layout in the comm buffer:
- *   whMessageCrypto_GenericResponseHeader
- *   whMessageCrypto_ShakeResponse
- *   uint8_t out[outSz]   (final or squeeze; outSz is 0 otherwise)
- *
- * Except after a final, the state carries the sponge to resume from. Sized to
- * match the request so the outgoing data starts where the incoming data did. */
+/* SHAKE Response, same size as the request. Data follows: out[outSz] */
 typedef struct {
     whMessageCrypto_Sha3State resumeState;
     uint32_t                  outSz;
@@ -1088,8 +1065,7 @@ WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_ShakeResponse) ==
                            sizeof(whMessageCrypto_ShakeRequest),
                        "ShakeRequest and ShakeResponse must be the same size");
 
-/* Per-variant max-inline update sizes, rounded down to a whole-block
- * multiple, as the SHA3 macros above are. */
+/* Per-variant max inline update sizes, in whole blocks */
 #define WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ         \
     (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
        (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
@@ -1104,18 +1080,13 @@ WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_ShakeResponse) ==
       136u) *                                                   \
      136u)
 
-/* Most output a single response can carry. A SHAKE asked for more than this
- * is declined so wolfCrypt produces it in software. */
+/* Max output per response. Larger requests fall back to software. */
 #define WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ           \
     (WOLFHSM_CFG_COMM_DATA_LEN -                               \
      (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
      (uint32_t)sizeof(whMessageCrypto_ShakeResponse))
 
-/* Each enabled SHAKE variant must fit at least one block inline. Additive
- * form for the same reason as the SHA3 asserts above: the capacity macros
- * subtract as unsigned values and wrap on an undersized comm buffer. SHAKE128
- * has the larger block (168) despite being the weaker variant, because a
- * smaller capacity leaves a larger rate. */
+/* Each SHAKE variant must fit one block. Additive to avoid unsigned wrap. */
 #ifdef WOLFSSL_SHAKE128
 WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
                                (uint32_t)sizeof(whMessageCrypto_ShakeRequest) +

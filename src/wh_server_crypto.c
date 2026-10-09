@@ -5176,8 +5176,7 @@ static int _HandleSha3(whServerContext* ctx, int hashType, uint16_t magic,
 #endif /* WOLFSSL_SHA3 */
 
 #if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
-/* SHAKE server handler. Mirrors _HandleSha3 above, with caller-specified
- * output length */
+/* SHAKE handler. Like _HandleSha3, but the caller sets the output length */
 typedef struct {
     uint32_t blockSize;
     int (*initFn)(wc_Shake* sha, void* heap, int devId);
