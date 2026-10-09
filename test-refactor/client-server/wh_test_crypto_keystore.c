@@ -28,6 +28,15 @@
  *   _whTest_NonExportableKeystore - confirm WH_NVM_FLAGS_NONEXPORTABLE keys
  *                                   cannot be exported while ordinary keys can
  *                                   (std and DMA export paths)
+ *   _whTest_NonModifiableCommit   - re-commit over a stored
+ *                                   WH_NVM_FLAGS_NONMODIFIABLE object is
+ *                                   denied, cached or not, and the stored key
+ *                                   and label survive the denial
+ *   _whTest_ModifiableRecommit    - a key without the flag still re-commits
+ *
+ * _whTest_NonModifiableCommit is gated by
+ * WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS: the object it commits
+ * cannot be erased, so it holds an NVM slot for the rest of the run.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -839,6 +848,144 @@ static int _whTest_NonExportableKeystore(whClientContext* ctx)
     return 0;
 }
 
+#if defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
+/* Committing a NONMODIFIABLE key leaves an object that
+ * wh_Nvm_DestroyObjectsChecked refuses to erase, so it occupies one NVM
+ * slot for the rest of the run. Gated like the keypolicy revocation test. */
+static int _whTest_NonModifiableCommit(whClientContext* ctx)
+{
+    int     ret   = 0;
+    whKeyId keyId = WH_KEYID_ERASED;
+    uint8_t key[WH_TEST_KEYSTORE_TEST_SZ] = {
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45,
+        0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+        0x32, 0x10, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
+    uint8_t  exportedKey[WH_TEST_KEYSTORE_TEST_SZ] = {0};
+    uint8_t  label[WH_NVM_LABEL_LEN]               = "NonModifiableCommitKey";
+    uint8_t  exportedLabel[WH_NVM_LABEL_LEN]       = {0};
+    uint16_t exportedKeySize;
+
+    WH_TEST_PRINT("Testing non-modifiable commit enforcement...\n");
+
+    /* Test 1: first commit of a NONMODIFIABLE key stores it, and the commit
+     * leaves the slot cached, so a repeat commit is an overwrite attempt. */
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONMODIFIABLE, label,
+                             sizeof(label), key, sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache non-modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_KeyCommit(ctx, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed first commit of non-modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    /* Test 2: re-committing over the stored non-modifiable object is denied */
+    ret = wh_Client_KeyCommit(ctx, keyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("Non-modifiable key was re-committed unexpectedly: %d\n",
+                       ret);
+        return -1;
+    }
+
+    WH_TEST_DEBUG_PRINT("Non-modifiable key re-commit correctly denied\n");
+
+    /* Test 3: the denial left the stored object intact. Evicting is allowed
+     * because the key is committed, so the export below must freshen it back
+     * out of NVM rather than read the surviving cache slot. */
+    ret = wh_Client_KeyEvict(ctx, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to evict committed non-modifiable key: %d\n",
+                       ret);
+        return ret;
+    }
+
+    exportedKeySize = sizeof(exportedKey);
+    ret = wh_Client_KeyExport(ctx, keyId, exportedLabel, sizeof(exportedLabel),
+                              exportedKey, &exportedKeySize);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to export stored non-modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    if (exportedKeySize != sizeof(key) ||
+        memcmp(key, exportedKey, exportedKeySize) != 0 ||
+        memcmp(label, exportedLabel, sizeof(label)) != 0) {
+        WH_ERROR_PRINT("Denied commit altered the stored key\n");
+        return -1;
+    }
+
+    WH_TEST_DEBUG_PRINT("Stored non-modifiable key unchanged after denial\n");
+
+    /* Evicting reclaims only the cache slot; wh_Nvm_DestroyObjectsChecked
+     * refuses the NONMODIFIABLE object. Checked so Test 4 cannot degrade into
+     * a repeat of Test 2 with the slot still resident. */
+    ret = wh_Client_KeyEvict(ctx, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to evict before uncached commit check: %d\n",
+                       ret);
+        return ret;
+    }
+
+    /* Test 4: the denial does not depend on cache residency. With no slot
+     * left, the stored flags still decide, so commit reports ACCESS rather
+     * than the NOTFOUND raised by the missing slot. */
+    ret = wh_Client_KeyCommit(ctx, keyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("Uncached non-modifiable commit not denied: %d\n", ret);
+        return -1;
+    }
+
+    WH_TEST_DEBUG_PRINT("Uncached non-modifiable commit correctly denied\n");
+
+    WH_TEST_PRINT("NON-MODIFIABLE COMMIT TEST SUCCESS\n");
+    return 0;
+}
+#endif /* WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS */
+
+static int _whTest_ModifiableRecommit(whClientContext* ctx)
+{
+    int     ret   = 0;
+    whKeyId keyId = WH_KEYID_ERASED;
+    uint8_t key[WH_TEST_KEYSTORE_TEST_SZ] = {
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45,
+        0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+        0x32, 0x10, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
+    uint8_t label[WH_NVM_LABEL_LEN] = "ModifiableCommitKey";
+
+    WH_TEST_PRINT("Testing modifiable commit is unaffected...\n");
+
+    /* A key without the flag still commits repeatedly */
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_NONE, label, sizeof(label), key,
+                             sizeof(key), &keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_KeyCommit(ctx, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed first commit of modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wh_Client_KeyCommit(ctx, keyId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed repeat commit of modifiable key: %d\n", ret);
+        return ret;
+    }
+
+    WH_TEST_DEBUG_PRINT("Modifiable key repeat commit allowed\n");
+
+    /* Clean up */
+    (void)wh_Client_KeyErase(ctx, keyId);
+
+    WH_TEST_PRINT("MODIFIABLE COMMIT TEST SUCCESS\n");
+    return 0;
+}
+
 int whTest_Crypto_Keystore(whClientContext* ctx)
 {
     /* A preceding suite may leave the DMA-preferred dispatch mode set; reset
@@ -846,6 +993,10 @@ int whTest_Crypto_Keystore(whClientContext* ctx)
     (void)wh_Client_SetDmaMode(ctx, 0);
     WH_TEST_RETURN_ON_FAIL(_whTest_KeyCache(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NonExportableKeystore(ctx));
+#if defined(WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS)
+    WH_TEST_RETURN_ON_FAIL(_whTest_NonModifiableCommit(ctx));
+#endif
+    WH_TEST_RETURN_ON_FAIL(_whTest_ModifiableRecommit(ctx));
     return 0;
 }
 
