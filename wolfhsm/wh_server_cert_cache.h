@@ -28,7 +28,8 @@
  *     successfully verified, scoped to the set of trusted-root NVM IDs
  *     that were loaded when the verify ran. Hits apply across clients
  *     but require the cached root set to be a subset of the caller's
- *     currently-loaded root set.
+ *     currently-loaded root set. A hit skips every check on the cert,
+ *     dates included.
  *
  *     Only CA certs are inserted. Caching a leaf would let a future
  *     "leaf alone" verify falsely succeed via cache hit, because the
@@ -37,6 +38,21 @@
  *     leaf is supplied without its intermediates). CA caching is sound
  *     because the chain walk loads each verified CA into the cert manager
  *     before the next cert is processed.
+ *
+ *     A cached CA is trusted in later requests that load the same root,
+ *     even when the certs above it are left out: after [I1, I2, L]
+ *     verifies, [I2, L] also passes. A path length constraint is only
+ *     applied when the CA that sets it is part of the request, so the
+ *     cache does not enforce path length constraints from CAs left out of
+ *     a request.
+ *
+ *     With WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN, a successful verify
+ *     also inserts the SHA-256 of the whole chain buffer. A later verify of
+ *     the exact same chain hits it and skips every check, leaf included. A
+ *     leaf from a longer chain is verified normally when sent alone or with
+ *     other CAs. A leaf verified alone (signed directly by a root) has a
+ *     chain hash equal to its own hash, so it hits wherever it appears while
+ *     that root is loaded.
  *
  *     Soundness of the subset rule rests on X.509 verify monotonicity:
  *     adding more trusted roots can never invalidate a previously
@@ -146,7 +162,8 @@ struct whServerContext_t;
  * @param rootNvmIds Array of trusted root NVM IDs currently loaded
  *        (presented set).
  * @param numRoots Number of entries in rootNvmIds (must be > 0).
- * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert.
+ * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert, or of
+ *        the whole chain (see WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN).
  * @return WH_ERROR_OK on hit, WH_ERROR_NOTFOUND on miss,
  *         WH_ERROR_BADARGS on invalid arguments.
  */
@@ -170,7 +187,8 @@ int wh_Server_CertVerifyCache_Lookup(struct whServerContext_t* server,
  * @param rootNvmIds Array of trusted root NVM IDs loaded for the verify.
  * @param numRoots Number of entries in rootNvmIds (must be > 0 and
  *        <= WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS).
- * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert.
+ * @param hash Pointer to a SHA-256 (32-byte) digest of the DER cert, or of
+ *        the whole chain (see WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN).
  */
 void wh_Server_CertVerifyCache_Insert(struct whServerContext_t* server,
                                       const whNvmId*            rootNvmIds,

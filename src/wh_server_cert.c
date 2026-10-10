@@ -329,6 +329,19 @@ int wh_Server_CertVerifyCache_EvictRoot(whServerContext* server,
     (void)_UnlockVerifyCache(cache);
     return WH_ERROR_OK;
 }
+
+/* Read the runtime enable flag under the cache lock */
+static int _IsVerifyCacheEnabled(whServerContext* server)
+{
+    whCertVerifyCacheContext* cache   = _GetVerifyCache(server);
+    int                       enabled = 0;
+
+    if ((cache != NULL) && (_LockVerifyCache(cache) == WH_ERROR_OK)) {
+        enabled = cache->enabled ? 1 : 0;
+        (void)_UnlockVerifyCache(cache);
+    }
+    return enabled;
+}
 #endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
 
 int wh_Server_CertSetVerifyCb(whServerContext* server, VerifyCallback cb)
@@ -373,7 +386,13 @@ static int _verifyChainAgainstCmStore(
     word32         idx           = 0;
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
     uint8_t certHash[WH_CERT_VERIFY_CACHE_HASH_LEN];
-    int     hashed = 0;
+    int     hashed   = 0;
+    int     certHit  = 0;
+    int     chainHit = 0;
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+    uint8_t chainHash[WH_CERT_VERIFY_CACHE_HASH_LEN];
+    int     chainHashed = 0;
+#endif
 #else
     (void)trustedRootNvmIds;
     (void)numRoots;
@@ -384,12 +403,33 @@ static int _verifyChainAgainstCmStore(
         return WH_ERROR_BADARGS;
     }
 
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+    /* Look up the hash of the whole chain. A hit means these exact bytes,
+     * leaf included, verified before under roots that are still loaded, so
+     * every check below is skipped, dates included. A one-cert chain has the
+     * same hash as its only cert, so a leaf that verified alone also hits the
+     * per-cert lookup in later chains. */
+    if (_IsVerifyCacheEnabled(server)) {
+        rc = wc_Sha256Hash_ex(chain, chain_len, chainHash, NULL, server->devId);
+        if (rc != 0) {
+            return rc;
+        }
+        chainHashed = 1;
+        if (wh_Server_CertVerifyCache_Lookup(server, trustedRootNvmIds,
+                                             numRoots,
+                                             chainHash) == WH_ERROR_OK) {
+            chainHit = 1;
+        }
+    }
+#endif
+
     /* Iterate through each certificate in the chain */
     while (remaining_len > 0) {
         /* Reset index for each certificate */
         idx = 0;
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
-        hashed = 0;
+        hashed  = 0;
+        certHit = 0;
 #endif
 
         /* Get the length of the current certificate */
@@ -405,41 +445,29 @@ static int _verifyChainAgainstCmStore(
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
         {
-            whCertVerifyCacheContext* vcache = _GetVerifyCache(server);
-            /* Snapshot the enable flag under the cache lock to prevent race */
-            int cacheActive = 0;
-            if (vcache != NULL) {
-                int lockRc = _LockVerifyCache(vcache);
-                if (lockRc == WH_ERROR_OK) {
-                    cacheActive = vcache->enabled ? 1 : 0;
-                    (void)_UnlockVerifyCache(vcache);
-                }
+            if (chainHit) {
+                /* The whole chain matched a cached entry */
+                rc      = WOLFSSL_SUCCESS;
+                certHit = 1;
             }
-            if (cacheActive) {
-                /* Hash the DER cert and check the verify cache. A hit
-                 * short-circuits the public-key signature check; the cert is
-                 * otherwise treated as if it had verified normally so the
-                 * rest of the loop (CA decode, store load, leaf pubkey
-                 * extract) continues unchanged. */
+            else if (_IsVerifyCacheEnabled(server)) {
+                /* Hash the DER cert and check the verify cache */
                 rc = wc_Sha256Hash_ex(cert_ptr, (word32)(cert_len + idx),
                                       certHash, NULL, server->devId);
                 if (rc != 0) {
                     return rc;
                 }
                 hashed = 1;
-                {
-                    int hit = (wh_Server_CertVerifyCache_Lookup(
-                                   server, trustedRootNvmIds, numRoots,
-                                   certHash) == WH_ERROR_OK);
-                    if (hit) {
-                        rc = WOLFSSL_SUCCESS;
-                    }
-                    else {
-                        /* Verify the current certificate */
-                        rc = wolfSSL_CertManagerVerifyBuffer(
-                            cm, cert_ptr, cert_len + idx,
-                            WOLFSSL_FILETYPE_ASN1);
-                    }
+                if (wh_Server_CertVerifyCache_Lookup(server, trustedRootNvmIds,
+                                                     numRoots,
+                                                     certHash) == WH_ERROR_OK) {
+                    rc      = WOLFSSL_SUCCESS;
+                    certHit = 1;
+                }
+                else {
+                    /* Verify the current certificate */
+                    rc = wolfSSL_CertManagerVerifyBuffer(
+                        cm, cert_ptr, cert_len + idx, WOLFSSL_FILETYPE_ASN1);
                 }
             }
             else {
@@ -473,9 +501,18 @@ static int _verifyChainAgainstCmStore(
                 return rc;
             }
             if (dc.isCA) {
+                word32 loadFlags = WOLFSSL_LOAD_VERIFY_DEFAULT_FLAGS;
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+                /* A cache hit skips every check, so stop the load from
+                 * checking the CA's dates again */
+                if (certHit) {
+                    loadFlags |= WOLFSSL_LOAD_FLAG_DATE_ERR_OKAY;
+                }
+#endif
                 /* Add the certificate to the CM store as trusted */
-                rc = wolfSSL_CertManagerLoadCABuffer(
-                    cm, cert_ptr, cert_len + idx, WOLFSSL_FILETYPE_ASN1);
+                rc = wolfSSL_CertManagerLoadCABuffer_ex(
+                    cm, cert_ptr, cert_len + idx, WOLFSSL_FILETYPE_ASN1, 0,
+                    loadFlags);
                 if (rc != WOLFSSL_SUCCESS) {
                     wc_FreeDecodedCert(&dc);
                     return rc;
@@ -539,7 +576,11 @@ static int _verifyChainAgainstCmStore(
              * cert manager when the leaf is supplied without its
              * intermediates). CA caching is sound because the chain walk
              * loads each verified CA into the cert manager before the next
-             * cert is processed.
+             * cert is processed. With
+             * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN the leaf is
+             * covered by the whole-chain entry instead. A leaf sent alone
+             * matches that entry only if the cached chain was the same leaf
+             * alone, which means a loaded root signed it directly.
              *
              * The slot's binding is the loaded root set passed in. Under
              * subset-lookup semantics, a future verify hits this entry
@@ -564,6 +605,14 @@ static int _verifyChainAgainstCmStore(
         cert_ptr += (cert_len + idx);
         remaining_len -= (cert_len + idx);
     }
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+    /* Every cert verified, so cache the whole chain */
+    if (chainHashed && !chainHit) {
+        wh_Server_CertVerifyCache_Insert(server, trustedRootNvmIds, numRoots,
+                                         chainHash);
+    }
+#endif
 
     return (rc == WOLFSSL_SUCCESS) ? WH_ERROR_OK : rc;
 }

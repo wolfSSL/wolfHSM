@@ -664,6 +664,15 @@
     "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL requires WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE"
 #endif
 
+/* Full-chain caching is a layered option on top of the verify cache. Enforce
+ * the dependency so downstream code can gate on
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN alone. */
+#if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN) && \
+    !defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE)
+#error \
+    "WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN requires WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE"
+#endif
+
 /* Enforce both dependencies so downstream code can gate on
  * WOLFHSM_CFG_SHE_GLOBAL_KEYS alone. */
 #if defined(WOLFHSM_CFG_SHE_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_SHE_EXTENSION)

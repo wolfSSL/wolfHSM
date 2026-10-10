@@ -163,6 +163,11 @@ jobs:
       if: matrix.group == 'base'
       run: cd test-refactor/posix && make clean && make -j DEBUG_VERBOSE=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    # Build and test the trusted certificate verify cache with full-chain caching
+    - name: Build and test refactor CERT_VERIFY_CACHE_FULLCHAIN ASAN
+      if: matrix.group == 'base'
+      run: cd test-refactor/posix && make clean && make -j CERT_VERIFY_CACHE_FULLCHAIN=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test in multithreaded mode with everything enabled
     - name: Build and test refactor with THREADSAFE and everything
       if: matrix.group == 'threadsafe'
