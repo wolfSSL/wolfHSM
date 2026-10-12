@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   clang-format-check:
-    name: Check PR formatting with clang-format-15
+    name: Check PR formatting with clang-format-18
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -23,9 +23,9 @@ jobs:
       with:
         fetch-depth: 0  # Need full history to compare with main branch
 
-    - name: Install clang-format-15
+    - name: Install clang-format-18
       run: |
-        sudo apt-get install -y clang-format-15
+        sudo apt-get install -y clang-format-18
 
     - name: Fetch base branch
       env:
@@ -38,41 +38,38 @@ jobs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
-        echo "Running git-clang-format-15 to check for formatting issues..."
+        echo "Running git-clang-format-18 to check for formatting issues..."
         echo "Comparing against base branch: $BASE_REF"
 
         # Create a temporary file for the diff and ensure cleanup
         DIFF_FILE="$(mktemp)"
         trap 'rm -f "$DIFF_FILE"' EXIT
 
-        # Run git-clang-format against the PR base commit and capture status safely under set -e
-        if git-clang-format-15 "$BASE_REF" > "$DIFF_FILE"; then
+        # Without --binary, the wrapper runs the unversioned clang-format
+        if git-clang-format-18 --binary clang-format-18 --diff "$BASE_REF" \
+            > "$DIFF_FILE"; then
           status=0
         else
           status=$?
         fi
 
         if [ "$status" -eq 0 ]; then
-          echo "✅ Code is properly formatted!"
+          echo "Code is properly formatted!"
           exit 0
         elif [ "$status" -eq 1 ]; then
-          echo "❌ Code formatting issues detected!"
+          echo "Code formatting issues detected!"
           echo ""
-          echo "The following changes would be made by clang-format-15:"
+          echo "The following changes would be made by clang-format-18:"
           echo "=================================================="
           cat "$DIFF_FILE"
           echo "=================================================="
           echo ""
           echo "Please run the following command locally on your feature branch and commit the changes:"
-          echo "  git-clang-format-15 $BASE_REF"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
+          echo "  git-clang-format-18 --binary clang-format-18 $BASE_REF"
+          exit 1
         else
-          echo "❌ git-clang-format-15 failed with exit code $status"
+          echo "git-clang-format-18 failed with exit code $status"
           echo "Output (if any):"
           cat "$DIFF_FILE"
-          exit 0
-          # TEMPORARY DISABLE DUE TO BUGS
-          #exit 1
+          exit 1
         fi
