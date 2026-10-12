@@ -23,15 +23,9 @@ jobs:
       with:
         fetch-depth: 0  # Need full history to compare with main branch
 
-    - name: Verify clang-format-18
+    - name: Install clang-format-18
       run: |
-        # 18 is preinstalled on ubuntu-latest. use it to avoid an update+install
-        command -v clang-format-18 >/dev/null || {
-          echo "clang-format-18 is missing from the runner image"; exit 1; }
-        command -v git-clang-format-18 >/dev/null || {
-          echo "git-clang-format-18 is missing from the runner image"; exit 1; }
-        clang-format-18 --version
-        clang-format --version || true
+        sudo apt-get install -y clang-format-18
 
     - name: Fetch base branch
       env:
@@ -41,8 +35,41 @@ jobs:
 
     - name: Check formatting
       env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
+        echo "Running git-clang-format-18 to check for formatting issues..."
         echo "Comparing against base branch: $BASE_REF"
-        # Same script the pre-commit hook runs, so local and CI agree.
-        .github/scripts/clang-format-check.sh "$BASE_REF"
+
+        # Create a temporary file for the diff and ensure cleanup
+        DIFF_FILE="$(mktemp)"
+        trap 'rm -f "$DIFF_FILE"' EXIT
+
+        # Without --binary, the wrapper runs the unversioned clang-format
+        if git-clang-format-18 --binary clang-format-18 --diff "$BASE_REF" \
+            > "$DIFF_FILE"; then
+          status=0
+        else
+          status=$?
+        fi
+
+        if [ "$status" -eq 0 ]; then
+          echo "Code is properly formatted!"
+          exit 0
+        elif [ "$status" -eq 1 ]; then
+          echo "Code formatting issues detected!"
+          echo ""
+          echo "The following changes would be made by clang-format-18:"
+          echo "=================================================="
+          cat "$DIFF_FILE"
+          echo "=================================================="
+          echo ""
+          echo "Please run the following command locally on your feature branch and commit the changes:"
+          echo "  git-clang-format-18 --binary clang-format-18 $BASE_REF"
+          exit 1
+        else
+          echo "git-clang-format-18 failed with exit code $status"
+          echo "Output (if any):"
+          cat "$DIFF_FILE"
+          exit 1
+        fi
