@@ -11639,8 +11639,8 @@ int wh_Client_SlhDsaMakeCacheKeyAndExportPublic(
     whClientContext* ctx, int param, whKeyId* inout_key_id, whNvmFlags flags,
     uint16_t label_len, const uint8_t* label, SlhDsaKey* pub)
 {
-    int     ret;
-    int     committed = 0;
+    int ret;
+    int committed = 0;
 
     if ((ctx == NULL) || (inout_key_id == NULL) || (pub == NULL)) {
         return WH_ERROR_BADARGS;
@@ -11681,7 +11681,7 @@ int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
 
 int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
                                          const byte* seed, word32 seedSz,
-                                         whKeyId* inout_key_id,
+                                         whKeyId*   inout_key_id,
                                          whNvmFlags flags, uint16_t label_len,
                                          uint8_t* label)
 {
@@ -11700,11 +11700,11 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
                          word32 preHashType, const byte* addRnd, byte addRndSz,
                          int randomized, int isMPrime)
 {
-    int                                ret     = WH_ERROR_OK;
-    whMessageCrypto_SlhDsaSignRequest* req     = NULL;
-    whMessageCrypto_SlhDsaSignResponse* res    = NULL;
-    uint8_t*                           dataPtr = NULL;
-    uint16_t                           pkType;
+    int                                 ret     = WH_ERROR_OK;
+    whMessageCrypto_SlhDsaSignRequest*  req     = NULL;
+    whMessageCrypto_SlhDsaSignResponse* res     = NULL;
+    uint8_t*                            dataPtr = NULL;
+    uint16_t                            pkType;
 
     /* Transaction state */
     whKeyId key_id;
@@ -11722,8 +11722,8 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         contextLen = 0;
     }
 
-    pkType = (isMPrime != 0) ? WC_PK_TYPE_PQC_SIG_SIGN_MSG
-                             : WC_PK_TYPE_PQC_SIG_SIGN;
+    pkType =
+        (isMPrime != 0) ? WC_PK_TYPE_PQC_SIG_SIGN_MSG : WC_PK_TYPE_PQC_SIG_SIGN;
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
@@ -11906,9 +11906,8 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_SlhDsaVerifyRequest*)
-            _createCryptoRequestWithSubtype(dataPtr, pkType,
-                                            WC_PQC_SIG_TYPE_SLHDSA,
-                                            ctx->cryptoAffinity);
+            _createCryptoRequestWithSubtype(
+                dataPtr, pkType, WC_PQC_SIG_TYPE_SLHDSA, ctx->cryptoAffinity);
 
         if (total_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint16_t req_len  = (uint16_t)total_len;
@@ -11993,10 +11992,10 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
 int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
                                  const byte* pubKey, word32 pubKeySz)
 {
-    int       ret     = WH_ERROR_OK;
-    uint8_t*  dataPtr = NULL;
-    whMessageCrypto_SlhDsaCheckPrivKeyRequest*  req = NULL;
-    whMessageCrypto_SlhDsaCheckPrivKeyResponse* res = NULL;
+    int                                         ret     = WH_ERROR_OK;
+    uint8_t*                                    dataPtr = NULL;
+    whMessageCrypto_SlhDsaCheckPrivKeyRequest*  req     = NULL;
+    whMessageCrypto_SlhDsaCheckPrivKeyResponse* res     = NULL;
 
     /* Transaction state */
     whKeyId key_id;
@@ -12045,8 +12044,7 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
             uint16_t req_len = (uint16_t)total_len;
 
             if (evict != 0) {
-                options |=
-                    WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT;
+                options |= WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT;
             }
 
             memset(req, 0, sizeof(*req));
@@ -12071,9 +12069,9 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    ret = _getCryptoResponse(
-                        dataPtr, WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY,
-                        (uint8_t**)&res);
+                    ret = _getCryptoResponse(dataPtr,
+                                             WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY,
+                                             (uint8_t**)&res);
                     if (ret >= 0) {
                         const uint32_t hdr_sz =
                             sizeof(whMessageCrypto_GenericResponseHeader) +
@@ -12171,9 +12169,9 @@ int wh_Client_SlhDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_SLHDSA, buffer,
-                                       buffer_len, label, label_len,
-                                       &buffer_len);
+    ret =
+        wh_Client_KeyExportPublicDma(ctx, keyId, WH_KEY_ALGO_SLHDSA, buffer,
+                                     buffer_len, label, label_len, &buffer_len);
     if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_SlhDsaDeserializeKeyDer(buffer, buffer_len, key);
     }
@@ -12219,11 +12217,9 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
     }
 
     /* Setup generic header and get pointer to request data */
-    req =
-        (whMessageCrypto_SlhDsaKeyGenDmaRequest*)
-            _createCryptoRequestWithSubtype(dataPtr, pkType,
-                                            WC_PQC_SIG_TYPE_SLHDSA,
-                                            ctx->cryptoAffinity);
+    req = (whMessageCrypto_SlhDsaKeyGenDmaRequest*)
+        _createCryptoRequestWithSubtype(dataPtr, pkType, WC_PQC_SIG_TYPE_SLHDSA,
+                                        ctx->cryptoAffinity);
 
     /* Use the supplied key id if provided */
     if (inout_key_id != NULL) {
@@ -12405,12 +12401,11 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
     return _SlhDsaCacheKeyFinish(ctx, ret, committed, inout_key_id, pub);
 }
 
-int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
-                            word32 in_len, byte* out, word32* out_len,
-                            SlhDsaKey* key, const byte* context,
-                            byte contextLen, word32 preHashType,
-                            const byte* addRnd, byte addRndSz, int randomized,
-                            int isMPrime)
+int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
+                            byte* out, word32* out_len, SlhDsaKey* key,
+                            const byte* context, byte contextLen,
+                            word32 preHashType, const byte* addRnd,
+                            byte addRndSz, int randomized, int isMPrime)
 {
     int                                    ret     = WH_ERROR_OK;
     whMessageCrypto_SlhDsaSignDmaRequest*  req     = NULL;
@@ -12440,8 +12435,8 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
     }
 
     sigCap = *out_len;
-    pkType = (isMPrime != 0) ? WC_PK_TYPE_PQC_SIG_SIGN_MSG
-                             : WC_PK_TYPE_PQC_SIG_SIGN;
+    pkType =
+        (isMPrime != 0) ? WC_PK_TYPE_PQC_SIG_SIGN_MSG : WC_PK_TYPE_PQC_SIG_SIGN;
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
@@ -12475,9 +12470,8 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_SlhDsaSignDmaRequest*)
-            _createCryptoRequestWithSubtype(dataPtr, pkType,
-                                            WC_PQC_SIG_TYPE_SLHDSA,
-                                            ctx->cryptoAffinity);
+            _createCryptoRequestWithSubtype(
+                dataPtr, pkType, WC_PQC_SIG_TYPE_SLHDSA, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint8_t* req_data = (uint8_t*)(req + 1);
@@ -12598,16 +12592,15 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
 int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                               word32 sig_len, const byte* msg, word32 msg_len,
                               int* out_res, SlhDsaKey* key, const byte* context,
-                              byte contextLen, word32 preHashType,
-                              int isMPrime)
+                              byte contextLen, word32 preHashType, int isMPrime)
 {
     int                                      ret     = WH_ERROR_OK;
     whMessageCrypto_SlhDsaVerifyDmaRequest*  req     = NULL;
     whMessageCrypto_SlhDsaVerifyDmaResponse* res     = NULL;
     uint8_t*                                 dataPtr = NULL;
     uint16_t                                 pkType;
-    int                                      sigPre  = 0;
-    int                                      msgPre  = 0;
+    int                                      sigPre = 0;
+    int                                      msgPre = 0;
 
     /* Transaction state */
     whKeyId key_id;
@@ -12661,9 +12654,8 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
 
         /* Setup generic header and get pointer to request data */
         req = (whMessageCrypto_SlhDsaVerifyDmaRequest*)
-            _createCryptoRequestWithSubtype(dataPtr, pkType,
-                                            WC_PQC_SIG_TYPE_SLHDSA,
-                                            ctx->cryptoAffinity);
+            _createCryptoRequestWithSubtype(
+                dataPtr, pkType, WC_PQC_SIG_TYPE_SLHDSA, ctx->cryptoAffinity);
 
         if (req_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             if (evict != 0) {

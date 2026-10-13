@@ -3531,7 +3531,7 @@ int wh_Client_SlhDsaMakeExportKeyFromSeed(whClientContext* ctx, int param,
  */
 int wh_Client_SlhDsaMakeCacheKeyFromSeed(whClientContext* ctx, int param,
                                          const byte* seed, word32 seedSz,
-                                         whKeyId* inout_key_id,
+                                         whKeyId*   inout_key_id,
                                          whNvmFlags flags, uint16_t label_len,
                                          uint8_t* label);
 
@@ -3710,12 +3710,11 @@ int wh_Client_SlhDsaMakeCacheKeyDma(whClientContext* ctx, int param,
  * @param[in] isMPrime Non-zero when in is a caller-built M'
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
-                            word32 in_len, byte* out, word32* out_len,
-                            SlhDsaKey* key, const byte* context,
-                            byte contextLen, word32 preHashType,
-                            const byte* addRnd, byte addRndSz, int randomized,
-                            int isMPrime);
+int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
+                            byte* out, word32* out_len, SlhDsaKey* key,
+                            const byte* context, byte contextLen,
+                            word32 preHashType, const byte* addRnd,
+                            byte addRndSz, int randomized, int isMPrime);
 
 /**
  * @brief Verify an SLH-DSA signature using DMA.
@@ -3735,9 +3734,9 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in,
  */
 int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
                               word32 sig_len, const byte* msg, word32 msg_len,
-                              int* out_res, SlhDsaKey* key,
-                              const byte* context, byte contextLen,
-                              word32 preHashType, int isMPrime);
+                              int* out_res, SlhDsaKey* key, const byte* context,
+                              byte contextLen, word32 preHashType,
+                              int isMPrime);
 
 /**
  * @brief Check an SLH-DSA private key on the server against a public key.

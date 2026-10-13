@@ -1205,7 +1205,7 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
 /* SLH-DSA Key Generation Request */
 typedef struct {
     uint32_t sz;
-    uint32_t param;  /* enum SlhDsaParam parameter set */
+    uint32_t param; /* enum SlhDsaParam parameter set */
     uint32_t keyId;
     uint32_t flags;
     uint32_t access;
