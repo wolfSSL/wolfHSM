@@ -64,8 +64,8 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
     ret = wc_AesInit(aes, heap, devid);
     /* do the first block with messageZero as the key */
     if (ret == 0) {
-        ret = wc_AesSetKeyDirect(aes, messageZero, AES_BLOCK_SIZE, NULL,
-            AES_ENCRYPTION);
+        ret = wc_AesSetKey(aes, messageZero, AES_BLOCK_SIZE, NULL,
+                           AES_ENCRYPTION);
     }
     while (ret == 0 && i < (int)inSz) {
         /* copy a block and pad it if we're short */
@@ -75,8 +75,9 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
         }
         else
             memcpy(paddedInput, in + i, AES_BLOCK_SIZE);
-        /* encrypt this block */
-        ret = wc_AesEncryptDirect(aes, out, paddedInput);
+        /* encrypt this block. One-block ECB, not AES-direct, which fails
+         * when a crypto callback owns the key */
+        ret = wc_AesEcbEncrypt(aes, out, paddedInput, AES_BLOCK_SIZE);
         /* xor with the original message and then the previous block */
         for (j = 0; j < (int)AES_BLOCK_SIZE; j++) {
             out[j] ^= paddedInput[j];
@@ -85,8 +86,7 @@ int wh_She_AesMp16_ex(Aes* aes, void* heap, int devid,
         }
         /* set the key for the next block */
         if (ret == 0) {
-            ret = wc_AesSetKeyDirect(aes, out, AES_BLOCK_SIZE,
-                NULL, AES_ENCRYPTION);
+            ret = wc_AesSetKey(aes, out, AES_BLOCK_SIZE, NULL, AES_ENCRYPTION);
         }
         if (ret == 0) {
             /* store previous output in messageZero */

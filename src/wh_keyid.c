@@ -45,11 +45,11 @@ whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
     }
 #endif
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Convert hardware-only flag to TYPE=WH_KEYTYPE_HW. Checked after
-     * the wrapped flag so HW wins if a client sets both */
-    if ((reqId & WH_KEYID_CLIENT_HW_FLAG) != 0) {
-        type = WH_KEYTYPE_HW;
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Convert the port key flag to TYPE=WH_KEYTYPE_PORT. Checked after
+     * the wrapped flag so the port key flag wins if a client sets both */
+    if ((reqId & WH_KEYID_CLIENT_PORT_FLAG) != 0) {
+        type = WH_KEYTYPE_PORT;
     }
 #endif
 
@@ -59,9 +59,9 @@ whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
 whKeyId wh_KeyId_TranslateObjectIdFromClient(uint16_t type, uint16_t clientId,
                                              whKeyId reqId)
 {
-    /* Strip wrapped and hardware flags so fixed types are preserved. */
+    /* Strip wrapped and port key flags so fixed types are preserved. */
     reqId &=
-        (whKeyId) ~(WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG);
+        (whKeyId) ~(WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_PORT_FLAG);
     return wh_KeyId_TranslateFromClient(type, clientId, reqId);
 }
 
@@ -72,8 +72,8 @@ int wh_KeyId_CheckClientObjectId(whKeyId reqId)
         0) {
         return WH_ERROR_BADARGS;
     }
-    /* Wrapped and hardware flags are not valid for fixed-type objects */
-    if ((reqId & (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_HW_FLAG)) !=
+    /* Wrapped and port key flags are not valid for fixed-type objects */
+    if ((reqId & (WH_KEYID_CLIENT_WRAPPED_FLAG | WH_KEYID_CLIENT_PORT_FLAG)) !=
         0) {
         return WH_ERROR_BADARGS;
     }
@@ -113,10 +113,10 @@ whKeyId wh_KeyId_TranslateToClient(whKeyId serverId)
     }
 #endif
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Convert TYPE=HW to hardware-only flag */
-    if (WH_KEYID_TYPE(serverId) == WH_KEYTYPE_HW) {
-        clientId |= WH_KEYID_CLIENT_HW_FLAG;
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Convert TYPE=PORT to the port key flag */
+    if (WH_KEYID_TYPE(serverId) == WH_KEYTYPE_PORT) {
+        clientId |= WH_KEYID_CLIENT_PORT_FLAG;
     }
 #endif
 

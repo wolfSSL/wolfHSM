@@ -38,7 +38,7 @@
  * The positive wrap/unwrap-and-export round trip under a plain client KEK
  * lives in wh_test_crypto_keywrap.c. The trusted-KEK positive paths
  * (wrap-export round-trip, unwrap-and-cache) live in
- * misc/wh_test_hwkeystore.c against the hardware KEK, and in
+ * misc/wh_test_portkey.c against the port KEK, and in
  * misc/wh_test_multiclient.c against an NVM-provisioned KEK.
  */
 
@@ -109,12 +109,13 @@ static int _CacheSwKek(whClientContext* client, whKeyId* outKekId)
     return WH_ERROR_OK;
 }
 
-/* The wrap-export and unwrap-and-cache operations require a trusted KEK (HW or
- * WH_NVM_FLAGS_TRUSTED). Prove that (a) a plain client-cached USAGE_WRAP key is
- * refused as their KEK, and that a client cannot forge a trusted KEK by
- * setting WH_NVM_FLAGS_TRUSTED itself through (b) the checked NVM add path, (c)
- * the HKDF cache-import path, (d) the key cache path, or (e) the cache-random
- * path -- the server strips the flag on each, so the key is still refused */
+/* The wrap-export and unwrap-and-cache operations require a trusted KEK (a
+ * fixed port key or WH_NVM_FLAGS_TRUSTED). Prove that (a) a plain
+ * client-cached USAGE_WRAP key is refused as their KEK, and that a client
+ * cannot forge a trusted KEK by setting WH_NVM_FLAGS_TRUSTED itself through
+ * (b) the checked NVM add path, (c) the HKDF cache-import path, (d) the key
+ * cache path, or (e) the cache-random path -- the server strips the flag on
+ * each, so the key is still refused */
 static int _whTest_KeywrapTrustedKekPolicy(whClientContext* client)
 {
     int           ret;

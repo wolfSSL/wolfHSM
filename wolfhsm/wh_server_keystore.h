@@ -232,6 +232,26 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
  */
 int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
 
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+/**
+ * @brief Copy a keystore key into a port key
+ *
+ * Reads the source key with the usual keystore policy checks (trusted keys
+ * are refused) and loads it into the port key through the port. The port key
+ * keeps the usage flags of the source. Erasing or revoking the source later
+ * clears the port key. If the port fails to clear it, the key still
+ * can't be used, and the erase or revoke returns the port's error.
+ *
+ * @param[in] server Server context
+ * @param[in] portKeyId Port key to load, with the owner in the USER field
+ * @param[in] srcId Keystore key to copy (TYPE=CRYPTO)
+ * @return WH_ERROR_OK on success, WH_ERROR_USAGE if the source has no usage
+ *         flags, or an error from the keystore or the port
+ */
+int wh_Server_KeystorePortLoad(whServerContext* server, whKeyId portKeyId,
+                               whKeyId srcId);
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
+
 /**
  * @brief Handle key management requests from clients
  *
