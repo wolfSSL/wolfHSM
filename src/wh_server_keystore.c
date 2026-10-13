@@ -583,13 +583,12 @@ static int _ExportMldsaPublicKey(whServerContext* server, whKeyId keyId,
 
 #ifdef WOLFSSL_HAVE_SLHDSA
 static int _ExportSlhDsaPublicKey(whServerContext* server, whKeyId keyId,
-    uint8_t* out, uint16_t* outSz)
+                                  uint8_t* out, uint16_t* outSz)
 {
     int       ret = WH_ERROR_OK;
     SlhDsaKey key[1];
     int       pub_ret;
-    int       devId = (server->crypto != NULL) ? server->devId
-                                               : INVALID_DEVID;
+    int       devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
 
     /* The decoder detects the real parameter set from the key OID */
     ret = wc_SlhDsaKey_Init(key, WC_SLHDSA_DEFAULT_PARAM, NULL, devId);
@@ -2975,36 +2974,36 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                       stage, &stageMax);
                             break;
                     #endif /* WOLFSSL_HAVE_MLDSA && WOLFSSL_MLDSA_PUBLIC_KEY */
-                    #ifdef WOLFSSL_HAVE_SLHDSA
+#ifdef WOLFSSL_HAVE_SLHDSA
                         case WH_KEY_ALGO_SLHDSA:
                             ret = _ExportSlhDsaPublicKey(server, serverKeyId,
-                                                      stage, &stageMax);
+                                                         stage, &stageMax);
                             break;
-                    #endif /* WOLFSSL_HAVE_SLHDSA */
-                    #ifdef HAVE_CURVE25519
+#endif /* WOLFSSL_HAVE_SLHDSA */
+#ifdef HAVE_CURVE25519
                         case WH_KEY_ALGO_CURVE25519:
                             ret = _ExportCurve25519PublicKey(server, serverKeyId,
                                                       stage, &stageMax);
                             break;
-                    #endif /* HAVE_CURVE25519 */
-                    #ifdef WOLFSSL_HAVE_MLKEM
+#endif /* HAVE_CURVE25519 */
+#ifdef WOLFSSL_HAVE_MLKEM
                         case WH_KEY_ALGO_MLKEM:
                             ret = _ExportMlkemPublicKey(server, serverKeyId,
                                                         stage, &stageMax);
                             break;
-                    #endif /* WOLFSSL_HAVE_MLKEM */
-                    #ifdef WOLFSSL_HAVE_LMS
+#endif /* WOLFSSL_HAVE_MLKEM */
+#ifdef WOLFSSL_HAVE_LMS
                         case WH_KEY_ALGO_LMS:
                             ret = _ExportLmsPublicKey(server, serverKeyId,
                                                       stage, &stageMax);
                             break;
-                    #endif /* WOLFSSL_HAVE_LMS */
-                    #ifdef WOLFSSL_HAVE_XMSS
+#endif /* WOLFSSL_HAVE_LMS */
+#ifdef WOLFSSL_HAVE_XMSS
                         case WH_KEY_ALGO_XMSS:
                             ret = _ExportXmssPublicKey(server, serverKeyId,
                                                        stage, &stageMax);
                             break;
-                    #endif /* WOLFSSL_HAVE_XMSS */
+#endif /* WOLFSSL_HAVE_XMSS */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
@@ -3196,36 +3195,36 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                         out, &max_der);
                             break;
                     #endif /* WOLFSSL_HAVE_MLDSA && WOLFSSL_MLDSA_PUBLIC_KEY */
-                    #ifdef WOLFSSL_HAVE_SLHDSA
+#ifdef WOLFSSL_HAVE_SLHDSA
                         case WH_KEY_ALGO_SLHDSA:
                             ret = _ExportSlhDsaPublicKey(server, serverKeyId,
                                                          out, &max_der);
                             break;
-                    #endif /* WOLFSSL_HAVE_SLHDSA */
-                    #ifdef HAVE_CURVE25519
+#endif /* WOLFSSL_HAVE_SLHDSA */
+#ifdef HAVE_CURVE25519
                         case WH_KEY_ALGO_CURVE25519:
                             ret = _ExportCurve25519PublicKey(server,
                                     serverKeyId, out, &max_der);
                             break;
-                    #endif /* HAVE_CURVE25519 */
-                    #ifdef WOLFSSL_HAVE_MLKEM
+#endif /* HAVE_CURVE25519 */
+#ifdef WOLFSSL_HAVE_MLKEM
                         case WH_KEY_ALGO_MLKEM:
                             ret = _ExportMlkemPublicKey(server, serverKeyId,
                                                         out, &max_der);
                             break;
-                    #endif /* WOLFSSL_HAVE_MLKEM */
-                    #ifdef WOLFSSL_HAVE_LMS
+#endif /* WOLFSSL_HAVE_MLKEM */
+#ifdef WOLFSSL_HAVE_LMS
                         case WH_KEY_ALGO_LMS:
                             ret = _ExportLmsPublicKey(server, serverKeyId,
                                                       out, &max_der);
                             break;
-                    #endif /* WOLFSSL_HAVE_LMS */
-                    #ifdef WOLFSSL_HAVE_XMSS
+#endif /* WOLFSSL_HAVE_LMS */
+#ifdef WOLFSSL_HAVE_XMSS
                         case WH_KEY_ALGO_XMSS:
                             ret = _ExportXmssPublicKey(server, serverKeyId,
                                                        out, &max_der);
                             break;
-                    #endif /* WOLFSSL_HAVE_XMSS */
+#endif /* WOLFSSL_HAVE_XMSS */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;

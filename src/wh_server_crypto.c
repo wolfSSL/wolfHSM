@@ -5697,9 +5697,9 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
     int      ret;
     uint32_t n;
     byte     rnd[WH_SLHDSA_MAX_N];
-    int mprime     = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_MPRIME);
-    int randomized = !!(options &
-                        WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_RANDOMIZED);
+    int mprime = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_MPRIME);
+    int randomized =
+        !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_RANDOMIZED);
 
     if ((key == NULL) || (key->params == NULL)) {
         return WH_ERROR_BADARGS;
@@ -5731,8 +5731,8 @@ static int _SlhDsaSignDispatch(whServerContext* ctx, SlhDsaKey* key,
         }
         else {
             /* Use the server's copy of the key for randomization */
-            ret = wc_SlhDsaKey_SignMsgDeterministic(key, in, in_len, sig,
-                                                    sigLen);
+            ret =
+                wc_SlhDsaKey_SignMsgDeterministic(key, in, in_len, sig, sigLen);
         }
     }
     else if (preHashType != WC_HASH_TYPE_NONE) {
@@ -5854,8 +5854,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     flags  = req.flags;
     label  = req.label;
     seedSz = req.seedSz;
-    seed   = (byte*)cryptoDataIn +
-           sizeof(whMessageCrypto_SlhDsaKeyGenRequest);
+    seed   = (byte*)cryptoDataIn + sizeof(whMessageCrypto_SlhDsaKeyGenRequest);
 
     available =
         (uint32_t)(inSize - sizeof(whMessageCrypto_SlhDsaKeyGenRequest));
@@ -5944,7 +5943,7 @@ static int _HandleSlhDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         res.len   = res_size;
 
         (void)wh_MessageCrypto_TranslateSlhDsaKeyGenResponse(magic, &res,
-                                                       cryptoDataOut);
+                                                             cryptoDataOut);
 
         *outSize = sizeof(whMessageCrypto_SlhDsaKeyGenResponse) + res_size;
     }
@@ -6000,14 +5999,14 @@ static int _HandleSlhDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     in = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_SlhDsaSignRequest);
-    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
-                                          ctx->comm->client_id, req.keyId);
+    key_id      = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               ctx->comm->client_id, req.keyId);
     in_len      = req.sz;
     contextSz   = req.contextSz;
     preHashType = req.preHashType;
     addRndSz    = req.addRndSz;
     options     = req.options;
-    evict = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
+    evict       = !!(options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
 
     /* Validate the declared lengths against the remaining payload */
     available = inSize - sizeof(whMessageCrypto_SlhDsaSignRequest);
@@ -6104,9 +6103,9 @@ static int _HandleSlhDsaVerify(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    options = req.options;
-    key_id  = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
-                                           ctx->comm->client_id, req.keyId);
+    options     = req.options;
+    key_id      = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                               ctx->comm->client_id, req.keyId);
     hash_len    = req.hashSz;
     sig_len     = req.sigSz;
     contextSz   = req.contextSz;
@@ -6171,8 +6170,8 @@ static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int       ret;
-    SlhDsaKey key[1];
+    int                                        ret;
+    SlhDsaKey                                  key[1];
     whMessageCrypto_SlhDsaCheckPrivKeyRequest  req;
     whMessageCrypto_SlhDsaCheckPrivKeyResponse res;
     byte*                                      req_pub;
@@ -6197,8 +6196,8 @@ static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                           ctx->comm->client_id, req.keyId);
     pubSz  = req.pubSz;
-    evict  = !!(req.options &
-                WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT);
+    evict =
+        !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_CHECKPRIVKEY_OPTIONS_EVICT);
     req_pub = (uint8_t*)(cryptoDataIn) +
               sizeof(whMessageCrypto_SlhDsaCheckPrivKeyRequest);
 
@@ -6225,8 +6224,8 @@ static int _HandleSlhDsaCheckPrivKey(whServerContext* ctx, uint16_t magic,
                 result = 0;
             }
             else {
-                result = (memcmp(key->sk + 2 * key->params->n, req_pub,
-                                 pubSz) == 0);
+                result =
+                    (memcmp(key->sk + 2 * key->params->n, req_pub, pubSz) == 0);
             }
         }
         wc_SlhDsaKey_Free(key);
@@ -6312,9 +6311,10 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
-                                          req.keyId);
-    res_out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemKeyGenResponse);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemKeyGenResponse);
     max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
                           (res_out - (uint8_t*)cryptoDataOut));
 
@@ -6328,8 +6328,8 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
         if (ret == 0) {
             if ((req.flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
                 key_id = WH_KEYID_ERASED;
-                ret = wh_Crypto_MlKemSerializeKey(key, max_size, res_out,
-                                                  &res_size);
+                ret    = wh_Crypto_MlKemSerializeKey(key, max_size, res_out,
+                                                     &res_size);
             }
             else {
                 /* Hold the NVM lock so id allocation and cache import are
@@ -6350,11 +6350,11 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                     /* Best-effort public key export: when the serialized
                      * public key fits in the response body, return it so the
                      * client can skip a separate ExportPublicKey call. When it
-                     * does not fit (small comm buffer or a large key), leave the
-                     * body empty and keep the cached key. Plain MakeCacheKey
-                     * callers ignore the body and see no regression;
-                     * MakeCacheKeyAndExportPublic callers detect the empty body
-                     * and evict the key themselves. */
+                     * does not fit (small comm buffer or a large key), leave
+                     * the body empty and keep the cached key. Plain
+                     * MakeCacheKey callers ignore the body and see no
+                     * regression; MakeCacheKeyAndExportPublic callers detect
+                     * the empty body and evict the key themselves. */
                     word32 pubSize = 0;
                     if ((wc_MlKemKey_PublicKeySize(key, &pubSize) == 0) &&
                         ((uint32_t)pubSize <= (uint32_t)max_size) &&
@@ -6397,18 +6397,18 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
     (void)outSize;
     return WH_ERROR_NOHANDLER;
 #else
-    int                                  ret = WH_ERROR_OK;
-    MlKemKey                             key[1];
-    whMessageCrypto_MlKemEncapsRequest   req;
-    whMessageCrypto_MlKemEncapsResponse  res;
-    whKeyId                              key_id;
-    uint8_t*                             res_ct;
-    uint8_t*                             res_ss;
-    word32                               ct_len;
-    word32                               ss_len;
-    word32                               max_out;
-    int                                  evict = 0;
-    int                                  keyInited = 0;
+    int                                 ret = WH_ERROR_OK;
+    MlKemKey                            key[1];
+    whMessageCrypto_MlKemEncapsRequest  req;
+    whMessageCrypto_MlKemEncapsResponse res;
+    whKeyId                             key_id;
+    uint8_t*                            res_ct;
+    uint8_t*                            res_ss;
+    word32                              ct_len;
+    word32                              ss_len;
+    word32                              max_out;
+    int                                 evict     = 0;
+    int                                 keyInited = 0;
 
     if (inSize < sizeof(whMessageCrypto_MlKemEncapsRequest)) {
         return WH_ERROR_BADARGS;
@@ -6420,9 +6420,9 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
-                                          req.keyId);
-    evict = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_ENCAPS_OPTIONS_EVICT);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_ENCAPS_OPTIONS_EVICT);
 
     if (!_IsMlKemLevelSupported((int)req.level)) {
         ret = WH_ERROR_BADARGS;
@@ -6451,10 +6451,11 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        res_ct = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemEncapsResponse);
-        res_ss = res_ct + ct_len;
+        res_ct = (uint8_t*)cryptoDataOut +
+                 sizeof(whMessageCrypto_MlKemEncapsResponse);
+        res_ss  = res_ct + ct_len;
         max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ct - (uint8_t*)cryptoDataOut));
+                           ((uint8_t*)res_ct - (uint8_t*)cryptoDataOut));
         if (ct_len + ss_len > max_out) {
             ret = WH_ERROR_BADARGS;
         }
@@ -6466,8 +6467,10 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
             res.ctSz = ct_len;
             res.ssSz = ss_len;
             (void)wh_MessageCrypto_TranslateMlKemEncapsResponse(
-                magic, &res, (whMessageCrypto_MlKemEncapsResponse*)cryptoDataOut);
-            *outSize = sizeof(whMessageCrypto_MlKemEncapsResponse) + ct_len + ss_len;
+                magic, &res,
+                (whMessageCrypto_MlKemEncapsResponse*)cryptoDataOut);
+            *outSize =
+                sizeof(whMessageCrypto_MlKemEncapsResponse) + ct_len + ss_len;
         }
         else {
             /* Zero sensitive data on failure */
@@ -6510,7 +6513,7 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
     uint32_t                            available;
     word32                              ss_len;
     word32                              max_out;
-    int                                 evict = 0;
+    int                                 evict     = 0;
     int                                 keyInited = 0;
 
     if (inSize < sizeof(whMessageCrypto_MlKemDecapsRequest)) {
@@ -6523,9 +6526,9 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
-                                          req.keyId);
-    evict = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_DECAPS_OPTIONS_EVICT);
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_MLKEM_DECAPS_OPTIONS_EVICT);
 
     if (!_IsMlKemLevelSupported((int)req.level)) {
         ret = WH_ERROR_BADARGS;
@@ -6558,9 +6561,10 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        res_ss = (byte*)cryptoDataOut + sizeof(whMessageCrypto_MlKemDecapsResponse);
+        res_ss =
+            (byte*)cryptoDataOut + sizeof(whMessageCrypto_MlKemDecapsResponse);
         max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+                           ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
         if (ss_len > max_out) {
             ret = WH_ERROR_BADARGS;
         }
@@ -6571,7 +6575,8 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
         if (ret == WH_ERROR_OK) {
             res.ssSz = ss_len;
             (void)wh_MessageCrypto_TranslateMlKemDecapsResponse(
-                magic, &res, (whMessageCrypto_MlKemDecapsResponse*)cryptoDataOut);
+                magic, &res,
+                (whMessageCrypto_MlKemDecapsResponse*)cryptoDataOut);
             *outSize = sizeof(whMessageCrypto_MlKemDecapsResponse) + ss_len;
         }
         else {
@@ -7461,9 +7466,9 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, int devId,
     res.hashType = hashType;
 
     memcpy(sha512->digest, req.resumeState.hash, WC_SHA512_DIGEST_SIZE);
-    sha512->loLen    = req.resumeState.loLen;
-    sha512->hiLen    = req.resumeState.hiLen;
-    sha512->buffLen  = 0;
+    sha512->loLen   = req.resumeState.loLen;
+    sha512->hiLen   = req.resumeState.hiLen;
+    sha512->buffLen = 0;
 
     if (ret == 0 && req.inSz > 0) {
         ret = wc_Sha512Update(sha512, inlineData, req.inSz);
@@ -7647,7 +7652,7 @@ static int _HandleMlDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
     void*       clientOutAddr = NULL;
     uint16_t    keySize       = 0;
 
-    whMessageCrypto_MlDsaKeyGenDmaRequest req;
+    whMessageCrypto_MlDsaKeyGenDmaRequest  req;
     whMessageCrypto_MlDsaKeyGenDmaResponse res;
 
     memset(&res, 0, sizeof(res));
@@ -7808,9 +7813,9 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     wc_MlDsaKey key[1];
     void*       msgAddr = NULL;
     void*       sigAddr = NULL;
-    word32      sigLen   = 0;
+    word32      sigLen  = 0;
 
-    whMessageCrypto_MlDsaSignDmaRequest req;
+    whMessageCrypto_MlDsaSignDmaRequest  req;
     whMessageCrypto_MlDsaSignDmaResponse res;
 
     if (inSize < sizeof(whMessageCrypto_MlDsaSignDmaRequest)) {
@@ -7837,7 +7842,7 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     /* Extract context from inline data after the struct */
     uint32_t contextSz   = req.contextSz;
     uint32_t preHashType = req.preHashType;
-    byte*    req_context  = NULL;
+    byte*    req_context = NULL;
     if (contextSz > WH_CRYPTO_MLDSA_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -7876,15 +7881,13 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                     sigLen = req.sig.sz;
                     if (preHashType != WC_HASH_TYPE_NONE) {
                         ret = wc_MlDsaKey_SignCtxHash(
-                            key, req_context, (byte)contextSz,
-                            sigAddr, &sigLen, msgAddr, req.msg.sz,
-                            preHashType, ctx->crypto->rng);
+                            key, req_context, (byte)contextSz, sigAddr, &sigLen,
+                            msgAddr, req.msg.sz, preHashType, ctx->crypto->rng);
                     }
                     else {
                         ret = wc_MlDsaKey_SignCtx(
-                            key, req_context, (byte)contextSz,
-                            sigAddr, &sigLen, msgAddr, req.msg.sz,
-                            ctx->crypto->rng);
+                            key, req_context, (byte)contextSz, sigAddr, &sigLen,
+                            msgAddr, req.msg.sz, ctx->crypto->rng);
                     }
                 }
 
@@ -7892,15 +7895,13 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                     /* Post-write processing of signature buffer */
                     (void)wh_Server_DmaProcessClientAddress(
                         ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
-                        WH_DMA_OPER_CLIENT_WRITE_POST,
-                        (whServerDmaFlags){0});
+                        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
                 }
                 if (msgAddr != NULL) {
                     /* Post-read processing of message buffer */
                     (void)wh_Server_DmaProcessClientAddress(
-                        ctx, (uintptr_t)req.msg.addr, &msgAddr,
-                        req.msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
-                        (whServerDmaFlags){0});
+                        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
                 }
             }
         }
@@ -7948,7 +7949,7 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     void*       sigAddr  = NULL;
     int         verified = 0;
 
-    whMessageCrypto_MlDsaVerifyDmaRequest req;
+    whMessageCrypto_MlDsaVerifyDmaRequest  req;
     whMessageCrypto_MlDsaVerifyDmaResponse res;
 
     if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest)) {
@@ -7974,12 +7975,13 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
     /* Extract context from inline data after the struct */
     uint32_t contextSz   = req.contextSz;
     uint32_t preHashType = req.preHashType;
-    byte*    req_context  = NULL;
+    byte*    req_context = NULL;
     if (contextSz > WH_CRYPTO_MLDSA_MAX_CTX_LEN) {
         return WH_ERROR_BADARGS;
     }
     if (contextSz > 0) {
-        if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest) + contextSz) {
+        if (inSize <
+            sizeof(whMessageCrypto_MlDsaVerifyDmaRequest) + contextSz) {
             return WH_ERROR_BADARGS;
         }
         req_context = (uint8_t*)(cryptoDataIn) +
@@ -8017,9 +8019,9 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                         msgAddr, req.msg.sz, preHashType, &verified);
                 }
                 else {
-                    ret = wc_MlDsaKey_VerifyCtx(
-                        key, sigAddr, req.sig.sz, req_context, (byte)contextSz,
-                        msgAddr, req.msg.sz, &verified);
+                    ret = wc_MlDsaKey_VerifyCtx(key, sigAddr, req.sig.sz,
+                                                req_context, (byte)contextSz,
+                                                msgAddr, req.msg.sz, &verified);
                 }
             }
 
@@ -8033,9 +8035,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
             if (msgAddr != NULL) {
                 /* Post-read processing of message buffer */
                 (void)wh_Server_DmaProcessClientAddress(
-                    ctx, (uintptr_t)req.msg.addr, &msgAddr,
-                    req.msg.sz, WH_DMA_OPER_CLIENT_READ_POST,
-                    (whServerDmaFlags){0});
+                    ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
+                    WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
             }
         }
     }
@@ -8139,8 +8140,8 @@ static int _HandleSlhDsaKeyGenDma(whServerContext* ctx, uint16_t magic,
                 }
                 else {
                     const byte* seed = (const byte*)clientSeedAddr;
-                    ret = wc_SlhDsaKey_MakeKeyWithRandom(
-                        key, seed, n, seed + n, n, seed + 2 * n, n);
+                    ret = wc_SlhDsaKey_MakeKeyWithRandom(key, seed, n, seed + n,
+                                                         n, seed + 2 * n, n);
                 }
                 (void)wh_Server_DmaProcessClientAddress(
                     ctx, req.seed.addr, &clientSeedAddr, req.seed.sz,
@@ -8298,7 +8299,7 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
 
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                           ctx->comm->client_id, req.keyId);
-    evict = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_SIGN_OPTIONS_EVICT);
 
     contextSz   = req.contextSz;
     preHashType = req.preHashType;
@@ -8349,10 +8350,9 @@ static int _HandleSlhDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
                 if (ret == 0) {
                     sigLen = (word32)req.sig.sz;
                     ret    = _SlhDsaSignDispatch(
-                           ctx, key, req.options, (const byte*)msgAddr,
-                           (word32)req.msg.sz, req_context, contextSz,
-                           preHashType, req_addRnd, addRndSz, (byte*)sigAddr,
-                           &sigLen);
+                        ctx, key, req.options, (const byte*)msgAddr,
+                        (word32)req.msg.sz, req_context, contextSz, preHashType,
+                        req_addRnd, addRndSz, (byte*)sigAddr, &sigLen);
                 }
 
                 if (sigPre) {
@@ -8430,7 +8430,7 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                           ctx->comm->client_id, req.keyId);
-    evict = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT);
+    evict  = !!(req.options & WH_MESSAGE_CRYPTO_SLHDSA_VERIFY_OPTIONS_EVICT);
 
     contextSz   = req.contextSz;
     preHashType = req.preHashType;
@@ -8471,8 +8471,8 @@ static int _HandleSlhDsaVerifyDma(whServerContext* ctx, uint16_t magic,
                     ret = _SlhDsaVerifyDispatch(
                         key, req.options, (const byte*)sigAddr,
                         (word32)req.sig.sz, (const byte*)msgAddr,
-                        (word32)req.msg.sz, req_context, contextSz,
-                        preHashType, &result);
+                        (word32)req.msg.sz, req_context, contextSz, preHashType,
+                        &result);
                 }
 
                 if (msgPre) {

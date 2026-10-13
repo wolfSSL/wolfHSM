@@ -1706,7 +1706,7 @@ int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
     whKeyId   keyId = WH_KEYID_ERASED;
     SlhDsaKey pub[1];
     SlhDsaKey handle[1];
-    uint8_t   label[] = "slhdsa-demo";
+    uint8_t   label[]   = "slhdsa-demo";
     byte      message[] = "wolfHSM SLH-DSA demo message";
     byte      signature[WC_SLHDSA_SHAKE128S_SIG_LEN];
     word32    sigLen = sizeof(signature);
@@ -1746,16 +1746,15 @@ int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext)
     }
 
     /* handle has no PK.seed, so supply the randomizer */
-    ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, message,
-                                      sizeof(message), signature, &sigLen,
-                                      addRnd);
+    ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, message, sizeof(message),
+                                      signature, &sigLen, addRnd);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_SignWithRandom %d\n", ret);
         goto exit;
     }
 
-    ret = wc_SlhDsaKey_Verify(pub, NULL, 0, message, sizeof(message),
-                              signature, sigLen);
+    ret = wc_SlhDsaKey_Verify(pub, NULL, 0, message, sizeof(message), signature,
+                              sigLen);
     if (ret != 0) {
         WOLFHSM_CFG_PRINTF("Failed to wc_SlhDsaKey_Verify %d\n", ret);
         goto exit;

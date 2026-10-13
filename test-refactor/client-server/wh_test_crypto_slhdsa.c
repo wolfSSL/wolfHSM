@@ -113,8 +113,8 @@ static int _whTest_SlhDsaWolfCryptImpl(whClientContext* ctx, int devId)
         }
     }
     if (ret == 0) {
-        ret = wc_SlhDsaKey_Sign(key, NULL, 0, msg, sizeof(msg), sig, &sigSz,
-                                rng);
+        ret =
+            wc_SlhDsaKey_Sign(key, NULL, 0, msg, sizeof(msg), sig, &sigSz, rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to sign with SLH-DSA: %d\n", ret);
         }
@@ -191,8 +191,8 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
         }
 
         ret = wh_Client_SlhDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
-                                     &verified, key, NULL, 0,
-                                     WC_HASH_TYPE_NONE, 0);
+                                     &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
+                                     0);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to verify SLH-DSA non-DMA: %d\n", ret);
             goto done;
@@ -206,8 +206,8 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
         /* A tampered signature must come back as a result, not an error */
         sig[0] ^= 0xFF;
         ret = wh_Client_SlhDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
-                                     &verified, key, NULL, 0,
-                                     WC_HASH_TYPE_NONE, 0);
+                                     &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
+                                     0);
         if (ret != 0) {
             WH_ERROR_PRINT("Verify with modified sig returned %d\n", ret);
             goto done;
@@ -221,7 +221,7 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
 
     /* FIPS 205 context string */
     {
-        byte       msg[]    = "Context test message non-DMA";
+        byte       msg[]     = "Context test message non-DMA";
         const byte context[] = {'w', 'o', 'l', 'f', 'H', 'S', 'M'};
         byte       sig[WH_TEST_SLHDSA_COMM_SIG_LEN];
         word32     sigLen   = sizeof(sig);
@@ -235,10 +235,9 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
             goto done;
         }
 
-        ret = wh_Client_SlhDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
-                                     &verified, key, context,
-                                     (byte)sizeof(context), WC_HASH_TYPE_NONE,
-                                     0);
+        ret = wh_Client_SlhDsaVerify(
+            ctx, sig, sigLen, msg, sizeof(msg), &verified, key, context,
+            (byte)sizeof(context), WC_HASH_TYPE_NONE, 0);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to verify with context: %d\n", ret);
             goto done;
@@ -251,8 +250,8 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
 
         /* The context is bound into the signature, so a different one fails */
         ret = wh_Client_SlhDsaVerify(ctx, sig, sigLen, msg, sizeof(msg),
-                                     &verified, key, NULL, 0,
-                                     WC_HASH_TYPE_NONE, 0);
+                                     &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
+                                     0);
         if (ret != 0) {
             WH_ERROR_PRINT("Verify with dropped context returned %d\n", ret);
             goto done;
@@ -274,9 +273,9 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
 
         memset(digest, 0x5A, sizeof(digest));
 
-        ret = wh_Client_SlhDsaSign(ctx, digest, sizeof(digest), sig, &sigLen,
-                                   key, NULL, 0, WC_HASH_TYPE_SHA256, NULL, 0,
-                                   1, 0);
+        ret =
+            wh_Client_SlhDsaSign(ctx, digest, sizeof(digest), sig, &sigLen, key,
+                                 NULL, 0, WC_HASH_TYPE_SHA256, NULL, 0, 1, 0);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to pre-hash sign: %d\n", ret);
             goto done;
@@ -309,9 +308,9 @@ done:
  * supplies the randomizer. */
 static int _whTest_CryptoSlhDsaCachedKey(whClientContext* ctx)
 {
-    int       devId  = WH_CLIENT_DEVID(ctx);
+    int       devId = WH_CLIENT_DEVID(ctx);
     int       ret;
-    whKeyId   keyId  = WH_KEYID_ERASED;
+    whKeyId   keyId = WH_KEYID_ERASED;
     SlhDsaKey pub[1];
     SlhDsaKey handle[1];
     int       pubInit    = 0;
@@ -379,9 +378,8 @@ static int _whTest_CryptoSlhDsaCachedKey(whClientContext* ctx)
             byte   sig2[WH_TEST_SLHDSA_COMM_SIG_LEN];
             word32 sig2Len = sizeof(sig2);
 
-            ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, msg,
-                                              sizeof(msg), sig2, &sig2Len,
-                                              addRnd);
+            ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, msg, sizeof(msg),
+                                              sig2, &sig2Len, addRnd);
             if (ret != 0) {
                 WH_ERROR_PRINT("Second cached-key sign failed: %d\n", ret);
                 goto done;
@@ -397,9 +395,8 @@ static int _whTest_CryptoSlhDsaCachedKey(whClientContext* ctx)
              * dropped on the way and replaced by a deterministic one. */
             memset(addRnd, 0x17, sizeof(addRnd));
             sig2Len = sizeof(sig2);
-            ret     = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, msg,
-                                                  sizeof(msg), sig2, &sig2Len,
-                                                  addRnd);
+            ret = wc_SlhDsaKey_SignWithRandom(handle, NULL, 0, msg, sizeof(msg),
+                                              sig2, &sig2Len, addRnd);
             if (ret != 0) {
                 WH_ERROR_PRINT("Third cached-key sign failed: %d\n", ret);
                 goto done;
@@ -443,10 +440,10 @@ static int _whTest_CryptoSlhDsaMPrime(whClientContext* ctx)
     int       ret;
     SlhDsaKey key[1];
     /* M' for a pure signature with an empty context: 0x00 || ctxSz || msg */
-    byte      mprime[] = {0x00, 0x00, 'm', 'p', 'r', 'i', 'm', 'e'};
-    byte      sig[WH_TEST_SLHDSA_COMM_SIG_LEN];
-    word32    sigLen = sizeof(sig);
-    byte      addRnd[WC_SLHDSA_MAX_SEED];
+    byte   mprime[] = {0x00, 0x00, 'm', 'p', 'r', 'i', 'm', 'e'};
+    byte   sig[WH_TEST_SLHDSA_COMM_SIG_LEN];
+    word32 sigLen = sizeof(sig);
+    byte   addRnd[WC_SLHDSA_MAX_SEED];
 
     memset(addRnd, 0x42, sizeof(addRnd));
 
@@ -526,8 +523,8 @@ static int _whTest_CryptoSlhDsaCheckPrivKey(whClientContext* ctx)
     (void)wh_Client_SlhDsaSetKeyId(handle, keyId);
 
     {
-        byte   expected[WC_SLHDSA_MAX_PUB_LEN];
-        int    pubSz;
+        byte expected[WC_SLHDSA_MAX_PUB_LEN];
+        int  pubSz;
 
         pubSz = wc_SlhDsaKey_PublicSize(pub);
         if ((pubSz <= 0) || ((word32)pubSz > sizeof(expected))) {
@@ -548,8 +545,8 @@ static int _whTest_CryptoSlhDsaCheckPrivKey(whClientContext* ctx)
             goto done;
         }
 
-        ret = wh_Client_SlhDsaCheckPrivKey(ctx, handle, expected,
-                                           (word32)pubSz);
+        ret =
+            wh_Client_SlhDsaCheckPrivKey(ctx, handle, expected, (word32)pubSz);
         if (ret != 0) {
             WH_ERROR_PRINT("CheckPrivKey rejected the matching key: %d\n", ret);
             goto done;
@@ -558,8 +555,8 @@ static int _whTest_CryptoSlhDsaCheckPrivKey(whClientContext* ctx)
         /* A public key that does not belong to the private key must be
          * rejected rather than silently accepted. */
         expected[0] ^= 0xFF;
-        ret = wh_Client_SlhDsaCheckPrivKey(ctx, handle, expected,
-                                           (word32)pubSz);
+        ret =
+            wh_Client_SlhDsaCheckPrivKey(ctx, handle, expected, (word32)pubSz);
         if (ret != WC_KEY_MISMATCH_E) {
             WH_ERROR_PRINT("CheckPrivKey accepted a mismatched key: %d\n", ret);
             ret = WH_TEST_FAIL;
@@ -662,9 +659,9 @@ static int _whTest_CryptoSlhDsaBufferTooSmall(whClientContext* ctx)
     }
 
     sig_len = small_buf_sz;
-    ret = wh_Client_SlhDsaSign(ctx, msg, (word32)sizeof(msg), small_sig,
-                               &sig_len, key, NULL, 0, WC_HASH_TYPE_NONE, NULL,
-                               0, 1, 0);
+    ret =
+        wh_Client_SlhDsaSign(ctx, msg, (word32)sizeof(msg), small_sig, &sig_len,
+                             key, NULL, 0, WC_HASH_TYPE_NONE, NULL, 0, 1, 0);
     if (ret != WH_ERROR_BUFFER_SIZE) {
         WH_ERROR_PRINT("SlhDsaSign small buf expected WH_ERROR_BUFFER_SIZE, "
                        "got %d\n",
@@ -696,24 +693,22 @@ done:
  * key generation has no expected output to compare against. */
 static const byte whTestSlhDsaKatSeed[] = {
     /* SK.seed */
-    0x39, 0x56, 0xAB, 0x39, 0x1B, 0x4D, 0x22, 0xFC,
-    0x90, 0x7A, 0xF0, 0x74, 0x03, 0x26, 0xD0, 0x61,
+    0x39, 0x56, 0xAB, 0x39, 0x1B, 0x4D, 0x22, 0xFC, 0x90, 0x7A, 0xF0, 0x74,
+    0x03, 0x26, 0xD0, 0x61,
     /* SK.prf */
-    0xAB, 0x0E, 0xB2, 0x06, 0x43, 0x6F, 0x2B, 0x86,
-    0xEB, 0xE0, 0x86, 0xD7, 0x77, 0x39, 0xB3, 0xE4,
+    0xAB, 0x0E, 0xB2, 0x06, 0x43, 0x6F, 0x2B, 0x86, 0xEB, 0xE0, 0x86, 0xD7,
+    0x77, 0x39, 0xB3, 0xE4,
     /* PK.seed */
-    0x56, 0x50, 0x5C, 0x22, 0x9F, 0x4E, 0x7F, 0xA6,
-    0xB2, 0x01, 0x71, 0x4C, 0x7D, 0xCC, 0x9D, 0xA3
-};
+    0x56, 0x50, 0x5C, 0x22, 0x9F, 0x4E, 0x7F, 0xA6, 0xB2, 0x01, 0x71, 0x4C,
+    0x7D, 0xCC, 0x9D, 0xA3};
 
 static const byte whTestSlhDsaKatPub[] = {
     /* PK.seed */
-    0x56, 0x50, 0x5C, 0x22, 0x9F, 0x4E, 0x7F, 0xA6,
-    0xB2, 0x01, 0x71, 0x4C, 0x7D, 0xCC, 0x9D, 0xA3,
+    0x56, 0x50, 0x5C, 0x22, 0x9F, 0x4E, 0x7F, 0xA6, 0xB2, 0x01, 0x71, 0x4C,
+    0x7D, 0xCC, 0x9D, 0xA3,
     /* PK.root */
-    0x66, 0x57, 0x8F, 0x1F, 0x24, 0xC3, 0xFE, 0x37,
-    0x1C, 0x97, 0xC1, 0x4C, 0xE0, 0xE7, 0x9C, 0xDC
-};
+    0x66, 0x57, 0x8F, 0x1F, 0x24, 0xC3, 0xFE, 0x37, 0x1C, 0x97, 0xC1, 0x4C,
+    0xE0, 0xE7, 0x9C, 0xDC};
 
 /* Seeded generation over the comm buffer. Only the tiny key material crosses
  * the wire here, so the fast parameter set is usable even without DMA. */
@@ -735,9 +730,9 @@ static int _whTest_CryptoSlhDsaSeededKat(whClientContext* ctx)
     {
         word32 n = (word32)(sizeof(whTestSlhDsaKatSeed) / 3);
 
-        ret = wc_SlhDsaKey_MakeKeyWithRandom(
-            key, whTestSlhDsaKatSeed, n, whTestSlhDsaKatSeed + n, n,
-            whTestSlhDsaKatSeed + 2 * n, n);
+        ret = wc_SlhDsaKey_MakeKeyWithRandom(key, whTestSlhDsaKatSeed, n,
+                                             whTestSlhDsaKatSeed + n, n,
+                                             whTestSlhDsaKatSeed + 2 * n, n);
     }
     if (ret != 0) {
         WH_ERROR_PRINT("Failed seeded SLH-DSA keygen: %d\n", ret);
@@ -773,10 +768,9 @@ done:
  * wolfCrypt from SK.seed 0x10..0x1f, SK.prf 0x30..0x3f, PK.seed 0x50..0x5f
  * and signed deterministically. */
 static const byte whTestSlhDsaVerifyPub[WH_TEST_SLHDSA_KAT_PUB_LEN] = {
-    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b,
-    0x5c, 0x5d, 0x5e, 0x5f, 0x6d, 0x05, 0x9c, 0x8a, 0x12, 0xa4, 0xea, 0xee,
-    0xa4, 0xfb, 0x9f, 0x1a, 0x75, 0x99, 0x8b, 0x0f
-};
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a,
+    0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x6d, 0x05, 0x9c, 0x8a, 0x12, 0xa4,
+    0xea, 0xee, 0xa4, 0xfb, 0x9f, 0x1a, 0x75, 0x99, 0x8b, 0x0f};
 
 static const byte whTestSlhDsaVerifyMsg[] =
     "wolfHSM SLH-DSA verify-only known answer test";
@@ -1436,20 +1430,16 @@ static const byte whTestSlhDsaVerifySig[WH_TEST_SLHDSA_KAT_SIG_LEN] = {
     0x0b, 0xd3, 0xc3, 0xfb, 0xa7, 0x9e, 0x92, 0xb8, 0x30, 0x45, 0xba, 0xb5,
     0xc0, 0x88, 0x7e, 0xef, 0x0b, 0x5a, 0x6c, 0x47, 0x23, 0x83, 0x63, 0x47,
     0x0f, 0xe0, 0xff, 0x91, 0x40, 0xd7, 0xb3, 0x61, 0xd9, 0x2b, 0x14, 0x63,
-    0x6a, 0x55, 0xd3, 0x04, 0x4c, 0xda, 0x5b, 0x43
-};
+    0x6a, 0x55, 0xd3, 0x04, 0x4c, 0xda, 0x5b, 0x43};
 
 #ifndef WOLFSSL_SLHDSA_VERIFY_ONLY
 /* The seed the vector above was generated from, as the contiguous
  * SK.seed || SK.prf || PK.seed the server expects. */
 static const byte whTestSlhDsaKeyGenSeed[] = {
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
-    0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f
-};
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
+    0x1c, 0x1d, 0x1e, 0x1f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x50, 0x51, 0x52, 0x53,
+    0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f};
 
 /* Rebuilds the vector's key from its seed, which covers the seeded keygen
  * path and the lengths the server accepts for a seed. */
@@ -1506,8 +1496,7 @@ static int _whTest_CryptoSlhDsaSeededKeyGen(whClientContext* ctx)
     if (ret == 0) {
         ret = wc_SlhDsaKey_ExportPublic(key, pub, &pubSz);
         if (ret != 0) {
-            WH_ERROR_PRINT("Failed to export the seeded public key: %d\n",
-                           ret);
+            WH_ERROR_PRINT("Failed to export the seeded public key: %d\n", ret);
         }
     }
 
@@ -1766,9 +1755,8 @@ static int _whTest_CryptoSlhDsaVerifyKatCached(whClientContext* ctx)
         goto done;
     }
 
-    ret = wh_Client_SlhDsaImportKey(ctx, key, &keyId,
-                                    WH_NVM_FLAGS_USAGE_VERIFY, sizeof(label),
-                                    label);
+    ret = wh_Client_SlhDsaImportKey(ctx, key, &keyId, WH_NVM_FLAGS_USAGE_VERIFY,
+                                    sizeof(label), label);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to cache the SLH-DSA public key: %d\n", ret);
         goto done;
@@ -1893,10 +1881,9 @@ static int _whTest_CryptoSlhDsaNoSign(whClientContext* ctx)
     }
 
     if (ret == 0) {
-        ret = wh_Client_SlhDsaSign(ctx, whTestSlhDsaVerifyMsg,
-                                   (word32)sizeof(whTestSlhDsaVerifyMsg), sig,
-                                   &sigLen, key, NULL, 0, WC_HASH_TYPE_NONE,
-                                   NULL, 0, 1, 0);
+        ret = wh_Client_SlhDsaSign(
+            ctx, whTestSlhDsaVerifyMsg, (word32)sizeof(whTestSlhDsaVerifyMsg),
+            sig, &sigLen, key, NULL, 0, WC_HASH_TYPE_NONE, NULL, 0, 1, 0);
         if (ret == 0) {
             WH_ERROR_PRINT("Verify-only server signed with SLH-DSA\n");
             ret = WH_TEST_FAIL;
@@ -1913,8 +1900,7 @@ static int _whTest_CryptoSlhDsaNoSign(whClientContext* ctx)
                                   whTestSlhDsaVerifySig,
                                   (word32)sizeof(whTestSlhDsaVerifySig));
         if (ret != 0) {
-            WH_ERROR_PRINT("Verify after a refused request failed: %d\n",
-                           ret);
+            WH_ERROR_PRINT("Verify after a refused request failed: %d\n", ret);
         }
     }
 
@@ -1962,15 +1948,14 @@ static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
     }
     if (sigLen != WH_TEST_SLHDSA_DMA_SIG_LEN) {
         WH_ERROR_PRINT("DMA signature length %u, expected %u\n",
-                       (unsigned)sigLen,
-                       (unsigned)WH_TEST_SLHDSA_DMA_SIG_LEN);
+                       (unsigned)sigLen, (unsigned)WH_TEST_SLHDSA_DMA_SIG_LEN);
         ret = WH_TEST_FAIL;
         goto done;
     }
 
-    ret = wh_Client_SlhDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg),
-                                    &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
-                                    0);
+    ret =
+        wh_Client_SlhDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg), &verified,
+                                  key, NULL, 0, WC_HASH_TYPE_NONE, 0);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to verify over DMA: %d\n", ret);
         goto done;
@@ -1982,9 +1967,9 @@ static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
     }
 
     sig[0] ^= 0xFF;
-    ret = wh_Client_SlhDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg),
-                                    &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
-                                    0);
+    ret =
+        wh_Client_SlhDsaVerifyDma(ctx, sig, sigLen, msg, sizeof(msg), &verified,
+                                  key, NULL, 0, WC_HASH_TYPE_NONE, 0);
     if (ret != 0) {
         WH_ERROR_PRINT("DMA verify with modified sig returned %d\n", ret);
         goto done;
@@ -2022,10 +2007,10 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
     }
     pubInit = 1;
 
-    ret = wh_Client_SlhDsaMakeCacheKeyDma(
-        ctx, WH_TEST_SLHDSA_DMA_PARAM, &keyId,
-        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, sizeof(label),
-        label, pub);
+    ret = wh_Client_SlhDsaMakeCacheKeyDma(ctx, WH_TEST_SLHDSA_DMA_PARAM, &keyId,
+                                          WH_NVM_FLAGS_USAGE_SIGN |
+                                              WH_NVM_FLAGS_USAGE_VERIFY,
+                                          sizeof(label), label, pub);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to cache SLH-DSA key over DMA: %d\n", ret);
         goto done;
@@ -2044,9 +2029,9 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
 
-        ret = wh_Client_SlhDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen,
-                                      handle, NULL, 0, WC_HASH_TYPE_NONE, NULL,
-                                      0, 1, 0);
+        ret =
+            wh_Client_SlhDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, handle,
+                                    NULL, 0, WC_HASH_TYPE_NONE, NULL, 0, 1, 0);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed to DMA sign with a cached key: %d\n", ret);
             goto done;
@@ -2074,8 +2059,8 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
         word32    aSz = sizeof(a);
         word32    bSz = sizeof(b);
 
-        ret = wc_SlhDsaKey_Init(exported, WH_TEST_SLHDSA_DMA_PARAM, NULL,
-                                devId);
+        ret =
+            wc_SlhDsaKey_Init(exported, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
         if (ret != 0) {
             goto done;
         }
@@ -2214,8 +2199,8 @@ static int _whTest_CryptoSlhDsaCommBufferLimit(whClientContext* ctx)
         return ret;
     }
 
-    ret = wh_Client_SlhDsaMakeExportKey(ctx, WH_TEST_SLHDSA_OVERSIZE_PARAM,
-                                        key);
+    ret =
+        wh_Client_SlhDsaMakeExportKey(ctx, WH_TEST_SLHDSA_OVERSIZE_PARAM, key);
     if (ret != 0) {
         WH_ERROR_PRINT("Failed to generate oversize SLH-DSA key: %d\n", ret);
         goto done;
@@ -2298,8 +2283,7 @@ int whTest_Crypto_SlhDsa(whClientContext* ctx)
 
     (void)ctx;
 #if !defined(WH_TEST_SLHDSA_COMM_PARAM) && \
-    !defined(WH_TEST_SLHDSA_FAST_PARAM) && \
-    !defined(WH_TEST_SLHDSA_KAT_PARAM)
+    !defined(WH_TEST_SLHDSA_FAST_PARAM) && !defined(WH_TEST_SLHDSA_KAT_PARAM)
     /* Nothing above was built, so report that rather than a pass. */
     return WH_TEST_SKIPPED;
 #else
