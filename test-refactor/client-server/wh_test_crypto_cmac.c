@@ -23,8 +23,9 @@
  * triple, exercises (a) one-shot generate with a cached server key,
  * (b) one-shot verify, and (c) incremental update/finalize. Also commits a
  * key to NVM and verifies through the cache->NVM->cache fetch path.
- * Streaming tests check input larger than one comm buffer message against
- * software CMAC.
+ * Streaming tests check partial block and error handling. The POSIX build
+ * also checks input larger than one comm buffer message against software
+ * CMAC.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -366,9 +367,10 @@ static int whTest_CryptoCmacImpl(whClientContext* ctx, int devId)
 }
 
 #ifdef WOLFSSL_AES_256
-/* Spans several max size Update requests. Static to limit stack use. */
-static uint8_t
-    whTest_CmacBigBuf[3 * WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ + 7u];
+static const byte whTest_CmacStreamingKey[] = {
+    0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae,
+    0xf0, 0x85, 0x7d, 0x77, 0x81, 0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61,
+    0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4};
 
 /* Compute a CMAC in software (no devId) to compare against. */
 static int whTest_CmacReference(const uint8_t* key, uint32_t keyLen,
@@ -391,8 +393,145 @@ static int whTest_CmacReference(const uint8_t* key, uint32_t keyLen,
     return ret;
 }
 
-/* CMAC input larger than one message, checked against software CMAC */
+static void whTest_CmacFillBuf(uint8_t* buf, uint32_t sz)
+{
+    uint32_t i;
+    for (i = 0; i < sz; i++) {
+        buf[i] = (uint8_t)((i * 13u + 5u) & 0xff);
+    }
+}
+
+/* CMAC streaming state handling with input that fits in one message */
 static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
+{
+    int            ret = 0;
+    Cmac           cmac[1];
+    uint8_t        tag[AES_BLOCK_SIZE];
+    uint8_t        ref[AES_BLOCK_SIZE];
+    uint8_t        buf[2 * AES_BLOCK_SIZE];
+    whKeyId        keyId                     = WH_KEYID_ERASED;
+    uint8_t        labelIn[WH_NVM_LABEL_LEN] = "CMAC Streaming";
+    const byte*    key                       = whTest_CmacStreamingKey;
+    const uint32_t keySz = (uint32_t)sizeof(whTest_CmacStreamingKey);
+    bool           sent;
+
+    whTest_CmacFillBuf(buf, sizeof(buf));
+
+    /* Case A: a failed Update leaves the streaming state unchanged */
+    ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
+                             sizeof(labelIn), (uint8_t*)key, keySz, &keyId);
+    if (ret == 0) {
+        ret = wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            ret = wh_Client_CmacSetKeyId(cmac, keyId);
+        }
+        if (ret == 0) {
+            /* Absorbed locally, so the evicted key is not seen yet */
+            ret = wc_CmacUpdate(cmac, buf, 5);
+        }
+        if (ret == 0) {
+            int rc = wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, NULL, 0, buf + 5,
+                                    sizeof(buf) - 5, NULL, NULL);
+            if (rc == WH_ERROR_OK) {
+                WH_ERROR_PRINT("CMAC streaming: expected evicted key error\n");
+                ret = -1;
+            }
+            else if (cmac->bufferSz != 5 || cmac->totalSz != 0 ||
+                     memcmp(cmac->buffer, buf, 5) != 0) {
+                WH_ERROR_PRINT("CMAC streaming: state changed on error\n");
+                ret = -1;
+            }
+        }
+        (void)wc_CmacFree(cmac);
+    }
+
+    /* Case B: async input that fits in the partial block needs no request */
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            sent = true;
+            ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
+                                               keySz, buf, 5, &sent);
+            if (ret == 0 && sent) {
+                WH_ERROR_PRINT("CMAC streaming: 5 byte update was sent\n");
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            sent = true;
+            ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                               buf + 5, 11, &sent);
+            if (ret == 0 && (sent || cmac->bufferSz != AES_BLOCK_SIZE)) {
+                WH_ERROR_PRINT("CMAC streaming: full block update was sent\n");
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            sent = false;
+            ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
+                                               buf + 16, 1, &sent);
+            if (ret == 0 && !sent) {
+                WH_ERROR_PRINT("CMAC streaming: 17th byte was not sent\n");
+                ret = -1;
+            }
+            if (ret == 0) {
+                do {
+                    ret = wh_Client_CmacUpdateResponse(ctx, cmac);
+                } while (ret == WH_ERROR_NOTREADY);
+            }
+        }
+        if (ret == 0) {
+            ret = wh_Client_CmacFinalRequest(ctx, cmac);
+        }
+        if (ret == 0) {
+            uint32_t outSz = sizeof(tag);
+            do {
+                ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &outSz);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        (void)wc_CmacFree(cmac);
+        if (ret == 0) {
+            ret = whTest_CmacReference(key, keySz, buf, 17, ref);
+        }
+        if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
+            WH_ERROR_PRINT("CMAC streaming: local absorb mismatch\n");
+            ret = -1;
+        }
+    }
+
+    /* Case C: a bad key length leaves the state unchanged */
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        if (ret == 0) {
+            int rc;
+            sent = true;
+            rc   = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key, 20,
+                                               buf, 1, &sent);
+            if (rc != WH_ERROR_BADARGS || sent || cmac->bufferSz != 0) {
+                WH_ERROR_PRINT("CMAC streaming: bad key length not rejected\n");
+                ret = -1;
+            }
+        }
+        (void)wc_CmacFree(cmac);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("CMAC STREAMING DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+
+/* Large static input buffer, so only built for the POSIX test harness */
+#ifdef WOLFHSM_CFG_TEST_POSIX
+/* Spans several max size Update requests */
+static uint8_t
+    whTest_CmacBigBuf[3 * WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ + 7u];
+
+/* CMAC input larger than one message, checked against software CMAC */
+static int _whTest_CryptoCmacLargeInput(whClientContext* ctx, int devId)
 {
     int            ret = 0;
     Cmac           cmac[1];
@@ -400,10 +539,12 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
     uint8_t        ref[AES_BLOCK_SIZE];
     word32         tagSz;
     whKeyId        keyId                     = WH_KEYID_ERASED;
-    uint8_t        labelIn[WH_NVM_LABEL_LEN] = "CMAC Streaming";
+    uint8_t        labelIn[WH_NVM_LABEL_LEN] = "CMAC Large Input";
     uint8_t*       buf                       = whTest_CmacBigBuf;
     const uint32_t bufSz = (uint32_t)sizeof(whTest_CmacBigBuf);
     const uint32_t maxSz = WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ;
+    const byte*    key   = whTest_CmacStreamingKey;
+    const uint32_t keySz = (uint32_t)sizeof(whTest_CmacStreamingKey);
     /* Around the per-request limit, and spanning several requests */
     const uint32_t sizes[] = {WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ,
                               WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ + 1u,
@@ -413,25 +554,19 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         5,  11,
         1,  WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ + 3u,
         17, WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_UPDATE_SZ - 20u};
-    const byte key[] = {0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe,
-                        0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
-                        0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7,
-                        0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4};
-    uint32_t   i;
-    bool       sent;
+    uint32_t i;
+    bool     sent;
 
-    for (i = 0; i < bufSz; i++) {
-        buf[i] = (uint8_t)((i * 13u + 5u) & 0xff);
-    }
+    whTest_CmacFillBuf(buf, bufSz);
 
     /* Case A: oneshot with an inline key on an uninitialized cmac */
     for (i = 0; ret == 0 && i < sizeof(sizes) / sizeof(sizes[0]); i++) {
         memset(cmac, 0xA5, sizeof(cmac));
         tagSz = sizeof(tag);
         ret   = wc_AesCmacGenerate_ex(cmac, tag, &tagSz, buf, sizes[i], key,
-                                      sizeof(key), NULL, devId);
+                                      keySz, NULL, devId);
         if (ret == 0) {
-            ret = whTest_CmacReference(key, sizeof(key), buf, sizes[i], ref);
+            ret = whTest_CmacReference(key, keySz, buf, sizes[i], ref);
         }
         if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
             WH_ERROR_PRINT("CMAC streaming: generate mismatch sz=%u\n",
@@ -441,7 +576,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         if (ret == 0) {
             memset(cmac, 0xA5, sizeof(cmac));
             ret = wc_AesCmacVerify_ex(cmac, ref, sizeof(ref), buf, sizes[i],
-                                      key, sizeof(key), NULL, devId);
+                                      key, keySz, NULL, devId);
             if (ret != 0) {
                 WH_ERROR_PRINT("CMAC streaming: verify failed sz=%u %d\n",
                                (unsigned)sizes[i], ret);
@@ -452,8 +587,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
     /* Case B: incremental updates with a cached HSM key */
     if (ret == 0) {
         ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_SIGN, labelIn,
-                                 sizeof(labelIn), (uint8_t*)key, sizeof(key),
-                                 &keyId);
+                                 sizeof(labelIn), (uint8_t*)key, keySz, &keyId);
     }
     if (ret == 0) {
         uint32_t off = 0;
@@ -471,7 +605,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         }
         (void)wc_CmacFree(cmac);
         if (ret == 0) {
-            ret = whTest_CmacReference(key, sizeof(key), buf, off, ref);
+            ret = whTest_CmacReference(key, keySz, buf, off, ref);
         }
         if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
             WH_ERROR_PRINT("CMAC streaming: HSM key update mismatch\n");
@@ -479,42 +613,9 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         }
     }
 
-    /* Case C: a failed Update leaves the streaming state unchanged */
+    /* Case C: inline key set at init, then one large update */
     if (ret == 0) {
-        whKeyId evictedId = keyId;
-
-        ret   = wh_Client_KeyEvict(ctx, keyId);
-        keyId = WH_KEYID_ERASED;
-        if (ret == 0) {
-            ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
-        }
-        if (ret == 0) {
-            ret = wh_Client_CmacSetKeyId(cmac, evictedId);
-        }
-        if (ret == 0) {
-            /* Absorbed locally, so the evicted key is not seen yet */
-            ret = wc_CmacUpdate(cmac, buf, 5);
-        }
-        if (ret == 0) {
-            int rc = wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, NULL, 0, buf + 5,
-                                    2 * maxSz, NULL, NULL);
-            if (rc == WH_ERROR_OK) {
-                WH_ERROR_PRINT("CMAC streaming: expected evicted key error\n");
-                ret = -1;
-            }
-            else if (cmac->bufferSz != 5 || cmac->totalSz != 0 ||
-                     memcmp(cmac->buffer, buf, 5) != 0) {
-                WH_ERROR_PRINT("CMAC streaming: state changed on error\n");
-                ret = -1;
-            }
-        }
-        (void)wc_CmacFree(cmac);
-    }
-
-    /* Case D: inline key set at init, then one large update */
-    if (ret == 0) {
-        ret = wc_InitCmac_ex(cmac, key, sizeof(key), WC_CMAC_AES, NULL, NULL,
-                             devId);
+        ret = wc_InitCmac_ex(cmac, key, keySz, WC_CMAC_AES, NULL, NULL, devId);
         if (ret == 0) {
             ret = wc_CmacUpdate(cmac, buf, bufSz);
         }
@@ -524,7 +625,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         }
         (void)wc_CmacFree(cmac);
         if (ret == 0) {
-            ret = whTest_CmacReference(key, sizeof(key), buf, bufSz, ref);
+            ret = whTest_CmacReference(key, keySz, buf, bufSz, ref);
         }
         if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
             WH_ERROR_PRINT("CMAC streaming: inline key update mismatch\n");
@@ -532,60 +633,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         }
     }
 
-    /* Case E: async input that fits in the partial block needs no request */
-    if (ret == 0) {
-        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
-    }
-    if (ret == 0) {
-        sent = true;
-        ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
-                                           sizeof(key), buf, 5, &sent);
-        if (ret == 0 && sent) {
-            WH_ERROR_PRINT("CMAC streaming: 5 byte update was sent\n");
-            ret = -1;
-        }
-    }
-    if (ret == 0) {
-        sent = true;
-        ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
-                                           buf + 5, 11, &sent);
-        if (ret == 0 && (sent || cmac->bufferSz != AES_BLOCK_SIZE)) {
-            WH_ERROR_PRINT("CMAC streaming: full block update was sent\n");
-            ret = -1;
-        }
-    }
-    if (ret == 0) {
-        sent = false;
-        ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, NULL, 0,
-                                           buf + 16, 1, &sent);
-        if (ret == 0 && !sent) {
-            WH_ERROR_PRINT("CMAC streaming: 17th byte was not sent\n");
-            ret = -1;
-        }
-        if (ret == 0) {
-            do {
-                ret = wh_Client_CmacUpdateResponse(ctx, cmac);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-    }
-    if (ret == 0) {
-        ret = wh_Client_CmacFinalRequest(ctx, cmac);
-    }
-    if (ret == 0) {
-        uint32_t outSz = sizeof(tag);
-        do {
-            ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &outSz);
-        } while (ret == WH_ERROR_NOTREADY);
-    }
-    if (ret == 0) {
-        ret = whTest_CmacReference(key, sizeof(key), buf, 17, ref);
-    }
-    if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
-        WH_ERROR_PRINT("CMAC streaming: local absorb mismatch\n");
-        ret = -1;
-    }
-
-    /* Case F: async updates of exactly the max size with a 32 byte key */
+    /* Case D: async updates of exactly the max size with a 32 byte key */
     if (ret == 0) {
         uint32_t off = 0;
         ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
@@ -596,8 +644,7 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
             }
             sent = false;
             ret  = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
-                                               sizeof(key), buf + off, chunk,
-                                               &sent);
+                                               keySz, buf + off, chunk, &sent);
             if (ret == 0 && sent) {
                 do {
                     ret = wh_Client_CmacUpdateResponse(ctx, cmac);
@@ -614,8 +661,9 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
                 ret = wh_Client_CmacFinalResponse(ctx, cmac, tag, &outSz);
             } while (ret == WH_ERROR_NOTREADY);
         }
+        (void)wc_CmacFree(cmac);
         if (ret == 0) {
-            ret = whTest_CmacReference(key, sizeof(key), buf, bufSz, ref);
+            ret = whTest_CmacReference(key, keySz, buf, bufSz, ref);
         }
         if (ret == 0 && memcmp(tag, ref, sizeof(ref)) != 0) {
             WH_ERROR_PRINT("CMAC streaming: async max chunk mismatch\n");
@@ -623,39 +671,32 @@ static int _whTest_CryptoCmacStreaming(whClientContext* ctx, int devId)
         }
     }
 
-    /* Case G: rejected requests leave the state unchanged */
+    /* Case E: an oversize request leaves the state unchanged */
     if (ret == 0) {
         ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
-    }
-    if (ret == 0) {
-        int rc;
-        sent = true;
-        rc   = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key,
-                                           sizeof(key), buf, maxSz + 1u, &sent);
-        if (rc != WH_ERROR_REQUEST_SIZE || sent || cmac->bufferSz != 0) {
-            WH_ERROR_PRINT("CMAC streaming: oversize update not rejected\n");
-            ret = -1;
+        if (ret == 0) {
+            int rc;
+            sent = true;
+            rc = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key, keySz,
+                                             buf, maxSz + 1u, &sent);
+            if (rc != WH_ERROR_REQUEST_SIZE || sent || cmac->bufferSz != 0) {
+                WH_ERROR_PRINT(
+                    "CMAC streaming: oversize update not rejected\n");
+                ret = -1;
+            }
         }
-    }
-    if (ret == 0) {
-        int rc;
-        sent = true;
-        rc   = wh_Client_CmacUpdateRequest(ctx, cmac, WC_CMAC_AES, key, 20, buf,
-                                           1, &sent);
-        if (rc != WH_ERROR_BADARGS || sent || cmac->bufferSz != 0) {
-            WH_ERROR_PRINT("CMAC streaming: bad key length not rejected\n");
-            ret = -1;
-        }
+        (void)wc_CmacFree(cmac);
     }
 
     if (keyId != WH_KEYID_ERASED) {
         (void)wh_Client_KeyEvict(ctx, keyId);
     }
     if (ret == 0) {
-        WH_TEST_PRINT("CMAC STREAMING DEVID=0x%X SUCCESS\n", devId);
+        WH_TEST_PRINT("CMAC LARGE INPUT DEVID=0x%X SUCCESS\n", devId);
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_TEST_POSIX */
 #endif /* WOLFSSL_AES_256 */
 
 int whTest_Crypto_Cmac(whClientContext* ctx)
@@ -671,6 +712,10 @@ int whTest_Crypto_Cmac(whClientContext* ctx)
 #ifdef WOLFSSL_AES_256
         WH_TEST_RETURN_ON_FAIL(
             _whTest_CryptoCmacStreaming(ctx, WH_CLIENT_DEVID(ctx)));
+#ifdef WOLFHSM_CFG_TEST_POSIX
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_CryptoCmacLargeInput(ctx, WH_CLIENT_DEVID(ctx)));
+#endif
 #endif
     }
     (void)wh_Client_SetDmaMode(ctx, 0);
