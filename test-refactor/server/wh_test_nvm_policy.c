@@ -213,6 +213,273 @@ static int _whTest_NvmPolicyRevokedCacheOnlyEraseDenied(whServerContext* server)
     return WH_ERROR_OK;
 }
 
+/* Committing over a stored TRUSTED object must be denied even when the cache
+ * slot's own flags lack the flag. Only the unchecked cache path (keywrap
+ * unwrap-and-cache, SHE) can produce that pairing. */
+static int _whTest_NvmPolicyCommitTrustedDenied(whServerContext* server)
+{
+    whNvmMetadata meta[1];
+    uint8_t       kek[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       forged[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       stored[WH_TEST_NVMPOL_KEYLEN];
+    whKeyId       kekId;
+    int           i;
+
+    for (i = 0; i < (int)sizeof(kek); i++) {
+        kek[i]    = (uint8_t)(0x40 + i);
+        forged[i] = 0xFF;
+    }
+
+    kekId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID, 0x33);
+
+    /* Provision the trusted KEK the way boot code or whnvmtool would */
+    memset(meta, 0, sizeof(meta));
+    meta->id     = kekId;
+    meta->len    = (whNvmSize)sizeof(kek);
+    meta->flags  = WH_NVM_FLAGS_TRUSTED;
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Nvm_AddObject(server->nvm, meta, sizeof(kek), kek));
+
+    /* Cache other bytes under the same id with the trusted flag cleared */
+    meta->flags = WH_NVM_FLAGS_USAGE_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreCacheKey(server, meta, forged));
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_KeystoreCommitKeyChecked(server, kekId));
+
+    /* The stored KEK is untouched */
+    memset(stored, 0, sizeof(stored));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_Read(server->nvm, kekId, 0,
+                                      (whNvmSize)sizeof(stored), stored));
+    WH_TEST_ASSERT_RETURN(memcmp(stored, kek, sizeof(kek)) == 0);
+
+    /* Unchecked teardown: the checked paths refuse a trusted object */
+    (void)wh_Server_KeystoreEvictKey(server, kekId);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjects(server->nvm, 1, &kekId));
+
+    return WH_ERROR_OK;
+}
+
+/* The other half of the commit deny mask. The client-driven test for this lives
+ * behind the persistence gate, since only the unchecked NVM API can remove the
+ * object again, so cover it here too and run in every configuration. */
+static int _whTest_NvmPolicyCommitNonModifiableDenied(whServerContext* server)
+{
+    whNvmMetadata meta[1];
+    uint8_t       keyData[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       replacement[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       stored[WH_TEST_NVMPOL_KEYLEN];
+    whKeyId       keyId;
+    int           i;
+
+    for (i = 0; i < (int)sizeof(keyData); i++) {
+        keyData[i]     = (uint8_t)(0xA0 + i);
+        replacement[i] = 0xDD;
+    }
+
+    keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID, 0x36);
+
+    memset(meta, 0, sizeof(meta));
+    meta->id     = keyId;
+    meta->len    = (whNvmSize)sizeof(keyData);
+    meta->flags  = WH_NVM_FLAGS_NONMODIFIABLE;
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK == wh_Nvm_AddObject(server->nvm, meta,
+                                                          sizeof(keyData),
+                                                          keyData));
+
+    /* Cache a replacement under the same id with the flag cleared */
+    meta->flags = WH_NVM_FLAGS_USAGE_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreCacheKey(server, meta, replacement));
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_KeystoreCommitKeyChecked(server, keyId));
+
+    /* The stored object is untouched */
+    memset(stored, 0, sizeof(stored));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_Read(server->nvm, keyId, 0,
+                                      (whNvmSize)sizeof(stored), stored));
+    WH_TEST_ASSERT_RETURN(memcmp(stored, keyData, sizeof(keyData)) == 0);
+
+    /* Unchecked teardown: the checked destroy refuses a non-modifiable object */
+    (void)wh_Server_KeystoreEvictKey(server, keyId);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjects(server->nvm, 1, &keyId));
+
+    return WH_ERROR_OK;
+}
+
+/* Both writers must fail closed when the stored flags cannot be read. A
+ * backend without the optional GetMetadata callback makes wh_Nvm_GetMetadata
+ * report WH_ERROR_ABORTED, which they must propagate instead of allowing. */
+static int _whTest_NvmPolicyUnreadableFlagsDenied(whServerContext* server)
+{
+    whNvmMetadata  meta[1];
+    static whNvmCb blindCb;
+    whNvmCb*       savedCb;
+    uint8_t        keyData[WH_TEST_NVMPOL_KEYLEN];
+    whKeyId        keyId;
+    int            commitRet;
+    int            revokeRet;
+    int            i;
+
+    for (i = 0; i < (int)sizeof(keyData); i++) {
+        keyData[i] = (uint8_t)(0x60 + i);
+    }
+
+    keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID, 0x34);
+
+    memset(meta, 0, sizeof(meta));
+    meta->id     = keyId;
+    meta->len    = (whNvmSize)sizeof(keyData);
+    meta->flags  = WH_NVM_FLAGS_USAGE_ANY;
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreCacheKey(server, meta, keyData));
+
+    /* The real backend, minus the optional metadata callback. Static, so a
+     * later edit that returns before the restore below cannot leave the shared
+     * context pointing into a dead stack frame. */
+    savedCb             = server->nvm->cb;
+    blindCb             = *savedCb;
+    blindCb.GetMetadata = NULL;
+    server->nvm->cb     = &blindCb;
+
+    commitRet = wh_Server_KeystoreCommitKeyChecked(server, keyId);
+    revokeRet = wh_Server_KeystoreRevokeKey(server, keyId);
+
+    /* Restore before asserting so a failure cannot leave the shared context
+     * with the stub callback table */
+    server->nvm->cb = savedCb;
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED == commitRet);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED == revokeRet);
+
+    /* Neither denial wrote anything: the key is still cache-only */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_Nvm_GetMetadata(server->nvm, keyId, meta));
+
+    (void)wh_Server_KeystoreEvictKey(server, keyId);
+
+    return WH_ERROR_OK;
+}
+
+/* Revoke rewrites the stored object from the cache slot, so it is gated on the
+ * stored TRUSTED flag exactly as commit is. Without the gate a laundered cache
+ * slot replaces the KEK bytes and drops the flag. */
+static int _whTest_NvmPolicyRevokeTrustedDenied(whServerContext* server)
+{
+    whNvmMetadata meta[1];
+    whNvmMetadata storedMeta[1];
+    uint8_t       kek[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       forged[WH_TEST_NVMPOL_KEYLEN];
+    uint8_t       stored[WH_TEST_NVMPOL_KEYLEN];
+    whKeyId       kekId;
+    int           i;
+
+    for (i = 0; i < (int)sizeof(kek); i++) {
+        kek[i]    = (uint8_t)(0x80 + i);
+        forged[i] = 0xEE;
+    }
+
+    kekId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID, 0x35);
+
+    /* Provision the trusted KEK the way boot code or whnvmtool would */
+    memset(meta, 0, sizeof(meta));
+    meta->id     = kekId;
+    meta->len    = (whNvmSize)sizeof(kek);
+    meta->flags  = WH_NVM_FLAGS_TRUSTED;
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Nvm_AddObject(server->nvm, meta, sizeof(kek), kek));
+
+    /* Cache other bytes under the same id with the trusted flag cleared */
+    meta->flags = WH_NVM_FLAGS_USAGE_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreCacheKey(server, meta, forged));
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Server_KeystoreRevokeKey(server, kekId));
+
+    /* The stored KEK keeps both its bytes and its trusted flag */
+    memset(stored, 0, sizeof(stored));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_Read(server->nvm, kekId, 0,
+                                      (whNvmSize)sizeof(stored), stored));
+    WH_TEST_ASSERT_RETURN(memcmp(stored, kek, sizeof(kek)) == 0);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_GetMetadata(server->nvm, kekId, storedMeta));
+    WH_TEST_ASSERT_RETURN((storedMeta->flags & WH_NVM_FLAGS_TRUSTED) != 0);
+
+    /* Unchecked teardown: the checked paths refuse a trusted object */
+    (void)wh_Server_KeystoreEvictKey(server, kekId);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjects(server->nvm, 1, &kekId));
+
+    return WH_ERROR_OK;
+}
+
+/* The allow side of the same mask: revoke omits NONMODIFIABLE so a revoked,
+ * committed key can be revoked again. Asserted against the stored object that
+ * commit refuses, so the two arms are pinned on identical input. */
+static int _whTest_NvmPolicyRevokeNonModifiableAllowed(whServerContext* server)
+{
+    whNvmMetadata meta[1];
+    whNvmMetadata storedMeta[1];
+    uint8_t       keyData[WH_TEST_NVMPOL_KEYLEN];
+    whKeyId       keyId;
+    int           i;
+
+    for (i = 0; i < (int)sizeof(keyData); i++) {
+        keyData[i] = (uint8_t)(0xC0 + i);
+    }
+
+    keyId = WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_DEFAULT_CLIENT_ID, 0x37);
+
+    /* Commit an ordinary key, then revoke it: the revoke marks the stored
+     * object NONMODIFIABLE */
+    memset(meta, 0, sizeof(meta));
+    meta->id     = keyId;
+    meta->len    = (whNvmSize)sizeof(keyData);
+    meta->flags  = WH_NVM_FLAGS_USAGE_ANY;
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreCacheKey(server, meta, keyData));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK == wh_Server_KeystoreCommitKeyChecked(server, keyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreRevokeKey(server, keyId));
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_GetMetadata(server->nvm, keyId, storedMeta));
+    WH_TEST_ASSERT_RETURN((storedMeta->flags & WH_NVM_FLAGS_NONMODIFIABLE) != 0);
+
+    /* Commit is now refused on that object, but revoke is not */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS == wh_Server_KeystoreCommitKeyChecked(server, keyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreRevokeKey(server, keyId));
+
+    /* Still permitted once the cache slot is gone and the stored flags alone
+     * decide */
+    (void)wh_Server_KeystoreEvictKey(server, keyId);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Server_KeystoreRevokeKey(server, keyId));
+
+    /* Unchecked teardown: the checked destroy refuses a revoked object */
+    (void)wh_Server_KeystoreEvictKey(server, keyId);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjects(server->nvm, 1, &keyId));
+
+    return WH_ERROR_OK;
+}
+
 int whTest_NvmPolicyChecked(whServerContext* ctx)
 {
     if (ctx == NULL) {
@@ -223,6 +490,11 @@ int whTest_NvmPolicyChecked(whServerContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyDestroyAllAbsentNoChurn(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyMissingKeyEraseSucceeds(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyRevokedCacheOnlyEraseDenied(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyCommitTrustedDenied(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyCommitNonModifiableDenied(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyUnreadableFlagsDenied(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyRevokeTrustedDenied(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyRevokeNonModifiableAllowed(ctx));
 
     return WH_ERROR_OK;
 }

@@ -955,7 +955,9 @@ int wh_Client_KeyCommitResponse(whClientContext* c);
  * @param[in] c Pointer to the client context.
  * @param[in] keyId Key ID to be committed. Committing a key means making it
  * persistent in non-volatile memory.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @return int 0 on success, else a negative error code. WH_ERROR_ACCESS if a
+ * non-modifiable or server-trusted object already exists under keyId.
+ * WH_ERROR_ABORTED if the stored flags are unreadable.
  */
 int wh_Client_KeyCommit(whClientContext* c, whNvmId keyId);
 
@@ -1035,7 +1037,9 @@ int wh_Client_KeyRevokeResponse(whClientContext* c);
  *
  * @param[in] c Pointer to the client context.
  * @param[in] keyId Key ID to be revoked.
- * @return int Returns 0 on success, or a negative error code on failure.
+ * @return int 0 on success, else a negative error code. WH_ERROR_ACCESS if the
+ * stored object carries WH_NVM_FLAGS_TRUSTED. WH_ERROR_ABORTED if the stored
+ * flags are unreadable.
  */
 int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
 
