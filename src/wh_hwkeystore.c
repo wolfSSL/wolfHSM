@@ -266,8 +266,7 @@ int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
             ret = WH_ERROR_NOSPACE;
         }
         else {
-            entry->id    = WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL,
-                                         WH_KEYID_ID(keyId));
+            entry->id    = keyId;
             entry->srcId = WH_KEYID_ERASED;
             entry->flags =
                 (flags & WH_NVM_FLAGS_USAGE_ANY) | WH_NVM_FLAGS_NONDESTROYABLE;

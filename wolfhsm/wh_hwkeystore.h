@@ -213,8 +213,9 @@ int wh_HwKeystore_GetKey(whHwKeystoreContext* context, whKeyId keyId,
  * TYPE=HW: the ID field names the hardware key and the USER field is the
  * client making the call (0 for a shared key). A key loaded by a client can
  * be used and cleared only by that client, unless it was loaded as shared.
- * Keys the port registers are shared and clients cannot clear them. devId is
- * the wolfCrypt device whose crypto callback implements WC_ALGO_TYPE_KEYSTORE.
+ * A key the port registers is shared if its USER field is 0, otherwise only
+ * that client can use it, and clients cannot clear it. devId is the wolfCrypt
+ * device whose crypto callback implements WC_ALGO_TYPE_KEYSTORE.
  */
 
 /**
@@ -228,10 +229,11 @@ void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref);
 /**
  * @brief Record a key the port loaded itself, for example at boot.
  *
- * The key is shared by all clients and clients cannot clear it.
+ * Clients cannot clear or replace the key.
  *
  * @param[in] context Pointer to an initialized hardware keystore context
- * @param[in] keyId Server keyId of the hardware key
+ * @param[in] keyId Server keyId of the hardware key. USER is the client that
+ *            may use it, or 0 to share it with all clients
  * @param[in] flags WH_NVM_FLAGS_USAGE_* the key allows
  * @param[in] len Key size in bytes
  * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if the key is already
