@@ -55,9 +55,9 @@
 /* Enable Image Manager feature */
 #define WOLFHSM_CFG_SERVER_IMG_MGR
 
+/* Port keys (WOLFHSM_CFG_PORTKEY) are tested in test-refactor */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #define WOLFHSM_CFG_KEYWRAP
-#define WOLFHSM_CFG_HWKEYSTORE
 #endif
 
 /* Test log-based NVM flash backend */
