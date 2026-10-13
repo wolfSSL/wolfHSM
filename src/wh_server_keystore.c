@@ -1477,25 +1477,28 @@ int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
     }
 
     /* Read the source with the policy checks every client keystore operation
-     * gets, which refuse trusted keys */
+     * gets, which refuse trusted keys. Hold the NVM lock until the copy is
+     * loaded, so erasing or revoking the source can't miss it */
     ret = WH_SERVER_NVM_LOCK(server);
     if (ret == WH_ERROR_OK) {
         ret = _KeystoreCheckPolicy(server, WH_KS_OP_HW_LOAD, srcId);
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_KeystoreReadKey(server, srcId, meta, key, &keySz);
         }
+
+        /* The hardware copy keeps the usage of the source. A key with none (a
+         * revoked key, for example) could not be used */
+        if ((ret == WH_ERROR_OK) &&
+            ((meta->flags & WH_NVM_FLAGS_USAGE_ANY) == 0)) {
+            ret = WH_ERROR_USAGE;
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = wh_HwKeystore_Load(server->hwKeystore, server->devId,
+                                     inout_hwId, srcId, meta->flags, key,
+                                     (uint16_t)keySz);
+        }
         (void)WH_SERVER_NVM_UNLOCK(server);
     } /* WH_SERVER_NVM_LOCK() */
-
-    /* The hardware copy keeps the usage of the source. A key with none (a
-     * revoked key, for example) could not be used */
-    if ((ret == WH_ERROR_OK) && ((meta->flags & WH_NVM_FLAGS_USAGE_ANY) == 0)) {
-        ret = WH_ERROR_USAGE;
-    }
-    if (ret == WH_ERROR_OK) {
-        ret = wh_HwKeystore_Load(server->hwKeystore, server->devId, inout_hwId,
-                                 srcId, meta->flags, key, (uint16_t)keySz);
-    }
     wh_Utils_ForceZero(key, sizeof(key));
     return ret;
 }
