@@ -861,10 +861,12 @@ static int _LoadKey(whServerContext* server, uint16_t magic, uint16_t req_size,
         resp.messageFour[15] =
             ((_PopId(req.messageOne) << 4) | _PopAuthId(req.messageOne));
 
-        /* Then encrypt counter into second half of messageFour */
-        ret = wc_AesEncryptDirect(server->she->sheAes,
-                                  resp.messageFour + WH_SHE_KEY_SZ,
-                                  counter_buffer);
+        /* Then encrypt counter into second half of messageFour. One-block
+         * ECB, not AES-direct, which fails when a crypto callback owns the
+         * key */
+        ret = wc_AesEcbEncrypt(server->she->sheAes,
+                               resp.messageFour + WH_SHE_KEY_SZ, counter_buffer,
+                               AES_BLOCK_SIZE);
     }
     /* free aes for protection */
     wc_AesFree(server->she->sheAes);
@@ -1075,10 +1077,10 @@ static int _ExportRamKey(whServerContext* server, uint16_t magic,
         memcpy(resp.messageFour + WH_SHE_KEY_SZ, &counter_val,
                sizeof(uint32_t));
         resp.messageFour[WH_SHE_KEY_SZ + 3] |= 0x08;
-        /* encrypt the new counter */
-        ret = wc_AesEncryptDirect(server->she->sheAes,
-                                  resp.messageFour + WH_SHE_KEY_SZ,
-                                  resp.messageFour + WH_SHE_KEY_SZ);
+        /* encrypt the new counter (one-block ECB, see above) */
+        ret = wc_AesEcbEncrypt(
+            server->she->sheAes, resp.messageFour + WH_SHE_KEY_SZ,
+            resp.messageFour + WH_SHE_KEY_SZ, AES_BLOCK_SIZE);
     }
     /* free aes for protection */
     wc_AesFree(server->she->sheAes);
