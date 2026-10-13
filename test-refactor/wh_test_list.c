@@ -46,6 +46,7 @@ WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_HwKeystore);
+WH_TEST_DECL(whTest_HwKeystoreCrypto);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MessageNvmTranslate);
 WH_TEST_DECL(whTest_MultiClient);
@@ -123,6 +124,7 @@ const whTestCase whTestsMisc[] = {
     { "whTest_MessageNvmTranslate", whTest_MessageNvmTranslate },
     { "whTest_MultiClient",      whTest_MultiClient },
     { "whTest_HwKeystore",       whTest_HwKeystore },
+    { "whTest_HwKeystoreCrypto", whTest_HwKeystoreCrypto },
     { "whTest_Lock",             whTest_Lock },
     { "whTest_Log",              whTest_Log },
     { "whTest_SheKeywrapInterop", whTest_SheKeywrapInterop },
