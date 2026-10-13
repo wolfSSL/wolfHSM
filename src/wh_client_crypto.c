@@ -11504,9 +11504,9 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + (uint64_t)seedSz;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + seedSz;
 
         if (total_len <= WOLFHSM_CFG_COMM_DATA_LEN) {
             uint16_t req_len = (uint16_t)total_len;
@@ -11739,10 +11739,9 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
 
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + (uint64_t)in_len +
-                             (uint64_t)contextLen + (uint64_t)addRndSz;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + in_len + contextLen + addRndSz;
         uint32_t options = 0;
 
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
@@ -11890,10 +11889,9 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + (uint64_t)sig_len +
-                             (uint64_t)msg_len + (uint64_t)contextLen;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + sig_len + msg_len + contextLen;
 
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
@@ -12023,9 +12021,9 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
         uint16_t action  = WC_ALGO_TYPE_PK;
         uint32_t options = 0;
 
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             sizeof(*req) + (uint64_t)pubKeySz;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            sizeof(*req) + pubKeySz;
 
         dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
