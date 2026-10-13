@@ -86,6 +86,18 @@
  *  served by a hardware keystore backend
  *      Default: 32
  *
+ *  WOLFHSM_CFG_HWKEYSTORE_CRYPTO - If defined, clients can load keys into
+ *  the hardware keystore and use hardware keys in AES and CMAC requests. The
+ *  server passes a hardware key to wolfCrypt by reference, so the crypto
+ *  callback must handle every operation on it. Requires
+ *  WOLFHSM_CFG_HWKEYSTORE, and WOLF_CRYPTO_CB_KEYSTORE and WOLF_PRIVATE_KEY_ID
+ *  in wolfCrypt
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS - The number of hardware keys the server
+ *  tracks for crypto use
+ *      Default: 8
+ *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
  *      Default: Not defined
@@ -587,6 +599,12 @@
 #error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
 #endif
 
+#if defined(WOLFHSM_CFG_HWKEYSTORE_CRYPTO) && \
+    (!defined(WOLF_CRYPTO_CB_KEYSTORE) || !defined(WOLF_PRIVATE_KEY_ID))
+#error \
+    "WOLFHSM_CFG_HWKEYSTORE_CRYPTO requires WOLF_CRYPTO_CB_KEYSTORE and WOLF_PRIVATE_KEY_ID"
+#endif
+
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #if defined(NO_AES) || \
     !defined(WOLFSSL_CMAC) || \
@@ -638,6 +656,19 @@
 #define WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE 32
 #endif
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
+
+#if defined(WOLFHSM_CFG_HWKEYSTORE_CRYPTO)
+#if !defined(WOLFHSM_CFG_HWKEYSTORE)
+#error "WOLFHSM_CFG_HWKEYSTORE_CRYPTO requires WOLFHSM_CFG_HWKEYSTORE"
+#endif
+#if defined(WOLFHSM_CFG_NO_CRYPTO)
+#error \
+    "WOLFHSM_CFG_HWKEYSTORE_CRYPTO is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#endif
+#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS
+#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS 8
+#endif
+#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
 
 /* Trusted cert verify cache requires the certificate manager and crypto.
  * Enforce here so downstream code can gate on

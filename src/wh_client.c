@@ -1436,6 +1436,227 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId)
     return ret;
 }
 
+int wh_Client_HwKeystoreLoadFromKeystoreRequest(whClientContext* c,
+                                                whKeyId          hwKeyId,
+                                                whKeyId          srcKeyId)
+{
+    whMessageKeystore_HwLoadRequest* req = NULL;
+
+    if ((c == NULL) || WH_KEYID_ISERASED(srcKeyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_HwLoadRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->hwId  = hwKeyId;
+    req->srcId = srcKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_HW_LOAD,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_HwKeystoreLoadFromKeystoreResponse(whClientContext* c,
+                                                 whKeyId*         outHwKeyId)
+{
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          size;
+    int                               ret;
+    whMessageKeystore_HwLoadResponse* resp = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageKeystore_HwLoadResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else if (outHwKeyId != NULL) {
+            *outHwKeyId = resp->hwId;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_HwKeystoreLoadFromKeystore(whClientContext* c, whKeyId hwKeyId,
+                                         whKeyId srcKeyId, whKeyId* outHwKeyId)
+{
+    int ret;
+    ret = wh_Client_HwKeystoreLoadFromKeystoreRequest(c, hwKeyId, srcKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_HwKeystoreLoadFromKeystoreResponse(c, outHwKeyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+/* ID 0 clears every key the client loaded */
+static int _HwKeystoreClearRequest(whClientContext* c, whKeyId hwKeyId)
+{
+    whMessageKeystore_HwClearRequest* req = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_HwClearRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->hwId = hwKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_HW_CLEAR,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_HwKeystoreClearRequest(whClientContext* c, whKeyId hwKeyId)
+{
+    if (WH_KEYID_ISERASED(hwKeyId)) {
+        return WH_ERROR_BADARGS;
+    }
+    return _HwKeystoreClearRequest(c, hwKeyId);
+}
+
+int wh_Client_HwKeystoreClearResponse(whClientContext* c)
+{
+    uint16_t                           group;
+    uint16_t                           action;
+    uint16_t                           size;
+    int                                ret;
+    whMessageKeystore_HwClearResponse* resp = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp =
+        (whMessageKeystore_HwClearResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_HwKeystoreClear(whClientContext* c, whKeyId hwKeyId)
+{
+    int ret;
+    ret = wh_Client_HwKeystoreClearRequest(c, hwKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_HwKeystoreClearResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_HwKeystoreClearAll(whClientContext* c)
+{
+    int ret;
+    ret = _HwKeystoreClearRequest(c, WH_KEYID_ERASED);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_HwKeystoreClearResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_HwKeystoreGetInfoRequest(whClientContext* c, whKeyId hwKeyId)
+{
+    whMessageKeystore_HwInfoRequest* req = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_HwInfoRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->hwId = hwKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_HW_INFO,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_HwKeystoreGetInfoResponse(whClientContext*  c,
+                                        whHwKeystoreInfo* info)
+{
+    uint16_t                          group;
+    uint16_t                          action;
+    uint16_t                          size;
+    int                               ret;
+    whMessageKeystore_HwInfoResponse* resp = NULL;
+
+    if ((c == NULL) || (info == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp = (whMessageKeystore_HwInfoResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            info->keyType = resp->keyType;
+            info->keyBits = resp->keyBits;
+            info->flags   = resp->flags;
+            info->owner   = resp->owner;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_HwKeystoreGetInfo(whClientContext* c, whKeyId hwKeyId,
+                                whHwKeystoreInfo* info)
+{
+    int ret;
+    ret = wh_Client_HwKeystoreGetInfoRequest(c, hwKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_HwKeystoreGetInfoResponse(c, info);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)
 {

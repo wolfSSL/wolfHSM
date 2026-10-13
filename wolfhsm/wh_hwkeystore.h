@@ -32,6 +32,15 @@
  * (stack) buffer, uses it, and zeroizes it. Hardware-only keys are only
  * usable as KEKs in the keywrap API.
  *
+ * With WOLFHSM_CFG_HWKEYSTORE_CRYPTO, clients can also load keys into the
+ * hardware keystore and use hardware keys in AES and CMAC requests. The
+ * hardware keeps the material: the server passes the key to wolfCrypt by
+ * reference and the port's crypto callback runs the operation. The port
+ * implements the WC_ALGO_TYPE_KEYSTORE callback to load, clear and describe
+ * keys, and decides which hardware keyIds exist and what they can hold. The
+ * front end records the owner and allowed usage of each key, and the server
+ * checks them on every request.
+ *
  * A backend provides a whHwKeystoreCb table (GetKey required; Init and Cleanup
  * optional) plus optional opaque context/config pointers for backend-specific
  * state. A whHwKeystoreContext is owned by the application, initialized once
@@ -52,6 +61,7 @@
 #include <stdint.h>
 
 #include "wolfhsm/wh_keyid.h"
+#include "wolfhsm/wh_common.h"
 
 #ifdef WOLFHSM_CFG_THREADSAFE
 #include "wolfhsm/wh_lock.h"
@@ -114,12 +124,29 @@ typedef struct whHwKeystoreCb_t {
     whHwKeystoreGetKeyCb  GetKey;  /* Fetch key material (required) */
 } whHwKeystoreCb;
 
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+/* Size of the key reference wolfCrypt passes to the port for a hardware key:
+ * the server keyId, big-endian */
+#define WH_HWKEYSTORE_REF_SIZE 2
+
+/* A hardware key the server allows in crypto requests */
+typedef struct whHwKeystoreKey_t {
+    whKeyId    id;    /* TYPE=HW, USER=owner (0 if shared), or ERASED if free */
+    whKeyId    srcId; /* Keystore key it was loaded from, or ERASED */
+    whNvmFlags flags; /* WH_NVM_FLAGS_USAGE_*. NONDESTROYABLE marks port keys */
+    uint16_t   len;   /* Key size in bytes */
+} whHwKeystoreKey;
+#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+
 /* Context structure associated with a hardware keystore instance */
 typedef struct whHwKeystoreContext_t {
     const whHwKeystoreCb* cb;      /* Backend callback table */
     void*                 context; /* Opaque backend context */
 #ifdef WOLFHSM_CFG_THREADSAFE
     whLock lock; /* Lock serializing callback invocations */
+#endif
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+    whHwKeystoreKey keys[WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS];
 #endif
     int     initialized; /* 1 if initialized, 0 otherwise */
     uint8_t WH_PAD[4];
@@ -179,6 +206,109 @@ int wh_HwKeystore_Cleanup(whHwKeystoreContext* context);
  */
 int wh_HwKeystore_GetKey(whHwKeystoreContext* context, whKeyId keyId,
                          uint8_t* out, uint16_t* inout_len);
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+/*
+ * Hardware keys for crypto requests. keyId arguments are server keyIds with
+ * TYPE=HW: the ID field names the hardware key and the USER field is the
+ * client making the call (0 for a shared key). A key loaded by a client can
+ * be used and cleared only by that client, unless it was loaded as shared.
+ * Keys the port registers are shared and clients cannot clear them. devId is
+ * the wolfCrypt device whose crypto callback implements WC_ALGO_TYPE_KEYSTORE.
+ */
+
+/**
+ * @brief Write the wolfCrypt key reference for a hardware key.
+ *
+ * @param[in] keyId Server keyId of the hardware key
+ * @param[out] ref Buffer of WH_HWKEYSTORE_REF_SIZE bytes
+ */
+void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref);
+
+/**
+ * @brief Record a key the port loaded itself, for example at boot.
+ *
+ * The key is shared by all clients and clients cannot clear it.
+ *
+ * @param[in] context Pointer to an initialized hardware keystore context
+ * @param[in] keyId Server keyId of the hardware key
+ * @param[in] flags WH_NVM_FLAGS_USAGE_* the key allows
+ * @param[in] len Key size in bytes
+ * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if the key is already
+ *         in use, WH_ERROR_NOSPACE if the table is full
+ */
+int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
+                           whNvmFlags flags, uint16_t len);
+
+/**
+ * @brief Load key material into a hardware key through the port.
+ *
+ * The owner can load again to replace its key. If the ID field of
+ * *inout_keyId is 0, the first free hardware key the port accepts is used
+ * and returned in *inout_keyId.
+ *
+ * @param[in] context Pointer to an initialized hardware keystore context
+ * @param[in] devId wolfCrypt device that implements the keystore callback
+ * @param[in,out] inout_keyId Hardware key to load, and the key loaded
+ * @param[in] srcId Keystore key the material came from, or WH_KEYID_ERASED
+ * @param[in] flags WH_NVM_FLAGS_USAGE_* the key allows
+ * @param[in] key Key material
+ * @param[in] keySz Key size in bytes
+ * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if another client owns
+ *         the key, WH_ERROR_NOSPACE if no key is free, or the port's error
+ */
+int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
+                       whKeyId* inout_keyId, whKeyId srcId, whNvmFlags flags,
+                       const uint8_t* key, uint16_t keySz);
+
+/**
+ * @brief Clear a hardware key the caller owns.
+ *
+ * @return int WH_ERROR_OK on success, WH_ERROR_NOTFOUND if the key is not
+ *         loaded, WH_ERROR_ACCESS if the caller does not own it
+ */
+int wh_HwKeystore_Clear(whHwKeystoreContext* context, int devId, whKeyId keyId);
+
+/**
+ * @brief Clear every hardware key owned by a client.
+ *
+ * @param[in] user Client ID. Port keys are never cleared
+ */
+int wh_HwKeystore_ClearAll(whHwKeystoreContext* context, int devId,
+                           uint16_t user);
+
+/**
+ * @brief Clear every hardware key loaded from a keystore key, for example
+ * when that key is erased or revoked.
+ */
+int wh_HwKeystore_ClearSource(whHwKeystoreContext* context, int devId,
+                              whKeyId srcId);
+
+/**
+ * @brief Check that the caller may use a hardware key.
+ *
+ * @param[in] keyId Hardware key, with the caller in the USER field
+ * @param[in] usage WH_NVM_FLAGS_USAGE_* the operation needs (all of them)
+ * @param[out] outKeyId Recorded keyId, for wh_HwKeystore_KeyRef()
+ * @return int WH_ERROR_OK on success, WH_ERROR_NOTFOUND if the key is not
+ *         loaded, WH_ERROR_ACCESS if another client owns it, WH_ERROR_USAGE
+ *         if it does not allow the usage
+ */
+int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
+                           whNvmFlags usage, whKeyId* outKeyId);
+
+/**
+ * @brief Describe a hardware key.
+ *
+ * Reports what the port says the key holds, plus its owner and usage when
+ * the server tracks it. An empty key reports keyType 0.
+ *
+ * @return int WH_ERROR_OK on success, or the port's error for a keyId it
+ *         does not have
+ */
+int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, int devId,
+                          whKeyId keyId, whHwKeystoreInfo* info);
+#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
 
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
 

@@ -125,6 +125,9 @@ typedef enum {
     /* Exporting only the public half of a public-key object is considered
      * non-sensitive and is intentionally not gated by NONEXPORTABLE. */
     WH_KS_OP_EXPORT_PUBLIC,
+    /* Copying a key into the hardware keystore. The key never goes back to a
+     * client, so NONEXPORTABLE does not apply */
+    WH_KS_OP_HW_LOAD,
 } whKsOp;
 
 static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
@@ -247,6 +250,7 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
 
         case WH_KS_OP_COMMIT:
         case WH_KS_OP_REVOKE:
+        case WH_KS_OP_HW_LOAD:
             /* Always allowed */
             break;
         default:
@@ -1285,8 +1289,24 @@ int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId)
     return wh_Server_KeystoreCommitKey(server, keyId);
 }
 
+/* An erased or revoked key must not stay usable through a hardware copy */
+static void _ClearHwCopies(whServerContext* server, whKeyId keyId)
+{
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+    if (server->hwKeystore != NULL) {
+        (void)wh_HwKeystore_ClearSource(server->hwKeystore, server->devId,
+                                        keyId);
+    }
+#else
+    (void)server;
+    (void)keyId;
+#endif
+}
+
 int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
 {
+    int ret;
+
     if ((server == NULL) || (WH_KEYID_IS_UNASSIGNED(keyId))) {
         return WH_ERROR_BADARGS;
     }
@@ -1308,11 +1328,16 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     /* No NVM means there is nothing to destroy, same as erasing a key that
      * was never there. */
     if (server->nvm == NULL) {
+        _ClearHwCopies(server, keyId);
         return WH_ERROR_OK;
     }
 
     /* destroy the object */
-    return wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
+    ret = wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
+    if (ret == WH_ERROR_OK) {
+        _ClearHwCopies(server, keyId);
+    }
+    return ret;
 }
 
 int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
@@ -1345,10 +1370,15 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
     /* Nothing left to destroy is a successful erase, matching
      * wh_Server_KeystoreEraseKey */
     if (server->nvm == NULL) {
+        _ClearHwCopies(server, keyId);
         return WH_ERROR_OK;
     }
 
-    return wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
+    ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
+    if (ret == WH_ERROR_OK) {
+        _ClearHwCopies(server, keyId);
+    }
+    return ret;
 }
 
 static void _revokeKey(whNvmMetadata* meta)
@@ -1423,8 +1453,53 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
         _revokeKey(cacheMeta);
     }
 
+    if (ret == WH_ERROR_OK) {
+        _ClearHwCopies(server, keyId);
+    }
     return ret;
 }
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
+                             whKeyId srcId)
+{
+    uint8_t       key[WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE];
+    uint32_t      keySz = sizeof(key);
+    whNvmMetadata meta[1];
+    int           ret;
+
+    if ((server == NULL) || (inout_hwId == NULL) ||
+        (WH_KEYID_TYPE(srcId) != WH_KEYTYPE_CRYPTO)) {
+        return WH_ERROR_BADARGS;
+    }
+    if (server->hwKeystore == NULL) {
+        return WH_ERROR_NOTFOUND;
+    }
+
+    /* Read the source with the policy checks every client keystore operation
+     * gets, which refuse trusted keys */
+    ret = WH_SERVER_NVM_LOCK(server);
+    if (ret == WH_ERROR_OK) {
+        ret = _KeystoreCheckPolicy(server, WH_KS_OP_HW_LOAD, srcId);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreReadKey(server, srcId, meta, key, &keySz);
+        }
+        (void)WH_SERVER_NVM_UNLOCK(server);
+    } /* WH_SERVER_NVM_LOCK() */
+
+    /* The hardware copy keeps the usage of the source. A key with none (a
+     * revoked key, for example) could not be used */
+    if ((ret == WH_ERROR_OK) && ((meta->flags & WH_NVM_FLAGS_USAGE_ANY) == 0)) {
+        ret = WH_ERROR_USAGE;
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wh_HwKeystore_Load(server->hwKeystore, server->devId, inout_hwId,
+                                 srcId, meta->flags, key, (uint16_t)keySz);
+    }
+    wh_Utils_ForceZero(key, sizeof(key));
+    return ret;
+}
+#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
@@ -3636,6 +3711,129 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
         } break;
 
 #endif /* WOLFHSM_CFG_KEYWRAP */
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+        case WH_KEY_HW_LOAD: {
+            whMessageKeystore_HwLoadRequest  req  = {0};
+            whMessageKeystore_HwLoadResponse resp = {0};
+            whKeyId                          hwId;
+
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                (void)wh_MessageKeystore_TranslateHwLoadRequest(
+                    magic, (whMessageKeystore_HwLoadRequest*)req_packet, &req);
+
+                hwId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_HW, server->comm->client_id,
+                    req.hwId | WH_KEYID_CLIENT_HW_FLAG);
+                ret = wh_Server_KeystoreHwLoad(
+                    server, &hwId,
+                    wh_KeyId_TranslateFromClient(
+                        WH_KEYTYPE_CRYPTO, server->comm->client_id, req.srcId));
+                if (ret == WH_ERROR_OK) {
+                    resp.hwId = wh_KeyId_TranslateToClient(hwId);
+                }
+            }
+            resp.rc = ret;
+
+            (void)wh_MessageKeystore_TranslateHwLoadResponse(
+                magic, &resp, (whMessageKeystore_HwLoadResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
+
+        case WH_KEY_HW_CLEAR: {
+            whMessageKeystore_HwClearRequest  req  = {0};
+            whMessageKeystore_HwClearResponse resp = {0};
+            whKeyId                           hwId;
+
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else if (server->hwKeystore == NULL) {
+                ret = WH_ERROR_NOTFOUND;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                (void)wh_MessageKeystore_TranslateHwClearRequest(
+                    magic, (whMessageKeystore_HwClearRequest*)req_packet, &req);
+
+                hwId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_HW, server->comm->client_id,
+                    req.hwId | WH_KEYID_CLIENT_HW_FLAG);
+                if (WH_KEYID_ISERASED(hwId)) {
+                    /* ID 0 clears every key the client loaded */
+                    ret = wh_HwKeystore_ClearAll(server->hwKeystore,
+                                                 server->devId,
+                                                 server->comm->client_id);
+                }
+                else {
+                    ret = wh_HwKeystore_Clear(server->hwKeystore, server->devId,
+                                              hwId);
+                }
+            }
+            resp.rc = ret;
+
+            (void)wh_MessageKeystore_TranslateHwClearResponse(
+                magic, &resp, (whMessageKeystore_HwClearResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
+
+        case WH_KEY_HW_INFO: {
+            whMessageKeystore_HwInfoRequest  req  = {0};
+            whMessageKeystore_HwInfoResponse resp = {0};
+            whHwKeystoreInfo                 info = {0};
+
+            if (req_size < sizeof(req)) {
+                ret = WH_ERROR_BADARGS;
+            }
+            else if (server->hwKeystore == NULL) {
+                ret = WH_ERROR_NOTFOUND;
+            }
+
+            if (ret == WH_ERROR_OK) {
+                (void)wh_MessageKeystore_TranslateHwInfoRequest(
+                    magic, (whMessageKeystore_HwInfoRequest*)req_packet, &req);
+
+                ret = wh_HwKeystore_GetInfo(
+                    server->hwKeystore, server->devId,
+                    wh_KeyId_TranslateFromClient(
+                        WH_KEYTYPE_HW, server->comm->client_id,
+                        req.hwId | WH_KEYID_CLIENT_HW_FLAG),
+                    &info);
+                if (ret == WH_ERROR_OK) {
+                    resp.keyType = info.keyType;
+                    resp.keyBits = info.keyBits;
+                    resp.flags   = info.flags;
+                    resp.owner   = info.owner;
+                }
+            }
+            resp.rc = ret;
+
+            (void)wh_MessageKeystore_TranslateHwInfoResponse(
+                magic, &resp, (whMessageKeystore_HwInfoResponse*)resp_packet);
+
+            *out_resp_size = sizeof(resp);
+        } break;
+#else
+        case WH_KEY_HW_LOAD:
+        case WH_KEY_HW_CLEAR:
+        case WH_KEY_HW_INFO: {
+            /* Not built in. rc comes first in all three responses, so the
+             * largest fits all */
+            whMessageKeystore_HwInfoResponse resp = {0};
+
+            ret     = WH_ERROR_NOTIMPL;
+            resp.rc = ret;
+            (void)wh_MessageKeystore_TranslateHwInfoResponse(
+                magic, &resp, (whMessageKeystore_HwInfoResponse*)resp_packet);
+            *out_resp_size = sizeof(resp);
+        } break;
+#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
 
         default:
             ret = WH_ERROR_NOHANDLER;
