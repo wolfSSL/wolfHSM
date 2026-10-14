@@ -141,27 +141,19 @@
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
 
-/* Exposes the SM entries in the crypto callback info union. Without it
- * wolfSSL compiles no sm2sign/sm4cbc/... members and this build cannot
- * reference them. */
-#define WOLFSSL_SM_CRYPTOCB
-
-/* SM2 (ShangMi elliptic curve) Options. Needs ECC and SHA-256, both already
- * enabled above; SM2 signing hashes with SM3. */
+/* SM2/SM3/SM4 Options, set by SM=1. Needs wolfsm installed into wolfSSL. */
+#ifdef WOLFHSM_CFG_TEST_SM
 #define WOLFSSL_SM2
 #define WOLFSSL_SM3
-/* sm2.c decodes the curve parameters from hex, which configure.ac pairs with
- * WOLFSSL_SM2 for the same reason. */
+/* sm2.c decodes the curve parameters from hex */
 #define WOLFSSL_BASE16
-
-/* SM4 (ShangMi block cipher) Options. All five modes are built so the
- * crypto callback covers every dispatch shape wolfSSL offers for SM4. */
 #define WOLFSSL_SM4
 #define WOLFSSL_SM4_ECB
 #define WOLFSSL_SM4_CBC
 #define WOLFSSL_SM4_CTR
 #define WOLFSSL_SM4_GCM
 #define WOLFSSL_SM4_CCM
+#endif /* WOLFHSM_CFG_TEST_SM */
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM

@@ -53,30 +53,24 @@
 /* GB/T 32907-2016 SM4 example key */
 static const byte whTestSm4Key[SM4_KEY_SIZE] = {
     0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
-    0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
-};
+    0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
 
 static const byte whTestSm4Iv[SM4_IV_SIZE] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
-};
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
 
 /* Two blocks so chaining modes actually chain */
 static const byte whTestSm4Plain[32] = {
-    0xAA, 0xAA, 0xAA, 0xAA, 0xBB, 0xBB, 0xBB, 0xBB,
-    0xCC, 0xCC, 0xCC, 0xCC, 0xDD, 0xDD, 0xDD, 0xDD,
-    0xEE, 0xEE, 0xEE, 0xEE, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xAA, 0xAA, 0xAA, 0xAA, 0xBB, 0xBB, 0xBB, 0xBB
-};
+    0xAA, 0xAA, 0xAA, 0xAA, 0xBB, 0xBB, 0xBB, 0xBB, 0xCC, 0xCC, 0xCC,
+    0xCC, 0xDD, 0xDD, 0xDD, 0xDD, 0xEE, 0xEE, 0xEE, 0xEE, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xAA, 0xAA, 0xAA, 0xAA, 0xBB, 0xBB, 0xBB, 0xBB};
 
 #ifdef WOLFSSL_SM4_ECB
 /* GB/T 32907-2016 ECB answer for the key and plaintext above */
 static const byte whTestSm4EcbKat[32] = {
-    0x5E, 0xC8, 0x14, 0x3D, 0xE5, 0x09, 0xCF, 0xF7,
-    0xB5, 0x17, 0x9F, 0x8F, 0x47, 0x4B, 0x86, 0x19,
-    0x2F, 0x1D, 0x30, 0x5A, 0x7F, 0xB1, 0x7D, 0xF9,
-    0x85, 0xF8, 0x1C, 0x84, 0x82, 0x19, 0x23, 0x04
-};
+    0x5E, 0xC8, 0x14, 0x3D, 0xE5, 0x09, 0xCF, 0xF7, 0xB5, 0x17, 0x9F,
+    0x8F, 0x47, 0x4B, 0x86, 0x19, 0x2F, 0x1D, 0x30, 0x5A, 0x7F, 0xB1,
+    0x7D, 0xF9, 0x85, 0xF8, 0x1C, 0x84, 0x82, 0x19, 0x23, 0x04};
 
 static int _whTest_Sm4Ecb(whClientContext* ctx)
 {
@@ -174,8 +168,7 @@ static int _whTest_Sm4Cbc(whClientContext* ctx)
     }
     if (ret == 0) {
         ret = wc_Sm4CbcEncrypt(hsm, cipher + SM4_BLOCK_SIZE,
-                               whTestSm4Plain + SM4_BLOCK_SIZE,
-                               SM4_BLOCK_SIZE);
+                               whTestSm4Plain + SM4_BLOCK_SIZE, SM4_BLOCK_SIZE);
     }
     if (ret != 0) {
         WH_ERROR_PRINT("SM4-CBC encrypt failed %d\n", ret);
@@ -299,16 +292,16 @@ static const byte whTestSm4Aad[] = {'w', 'o', 'l', 'f', 'H', 'S', 'M'};
  * flipped tag bit is rejected rather than quietly returning plaintext. */
 static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
 {
-    int    devId = WH_CLIENT_DEVID(ctx);
-    int    ret;
-    wc_Sm4 sm4[1];
-    wc_Sm4 sw[1];
-    byte   cipher[sizeof(whTestSm4Plain)];
-    byte   expect[sizeof(whTestSm4Plain)];
-    byte   plain[sizeof(whTestSm4Plain)];
-    byte   tag[SM4_BLOCK_SIZE];
-    byte   expectTag[SM4_BLOCK_SIZE];
-    byte   nonce[12];
+    int         devId = WH_CLIENT_DEVID(ctx);
+    int         ret;
+    wc_Sm4      sm4[1];
+    wc_Sm4      sw[1];
+    byte        cipher[sizeof(whTestSm4Plain)];
+    byte        expect[sizeof(whTestSm4Plain)];
+    byte        plain[sizeof(whTestSm4Plain)];
+    byte        tag[SM4_BLOCK_SIZE];
+    byte        expectTag[SM4_BLOCK_SIZE];
+    byte        nonce[12];
     const char* name = isCcm ? "CCM" : "GCM";
 
     memset(nonce, 0x5A, sizeof(nonce));
@@ -316,9 +309,7 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
     memset(expect, 0, sizeof(expect));
     memset(expectTag, 0, sizeof(expectTag));
 
-    /* Software reference, so a marshalling, nonce, AAD or tag-placement
-     * error that is symmetric in both directions cannot pass the round
-     * trip unnoticed. */
+    /* Software reference, so a symmetric marshalling error cannot pass */
     ret = wc_Sm4Init(sw, NULL, INVALID_DEVID);
     if (ret != 0) {
         return ret;
@@ -328,9 +319,9 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
         ret = wc_Sm4GcmSetKey(sw, whTestSm4Key, sizeof(whTestSm4Key));
         if (ret == 0) {
             ret = wc_Sm4GcmEncrypt(sw, expect, whTestSm4Plain,
-                                   sizeof(whTestSm4Plain), nonce,
-                                   sizeof(nonce), expectTag, sizeof(expectTag),
-                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+                                   sizeof(whTestSm4Plain), nonce, sizeof(nonce),
+                                   expectTag, sizeof(expectTag), whTestSm4Aad,
+                                   sizeof(whTestSm4Aad));
         }
 #endif
     }
@@ -339,9 +330,9 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
         ret = wc_Sm4SetKey(sw, whTestSm4Key, sizeof(whTestSm4Key));
         if (ret == 0) {
             ret = wc_Sm4CcmEncrypt(sw, expect, whTestSm4Plain,
-                                   sizeof(whTestSm4Plain), nonce,
-                                   sizeof(nonce), expectTag, sizeof(expectTag),
-                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+                                   sizeof(whTestSm4Plain), nonce, sizeof(nonce),
+                                   expectTag, sizeof(expectTag), whTestSm4Aad,
+                                   sizeof(whTestSm4Aad));
         }
 #endif
     }
@@ -361,9 +352,9 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
         ret = wc_Sm4GcmSetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
         if (ret == 0) {
             ret = wc_Sm4GcmEncrypt(sm4, cipher, whTestSm4Plain,
-                                   sizeof(whTestSm4Plain), nonce,
-                                   sizeof(nonce), tag, sizeof(tag),
-                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+                                   sizeof(whTestSm4Plain), nonce, sizeof(nonce),
+                                   tag, sizeof(tag), whTestSm4Aad,
+                                   sizeof(whTestSm4Aad));
         }
 #endif
     }
@@ -372,9 +363,9 @@ static int _whTest_Sm4Auth(whClientContext* ctx, int isCcm)
         ret = wc_Sm4SetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
         if (ret == 0) {
             ret = wc_Sm4CcmEncrypt(sm4, cipher, whTestSm4Plain,
-                                   sizeof(whTestSm4Plain), nonce,
-                                   sizeof(nonce), tag, sizeof(tag),
-                                   whTestSm4Aad, sizeof(whTestSm4Aad));
+                                   sizeof(whTestSm4Plain), nonce, sizeof(nonce),
+                                   tag, sizeof(tag), whTestSm4Aad,
+                                   sizeof(whTestSm4Aad));
         }
 #endif
     }
@@ -542,38 +533,307 @@ done:
 #endif /* WOLFSSL_SM4_CBC */
 
 
+/* Offloading must not hide a missing key or IV from the caller */
+static int _whTest_Sm4Unset(whClientContext* ctx)
+{
+    int    devId = WH_CLIENT_DEVID(ctx);
+    int    ret;
+    wc_Sm4 sm4[1];
+    byte   out[SM4_BLOCK_SIZE];
+
+    ret = wc_Sm4Init(sm4, NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+#ifdef WOLFSSL_SM4_ECB
+    if (wc_Sm4EcbEncrypt(sm4, out, whTestSm4Plain, SM4_BLOCK_SIZE) !=
+        MISSING_KEY) {
+        WH_ERROR_PRINT("SM4-ECB without a key did not fail\n");
+        ret = WH_TEST_FAIL;
+    }
+#endif
+#if defined(WOLFSSL_SM4_CBC) || defined(WOLFSSL_SM4_CTR)
+    if (ret == 0) {
+        ret = wc_Sm4SetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
+    }
+#endif
+#ifdef WOLFSSL_SM4_CBC
+    if ((ret == 0) && (wc_Sm4CbcEncrypt(sm4, out, whTestSm4Plain,
+                                        SM4_BLOCK_SIZE) != MISSING_IV)) {
+        WH_ERROR_PRINT("SM4-CBC without an IV did not fail\n");
+        ret = WH_TEST_FAIL;
+    }
+#endif
+#ifdef WOLFSSL_SM4_CTR
+    if ((ret == 0) && (wc_Sm4CtrEncrypt(sm4, out, whTestSm4Plain,
+                                        SM4_BLOCK_SIZE) != MISSING_IV)) {
+        WH_ERROR_PRINT("SM4-CTR without an IV did not fail\n");
+        ret = WH_TEST_FAIL;
+    }
+#endif
+    wc_Sm4Free(sm4);
+    (void)out;
+    return ret;
+}
+
+static int _whTest_Sm4Modes(whClientContext* ctx)
+{
+#ifdef WOLFSSL_SM4_ECB
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Ecb(ctx));
+#endif
+#ifdef WOLFSSL_SM4_CBC
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Cbc(ctx));
+#endif
+#ifdef WOLFSSL_SM4_CTR
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Ctr(ctx));
+#endif
+#ifdef WOLFSSL_SM4_GCM
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Auth(ctx, 0));
+#endif
+#ifdef WOLFSSL_SM4_CCM
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Auth(ctx, 1));
+#endif
+#ifdef WOLFSSL_SM4_CBC
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4CachedKey(ctx));
+#endif
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Unset(ctx));
+    return 0;
+}
+
+#ifdef WOLFSSL_SM4_CBC
+/* The split API sends nothing for a request it cannot complete, and reports
+ * the output size and chained IV */
+static int _whTest_Sm4CbcSplit(whClientContext* ctx)
+{
+    static byte big[WOLFHSM_CFG_COMM_DATA_LEN];
+    int         devId = WH_CLIENT_DEVID(ctx);
+    int         ret;
+    int         pending;
+    wc_Sm4      sm4[1];
+    byte        cipher[sizeof(whTestSm4Plain)];
+    byte        expect[sizeof(whTestSm4Plain)];
+    uint32_t    outSz = 0;
+
+    ret = wc_Sm4Init(sm4, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_Sm4SetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
+        if (ret == 0) {
+            ret = wc_Sm4SetIV(sm4, whTestSm4Iv);
+        }
+        if (ret == 0) {
+            ret = wc_Sm4CbcEncrypt(sm4, expect, whTestSm4Plain,
+                                   sizeof(whTestSm4Plain));
+        }
+        wc_Sm4Free(sm4);
+    }
+    if (ret == 0) {
+        ret = wc_Sm4Init(sm4, NULL, devId);
+    }
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = wc_Sm4SetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
+    if (ret == 0) {
+        ret = wc_Sm4SetIV(sm4, whTestSm4Iv);
+    }
+    if ((ret == 0) &&
+        ((wh_Client_Sm4CbcRequest(ctx, sm4, 1, whTestSm4Plain, 0) !=
+          WH_ERROR_BADARGS) ||
+         (wh_Client_Sm4CbcRequest(ctx, sm4, 1, whTestSm4Plain,
+                                  SM4_BLOCK_SIZE - 1) != WH_ERROR_BADARGS) ||
+         (wh_Client_Sm4CbcRequest(
+              ctx, sm4, 1, big, sizeof(big) - (sizeof(big) % SM4_BLOCK_SIZE)) !=
+          WH_ERROR_BADARGS))) {
+        WH_ERROR_PRINT("SM4-CBC split request accepted bad arguments\n");
+        ret = WH_TEST_FAIL;
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_Sm4CbcRequest(ctx, sm4, 1, whTestSm4Plain,
+                                      sizeof(whTestSm4Plain));
+    }
+    if (ret == 0) {
+        /* A second request must not displace the one in flight */
+        pending = wh_Client_Sm4CbcRequest(ctx, sm4, 1, whTestSm4Plain,
+                                          sizeof(whTestSm4Plain));
+        do {
+            ret = wh_Client_Sm4CbcResponse(ctx, sm4, cipher, &outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+        if ((ret == 0) && (pending != WH_ERROR_REQUEST_PENDING)) {
+            WH_ERROR_PRINT("SM4-CBC request while one is pending: %d\n",
+                           pending);
+            ret = WH_TEST_FAIL;
+        }
+    }
+    if ((ret == 0) &&
+        ((outSz != sizeof(cipher)) ||
+         (memcmp(cipher, expect, sizeof(expect)) != 0) ||
+         (memcmp(sm4->iv, cipher + sizeof(cipher) - SM4_BLOCK_SIZE,
+                 SM4_BLOCK_SIZE) != 0))) {
+        WH_ERROR_PRINT("SM4-CBC split response has the wrong output\n");
+        ret = WH_TEST_FAIL;
+    }
+    wc_Sm4Free(sm4);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SM4 CBC SPLIT DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFHSM_CFG_DMA
+/* Translating client DMA callback that moves each buffer to its own slot. A
+ * POST that names a different address than its PRE returned finds no slot. */
+#define WH_TEST_SM4_DMA_SLOTS 3
+typedef struct {
+    int       inUse;
+    uintptr_t clientAddr;
+    byte      buf[sizeof(whTestSm4Plain)];
+} whTestSm4DmaSlot;
+
+static whTestSm4DmaSlot whTestSm4DmaSlots[WH_TEST_SM4_DMA_SLOTS];
+static int              whTestSm4DmaBadPosts;
+static int              whTestSm4DmaFailWritePost;
+
+static int _whTest_Sm4DmaCb(whClientContext* client, uintptr_t clientAddr,
+                            void** xformedCliAddr, size_t len, whDmaOper oper,
+                            whDmaFlags flags)
+{
+    whTestSm4DmaSlot* slot = NULL;
+    int               i;
+
+    (void)client;
+    (void)flags;
+
+    for (i = 0; i < WH_TEST_SM4_DMA_SLOTS; i++) {
+        whTestSm4DmaSlot* s = &whTestSm4DmaSlots[i];
+        if ((oper == WH_DMA_OPER_CLIENT_READ_PRE) ||
+            (oper == WH_DMA_OPER_CLIENT_WRITE_PRE)) {
+            if (s->inUse == 0) {
+                slot = s;
+                break;
+            }
+        }
+        else if ((s->inUse != 0) && (s->clientAddr == clientAddr) &&
+                 ((void*)s->buf == *xformedCliAddr)) {
+            slot = s;
+            break;
+        }
+    }
+
+    switch (oper) {
+        case WH_DMA_OPER_CLIENT_READ_PRE:
+        case WH_DMA_OPER_CLIENT_WRITE_PRE:
+            if ((slot == NULL) || (len > sizeof(slot->buf))) {
+                return WH_ERROR_NOSPACE;
+            }
+            slot->inUse      = 1;
+            slot->clientAddr = clientAddr;
+            if (oper == WH_DMA_OPER_CLIENT_READ_PRE) {
+                memcpy(slot->buf, (void*)clientAddr, len);
+            }
+            *xformedCliAddr = slot->buf;
+            break;
+
+        case WH_DMA_OPER_CLIENT_READ_POST:
+        case WH_DMA_OPER_CLIENT_WRITE_POST:
+            if (slot == NULL) {
+                whTestSm4DmaBadPosts++;
+                return WH_ERROR_ABORTED;
+            }
+            slot->inUse = 0;
+            if (oper == WH_DMA_OPER_CLIENT_WRITE_POST) {
+                if (whTestSm4DmaFailWritePost != 0) {
+                    return WH_ERROR_ABORTED;
+                }
+                memcpy((void*)clientAddr, slot->buf, len);
+            }
+            break;
+    }
+    return WH_ERROR_OK;
+}
+
+#ifdef WOLFSSL_SM4_ECB
+/* A failed copy back must fail the operation */
+static int _whTest_Sm4DmaPostFail(whClientContext* ctx)
+{
+    int    ret;
+    wc_Sm4 sm4[1];
+    byte   cipher[sizeof(whTestSm4Plain)];
+
+    ret = wc_Sm4Init(sm4, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wc_Sm4SetKey(sm4, whTestSm4Key, sizeof(whTestSm4Key));
+    if (ret == 0) {
+        whTestSm4DmaFailWritePost = 1;
+        ret = wc_Sm4EcbEncrypt(sm4, cipher, whTestSm4Plain,
+                               sizeof(whTestSm4Plain));
+        whTestSm4DmaFailWritePost = 0;
+        if (ret == 0) {
+            WH_ERROR_PRINT("SM4 DMA ignored a failed copy back\n");
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+    wc_Sm4Free(sm4);
+    return ret;
+}
+#endif /* WOLFSSL_SM4_ECB */
+
+static int _whTest_Sm4DmaTranslated(whClientContext* ctx)
+{
+    whClientDmaClientMemCb prevCb = ctx->dma.cb;
+    int                    ret;
+
+    memset(whTestSm4DmaSlots, 0, sizeof(whTestSm4DmaSlots));
+    whTestSm4DmaBadPosts = 0;
+
+    (void)wh_Client_SetDmaMode(ctx, 1);
+    ret = wh_Client_DmaRegisterCb(ctx, _whTest_Sm4DmaCb);
+    if (ret == 0) {
+        ret = _whTest_Sm4Modes(ctx);
+    }
+#ifdef WOLFSSL_SM4_ECB
+    if (ret == 0) {
+        ret = _whTest_Sm4DmaPostFail(ctx);
+    }
+#endif
+    (void)wh_Client_DmaRegisterCb(ctx, prevCb);
+    (void)wh_Client_SetDmaMode(ctx, 0);
+
+    if ((ret == 0) && (whTestSm4DmaBadPosts != 0)) {
+        WH_ERROR_PRINT("SM4 DMA released %d unknown mappings\n",
+                       whTestSm4DmaBadPosts);
+        ret = WH_TEST_FAIL;
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
 int whTest_Crypto_Sm4(whClientContext* ctx)
 {
     int i;
 
     /* Every mode runs in each dispatch mode the build offers, so the DMA and
-     * comm-buffer paths are held to the same known answers. The wolfCrypt API
-     * is identical either way; only the transport underneath changes. */
+     * comm-buffer paths are held to the same known answers. */
     for (i = 0; i < WH_TEST_DMA_MODE_CNT; i++) {
         (void)wh_Client_SetDmaMode(ctx, i);
-
-#ifdef WOLFSSL_SM4_ECB
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Ecb(ctx));
-#endif
-#ifdef WOLFSSL_SM4_CBC
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Cbc(ctx));
-#endif
-#ifdef WOLFSSL_SM4_CTR
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Ctr(ctx));
-#endif
-#ifdef WOLFSSL_SM4_GCM
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Auth(ctx, 0));
-#endif
-#ifdef WOLFSSL_SM4_CCM
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Auth(ctx, 1));
-#endif
-#ifdef WOLFSSL_SM4_CBC
-        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4CachedKey(ctx));
-#endif
+        WH_TEST_RETURN_ON_FAIL(_whTest_Sm4Modes(ctx));
     }
     (void)wh_Client_SetDmaMode(ctx, 0);
 
-    (void)ctx;
+#ifdef WOLFSSL_SM4_CBC
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4CbcSplit(ctx));
+#endif
+#ifdef WOLFHSM_CFG_DMA
+    WH_TEST_RETURN_ON_FAIL(_whTest_Sm4DmaTranslated(ctx));
+#endif
     return 0;
 }
 

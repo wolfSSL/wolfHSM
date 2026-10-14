@@ -2145,7 +2145,8 @@ int wh_MessageCrypto_TranslateSm4EcbDmaRequest(
     if (ret != 0) {
         return ret;
     }
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
     if (ret != 0) {
         return ret;
     }
@@ -2190,7 +2191,8 @@ int wh_MessageCrypto_TranslateSm4CbcDmaRequest(
     if (ret != 0) {
         return ret;
     }
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
     if (ret != 0) {
         return ret;
     }
@@ -2235,7 +2237,8 @@ int wh_MessageCrypto_TranslateSm4CtrDmaRequest(
     if (ret != 0) {
         return ret;
     }
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
     if (ret != 0) {
         return ret;
     }
@@ -2281,7 +2284,8 @@ int wh_MessageCrypto_TranslateSm4AuthDmaRequest(
     if (ret != 0) {
         return ret;
     }
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
+    ret =
+        wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output, &dest->output);
     if (ret != 0) {
         return ret;
     }

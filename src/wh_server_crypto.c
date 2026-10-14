@@ -4475,6 +4475,7 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 /* SM2 keys are ecc_key values, so these reuse the ECC key cache and its usage
  * policy enforcement wholesale; only the wolfCrypt call differs. */
 
+#ifdef HAVE_ECC_SIGN
 static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
                           const void* cryptoDataIn, uint16_t inSize,
                           void* cryptoDataOut, uint16_t* outSize)
@@ -4512,8 +4513,7 @@ static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
                                           ctx->comm->client_id, req.keyId);
     evict  = !!(req.options & WH_MESSAGE_CRYPTO_SM2SIGN_OPTIONS_EVICT);
 
-    in      = (const byte*)cryptoDataIn +
-              sizeof(whMessageCrypto_Sm2SignRequest);
+    in = (const byte*)cryptoDataIn + sizeof(whMessageCrypto_Sm2SignRequest);
     res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_Sm2SignResponse);
     /* cryptoDataOut already points past the generic response header, so that
      * header comes out of the budget too. */
@@ -4544,7 +4544,9 @@ static int _HandleSm2Sign(whServerContext* ctx, uint16_t magic, int devId,
     }
     return ret;
 }
+#endif /* HAVE_ECC_SIGN */
 
+#ifdef HAVE_ECC_VERIFY
 static int _HandleSm2Verify(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
@@ -4589,8 +4591,8 @@ static int _HandleSm2Verify(whServerContext* ctx, uint16_t magic, int devId,
 
     ret = wc_ecc_init_ex(key, NULL, devId);
     if (ret == 0) {
-        ret = _EccKeyCacheExportEnforce(ctx, key_id,
-                                        WH_NVM_FLAGS_USAGE_VERIFY, key);
+        ret = _EccKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY,
+                                        key);
         if (ret == WH_ERROR_OK) {
             ret = wc_ecc_sm2_verify_hash(req_sig, sig_len, req_hash, hash_len,
                                          &result, key);
@@ -4610,7 +4612,9 @@ static int _HandleSm2Verify(whServerContext* ctx, uint16_t magic, int devId,
     }
     return ret;
 }
+#endif /* HAVE_ECC_VERIFY */
 
+#ifdef HAVE_ECC_DHE
 static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
                                   int devId, const void* cryptoDataIn,
                                   uint16_t inSize, void* cryptoDataOut,
@@ -4640,10 +4644,10 @@ static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
         return ret;
     }
 
-    prv_id    = wh_KeyId_TranslateFromClient(
-           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
-    pub_id    = wh_KeyId_TranslateFromClient(
-           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
+    prv_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.privateKeyId);
+    pub_id = wh_KeyId_TranslateFromClient(
+        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.publicKeyId);
     evict_prv = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPRV);
     evict_pub = !!(req.options & WH_MESSAGE_CRYPTO_SM2DH_OPTIONS_EVICTPUB);
 
@@ -4659,17 +4663,15 @@ static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
     }
     if (ret == 0) {
         pubInit = 1;
-        ret     = _EccKeyCacheExportEnforce(ctx, prv_id,
-                                            WH_NVM_FLAGS_USAGE_DERIVE, prv);
+        ret = _EccKeyCacheExportEnforce(ctx, prv_id, WH_NVM_FLAGS_USAGE_DERIVE,
+                                        prv);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _EccKeyCacheExportEnforce(ctx, pub_id,
-                                        WH_NVM_FLAGS_USAGE_DERIVE, pub);
+        ret = _EccKeyCacheExportEnforce(ctx, pub_id, WH_NVM_FLAGS_USAGE_DERIVE,
+                                        pub);
     }
     if (ret == WH_ERROR_OK) {
-        /* Point multiplication is blinded under ECC_TIMING_RESISTANT, which
-         * needs an RNG on the private key. The freshly imported key has
-         * none, so lend it the server's. */
+        /* Blinded point multiplication needs an RNG on the key */
         ret = wc_ecc_set_rng(prv, ctx->crypto->rng);
     }
     if (ret == WH_ERROR_OK) {
@@ -4698,15 +4700,14 @@ static int _HandleSm2SharedSecret(whServerContext* ctx, uint16_t magic,
     }
     return ret;
 }
+#endif /* HAVE_ECC_DHE */
 
 #endif /* WOLFSSL_SM2 && HAVE_ECC */
 
 #ifdef WOLFSSL_SM4
 
-/* Resolve the key for an SM4 request. A key id that is not erased wins over
- * the inline key, and reading it enforces the usage policy against the same
- * locked snapshot, so a key marked encrypt-only cannot be used to decrypt.
- * SM4 has a single key size, so anything else is a malformed request. */
+/* Resolve the SM4 key. A key id wins over the inline key and is checked
+ * against its usage policy. */
 static int _Sm4ResolveKey(whServerContext* ctx, whKeyId key_id, uint32_t enc,
                           whNvmMetadata* keyMeta, uint8_t* cachedKey,
                           const uint8_t** inout_key, uint32_t* inout_key_len)
@@ -4717,7 +4718,8 @@ static int _Sm4ResolveKey(whServerContext* ctx, whKeyId key_id, uint32_t enc,
         uint32_t cachedKeyLen = SM4_KEY_SIZE;
         ret                   = wh_Server_KeystoreReadKeyEnforce(
             ctx, key_id,
-            (enc != 0) ? WH_NVM_FLAGS_USAGE_ENCRYPT : WH_NVM_FLAGS_USAGE_DECRYPT,
+            (enc != 0) ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                         : WH_NVM_FLAGS_USAGE_DECRYPT,
             keyMeta, cachedKey, &cachedKeyLen);
         if (ret == WH_ERROR_OK) {
             *inout_key     = cachedKey;
@@ -4893,8 +4895,7 @@ static int _HandleSm4Cbc(whServerContext* ctx, uint16_t magic, int devId,
         res.sz = len;
         (void)wh_MessageCrypto_TranslateSm4CbcResponse(
             magic, &res, (whMessageCrypto_Sm4CbcResponse*)cryptoDataOut);
-        *outSize =
-            sizeof(whMessageCrypto_Sm4CbcResponse) + len + SM4_IV_SIZE;
+        *outSize = sizeof(whMessageCrypto_Sm4CbcResponse) + len + SM4_IV_SIZE;
     }
 
     wc_ForceZero(cachedKey, sizeof(cachedKey));
@@ -4951,12 +4952,12 @@ static int _HandleSm4Ctr(whServerContext* ctx, uint16_t magic, int devId,
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
                                           ctx->comm->client_id, req.keyId);
 
-    in  = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CtrRequest);
-    key = in + len;
-    iv  = (uint8_t*)key + key_len;
-    tmp = iv + SM4_IV_SIZE;
-    out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CtrResponse);
-    out_iv  = out + len;
+    in     = (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4CtrRequest);
+    key    = in + len;
+    iv     = (uint8_t*)key + key_len;
+    tmp    = iv + SM4_IV_SIZE;
+    out    = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_Sm4CtrResponse);
+    out_iv = out + len;
     out_tmp = out_iv + SM4_IV_SIZE;
 
     /* CTR uses one operation for both directions, so the usage policy is
@@ -5170,7 +5171,7 @@ static int _Sm4DmaResolveKey(whServerContext* ctx, uint32_t reqKeyId,
             ret                   = wh_Server_KeystoreReadKeyEnforce(
                 ctx, keyId,
                 (enc != 0) ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                             : WH_NVM_FLAGS_USAGE_DECRYPT,
                 keyMeta, cachedKey, &cachedKeyLen);
             if (ret == WH_ERROR_OK) {
                 *out_key     = cachedKey;
@@ -5197,11 +5198,12 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_Sm4EcbDmaResponse res;
     whNvmMetadata                     keyMeta[1];
     uint8_t                           cachedKey[SM4_KEY_SIZE];
-    void*                             inAddr  = NULL;
-    void*                             outAddr = NULL;
+    void*                             inAddr    = NULL;
+    void*                             outAddr   = NULL;
     int                               outMapped = 0;
-    const uint8_t*                    key     = NULL;
-    uint32_t                          key_len = 0;
+    int                               inMapped  = 0;
+    const uint8_t*                    key       = NULL;
+    uint32_t                          key_len   = 0;
     uint64_t                          needed;
 
     if (inSize < sizeof(whMessageCrypto_Sm4EcbDmaRequest)) {
@@ -5228,10 +5230,10 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
 
     memset(&res, 0, sizeof(res));
 
-    ret = _Sm4DmaResolveKey(
-        ctx, req.keyId, req.enc,
-        (uint8_t*)(cryptoDataIn) + sizeof(whMessageCrypto_Sm4EcbDmaRequest),
-        req.keySz, keyMeta, cachedKey, &key, &key_len);
+    ret = _Sm4DmaResolveKey(ctx, req.keyId, req.enc,
+                            (uint8_t*)(cryptoDataIn) +
+                                sizeof(whMessageCrypto_Sm4EcbDmaRequest),
+                            req.keySz, keyMeta, cachedKey, &key, &key_len);
 
     if ((ret == WH_ERROR_OK) && (req.input.sz > 0)) {
         ret = wh_Server_DmaProcessClientAddress(
@@ -5239,6 +5241,9 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.input;
+        }
+        else {
+            inMapped = 1;
         }
     }
     if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
@@ -5274,9 +5279,7 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* PRE and POST are a pair: once the output mapping succeeded it must be
-     * released even if the cipher or the authentication then failed, which
-     * is a normal outcome for a decrypt. Keep the original error. */
+    /* Release the output even if the cipher failed, keeping that error */
     if (outMapped != 0) {
         int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
@@ -5288,7 +5291,7 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
     }
-    if (inAddr != NULL) {
+    if (inMapped != 0) {
         (void)wh_Server_DmaProcessClientAddress(
             ctx, req.input.addr, &inAddr, req.input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
@@ -5314,11 +5317,12 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_Sm4CbcDmaResponse res;
     whNvmMetadata                     keyMeta[1];
     uint8_t                           cachedKey[SM4_KEY_SIZE];
-    void*                             inAddr  = NULL;
-    void*                             outAddr = NULL;
+    void*                             inAddr    = NULL;
+    void*                             outAddr   = NULL;
     int                               outMapped = 0;
-    const uint8_t*                    key     = NULL;
-    uint32_t                          key_len = 0;
+    int                               inMapped  = 0;
+    const uint8_t*                    key       = NULL;
+    uint32_t                          key_len   = 0;
     uint64_t                          needed;
     uint8_t*                          iv;
     uint8_t*                          out_iv;
@@ -5361,6 +5365,9 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.input;
         }
+        else {
+            inMapped = 1;
+        }
     }
     if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
         ret = wh_Server_DmaProcessClientAddress(
@@ -5399,9 +5406,7 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* PRE and POST are a pair: once the output mapping succeeded it must be
-     * released even if the cipher or the authentication then failed, which
-     * is a normal outcome for a decrypt. Keep the original error. */
+    /* Release the output even if the cipher failed, keeping that error */
     if (outMapped != 0) {
         int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
@@ -5413,7 +5418,7 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
     }
-    if (inAddr != NULL) {
+    if (inMapped != 0) {
         (void)wh_Server_DmaProcessClientAddress(
             ctx, req.input.addr, &inAddr, req.input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
@@ -5439,11 +5444,12 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_Sm4CtrDmaResponse res;
     whNvmMetadata                     keyMeta[1];
     uint8_t                           cachedKey[SM4_KEY_SIZE];
-    void*                             inAddr  = NULL;
-    void*                             outAddr = NULL;
+    void*                             inAddr    = NULL;
+    void*                             outAddr   = NULL;
     int                               outMapped = 0;
-    const uint8_t*                    key     = NULL;
-    uint32_t                          key_len = 0;
+    int                               inMapped  = 0;
+    const uint8_t*                    key       = NULL;
+    uint32_t                          key_len   = 0;
     uint64_t                          needed;
     uint8_t*                          iv;
     uint8_t*                          tmp;
@@ -5493,6 +5499,9 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.input;
         }
+        else {
+            inMapped = 1;
+        }
     }
     if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
         ret = wh_Server_DmaProcessClientAddress(
@@ -5529,9 +5538,7 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* PRE and POST are a pair: once the output mapping succeeded it must be
-     * released even if the cipher or the authentication then failed, which
-     * is a normal outcome for a decrypt. Keep the original error. */
+    /* Release the output even if the cipher failed, keeping that error */
     if (outMapped != 0) {
         int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
@@ -5543,7 +5550,7 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
     }
-    if (inAddr != NULL) {
+    if (inMapped != 0) {
         (void)wh_Server_DmaProcessClientAddress(
             ctx, req.input.addr, &inAddr, req.input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
@@ -5571,12 +5578,14 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_Sm4AuthDmaResponse res;
     whNvmMetadata                      keyMeta[1];
     uint8_t                            cachedKey[SM4_KEY_SIZE];
-    void*                              inAddr  = NULL;
-    void*                              outAddr = NULL;
+    void*                              inAddr    = NULL;
+    void*                              outAddr   = NULL;
     int                                outMapped = 0;
-    void*                              aadAddr = NULL;
-    const uint8_t*                     key     = NULL;
-    uint32_t                           key_len = 0;
+    int                                inMapped  = 0;
+    void*                              aadAddr   = NULL;
+    int                                aadMapped = 0;
+    const uint8_t*                     key       = NULL;
+    uint32_t                           key_len   = 0;
     uint64_t                           needed;
     uint64_t                           res_len;
     uint8_t*                           iv;
@@ -5595,8 +5604,7 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     needed = (uint64_t)sizeof(whMessageCrypto_Sm4AuthDmaRequest) +
-             (uint64_t)req.ivSz + (uint64_t)req.authTagSz +
-             (uint64_t)req.keySz;
+             (uint64_t)req.ivSz + (uint64_t)req.authTagSz + (uint64_t)req.keySz;
     if (needed != inSize) {
         return WH_ERROR_BADARGS;
     }
@@ -5638,6 +5646,9 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.input;
         }
+        else {
+            inMapped = 1;
+        }
     }
     if ((ret == WH_ERROR_OK) && (req.output.sz > 0)) {
         ret = wh_Server_DmaProcessClientAddress(
@@ -5656,6 +5667,9 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
             WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
         if (ret != WH_ERROR_OK) {
             res.dmaAddrStatus.badAddr = req.aad;
+        }
+        else {
+            aadMapped = 1;
         }
     }
 
@@ -5716,9 +5730,7 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    /* PRE and POST are a pair: once the output mapping succeeded it must be
-     * released even if the cipher or the authentication then failed, which
-     * is a normal outcome for a decrypt. Keep the original error. */
+    /* Release the output even if the cipher failed, keeping that error */
     if (outMapped != 0) {
         int post_rc = wh_Server_DmaProcessClientAddress(
             ctx, req.output.addr, &outAddr, req.output.sz,
@@ -5730,12 +5742,12 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
     }
-    if (aadAddr != NULL) {
+    if (aadMapped != 0) {
         (void)wh_Server_DmaProcessClientAddress(
             ctx, req.aad.addr, &aadAddr, req.aad.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
     }
-    if (inAddr != NULL) {
+    if (inMapped != 0) {
         (void)wh_Server_DmaProcessClientAddress(
             ctx, req.input.addr, &inAddr, req.input.sz,
             WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
@@ -7449,22 +7461,27 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* HAVE_ECC_SIGN */
 #if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+#ifdef HAVE_ECC_SIGN
                 case WC_PK_TYPE_SM2_SIGN:
                     ret = _HandleSm2Sign(ctx, magic, devId, cryptoDataIn,
                                          cryptoInSize, cryptoDataOut,
                                          &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_SIGN */
+#ifdef HAVE_ECC_VERIFY
                 case WC_PK_TYPE_SM2_VERIFY:
                     ret = _HandleSm2Verify(ctx, magic, devId, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_VERIFY */
+#ifdef HAVE_ECC_DHE
                 case WC_PK_TYPE_SM2_SHARED_SECRET:
                     ret = _HandleSm2SharedSecret(ctx, magic, devId,
                                                  cryptoDataIn, cryptoInSize,
-                                                 cryptoDataOut,
-                                                 &cryptoOutSize);
+                                                 cryptoDataOut, &cryptoOutSize);
                     break;
+#endif /* HAVE_ECC_DHE */
 #endif /* WOLFSSL_SM2 && HAVE_ECC */
 #ifdef HAVE_ECC_VERIFY
                 case WC_PK_TYPE_ECDSA_VERIFY:

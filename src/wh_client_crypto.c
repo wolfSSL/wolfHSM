@@ -1932,8 +1932,8 @@ int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
         uint8_t    keyLabel[] = "TempSm2Sign";
         whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
 
-        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags,
-                                     sizeof(keyLabel), keyLabel);
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
         if (ret == WH_ERROR_OK) {
             evict = 1;
         }
@@ -1942,10 +1942,10 @@ int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
     if (ret == WH_ERROR_OK) {
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             (uint64_t)sizeof(*req) + (uint64_t)in_len;
-        uint32_t options   = 0;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)in_len;
+        uint32_t options = 0;
 
         dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
@@ -1975,8 +1975,8 @@ int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
             ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
             if (ret == WH_ERROR_OK) {
                 /* The server evicts from here on, so stop tracking it */
-                uint16_t res_len = 0;
-                whMessageCrypto_Sm2SignResponse* res = NULL;
+                uint16_t                         res_len = 0;
+                whMessageCrypto_Sm2SignResponse* res     = NULL;
 
                 evict = 0;
 
@@ -2041,8 +2041,8 @@ int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
         uint8_t    keyLabel[] = "TempSm2Verify";
         whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
 
-        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags,
-                                     sizeof(keyLabel), keyLabel);
+        ret = wh_Client_EccImportKey(ctx, key, &key_id, flags, sizeof(keyLabel),
+                                     keyLabel);
         if (ret == WH_ERROR_OK) {
             evict = 1;
         }
@@ -2051,11 +2051,10 @@ int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
     if (ret == WH_ERROR_OK) {
         uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
         uint16_t action = WC_ALGO_TYPE_PK;
-        uint64_t total_len = (uint64_t)sizeof(
-                                 whMessageCrypto_GenericRequestHeader) +
-                             (uint64_t)sizeof(*req) + (uint64_t)sig_len +
-                             (uint64_t)hash_len;
-        uint32_t options   = 0;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)sig_len + (uint64_t)hash_len;
+        uint32_t options = 0;
 
         dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
         if (dataPtr == NULL) {
@@ -2089,8 +2088,8 @@ int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
             if (ret == WH_ERROR_OK) {
-                uint16_t res_len = 0;
-                whMessageCrypto_Sm2VerifyResponse* res = NULL;
+                uint16_t                           res_len = 0;
+                whMessageCrypto_Sm2VerifyResponse* res     = NULL;
 
                 evict = 0;
 
@@ -2201,8 +2200,8 @@ int wh_Client_Sm2SharedSecret(whClientContext* ctx, ecc_key* priv_key,
 
             ret = wh_Client_SendRequest(ctx, group, action, req_len, dataPtr);
             if (ret == WH_ERROR_OK) {
-                uint16_t res_len = 0;
-                whMessageCrypto_Sm2DhResponse* res = NULL;
+                uint16_t                       res_len = 0;
+                whMessageCrypto_Sm2DhResponse* res     = NULL;
 
                 evict_prv = 0;
                 evict_pub = 0;
@@ -2214,9 +2213,8 @@ int wh_Client_Sm2SharedSecret(whClientContext* ctx, ecc_key* priv_key,
                 } while (ret == WH_ERROR_NOTREADY);
 
                 if (ret == WH_ERROR_OK) {
-                    ret = _getCryptoResponse(dataPtr,
-                                             WC_PK_TYPE_SM2_SHARED_SECRET,
-                                             (uint8_t**)&res);
+                    ret = _getCryptoResponse(
+                        dataPtr, WC_PK_TYPE_SM2_SHARED_SECRET, (uint8_t**)&res);
                 }
                 if (ret == WH_ERROR_OK) {
                     const uint32_t hdr_sz =
@@ -2255,11 +2253,7 @@ done:
 
 #ifdef WOLFSSL_SM4
 
-/* Every SM4 request carries the caller's key inline and its key id. The
- * server prefers the key id when it is not erased, so a key that lives in the
- * HSM never travels, while an application-held key still works. wc_Sm4 keeps
- * the raw key in devKey precisely because the key schedule cannot be turned
- * back into it. */
+/* The server uses a bound key id in place of the inline key */
 int wh_Client_Sm4SetKeyId(wc_Sm4* sm4, whKeyId keyId)
 {
     if (sm4 == NULL) {
@@ -2308,9 +2302,7 @@ int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
         ((len % SM4_BLOCK_SIZE) != 0)) {
         return WH_ERROR_BADARGS;
     }
-    /* The paired Response call would wait for a response that was never
-     * sent, so a zero-length split request is a caller error. The blocking
-     * wrappers still treat it as a no-op. */
+    /* Nothing would be sent, so the paired Response would never return */
     if (len == 0) {
         return WH_ERROR_BADARGS;
     }
@@ -2330,9 +2322,7 @@ int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
     req = (whMessageCrypto_Sm4EcbRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_ECB, ctx->cryptoAffinity);
     total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                (uint64_t)sizeof(*req) +
-                (uint64_t)len +
-                (uint64_t)key_len;
+                (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len;
 
     if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -2435,9 +2425,7 @@ int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
         ((len % SM4_BLOCK_SIZE) != 0)) {
         return WH_ERROR_BADARGS;
     }
-    /* The paired Response call would wait for a response that was never
-     * sent, so a zero-length split request is a caller error. The blocking
-     * wrappers still treat it as a no-op. */
+    /* Nothing would be sent, so the paired Response would never return */
     if (len == 0) {
         return WH_ERROR_BADARGS;
     }
@@ -2456,9 +2444,7 @@ int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
     req = (whMessageCrypto_Sm4CbcRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_CBC, ctx->cryptoAffinity);
     total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                (uint64_t)sizeof(*req) +
-                (uint64_t)len +
-                (uint64_t)key_len +
+                (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
                 (uint64_t)SM4_IV_SIZE;
 
     if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
@@ -2570,9 +2556,7 @@ int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    /* The paired Response call would wait for a response that was never
-     * sent, so a zero-length split request is a caller error. The blocking
-     * wrappers still treat it as a no-op. */
+    /* Nothing would be sent, so the paired Response would never return */
     if (len == 0) {
         return WH_ERROR_BADARGS;
     }
@@ -2591,11 +2575,8 @@ int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
     req = (whMessageCrypto_Sm4CtrRequest*)_createCryptoRequest(
         dataPtr, WC_CIPHER_SM4_CTR, ctx->cryptoAffinity);
     total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                (uint64_t)sizeof(*req) +
-                (uint64_t)len +
-                (uint64_t)key_len +
-                (uint64_t)SM4_IV_SIZE +
-                (uint64_t)SM4_BLOCK_SIZE;
+                (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
+                (uint64_t)SM4_IV_SIZE + (uint64_t)SM4_BLOCK_SIZE;
 
     if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -2737,12 +2718,8 @@ static int _Sm4AuthRequest(whClientContext* ctx, uint16_t cipherType,
     req = (whMessageCrypto_Sm4AuthRequest*)_createCryptoRequest(
         dataPtr, cipherType, ctx->cryptoAffinity);
     total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                (uint64_t)sizeof(*req) +
-                (uint64_t)len +
-                (uint64_t)key_len +
-                (uint64_t)iv_len +
-                (uint64_t)authin_len +
-                (uint64_t)tag_len;
+                (uint64_t)sizeof(*req) + (uint64_t)len + (uint64_t)key_len +
+                (uint64_t)iv_len + (uint64_t)authin_len + (uint64_t)tag_len;
 
     if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
@@ -2819,7 +2796,7 @@ static int _Sm4AuthResponse(whClientContext* ctx, uint16_t cipherType, int enc,
                 if ((out != NULL) && (res->sz > 0)) {
                     memcpy(out, res_out, res->sz);
                 }
-                /* Only an encrypt produces a tag to hand back */
+                /* Only an encrypt produces a tag to return */
                 if ((enc != 0) && (tag != NULL) && (tag_len > 0)) {
                     if (res->authTagSz != tag_len) {
                         ret = WH_ERROR_ABORTED;
@@ -2852,8 +2829,8 @@ int wh_Client_Sm4Gcm(whClientContext* ctx, wc_Sm4* sm4, int enc,
         return WH_ERROR_BADARGS;
     }
 
-    ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_GCM, sm4, enc, in, len, iv,
-                          iv_len, authin, authin_len, tag, tag_len);
+    ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_GCM, sm4, enc, in, len, iv, iv_len,
+                          authin, authin_len, tag, tag_len);
     if (ret == WH_ERROR_OK) {
         do {
             ret = _Sm4AuthResponse(ctx, WC_CIPHER_SM4_GCM, enc, out, tag,
@@ -2880,8 +2857,8 @@ int wh_Client_Sm4Ccm(whClientContext* ctx, wc_Sm4* sm4, int enc,
         return WH_ERROR_BADARGS;
     }
 
-    ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_CCM, sm4, enc, in, len, iv,
-                          iv_len, authin, authin_len, tag, tag_len);
+    ret = _Sm4AuthRequest(ctx, WC_CIPHER_SM4_CCM, sm4, enc, in, len, iv, iv_len,
+                          authin, authin_len, tag, tag_len);
     if (ret == WH_ERROR_OK) {
         do {
             ret = _Sm4AuthResponse(ctx, WC_CIPHER_SM4_CCM, enc, out, tag,
@@ -2894,9 +2871,7 @@ int wh_Client_Sm4Ccm(whClientContext* ctx, wc_Sm4* sm4, int enc,
 
 #ifdef WOLFHSM_CFG_DMA
 
-/* Fill in the key fields of a DMA request. A bound key id means the server
- * already has the key and nothing is sent; otherwise the inline key follows
- * the fixed part of the request. Returns the inline key length. */
+/* Send the key inline only when no key id is bound */
 static uint32_t _Sm4DmaKeyFields(wc_Sm4* sm4, uint32_t* out_key_id,
                                  uint32_t* out_key_sz)
 {
@@ -2905,75 +2880,82 @@ static uint32_t _Sm4DmaKeyFields(wc_Sm4* sm4, uint32_t* out_key_id,
     return *out_key_sz;
 }
 
-/* Acquire the client input and output buffers for a DMA transfer. On failure
- * every buffer acquired so far is released, so the caller never has to unwind
- * a partial acquisition. */
-static int _Sm4DmaAcquire(whClientContext* ctx, const uint8_t* in,
-                          uint32_t in_len, uint8_t* out, uint32_t out_len,
-                          whMessageCrypto_DmaBuffer* req_in,
-                          whMessageCrypto_DmaBuffer* req_out)
+/* Map one buffer for the server and describe it in the request */
+static int _Sm4DmaPre(whClientContext* ctx, const void* buf, uint32_t len,
+                      whDmaOper oper, uintptr_t* addr,
+                      whMessageCrypto_DmaBuffer* req_buf)
 {
-    int       ret     = WH_ERROR_OK;
-    uintptr_t addr    = 0;
+    int ret = WH_ERROR_OK;
 
-    if ((in != NULL) && (in_len > 0)) {
-        req_in->sz = in_len;
-        ret        = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&addr, in_len,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
+    if ((buf != NULL) && (len > 0)) {
+        ret = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)buf, (void**)addr, len, oper, (whDmaFlags){0});
         if (ret == WH_ERROR_OK) {
-            req_in->addr = addr;
+            req_buf->addr = *addr;
+            req_buf->sz   = len;
         }
     }
-
-    if ((ret == WH_ERROR_OK) && (out != NULL) && (out_len > 0)) {
-        req_out->sz = out_len;
-        ret         = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&addr, out_len,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
-        if (ret == WH_ERROR_OK) {
-            req_out->addr = addr;
-        }
-        else if ((in != NULL) && (in_len > 0)) {
-            (void)wh_Client_DmaProcessClientAddress(
-                ctx, (uintptr_t)in, (void**)&addr, in_len,
-                WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-        }
-    }
-
     return ret;
 }
 
-static void _Sm4DmaRelease(whClientContext* ctx, const uint8_t* in,
-                           uint32_t in_len, uint8_t* out, uint32_t out_len)
+/* Release one buffer mapped by _Sm4DmaPre. A failure replaces a successful
+ * ret, since the output may not have reached the caller. */
+static int _Sm4DmaPost(whClientContext* ctx, int ret, const void* buf,
+                       uint32_t len, uintptr_t addr, whDmaOper oper)
 {
-    uintptr_t addr = 0;
+    if ((buf != NULL) && (len > 0)) {
+        int rc = wh_Client_DmaProcessClientAddress(
+            ctx, (uintptr_t)buf, (void**)&addr, len, oper, (whDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            ret = rc;
+        }
+    }
+    return ret;
+}
 
-    if ((out != NULL) && (out_len > 0)) {
-        (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)out, (void**)&addr, out_len,
-            WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
+/* Map the input and output buffers. On failure nothing stays mapped. */
+static int _Sm4DmaAcquire(whClientContext* ctx, const uint8_t* in, uint8_t* out,
+                          uint32_t len, whMessageCrypto_DmaBuffer* req_in,
+                          whMessageCrypto_DmaBuffer* req_out, uintptr_t* inAddr,
+                          uintptr_t* outAddr)
+{
+    int ret =
+        _Sm4DmaPre(ctx, in, len, WH_DMA_OPER_CLIENT_READ_PRE, inAddr, req_in);
+    if (ret == WH_ERROR_OK) {
+        ret = _Sm4DmaPre(ctx, out, len, WH_DMA_OPER_CLIENT_WRITE_PRE, outAddr,
+                         req_out);
+        if (ret != WH_ERROR_OK) {
+            (void)_Sm4DmaPost(ctx, ret, in, len, *inAddr,
+                              WH_DMA_OPER_CLIENT_READ_POST);
+        }
     }
-    if ((in != NULL) && (in_len > 0)) {
-        (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)in, (void**)&addr, in_len,
-            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-    }
+    return ret;
+}
+
+static int _Sm4DmaRelease(whClientContext* ctx, int ret, const uint8_t* in,
+                          uint8_t* out, uint32_t len, uintptr_t inAddr,
+                          uintptr_t outAddr)
+{
+    ret =
+        _Sm4DmaPost(ctx, ret, out, len, outAddr, WH_DMA_OPER_CLIENT_WRITE_POST);
+    return _Sm4DmaPost(ctx, ret, in, len, inAddr, WH_DMA_OPER_CLIENT_READ_POST);
 }
 
 #ifdef WOLFSSL_SM4_ECB
 int wh_Client_Sm4EcbDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
                         const uint8_t* in, uint32_t len, uint8_t* out)
 {
-    int                               ret;
-    uint8_t*                          dataPtr;
-    whMessageCrypto_Sm4EcbDmaRequest* req;
+    int                                ret;
+    uint8_t*                           dataPtr;
+    whMessageCrypto_Sm4EcbDmaRequest*  req;
     whMessageCrypto_Sm4EcbDmaResponse* res;
-    uint8_t*                          req_key;
-    uint32_t                          req_len;
-    uint16_t                          group   = 0;
-    uint16_t                          action  = 0;
-    uint16_t                          res_len = 0;
+    uint8_t*                           req_key;
+    uint32_t                           req_len;
+    uint16_t                           group   = 0;
+    uint16_t                           action  = 0;
+    uint16_t                           res_len = 0;
+    uintptr_t                          inAddr  = 0;
+    uintptr_t                          outAddr = 0;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL) || (out == NULL) ||
         ((len % SM4_BLOCK_SIZE) != 0)) {
@@ -3008,7 +2990,8 @@ int wh_Client_Sm4EcbDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
         memcpy(req_key, (const uint8_t*)sm4->devKey, req->keySz);
     }
 
-    ret = _Sm4DmaAcquire(ctx, in, len, out, len, &req->input, &req->output);
+    ret = _Sm4DmaAcquire(ctx, in, out, len, &req->input, &req->output, &inAddr,
+                         &outAddr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3024,14 +3007,13 @@ int wh_Client_Sm4EcbDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, WC_CIPHER_SM4_ECB, (uint8_t**)&res);
         if ((ret == WH_ERROR_OK) &&
-            (res_len < sizeof(whMessageCrypto_GenericResponseHeader) +
-                           sizeof(*res))) {
+            (res_len <
+             sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res))) {
             ret = WH_ERROR_ABORTED;
         }
     }
 
-    _Sm4DmaRelease(ctx, in, len, out, len);
-    return ret;
+    return _Sm4DmaRelease(ctx, ret, in, out, len, inAddr, outAddr);
 }
 #endif /* WOLFSSL_SM4_ECB */
 
@@ -3049,6 +3031,8 @@ int wh_Client_Sm4CbcDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
     uint16_t                           group   = 0;
     uint16_t                           action  = 0;
     uint16_t                           res_len = 0;
+    uintptr_t                          inAddr  = 0;
+    uintptr_t                          outAddr = 0;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL) || (out == NULL) ||
         ((len % SM4_BLOCK_SIZE) != 0)) {
@@ -3085,7 +3069,8 @@ int wh_Client_Sm4CbcDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
         memcpy(req_key, (const uint8_t*)sm4->devKey, req->keySz);
     }
 
-    ret = _Sm4DmaAcquire(ctx, in, len, out, len, &req->input, &req->output);
+    ret = _Sm4DmaAcquire(ctx, in, out, len, &req->input, &req->output, &inAddr,
+                         &outAddr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3114,8 +3099,7 @@ int wh_Client_Sm4CbcDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
         }
     }
 
-    _Sm4DmaRelease(ctx, in, len, out, len);
-    return ret;
+    return _Sm4DmaRelease(ctx, ret, in, out, len, inAddr, outAddr);
 }
 #endif /* WOLFSSL_SM4_CBC */
 
@@ -3134,6 +3118,8 @@ int wh_Client_Sm4CtrDma(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
     uint16_t                           group   = 0;
     uint16_t                           action  = 0;
     uint16_t                           res_len = 0;
+    uintptr_t                          inAddr  = 0;
+    uintptr_t                          outAddr = 0;
 
     if ((ctx == NULL) || (sm4 == NULL) || (in == NULL) || (out == NULL)) {
         return WH_ERROR_BADARGS;
@@ -3171,7 +3157,8 @@ int wh_Client_Sm4CtrDma(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
         memcpy(req_key, (const uint8_t*)sm4->devKey, req->keySz);
     }
 
-    ret = _Sm4DmaAcquire(ctx, in, len, out, len, &req->input, &req->output);
+    ret = _Sm4DmaAcquire(ctx, in, out, len, &req->input, &req->output, &inAddr,
+                         &outAddr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
@@ -3203,8 +3190,7 @@ int wh_Client_Sm4CtrDma(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
         }
     }
 
-    _Sm4DmaRelease(ctx, in, len, out, len);
-    return ret;
+    return _Sm4DmaRelease(ctx, ret, in, out, len, inAddr, outAddr);
 }
 #endif /* WOLFSSL_SM4_CTR */
 
@@ -3212,8 +3198,8 @@ int wh_Client_Sm4CtrDma(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
 static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
                        int enc, const uint8_t* in, uint32_t len,
                        const uint8_t* iv, uint32_t iv_len,
-                       const uint8_t* authin, uint32_t authin_len,
-                       uint8_t* tag, uint32_t tag_len, uint8_t* out)
+                       const uint8_t* authin, uint32_t authin_len, uint8_t* tag,
+                       uint32_t tag_len, uint8_t* out)
 {
     int                                 ret;
     uint8_t*                            dataPtr;
@@ -3224,6 +3210,8 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
     uint8_t*                            req_key;
     uint32_t                            req_len;
     uint64_t                            total_len;
+    uintptr_t                           inAddr  = 0;
+    uintptr_t                           outAddr = 0;
     uintptr_t                           aadAddr = 0;
     uint16_t                            group   = 0;
     uint16_t                            action  = 0;
@@ -3251,12 +3239,10 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
     req->authTagSz = tag_len;
     (void)_Sm4DmaKeyFields(sm4, &req->keyId, &req->keySz);
 
-    /* Sum in 64 bits and check before deriving any trailing pointer: the
-     * lengths are caller supplied and a 32-bit sum could wrap past the
-     * buffer check. */
+    /* Sum in 64 bits so caller lengths cannot wrap past the check */
     total_len = (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                (uint64_t)sizeof(*req) + (uint64_t)iv_len +
-                (uint64_t)tag_len + (uint64_t)req->keySz;
+                (uint64_t)sizeof(*req) + (uint64_t)iv_len + (uint64_t)tag_len +
+                (uint64_t)req->keySz;
     if (total_len > (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
         return WH_ERROR_BADARGS;
     }
@@ -3279,23 +3265,16 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
         memcpy(req_key, (const uint8_t*)sm4->devKey, req->keySz);
     }
 
-    ret = _Sm4DmaAcquire(ctx, in, len, out, len, &req->input, &req->output);
+    ret = _Sm4DmaAcquire(ctx, in, out, len, &req->input, &req->output, &inAddr,
+                         &outAddr);
     if (ret != WH_ERROR_OK) {
         return ret;
     }
 
-    if ((authin != NULL) && (authin_len > 0)) {
-        req->aad.sz = authin_len;
-        ret         = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)authin, (void**)&aadAddr, authin_len,
-            WH_DMA_OPER_CLIENT_READ_PRE, (whDmaFlags){0});
-        if (ret == WH_ERROR_OK) {
-            req->aad.addr = aadAddr;
-        }
-        else {
-            _Sm4DmaRelease(ctx, in, len, out, len);
-            return ret;
-        }
+    ret = _Sm4DmaPre(ctx, authin, authin_len, WH_DMA_OPER_CLIENT_READ_PRE,
+                     &aadAddr, &req->aad);
+    if (ret != WH_ERROR_OK) {
+        return _Sm4DmaRelease(ctx, ret, in, out, len, inAddr, outAddr);
     }
 
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
@@ -3311,8 +3290,7 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
         if (ret == WH_ERROR_OK) {
             const uint32_t hdr_sz =
                 sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
-            if ((res_len < hdr_sz) ||
-                (res->authTagSz > (res_len - hdr_sz))) {
+            if ((res_len < hdr_sz) || (res->authTagSz > (res_len - hdr_sz))) {
                 ret = WH_ERROR_ABORTED;
             }
             else if ((enc != 0) && (tag != NULL) && (tag_len > 0)) {
@@ -3326,13 +3304,9 @@ static int _Sm4AuthDma(whClientContext* ctx, uint16_t cipherType, wc_Sm4* sm4,
         }
     }
 
-    if ((authin != NULL) && (authin_len > 0)) {
-        (void)wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)authin, (void**)&aadAddr, authin_len,
-            WH_DMA_OPER_CLIENT_READ_POST, (whDmaFlags){0});
-    }
-    _Sm4DmaRelease(ctx, in, len, out, len);
-    return ret;
+    ret = _Sm4DmaPost(ctx, ret, authin, authin_len, aadAddr,
+                      WH_DMA_OPER_CLIENT_READ_POST);
+    return _Sm4DmaRelease(ctx, ret, in, out, len, inAddr, outAddr);
 }
 #endif /* WOLFSSL_SM4_GCM || WOLFSSL_SM4_CCM */
 

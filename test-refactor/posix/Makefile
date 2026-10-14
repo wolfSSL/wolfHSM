@@ -144,6 +144,11 @@ ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Enable SM2/SM3/SM4, which needs wolfsm installed into wolfSSL
+ifeq ($(SM),1)
+    DEF += -DWOLFHSM_CFG_TEST_SM
+endif
+
 # Share all SHE key slots across clients (global SHE device view). Implies
 # SHE=1. WOLFHSM_CFG_GLOBAL_KEYS comes from the test config.
 ifeq ($(SHE_GLOBAL),1)
