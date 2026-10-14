@@ -23,13 +23,13 @@
  * (WOLFHSM_CFG_HWKEYSTORE_CRYPTO). Two clients talk to two servers that share
  * one NVM and one hardware keystore, like one HSM serving two cores.
  *
- * The servers' crypto callback is a mock AES engine modeled on the TC3xx HSM.
- * It has eight write-only AES-128 key slots:
+ * The servers' crypto callback is a mock AES engine with eight write-only
+ * AES-128 key slots with some arbitrary restrictions:
  *   K0, K1  device keys that no client can name
  *   K2      a key the port loads at boot. Clients can use it but not set or
  *           clear it
- *   K3, K4  loadable by clients
- *   K5-K7   used by the port for other things
+ *   K3, K4  loadable by clients for generic use
+ *   K5-K7   used as scratch keys for port-internal functionality
  * The mock runs each operation with wolfCrypt in software, using the key in
  * the slot, and implements the wolfCrypt keystore callback that loads, clears
  * and describes slots.
@@ -44,7 +44,8 @@
  *                               it in every AES mode and CMAC, standard and DMA
  *   _whTest_HwKeyAllocation   - picking a free key, explicit IDs, running out,
  *                               reloading, and another client's keys
- *   _whTest_HwKeyUsage        - the copy keeps the source key's usage flags
+ *   _whTest_HwKeyUsage        - the copy keeps the source key's usage flags,
+ *                               and every AES and CMAC request checks them
  *   _whTest_HwKeySource       - evict keeps the copy, erase and revoke clear it
  *   _whTest_HwKeyRefused      - sources and targets the server or port refuses
  *   _whTest_HwKeyClear        - Clear and ClearAll
@@ -511,7 +512,6 @@ typedef struct {
     whNvmConfig         n_conf[1];
 } TestCtx;
 
-/* Static to keep the misc group's stack footprint small */
 static TestCtx _testCtx;
 static uint8_t _flashMemory[FLASH_RAM_SIZE];
 
@@ -809,16 +809,16 @@ static int _Cbc(whClientContext* c, Aes* aes, int dma, int enc,
     return wh_Client_AesCbc(c, aes, enc, in, sz, out);
 }
 
-static int _Ctr(whClientContext* c, Aes* aes, int dma, const uint8_t* in,
-                uint8_t* out, uint32_t sz)
+static int _Ctr(whClientContext* c, Aes* aes, int dma, int enc,
+                const uint8_t* in, uint8_t* out, uint32_t sz)
 {
 #ifdef WOLFHSM_CFG_DMA
     if (dma) {
-        return wh_Client_AesCtrDma(c, aes, 1, in, sz, out);
+        return wh_Client_AesCtrDma(c, aes, enc, in, sz, out);
     }
 #endif
     (void)dma;
-    return wh_Client_AesCtr(c, aes, 1, in, sz, out);
+    return wh_Client_AesCtr(c, aes, enc, in, sz, out);
 }
 
 static int _Gcm(whClientContext* c, Aes* aes, int dma, int enc,
@@ -866,13 +866,61 @@ static int _Cmac(whClientContext* c, whKeyId keyId, int dma, uint8_t* tag)
     return ret;
 }
 
+/* One CMAC update request, standard or DMA */
+static int _CmacUpdate(whClientContext* c, Cmac* cmac, int dma,
+                       const uint8_t* in, uint32_t sz)
+{
+    bool sent = false;
+    int  ret;
+
+#ifdef WOLFHSM_CFG_DMA
+    if (dma) {
+        ret = wh_Client_CmacDmaUpdateRequest(c, cmac, WC_CMAC_AES, NULL, 0, in,
+                                             sz, &sent);
+        if ((ret == 0) && sent) {
+            ret = wh_Client_CmacDmaUpdateResponse(c, cmac);
+        }
+        return ret;
+    }
+#endif
+    (void)dma;
+    ret = wh_Client_CmacUpdateRequest(c, cmac, WC_CMAC_AES, NULL, 0, in, sz,
+                                      &sent);
+    if ((ret == 0) && sent) {
+        ret = wh_Client_CmacUpdateResponse(c, cmac);
+    }
+    return ret;
+}
+
+/* CMAC final request, standard or DMA */
+static int _CmacFinal(whClientContext* c, Cmac* cmac, int dma, uint8_t* tag,
+                      uint32_t* tagSz)
+{
+    int ret;
+
+#ifdef WOLFHSM_CFG_DMA
+    if (dma) {
+        ret = wh_Client_CmacDmaFinalRequest(c, cmac);
+        if (ret == 0) {
+            ret = wh_Client_CmacDmaFinalResponse(c, cmac, tag, tagSz);
+        }
+        return ret;
+    }
+#endif
+    (void)dma;
+    ret = wh_Client_CmacFinalRequest(c, cmac);
+    if (ret == 0) {
+        ret = wh_Client_CmacFinalResponse(c, cmac, tag, tagSz);
+    }
+    return ret;
+}
+
 /* CMAC of the test message over several requests, so the server picks up the
  * running state each time */
-static int _CmacSteps(whClientContext* c, whKeyId keyId, uint8_t* tag)
+static int _CmacSteps(whClientContext* c, whKeyId keyId, int dma, uint8_t* tag)
 {
     Cmac     cmac[1];
     uint32_t tagSz = AES_BLOCK_SIZE;
-    bool     sent  = false;
     int      ret;
 
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, c->devId);
@@ -880,42 +928,73 @@ static int _CmacSteps(whClientContext* c, whKeyId keyId, uint8_t* tag)
         ret = wh_Client_CmacSetKeyId(cmac, keyId);
     }
     if (ret == 0) {
-        ret = wh_Client_CmacUpdateRequest(c, cmac, WC_CMAC_AES, NULL, 0, _msg,
-                                          40, &sent);
-    }
-    if ((ret == 0) && sent) {
-        ret = wh_Client_CmacUpdateResponse(c, cmac);
+        ret = _CmacUpdate(c, cmac, dma, _msg, 40);
     }
     if (ret == 0) {
-        ret = wh_Client_CmacUpdateRequest(c, cmac, WC_CMAC_AES, NULL, 0,
-                                          _msg + 40, TEST_CMAC_SZ - 40, &sent);
-    }
-    if ((ret == 0) && sent) {
-        ret = wh_Client_CmacUpdateResponse(c, cmac);
+        ret = _CmacUpdate(c, cmac, dma, _msg + 40, TEST_CMAC_SZ - 40);
     }
     if (ret == 0) {
-        ret = wh_Client_CmacFinalRequest(c, cmac);
-    }
-    if (ret == 0) {
-        ret = wh_Client_CmacFinalResponse(c, cmac, tag, &tagSz);
+        ret = _CmacFinal(c, cmac, dma, tag, &tagSz);
     }
     (void)wc_CmacFree(cmac);
+    return ret;
+}
+
+/* AES modes for _TryAes */
+enum {
+    MODE_ECB = 0,
+    MODE_CBC,
+    MODE_CTR,
+    MODE_GCM,
+    MODE_COUNT,
+};
+
+/* Result of one request in mode with keyId. A GCM decrypt uses the software
+ * ciphertext and tag in e, so it succeeds with the right key */
+static int _TryAes(whClientContext* c, whKeyId keyId, int mode, int dma,
+                   int enc, const Expected* e)
+{
+    Aes     aes[1];
+    uint8_t out[TEST_GCM_SZ];
+    uint8_t tag[AES_BLOCK_SIZE];
+    int     ret;
+
+    ret = _AesStart(aes, keyId,
+                    ((mode == MODE_CBC) || (mode == MODE_CTR)) ? _iv : NULL);
+    if (ret == 0) {
+        switch (mode) {
+            case MODE_ECB:
+                ret = _Ecb(c, aes, dma, enc, _msg, out, AES_BLOCK_SIZE);
+                break;
+            case MODE_CBC:
+                ret = _Cbc(c, aes, dma, enc, _msg, out, AES_BLOCK_SIZE);
+                break;
+            case MODE_CTR:
+                ret = _Ctr(c, aes, dma, enc, _msg, out, AES_BLOCK_SIZE);
+                break;
+            case MODE_GCM:
+                if (enc) {
+                    ret = _Gcm(c, aes, dma, 1, _msg, out, TEST_GCM_SZ,
+                               TEST_GCM_IV_SZ, NULL, tag);
+                }
+                else {
+                    ret = _Gcm(c, aes, dma, 0, e->gcm, out, TEST_GCM_SZ,
+                               TEST_GCM_IV_SZ, e->gcmTag, NULL);
+                }
+                break;
+            default:
+                ret = WH_ERROR_BADARGS;
+                break;
+        }
+    }
+    wc_AesFree(aes);
     return ret;
 }
 
 /* Result of a one-block ECB request with keyId */
 static int _TryEcb(whClientContext* c, whKeyId keyId, int enc)
 {
-    Aes     aes[1];
-    uint8_t out[AES_BLOCK_SIZE];
-    int     ret;
-
-    ret = _AesStart(aes, keyId, NULL);
-    if (ret == 0) {
-        ret = wh_Client_AesEcb(c, aes, enc, _msg, AES_BLOCK_SIZE, out);
-    }
-    wc_AesFree(aes);
-    return ret;
+    return _TryAes(c, keyId, MODE_ECB, 0, enc, NULL);
 }
 
 /* Result of a one-shot CMAC request with keyId */
@@ -989,13 +1068,13 @@ static int _CheckModes(whClientContext* c, whKeyId keyId, const uint8_t* key,
     /* CTR, in two requests that split a block */
     ops = _mock.ops;
     WH_TEST_RETURN_ON_FAIL(_AesStart(aes, keyId, _iv));
-    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, _msg, out, 20));
+    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, 1, _msg, out, 20));
     WH_TEST_RETURN_ON_FAIL(
-        _Ctr(c, aes, dma, _msg + 20, out + 20, TEST_CTR_SZ - 20));
+        _Ctr(c, aes, dma, 1, _msg + 20, out + 20, TEST_CTR_SZ - 20));
     WH_TEST_ASSERT_RETURN(memcmp(out, e.ctr, TEST_CTR_SZ) == 0);
     wc_AesFree(aes);
     WH_TEST_RETURN_ON_FAIL(_AesStart(aes, keyId, _iv));
-    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, out, back, TEST_CTR_SZ));
+    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, 1, out, back, TEST_CTR_SZ));
     WH_TEST_ASSERT_RETURN(memcmp(back, _msg, TEST_CTR_SZ) == 0);
     wc_AesFree(aes);
     CHECK_RAN(ops, hw);
@@ -1025,11 +1104,11 @@ static int _CheckModes(whClientContext* c, whKeyId keyId, const uint8_t* key,
     ops = _mock.ops;
     WH_TEST_RETURN_ON_FAIL(_Cmac(c, keyId, dma, tag));
     WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
-    if (!dma) {
-        memset(tag, 0, sizeof(tag));
-        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, keyId, tag));
-        WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
-    }
+    CHECK_RAN(ops, hw);
+    ops = _mock.ops;
+    memset(tag, 0, sizeof(tag));
+    WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, keyId, dma, tag));
+    WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
     CHECK_RAN(ops, hw);
 
     return WH_ERROR_OK;
@@ -1225,35 +1304,78 @@ static int _whTest_HwKeyAllocation(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* The copy keeps the source key's usage flags */
+/* The copy keeps the source key's usage flags. Each AES request needs the
+ * usage for its direction and CMAC needs sign or verify, standard and DMA */
 static int _whTest_HwKeyUsage(TestCtx* t)
 {
     whClientContext* c = t->pair[0].client;
+    Expected         e;
+    uint8_t          tag[AES_BLOCK_SIZE];
+    whKeyId          src1;
+    whKeyId          src2;
+    whKeyId          hw1;
+    whKeyId          hw2;
     whKeyId          src;
     whKeyId          hwId;
+    int              mode;
+    int              dma;
 
-    /* Encrypt only: no decrypt and no CMAC */
-    src = WH_KEYID_ERASED;
+    WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
+
+    /* Encrypt only and decrypt only: each works one way in every AES mode, and
+     * neither can do CMAC */
+    src1 = WH_KEYID_ERASED;
+    src2 = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
-        _Cache(c, WH_NVM_FLAGS_USAGE_ENCRYPT, _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src, &hwId));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hwId), 1,
+        _Cache(c, WH_NVM_FLAGS_USAGE_ENCRYPT, _keyA, sizeof(_keyA), &src1));
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, WH_NVM_FLAGS_USAGE_DECRYPT, _keyA, sizeof(_keyA), &src2));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 1,
                                       WH_NVM_FLAGS_USAGE_ENCRYPT, CLIENT1_ID));
-    WH_TEST_RETURN_ON_FAIL(_TryEcb(c, hwId, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c, hwId, 0));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryCmac(c, hwId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw2), 1,
+                                      WH_NVM_FLAGS_USAGE_DECRYPT, CLIENT1_ID));
+    for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
+        for (mode = 0; mode < MODE_COUNT; mode++) {
+            WH_TEST_RETURN_ON_FAIL(_TryAes(c, hw1, mode, dma, 1, &e));
+            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                  _TryAes(c, hw1, mode, dma, 0, &e));
+            WH_TEST_RETURN_ON_FAIL(_TryAes(c, hw2, mode, dma, 0, &e));
+            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                  _TryAes(c, hw2, mode, dma, 1, &e));
+        }
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, hw1, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, hw1, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, hw2, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, hw2, dma, tag));
+    }
+    WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src2));
 
-    /* Verify only: CMAC but no AES */
-    src = WH_KEYID_ERASED;
+    /* Sign only and verify only: either can do CMAC but not AES */
+    src1 = WH_KEYID_ERASED;
+    src2 = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
-        _Cache(c, WH_NVM_FLAGS_USAGE_VERIFY, _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src, &hwId));
-    WH_TEST_RETURN_ON_FAIL(_TryCmac(c, hwId));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c, hwId, 1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
+        _Cache(c, WH_NVM_FLAGS_USAGE_SIGN, _keyA, sizeof(_keyA), &src1));
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, WH_NVM_FLAGS_USAGE_VERIFY, _keyA, sizeof(_keyA), &src2));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
+    for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
+        WH_TEST_RETURN_ON_FAIL(_Cmac(c, hw1, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, hw1, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_Cmac(c, hw2, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, hw2, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                              _TryAes(c, hw1, MODE_ECB, dma, 1, &e));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                              _TryAes(c, hw2, MODE_ECB, dma, 0, &e));
+    }
+    WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src2));
 
     /* A key with no usage could never be used, so it isn't loaded */
     src = WH_KEYID_ERASED;
