@@ -34,8 +34,9 @@
  * the slot, and implements the wolfCrypt keystore callback that loads, clears
  * and describes slots.
  *
- * Each client's transport runs its server whenever the client waits for a
- * reply, so the blocking client APIs work without threads.
+ * Each client talks to its server over the autopoll mem transport
+ * (wh_test_transport_mem_autopoll.h), so the blocking client APIs work without
+ * threads.
  *
  *   _whTest_HwKeyMap          - GetInfo for every hardware key ID
  *   _whTest_HwKeyPortKey      - both clients use K2 but can't set or clear it
@@ -90,6 +91,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
+#include "wh_test_transport_mem_autopoll.h"
 
 #define BUFFER_SIZE 4096
 #define FLASH_RAM_SIZE (1024 * 1024)
@@ -476,72 +478,22 @@ static int _MockBoot(whHwKeystoreContext* hwKeystore, uint16_t owner)
  * Client/server setup
  * ------------------------------------------------------------------------ */
 
-/* Client transport that runs the server when the client waits for a reply */
-typedef struct {
-    whTransportMemClientContext mem[1];
-    whServerContext*            server;
-} PumpClientContext;
-
-static int _PumpInit(void* c, const void* cf, whCommSetConnectedCb connectcb,
-                     void* connectcb_arg)
-{
-    return wh_TransportMem_InitClear(((PumpClientContext*)c)->mem, cf,
-                                     connectcb, connectcb_arg);
-}
-
-static int _PumpSend(void* c, uint16_t len, const void* data)
-{
-    return wh_TransportMem_SendRequest(((PumpClientContext*)c)->mem, len, data);
-}
-
-static int _PumpRecv(void* c, uint16_t* out_len, void* data)
-{
-    PumpClientContext* pump = (PumpClientContext*)c;
-    int                ret;
-    int                serverRet;
-
-    ret = wh_TransportMem_RecvResponse(pump->mem, out_len, data);
-    if (ret == WH_ERROR_NOTREADY) {
-        serverRet = wh_Server_HandleRequestMessage(pump->server);
-        ret       = wh_TransportMem_RecvResponse(pump->mem, out_len, data);
-        /* The server replies to each request at once, so still waiting
-         * means it failed. Stop instead of waiting forever */
-        if (ret == WH_ERROR_NOTREADY) {
-            ret = (serverRet != WH_ERROR_OK) ? serverRet : WH_ERROR_ABORTED;
-        }
-    }
-    return ret;
-}
-
-static int _PumpCleanup(void* c)
-{
-    return wh_TransportMem_Cleanup(((PumpClientContext*)c)->mem);
-}
-
-/* clang-format off */
-static const whTransportClientCb _pumpClientCb = {
-    .Init    = _PumpInit,
-    .Send    = _PumpSend,
-    .Recv    = _PumpRecv,
-    .Cleanup = _PumpCleanup,
-};
-/* clang-format on */
-
 /* One client and the server it talks to */
 typedef struct {
-    whServerContext             server[1];
-    whClientContext             client[1];
-    whServerCryptoContext       crypto[1];
-    uint8_t                     reqBuf[BUFFER_SIZE];
-    uint8_t                     respBuf[BUFFER_SIZE];
-    whTransportMemConfig        tmcf[1];
-    whTransportServerCb         tscb[1];
-    whTransportMemServerContext tmsc[1];
-    whCommServerConfig          cs_conf[1];
-    PumpClientContext           pump[1];
-    whCommClientConfig          cc_conf[1];
-    whClientConfig              c_conf[1];
-    whServerConfig              s_conf[1];
+    whServerContext                     server[1];
+    whClientContext                     client[1];
+    whServerCryptoContext               crypto[1];
+    uint8_t                             reqBuf[BUFFER_SIZE];
+    uint8_t                             respBuf[BUFFER_SIZE];
+    whTransportMemConfig                tmcf[1];
+    whTransportServerCb                 tscb[1];
+    whTransportMemServerContext         tmsc[1];
+    whCommServerConfig                  cs_conf[1];
+    whTransportClientCb                 tccb[1];
+    whTransportMemAutopollClientContext tmcc[1];
+    whCommClientConfig                  cc_conf[1];
+    whClientConfig                      c_conf[1];
+    whServerConfig                      s_conf[1];
 } TestPair;
 
 typedef struct {
@@ -591,10 +543,11 @@ static int _SetupPair(TestCtx* t, TestPair* p, uint16_t clientId,
         .transport_config  = (void*)p->tmcf,
         .server_id         = serverId,
     };
-    p->pump->server = p->server;
+    p->tccb[0]      = (whTransportClientCb)WH_TRANSPORT_MEM_AUTOPOLL_CLIENT_CB;
+    p->tmcc->server = p->server;
     p->cc_conf[0]   = (whCommClientConfig){
-          .transport_cb      = &_pumpClientCb,
-          .transport_context = (void*)p->pump,
+          .transport_cb      = p->tccb,
+          .transport_context = (void*)p->tmcc,
           .transport_config  = (void*)p->tmcf,
           .client_id         = clientId,
     };
