@@ -223,6 +223,9 @@ ifeq ($(TESTWOLFCRYPT),1)
     # TESTWOLFCRYPT_DMA uses WH_DEV_ID_DMA).
     DEF += -DWC_USE_DEVID=$(TESTWOLFCRYPT_DEVID)
 
+    # Find the wolfSSL certs/ dir from any working directory
+    DEF += -DCERT_PREFIX='"$(abspath $(WOLFSSL_DIR))/"'
+
     # wolfCrypt test source file
     SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
 endif
