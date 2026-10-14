@@ -205,6 +205,10 @@ jobs:
       if: matrix.group == 'base'
       run: cd test-refactor/posix && make clean && make -j AUTH=1 NOCRYPTO=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    - name: Show test-suite.log
+      if: failure()
+      run: cat test-refactor/posix/test-suite.log || true
+
     - name: Show ccache stats
       run: ccache -s
 
@@ -262,6 +266,10 @@ jobs:
     # the legacy suite is the only one that runs the POSIX flash file backend
     - name: Build and test legacy suite 32-bit
       run: cd test && make clean && make -j ARCHFLAGS=-m32 WOLFSSL_DIR=../wolfssl && make run ARCHFLAGS=-m32 WOLFSSL_DIR=../wolfssl
+
+    - name: Show test-suite.log
+      if: failure()
+      run: cat test-refactor/posix/test-suite.log || true
 
     - name: Show ccache stats
       run: ccache -s
