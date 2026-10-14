@@ -77,6 +77,12 @@ jobs:
       if: matrix.group == 'pq-dma'
       run: cd test && make clean && make -j DMA=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
 
+    # Build and test DMA with non-coherent client caches (wolfCrypt DMA refused),
+    # aborting on DMA output buffers that are not aligned and padded
+    - name: Build and test DMA NONCOHERENT ASAN
+      if: matrix.group == 'pq-dma'
+      run: cd test && make clean && make -j DMA=1 DMA_NONCOHERENT=1 DMA_ALIGN_CHECK=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run
+
     # Build and test with NVM flash CRC16 integrity checking enabled
     - name: Build and test NVM flash CRC ASAN
       run: cd test && make clean && make -j NVM_FLASH_CRC=1 ASAN=1 WOLFSSL_DIR=../wolfssl && make run

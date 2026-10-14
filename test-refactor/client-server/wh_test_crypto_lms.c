@@ -48,7 +48,9 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-#if defined(WOLFHSM_CFG_DMA) && \
+/* Runs through wolfCrypt on WH_DEV_ID_DMA, which non-coherent DMA builds
+ * refuse, so the test is skipped there. */
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT) && \
     defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
 
 /* L=1, H=5, W=8 keeps the signature ~1.3 KB and gives 2^5 = 32 signatures. */
@@ -493,6 +495,6 @@ int whTest_Crypto_Lms(whClientContext* ctx)
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS && !WOLFSSL_LMS_VERIFY_ONLY */
+#endif /* DMA && !DMA_NONCOHERENT && LMS && !LMS_VERIFY_ONLY */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

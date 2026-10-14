@@ -32,6 +32,63 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client.h"
 
+#ifdef WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK
+#include <stdio.h>
+#include <stdlib.h>
+
+#if defined(__SANITIZE_ADDRESS__)
+#define WH_DMA_ALIGN_CHECK_ASAN
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define WH_DMA_ALIGN_CHECK_ASAN
+#endif
+#endif
+
+#ifdef WH_DMA_ALIGN_CHECK_ASAN
+#include <sanitizer/asan_interface.h>
+#include <sanitizer/common_interface_defs.h>
+#endif
+
+/* Abort when a buffer the server writes shares a cache line with other data.
+ * The start is checked directly. The padding is only checked under ASAN, which
+ * keeps the bytes around each stack, heap and global object unaddressable. A
+ * buffer inside a larger object, such as a struct member, only gets the start
+ * check. */
+static void _CheckDmaWriteBuffer(uintptr_t addr, size_t len)
+{
+    const void* bad = NULL;
+
+    if (len == 0) {
+        return;
+    }
+    if (!WH_DMA_IS_ALIGNED(addr)) {
+        bad = (const void*)addr;
+    }
+#ifdef WH_DMA_ALIGN_CHECK_ASAN
+    else {
+        bad = __asan_region_is_poisoned((void*)addr, WH_DMA_PAD_SIZE(len));
+    }
+#endif
+    if (bad == NULL) {
+        return;
+    }
+
+    WOLFHSM_CFG_PRINTF("DMA output buffer %p (len %u) is not aligned and "
+                       "padded to WOLFHSM_CFG_DMA_ALIGN (%u), first bad byte "
+                       "%p\n",
+                       (void*)addr, (unsigned)len,
+                       (unsigned)WOLFHSM_CFG_DMA_ALIGN, bad);
+    /* abort() does not flush stdio, and a piped stdout is buffered */
+    (void)fflush(NULL);
+#ifdef WH_DMA_ALIGN_CHECK_ASAN
+    /* Names the offending variable and the call that passed it */
+    __asan_describe_address((void*)bad);
+    __sanitizer_print_stack_trace();
+#endif
+    abort();
+}
+#endif /* WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK */
+
 
 int wh_Client_DmaRegisterAllowList(whClientContext*          client,
                                    const whDmaAddrAllowList* allowlist)
@@ -75,6 +132,14 @@ int wh_Client_DmaProcessClientAddress(whClientContext* client,
     if (NULL == xformedCliAddr) {
         return WH_ERROR_BADARGS;
     }
+
+#ifdef WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK
+    /* Every buffer the server writes passes through here, whatever the port
+     * callback does with it */
+    if (oper == WH_DMA_OPER_CLIENT_WRITE_PRE) {
+        _CheckDmaWriteBuffer(clientAddr, len);
+    }
+#endif
 
     /* Perform user-supplied address transformation, cache manipulation, etc */
     if (NULL != client->dma.cb) {

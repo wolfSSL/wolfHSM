@@ -142,7 +142,7 @@ static int _benchMlKemEncaps(whClientContext* client, whBenchOpContext* ctx,
     int      ret = WH_ERROR_OK;
     int      i;
     MlKemKey key[1];
-    byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    WH_DMA_ALIGNED byte ct[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_CIPHER_TEXT_SIZE)];
     byte     ss[WC_ML_KEM_SS_SZ];
     whKeyId  keyId = WH_KEYID_ERASED;
 
@@ -206,7 +206,7 @@ static int _benchMlKemDecaps(whClientContext* client, whBenchOpContext* ctx,
     int      ret = WH_ERROR_OK;
     int      i;
     MlKemKey key[1];
-    byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    WH_DMA_ALIGNED byte ct[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_CIPHER_TEXT_SIZE)];
     byte     ssEnc[WC_ML_KEM_SS_SZ];
     byte     ssDec[WC_ML_KEM_SS_SZ];
     uint32_t ctLen = sizeof(ct);

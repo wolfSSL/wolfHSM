@@ -116,7 +116,7 @@ static int _addAndVerifyOne(whClientContext* ctx,
     whNvmFlags  gflags  = 0;
     whNvmSize   glen    = 0;
     char        glabel[WH_NVM_LABEL_LEN] = {0};
-    uint8_t     buf[WOLFHSM_CFG_COMM_DATA_LEN];
+    WH_DMA_ALIGNED uint8_t buf[WH_DMA_PAD_SIZE(WOLFHSM_CFG_COMM_DATA_LEN)];
     whNvmSize   rlen    = 0;
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetAvailable(

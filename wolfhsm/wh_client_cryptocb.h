@@ -47,7 +47,8 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* ctx);
 
 #ifdef WOLFHSM_CFG_DMA
 /* DMA-only cryptoCb, registered for WH_DEV_ID_DMA. No standard-path fallback:
- * algorithms without a DMA variant return CRYPTOCB_UNAVAILABLE.
+ * algorithms without a DMA variant return CRYPTOCB_UNAVAILABLE. With
+ * WOLFHSM_CFG_DMA_NONCOHERENT every operation fails with WC_HW_E.
  */
 int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx);
 #endif /* WOLFHSM_CFG_DMA */

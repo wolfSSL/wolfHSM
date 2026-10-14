@@ -369,7 +369,7 @@ static int whTest_CryptoRngDmaAsync(whClientContext* ctx)
     int ret = WH_ERROR_OK;
     /* DMA bypasses the comm buffer so we can request more than COMM_DATA_LEN
      * in a single round trip. */
-    uint8_t big[WOLFHSM_CFG_COMM_DATA_LEN * 2];
+    WH_DMA_ALIGNED uint8_t big[WH_DMA_PAD_SIZE(WOLFHSM_CFG_COMM_DATA_LEN * 2)];
 
     /* Case A: basic DMA Request -> Response */
     if (ret == 0) {
@@ -394,7 +394,7 @@ static int whTest_CryptoRngDmaAsync(whClientContext* ctx)
 
     /* Case B: small DMA request still works (no chunking semantics). */
     if (ret == 0) {
-        uint8_t small[32];
+        WH_DMA_ALIGNED uint8_t small[WH_DMA_PAD_SIZE(32)];
         memset(small, 0, sizeof(small));
         ret = wh_Client_RngGenerateDmaRequest(ctx, small, sizeof(small));
         if (ret == 0) {
@@ -449,6 +449,111 @@ static int whTest_CryptoRngDmaAsync(whClientContext* ctx)
     return ret;
 }
 #endif /* WOLFHSM_CFG_DMA */
+
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+/* With non-coherent DMA, wolfCrypt must not reach the DMA path: operations on
+ * WH_DEV_ID_DMA fail with WC_HW_E (no silent software fallback), objects
+ * created with it can still be freed, and DMA-preferred mode is refused. */
+static int whTest_CryptoDmaNoncoherentRefusal(whClientContext* ctx,
+                                              whClientConfig*  config)
+{
+    int ret = 0;
+    int rc;
+    int mode = -1;
+
+/* Needs a cipher operation that always reaches the cryptoCb: SetKey alone only
+ * does so on builds that route it there, otherwise it returns 0 */
+#if !defined(NO_AES) && defined(HAVE_AES_CBC)
+    if (ret == 0) {
+        Aes           aes[1];
+        const uint8_t key[AES_128_KEY_SIZE] = {0};
+        const uint8_t iv[AES_BLOCK_SIZE]    = {0};
+        uint8_t       in[AES_BLOCK_SIZE]    = {0};
+        uint8_t       out[AES_BLOCK_SIZE]   = {0};
+
+        ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+        if (ret == 0) {
+            /* The key may be handed to the cryptoCb already (SETKEY) */
+            rc = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (rc == 0) {
+                rc = wc_AesCbcEncrypt(aes, out, in, sizeof(in));
+            }
+            if (rc != WC_HW_E) {
+                WH_ERROR_PRINT("AES on WH_DEV_ID_DMA returned %d, expected "
+                               "WC_HW_E\n",
+                               rc);
+                ret = WH_ERROR_ABORTED;
+            }
+            wc_AesFree(aes);
+        }
+    }
+#endif /* !NO_AES && HAVE_AES_CBC */
+
+#ifndef NO_SHA256
+    if (ret == 0) {
+        wc_Sha256     sha[1];
+        const uint8_t msg[] = "noncoherent";
+
+        ret = wc_InitSha256_ex(sha, NULL, WH_DEV_ID_DMA);
+        if (ret == 0) {
+            rc = wc_Sha256Update(sha, msg, sizeof(msg));
+            if (rc != WC_HW_E) {
+                WH_ERROR_PRINT("SHA256 on WH_DEV_ID_DMA returned %d, expected "
+                               "WC_HW_E\n",
+                               rc);
+                ret = WH_ERROR_ABORTED;
+            }
+            wc_Sha256Free(sha);
+        }
+    }
+#endif /* !NO_SHA256 */
+
+    /* DMA-preferred mode is refused and the mode stays standard */
+    if (ret == 0) {
+        rc = wh_Client_SetDmaMode(ctx, 1);
+        if ((rc != WH_ERROR_BADARGS) ||
+            (wh_Client_GetDmaMode(ctx, &mode) != WH_ERROR_OK) || (mode != 0)) {
+            WH_ERROR_PRINT("SetDmaMode(1) returned %d (mode %d), expected "
+                           "WH_ERROR_BADARGS (mode 0)\n",
+                           rc, mode);
+            ret = WH_ERROR_ABORTED;
+        }
+    }
+    if (ret == 0) {
+        ret = wh_Client_SetDmaMode(ctx, 0);
+    }
+
+    /* A config preferring DMA is refused before anything is initialized */
+    if (ret == 0) {
+        whClientContext   other[1];
+        whClientConfig    otherCfg = *config;
+        whClientDmaConfig dmaCfg;
+
+        memset(&dmaCfg, 0, sizeof(dmaCfg));
+        if (config->dmaConfig != NULL) {
+            dmaCfg = *config->dmaConfig;
+        }
+        dmaCfg.preferDma   = 1;
+        otherCfg.dmaConfig = &dmaCfg;
+
+        rc = wh_Client_Init(other, &otherCfg);
+        if (rc != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("wh_Client_Init with preferDma returned %d, "
+                           "expected WH_ERROR_BADARGS\n",
+                           rc);
+            if (rc == WH_ERROR_OK) {
+                (void)wh_Client_Cleanup(other);
+            }
+            ret = WH_ERROR_ABORTED;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("DMA NONCOHERENT REFUSAL SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
 
 #ifndef NO_RSA
 static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -2222,7 +2327,7 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
     uint8_t sig[ECC_MAX_SIG_SIZE]  = {0};
     word32  sigLen            = sizeof(sig);
     int     verified          = 0;
-    byte    derBuf[ECC_BUFSIZE];
+    WH_DMA_ALIGNED byte derBuf[WH_DMA_PAD_SIZE(ECC_BUFSIZE)];
     uint16_t derSz            = sizeof(derBuf);
     word32   i;
 
@@ -4388,7 +4493,7 @@ static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
     whKeyId     signKeyId   = WH_KEYID_ERASED;
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 DMA message";
-    byte        sig[ED25519_SIG_SIZE];
+    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(ED25519_SIG_SIZE)];
     uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 DMA Key";
@@ -8506,7 +8611,8 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
     uint16_t outLen;
     uint16_t keyId;
     uint8_t key[WH_TEST_KEYCACHE_KEYSIZE];
-    uint8_t keyOut[WH_TEST_KEYCACHE_KEYSIZE] = {0};
+    WH_DMA_ALIGNED uint8_t keyOut[WH_DMA_PAD_SIZE(WH_TEST_KEYCACHE_KEYSIZE)] = {
+        0};
     uint8_t labelIn[WH_NVM_LABEL_LEN] = "KeyCache Test Label";
     uint8_t labelOut[WH_NVM_LABEL_LEN] = {0};
 
@@ -8889,7 +8995,7 @@ static int whTest_KeyCache(whClientContext* ctx, int devId, WC_RNG* rng)
         uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big DMA Key Label";
 
         /* Buffer for exported key and metadata */
-        uint8_t  exportedKey[bigKeySize];
+        WH_DMA_ALIGNED uint8_t exportedKey[WH_DMA_PAD_SIZE(bigKeySize)];
         uint8_t  exportedLabel[WH_NVM_LABEL_LEN];
         uint16_t exportedKeySize;
 
@@ -9133,7 +9239,8 @@ static int whTest_NonExportableKeystore(whClientContext* ctx, int devId,
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55,
         0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
         0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00};
-    uint8_t  exportedKey[WH_TEST_KEYSTORE_TEST_SZ] = {0};
+    WH_DMA_ALIGNED uint8_t
+             exportedKey[WH_DMA_PAD_SIZE(WH_TEST_KEYSTORE_TEST_SZ)] = {0};
     uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
     uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
@@ -11131,8 +11238,9 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
     uint8_t key[WH_TEST_AES_ASYNC_DMA_KEYSZ];
     uint8_t iv[AES_BLOCK_SIZE];
     uint8_t plainIn[WH_TEST_AES_ASYNC_DMA_BUFSZ];
-    uint8_t cipher[WH_TEST_AES_ASYNC_DMA_BUFSZ];
-    uint8_t plainOut[WH_TEST_AES_ASYNC_DMA_BUFSZ];
+    WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(WH_TEST_AES_ASYNC_DMA_BUFSZ)];
+    WH_DMA_ALIGNED uint8_t
+        plainOut[WH_DMA_PAD_SIZE(WH_TEST_AES_ASYNC_DMA_BUFSZ)];
 
     memset(plainIn, 0xBB, sizeof(plainIn));
     memset(cipher, 0, sizeof(cipher));
@@ -11165,7 +11273,7 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
         }
         if (ret == 0) {
             ret = wh_Client_AesCbcDmaRequest(ctx, aes, 0, cipher,
-                                             sizeof(cipher), plainOut);
+                                             sizeof(plainIn), plainOut);
         }
         if (ret == 0) {
             do {
@@ -11206,7 +11314,7 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
         }
         if (ret == 0) {
             ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, cipher,
-                                             sizeof(cipher), plainOut);
+                                             sizeof(plainIn), plainOut);
         }
         if (ret == 0) {
             do {
@@ -11269,7 +11377,7 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
         }
         if (ret == 0) {
             ret = wh_Client_AesEcbDmaRequest(ctx, aes, 0, cipher,
-                                             sizeof(cipher), plainOut);
+                                             sizeof(plainIn), plainOut);
         }
         if (ret == 0) {
             do {
@@ -11358,9 +11466,8 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
             if (ret == 0) {
                 memcpy(dec_tag, enc_tag, sizeof(dec_tag));
                 ret = wh_Client_AesGcmDmaRequest(
-                    ctx, aes, 0, cipher, sizeof(cipher), plainOut, iv,
-                    AES_BLOCK_SIZE, authin, aadSz[i], dec_tag,
-                    sizeof(dec_tag));
+                    ctx, aes, 0, cipher, sizeof(plainIn), plainOut, iv,
+                    AES_BLOCK_SIZE, authin, aadSz[i], dec_tag, sizeof(dec_tag));
             }
             if (ret == 0) {
                 do {
@@ -11395,7 +11502,7 @@ static int whTest_CryptoAesDmaAsyncKat(whClientContext* ctx, int devId)
 {
     int     ret = 0;
     Aes     aes[1];
-    uint8_t outBuf[64];
+    WH_DMA_ALIGNED uint8_t outBuf[WH_DMA_PAD_SIZE(64)];
 
 #ifdef HAVE_AES_CBC
     {
@@ -11794,8 +11901,8 @@ static int whTest_CryptoAesDmaAsyncKat(whClientContext* ctx, int devId)
             {gcm256Key, 32, gcm256Plain, sizeof(gcm256Plain),
              gcm256Aad, sizeof(gcm256Aad), gcm256Cipher, gcm256Tag},
         };
-        uint8_t cipherBuf[64];
-        uint8_t plainBuf[64];
+        WH_DMA_ALIGNED uint8_t cipherBuf[WH_DMA_PAD_SIZE(64)];
+        WH_DMA_ALIGNED uint8_t plainBuf[WH_DMA_PAD_SIZE(64)];
         uint8_t tagBuf[AES_BLOCK_SIZE];
         size_t  i;
         for (i = 0; i < sizeof(v) / sizeof(v[0]) && ret == 0; i++) {
@@ -13819,7 +13926,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Test signing and verification */
     if (ret == 0) {
         byte   msg[] = "Test message to sign";
-        byte   sig[MLDSA_MAX_SIG_SIZE];
+        WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(MLDSA_MAX_SIG_SIZE)];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
 
@@ -13882,7 +13989,7 @@ static int whTestCrypto_MlDsaDmaClient(whClientContext* ctx, int devId,
     /* Test signing and verification with a FIPS 204 context string */
     if (ret == 0) {
         byte   msg[] = "Context test message";
-        byte   sig[MLDSA_MAX_SIG_SIZE];
+        WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(MLDSA_MAX_SIG_SIZE)];
         word32 sigLen   = sizeof(sig);
         int    verified = 0;
         const byte ctx_str[] = "test-context";
@@ -13980,7 +14087,8 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
 
     /* Full DMA export must be denied */
     {
-        byte fullBuf[MLDSA_MAX_BOTH_KEY_DER_SIZE];
+        WH_DMA_ALIGNED byte
+                 fullBuf[WH_DMA_PAD_SIZE(MLDSA_MAX_BOTH_KEY_DER_SIZE)];
         uint16_t fullLen = sizeof(fullBuf);
         int denyRet = wh_Client_KeyExportDma(ctx, keyId, fullBuf, fullLen,
                                              NULL, 0, &denyLen);
@@ -14019,7 +14127,7 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
      * key. This cross-validates that the DMA path isn't producing
      * subtly different output. */
     if (ret == 0) {
-        byte     dmaDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
+        WH_DMA_ALIGNED byte dmaDer[WH_DMA_PAD_SIZE(MLDSA_MAX_PUB_KEY_DER_SIZE)];
         byte     nonDmaDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
         uint16_t dmaSz    = sizeof(dmaDer);
         uint16_t nonDmaSz = sizeof(nonDmaDer);
@@ -14050,10 +14158,12 @@ static int whTestCrypto_MlDsaExportPublicDma(whClientContext* ctx, int devId,
         }
     }
 
-    /* Negative: a too-small client buffer must yield WH_ERROR_NOSPACE. */
+    /* Negative: a too-small client buffer must yield WH_ERROR_NOSPACE. Pass its
+     * real size: sizeof(tinyBuf) is padded to the DMA alignment. */
     if (ret == 0) {
-        byte     tinyBuf[8];
-        uint16_t tinySz = sizeof(tinyBuf);
+        WH_DMA_ALIGNED byte tinyBuf[WH_DMA_PAD_SIZE(8)];
+
+        uint16_t tinySz = 8;
         int      negRet = wh_Client_KeyExportPublicDma(
             ctx, keyId, WH_KEY_ALGO_MLDSA, tinyBuf, tinySz, NULL, 0, &tinySz);
         if (negRet != WH_ERROR_NOSPACE) {
@@ -14085,7 +14195,7 @@ static int whTestCrypto_MlDsaCacheKeyAndExportPublicDma(whClientContext* ctx,
     wc_MlDsaKey genPub[1] = {0};
     wc_MlDsaKey refPub[1] = {0};
     byte        msg[]     = "ML-DSA DMA cache-export-public message";
-    byte        sig[MLDSA_MAX_SIG_SIZE];
+    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(MLDSA_MAX_SIG_SIZE)];
     word32      sigLen    = sizeof(sig);
     int         verified  = 0;
     byte        genDer[MLDSA_MAX_PUB_KEY_DER_SIZE];
@@ -15354,7 +15464,8 @@ static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
 
         /* Full DMA export must be denied. */
         {
-            byte     fullBuf[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+            WH_DMA_ALIGNED byte
+                     fullBuf[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_PRIVATE_KEY_SIZE)];
             uint16_t fullLen = sizeof(fullBuf);
             int denyRet = wh_Client_KeyExportDma(ctx, keyId, fullBuf, fullLen,
                                                  NULL, 0, &fullLen);
@@ -15433,7 +15544,8 @@ static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
         /* Byte-identity check: DMA and non-DMA paths must produce the
          * same public bytes for the same cached key. */
         if (ret == 0) {
-            byte     dmaBuf[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
+            WH_DMA_ALIGNED byte
+                     dmaBuf[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_PUBLIC_KEY_SIZE)];
             byte     nonDmaBuf[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE];
             uint16_t dmaSz    = sizeof(dmaBuf);
             uint16_t nonDmaSz = sizeof(nonDmaBuf);
@@ -15464,10 +15576,13 @@ static int whTestCrypto_MlKemExportPublicDma(whClientContext* ctx, int devId,
             }
         }
 
-        /* Negative: a too-small client buffer must yield WH_ERROR_NOSPACE. */
+        /* Negative: a too-small client buffer must yield WH_ERROR_NOSPACE.
+         * Pass its real size: sizeof(tinyBuf) is padded to the DMA alignment.
+         */
         if (ret == 0) {
-            byte     tinyBuf[8];
-            uint16_t tinySz = sizeof(tinyBuf);
+            WH_DMA_ALIGNED byte tinyBuf[WH_DMA_PAD_SIZE(8)];
+
+            uint16_t tinySz = 8;
             int      negRet = wh_Client_KeyExportPublicDma(
                 ctx, keyId, WH_KEY_ALGO_MLKEM, tinyBuf, tinySz, NULL, 0,
                 &tinySz);
@@ -15633,7 +15748,7 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
     int      levels[3];
     int      levelCnt = 0;
     int      i;
-    byte     ct[WC_ML_KEM_MAX_CIPHER_TEXT_SIZE];
+    WH_DMA_ALIGNED byte ct[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_CIPHER_TEXT_SIZE)];
     byte     ssEnc[WC_ML_KEM_SS_SZ];
     byte     ssDec[WC_ML_KEM_SS_SZ];
     byte     ssWrong[WC_ML_KEM_SS_SZ];
@@ -16024,7 +16139,77 @@ static int whTestCrypto_MlKemDmaClient(whClientContext* ctx, int devId,
 #define WH_TEST_LMS_WINTERNITZ (8)
 /* Generous buffer that fits L1_H5_W8 (~1328) and any W<8 variant of the same
  * height (W=1 ~8688). Keeps off the stack so ASAN builds stay happy. */
-static byte whTest_LmsSigBuf[8800];
+static WH_DMA_ALIGNED byte whTest_LmsSigBuf[WH_DMA_PAD_SIZE(8800)];
+
+/* Key operations under test. wolfCrypt cannot use DMA with non-coherent
+ * caches, so there the wh_Client_Lms*Dma APIs are driven directly instead of
+ * going through the cryptoCb (devId is then INVALID_DEVID). */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+static int _whTestLms_MakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
+{
+    int ret;
+    (void)rng;
+    ret = wh_Client_LmsMakeExportKeyDma(ctx, key);
+    if (ret == 0) {
+        /* wh_Client_LmsMakeExportKeyDma only fills in the public key and
+         * keyId, it does not mark the key usable (this predates
+         * WOLFHSM_CFG_DMA_NONCOHERENT). Set what wc_LmsKey_MakeKey
+         * sets after a cryptoCb keygen. */
+        key->state  = WC_LMS_STATE_OK;
+        key->pubSet = 1;
+    }
+    return ret;
+}
+
+static int _whTestLms_SigsLeft(whClientContext* ctx, LmsKey* key)
+{
+    return (wh_Client_LmsSigsLeftDma(ctx, key) > 0) ? 1 : 0;
+}
+
+static int _whTestLms_Sign(whClientContext* ctx, LmsKey* key, byte* sig,
+                           word32* sigLen, const byte* msg, int msgSz)
+{
+    return wh_Client_LmsSignDma(ctx, msg, (word32)msgSz, sig, sigLen, key);
+}
+
+static int _whTestLms_Verify(whClientContext* ctx, LmsKey* key, const byte* sig,
+                             word32 sigLen, const byte* msg, int msgSz)
+{
+    int res = 0;
+    int ret =
+        wh_Client_LmsVerifyDma(ctx, sig, sigLen, msg, (word32)msgSz, &res, key);
+    if ((ret == 0) && (res != 1)) {
+        ret = SIG_VERIFY_E;
+    }
+    return ret;
+}
+#else
+static int _whTestLms_MakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
+{
+    (void)ctx;
+    return wc_LmsKey_MakeKey(key, rng);
+}
+
+static int _whTestLms_SigsLeft(whClientContext* ctx, LmsKey* key)
+{
+    (void)ctx;
+    return wc_LmsKey_SigsLeft(key);
+}
+
+static int _whTestLms_Sign(whClientContext* ctx, LmsKey* key, byte* sig,
+                           word32* sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_LmsKey_Sign(key, sig, sigLen, msg, msgSz);
+}
+
+static int _whTestLms_Verify(whClientContext* ctx, LmsKey* key, const byte* sig,
+                             word32 sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_LmsKey_Verify(key, sig, sigLen, msg, msgSz);
+}
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
 
 static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
@@ -16073,7 +16258,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* MakeKey via cryptocb: the server commits the key to NVM before
      * returning the public key over DMA. */
     if (ret == 0) {
-        ret = wc_LmsKey_MakeKey(key, rng);
+        ret = _whTestLms_MakeKey(ctx, key, rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS MakeKey ret=%d\n", ret);
         }
@@ -16082,7 +16267,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* wc_LmsKey_SigsLeft returns a boolean: nonzero = signatures available,
      * 0 = exhausted. Fresh key should report nonzero. */
     if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
+        if (_whTestLms_SigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("LMS reported exhausted on fresh key\n");
             ret = -1;
         }
@@ -16205,7 +16390,8 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* Sign via cryptocb. */
     if (ret == 0) {
         sigLen = sigCap;
-        ret = wc_LmsKey_Sign(key, whTest_LmsSigBuf, &sigLen, msg, (int)msgSz);
+        ret    = _whTestLms_Sign(ctx, key, whTest_LmsSigBuf, &sigLen, msg,
+                                 (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS Sign ret=%d\n", ret);
         }
@@ -16218,7 +16404,8 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
 
     /* Verify the signature via cryptocb. */
     if (ret == 0) {
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTestLms_Verify(ctx, key, whTest_LmsSigBuf, sigLen, msg,
+                                (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS Verify ret=%d\n", ret);
         }
@@ -16227,7 +16414,8 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* Tampered signature must fail to verify. */
     if (ret == 0) {
         whTest_LmsSigBuf[0] ^= 0xFF;
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTestLms_Verify(ctx, key, whTest_LmsSigBuf, sigLen, msg,
+                                (int)msgSz);
         whTest_LmsSigBuf[0] ^= 0xFF;
         if (ret == 0) {
             WH_ERROR_PRINT("LMS Verify unexpectedly accepted tampered sig\n");
@@ -16241,8 +16429,8 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* Wrong message must also fail to verify. */
     if (ret == 0) {
         const byte wrongMsg[] = "wolfHSM LMS cryptocb wrong";
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, wrongMsg,
-                               (int)(sizeof(wrongMsg) - 1));
+        ret = _whTestLms_Verify(ctx, key, whTest_LmsSigBuf, sigLen, wrongMsg,
+                                (int)(sizeof(wrongMsg) - 1));
         if (ret == 0) {
             WH_ERROR_PRINT("LMS Verify unexpectedly accepted wrong message\n");
             ret = -1;
@@ -16255,7 +16443,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
     /* H=5 means 32 sigs total; after one sign, the key is still not
      * exhausted. */
     if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
+        if (_whTestLms_SigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("LMS reported exhausted after one sign\n");
             ret = -1;
         }
@@ -16441,7 +16629,79 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
 /* "XMSS-SHA2_10_256" is the smallest standardized XMSS parameter set
  * (height 10, 1024 signatures). pubLen=68, sigLen=2500. */
 #define WH_TEST_XMSS_PARAM_STR "XMSS-SHA2_10_256"
-static byte whTest_XmssSigBuf[2500];
+static WH_DMA_ALIGNED byte whTest_XmssSigBuf[WH_DMA_PAD_SIZE(2500)];
+
+/* Key operations under test. wolfCrypt cannot use DMA with non-coherent
+ * caches, so there the wh_Client_Xmss*Dma APIs are driven directly instead of
+ * going through the cryptoCb (devId is then INVALID_DEVID). */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+static int _whTestXmss_MakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
+{
+    int ret;
+    (void)rng;
+    ret = wh_Client_XmssMakeExportKeyDma(ctx, key);
+    if (ret == 0) {
+        /* wh_Client_XmssMakeExportKeyDma only fills in the public key and
+         * keyId, it does not mark the key usable (this predates
+         * WOLFHSM_CFG_DMA_NONCOHERENT). Set what wc_XmssKey_MakeKey
+         * sets after a cryptoCb keygen. */
+        key->state  = WC_XMSS_STATE_OK;
+        key->pubSet = 1;
+    }
+    return ret;
+}
+
+static int _whTestXmss_SigsLeft(whClientContext* ctx, XmssKey* key)
+{
+    return (wh_Client_XmssSigsLeftDma(ctx, key) > 0) ? 1 : 0;
+}
+
+static int _whTestXmss_Sign(whClientContext* ctx, XmssKey* key, byte* sig,
+                            word32* sigLen, const byte* msg, int msgSz)
+{
+    return wh_Client_XmssSignDma(ctx, msg, (word32)msgSz, sig, sigLen, key);
+}
+
+static int _whTestXmss_Verify(whClientContext* ctx, XmssKey* key,
+                              const byte* sig, word32 sigLen, const byte* msg,
+                              int msgSz)
+{
+    int res = 0;
+    int ret = wh_Client_XmssVerifyDma(ctx, sig, sigLen, msg, (word32)msgSz,
+                                      &res, key);
+    if ((ret == 0) && (res != 1)) {
+        ret = SIG_VERIFY_E;
+    }
+    return ret;
+}
+#else
+static int _whTestXmss_MakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
+{
+    (void)ctx;
+    return wc_XmssKey_MakeKey(key, rng);
+}
+
+static int _whTestXmss_SigsLeft(whClientContext* ctx, XmssKey* key)
+{
+    (void)ctx;
+    return wc_XmssKey_SigsLeft(key);
+}
+
+static int _whTestXmss_Sign(whClientContext* ctx, XmssKey* key, byte* sig,
+                            word32* sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_XmssKey_Sign(key, sig, sigLen, msg, msgSz);
+}
+
+static int _whTestXmss_Verify(whClientContext* ctx, XmssKey* key,
+                              const byte* sig, word32 sigLen, const byte* msg,
+                              int msgSz)
+{
+    (void)ctx;
+    return wc_XmssKey_Verify(key, sig, sigLen, msg, msgSz);
+}
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
 
 static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
                                      WC_RNG* rng)
@@ -16489,7 +16749,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
     /* MakeKey via cryptocb: the server commits the key to NVM before
      * returning the public key over DMA. */
     if (ret == 0) {
-        ret = wc_XmssKey_MakeKey(key, rng);
+        ret = _whTestXmss_MakeKey(ctx, key, rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS MakeKey ret=%d\n", ret);
         }
@@ -16498,7 +16758,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
     /* wc_XmssKey_SigsLeft returns a boolean: nonzero = signatures available,
      * 0 = exhausted. */
     if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
+        if (_whTestXmss_SigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted on fresh key\n");
             ret = -1;
         }
@@ -16616,7 +16876,8 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         sigLen = sigCap;
-        ret = wc_XmssKey_Sign(key, whTest_XmssSigBuf, &sigLen, msg, (int)msgSz);
+        ret    = _whTestXmss_Sign(ctx, key, whTest_XmssSigBuf, &sigLen, msg,
+                                  (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS Sign ret=%d\n", ret);
         }
@@ -16628,7 +16889,8 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
     }
 
     if (ret == 0) {
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTestXmss_Verify(ctx, key, whTest_XmssSigBuf, sigLen, msg,
+                                 (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS Verify ret=%d\n", ret);
         }
@@ -16636,7 +16898,8 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         whTest_XmssSigBuf[0] ^= 0xFF;
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTestXmss_Verify(ctx, key, whTest_XmssSigBuf, sigLen, msg,
+                                 (int)msgSz);
         whTest_XmssSigBuf[0] ^= 0xFF;
         if (ret == 0) {
             WH_ERROR_PRINT("XMSS Verify unexpectedly accepted tampered sig\n");
@@ -16649,8 +16912,8 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         const byte wrongMsg[] = "wolfHSM XMSS cryptocb wrong";
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, wrongMsg,
-                                (int)(sizeof(wrongMsg) - 1));
+        ret = _whTestXmss_Verify(ctx, key, whTest_XmssSigBuf, sigLen, wrongMsg,
+                                 (int)(sizeof(wrongMsg) - 1));
         if (ret == 0) {
             WH_ERROR_PRINT("XMSS Verify unexpectedly accepted wrong message\n");
             ret = -1;
@@ -16663,7 +16926,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
     /* H=10 means 1024 sigs total; after one sign, the key is still not
      * exhausted. */
     if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
+        if (_whTestXmss_SigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
             ret = -1;
         }
@@ -17235,7 +17498,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
-        uint8_t ctrCipher[16]      = {0};
+        WH_DMA_ALIGNED uint8_t ctrCipher[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
@@ -17275,7 +17538,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
-        uint8_t ctrOut[16]         = {0};
+        WH_DMA_ALIGNED uint8_t ctrOut[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
@@ -17316,7 +17579,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     WH_TEST_PRINT("  Testing AES ECB DMA encrypt without ENCRYPT flag...\n");
     {
         Aes     aes[1];
-        uint8_t ecbCipher[16] = {0};
+        WH_DMA_ALIGNED uint8_t ecbCipher[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
@@ -17352,7 +17615,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     WH_TEST_PRINT("  Testing AES ECB DMA decrypt without DECRYPT flag...\n");
     {
         Aes     aes[1];
-        uint8_t ecbOut[16] = {0};
+        WH_DMA_ALIGNED uint8_t ecbOut[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
@@ -17391,7 +17654,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
-        uint8_t cbcCipher[16]      = {0};
+        WH_DMA_ALIGNED uint8_t cbcCipher[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE,
@@ -17431,7 +17694,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
-        uint8_t cbcOut[16]         = {0};
+        WH_DMA_ALIGNED uint8_t cbcOut[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
         ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
@@ -17473,7 +17736,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t gcmIv[12]     = {0};
-        uint8_t gcmCipher[16] = {0};
+        WH_DMA_ALIGNED uint8_t gcmCipher[WH_DMA_PAD_SIZE(16)] = {0};
         uint8_t gcmTag[16]    = {0};
 
         keyId = WH_KEYID_ERASED;
@@ -17514,7 +17777,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
     {
         Aes     aes[1];
         uint8_t gcmIv[12]  = {0};
-        uint8_t gcmOut[16] = {0};
+        WH_DMA_ALIGNED uint8_t gcmOut[WH_DMA_PAD_SIZE(16)] = {0};
         uint8_t gcmTag[16] = {0};
 
         keyId = WH_KEYID_ERASED;
@@ -18326,6 +18589,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTest_CryptoRngDmaAsync(client);
     }
 #endif /* WOLFHSM_CFG_DMA */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+    if (ret == WH_ERROR_OK) {
+        ret = whTest_CryptoDmaNoncoherentRefusal(client, config);
+    }
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
 
     /* The remaining once-run tests below historically used the non-DMA devId;
      * select the std (non-DMA) dispatch mode for them. Reinitialize the default
@@ -18887,14 +19155,22 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
     if (ret == 0) {
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+        ret = whTestCrypto_LmsCryptoCb(client, INVALID_DEVID, rng);
+#else
         ret = whTestCrypto_LmsCryptoCb(client, WH_DEV_ID_DMA, rng);
+#endif
     }
 #endif
 
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
     if (ret == 0) {
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+        ret = whTestCrypto_XmssCryptoCb(client, INVALID_DEVID, rng);
+#else
         ret = whTestCrypto_XmssCryptoCb(client, WH_DEV_ID_DMA, rng);
+#endif
     }
 #endif
 
@@ -19075,8 +19351,11 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
      * missing translation is rejected (see test/wh_test_dma.c); the
      * use-after-free class is covered by the single-thread harness. */
     whClientDmaConfig clientDmaConfig = {
-        .cb        = whTestDma_BounceClientCb,
+        .cb = whTestDma_BounceClientCb,
+#ifndef WOLFHSM_CFG_DMA_NONCOHERENT
+        /* Refused with non-coherent DMA (no DMA through wolfCrypt) */
         .preferDma = 1,
+#endif
     };
 #endif
     whClientConfig c_conf[1] = {{

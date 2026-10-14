@@ -2297,7 +2297,7 @@ static int _whTest_CryptoEccExportPublicKeyDma(whClientContext* ctx)
     uint8_t  sig[ECC_MAX_SIG_SIZE];
     word32   sigLen = sizeof(sig);
     int      verify = 0;
-    uint8_t  derBuf[256];
+    WH_DMA_ALIGNED uint8_t derBuf[WH_DMA_PAD_SIZE(256)];
     uint16_t derSz  = sizeof(derBuf);
 
     ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));

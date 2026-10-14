@@ -48,7 +48,9 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-#if defined(WOLFHSM_CFG_DMA) && \
+/* Runs through wolfCrypt on WH_DEV_ID_DMA, which non-coherent DMA builds
+ * refuse, so the test is skipped there. */
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT) && \
     defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
 
 /* "XMSS-SHA2_10_256" is the smallest standardized XMSS parameter set
@@ -479,6 +481,6 @@ int whTest_Crypto_Xmss(whClientContext* ctx)
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS && !WOLFSSL_XMSS_VERIFY_ONLY */
+#endif /* DMA && !DMA_NONCOHERENT && XMSS && !XMSS_VERIFY_ONLY */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

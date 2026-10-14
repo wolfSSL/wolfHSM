@@ -2514,14 +2514,14 @@ static int _benchMlDsaSign(whClientContext* client, whBenchOpContext* ctx,
     }
 
     /* Import key to the HSM */
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     if (useDma) {
         ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
                                           WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
     }
     else
-#endif /* !(WOLFHSM_CFG_DMA) */
+#endif /* !(WH_BENCH_CRYPTOCB_DMA) */
     {
         ret = wh_Client_MlDsaImportKey(client, &key, &keyId,
                                        WH_NVM_FLAGS_USAGE_ANY, strlen(keyLabel),
@@ -2700,14 +2700,14 @@ static int _benchMlDsaVerify(whClientContext* client, whBenchOpContext* ctx,
     }
 
 /* Import key to the HSM */
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     if (useDma) {
         ret = wh_Client_MlDsaImportKeyDma(client, &key, &keyId,
                                           WH_NVM_FLAGS_USAGE_ANY,
                                           strlen(keyLabel), (uint8_t*)keyLabel);
     }
     else
-#endif /* !(WOLFHSM_CFG_DMA) */
+#endif /* !(WH_BENCH_CRYPTOCB_DMA) */
     {
         ret = wh_Client_MlDsaImportKey(client, &key, &keyId,
                                        WH_NVM_FLAGS_USAGE_ANY, strlen(keyLabel),
@@ -2887,7 +2887,7 @@ int wh_Bench_Mod_MlDsa44Sign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
     (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_44, 1);
 #else
@@ -2918,7 +2918,7 @@ int wh_Bench_Mod_MlDsa44Verify(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
     (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_44, 1);
 #else
@@ -2949,7 +2949,7 @@ int wh_Bench_Mod_MlDsa44KeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa44KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
     (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_44, 1);
 #else
@@ -2983,7 +2983,7 @@ int wh_Bench_Mod_MlDsa65Sign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa65SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
     (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_65, 1);
 #else
@@ -3014,7 +3014,7 @@ int wh_Bench_Mod_MlDsa65Verify(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa65VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
     (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_65, 1);
 #else
@@ -3045,7 +3045,7 @@ int wh_Bench_Mod_MlDsa65KeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa65KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
     (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_65, 1);
 #else
@@ -3079,7 +3079,7 @@ int wh_Bench_Mod_MlDsa87Sign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa87SignDma(whClientContext* client, whBenchOpContext* ctx,
                                 int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_SIGN)
     (void)params;
     return _benchMlDsaSign(client, ctx, id, WC_ML_DSA_87, 1);
 #else
@@ -3110,7 +3110,7 @@ int wh_Bench_Mod_MlDsa87Verify(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa87VerifyDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_VERIFY)
     (void)params;
     return _benchMlDsaVerify(client, ctx, id, WC_ML_DSA_87, 1);
 #else
@@ -3141,7 +3141,7 @@ int wh_Bench_Mod_MlDsa87KeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_MlDsa87KeyGenDma(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && !defined(WOLFSSL_MLDSA_NO_MAKE_KEY)
     (void)params;
     return _benchMlDsaKeyGen(client, ctx, id, WC_ML_DSA_87, 1);
 #else

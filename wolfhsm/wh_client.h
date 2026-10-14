@@ -29,7 +29,8 @@
  * the wolfCrypt init functions. Set the devId in whClientConfig.devId (0 picks
  * the default WH_DEV_ID) and read it back with WH_CLIENT_DEVID(c). With a
  * single client you can just pass the global WH_DEV_ID (or WH_DEV_ID_DMA for
- * DMA only). With more than one client, give each its own devId. See
+ * DMA only; with WOLFHSM_CFG_DMA_NONCOHERENT every WH_DEV_ID_DMA operation
+ * fails). With more than one client, give each its own devId. See
  * WH_CLIENT_DEVID and WH_DEV_ID below.
  *
  * In addition to the offload of cryptographic functions, the WolfHSM Client
@@ -132,7 +133,8 @@ typedef int (*whClientDmaClientMemCb)(struct whClientContext_t* client,
 typedef struct {
     whClientDmaClientMemCb    cb;
     const whDmaAddrAllowList* dmaAddrAllowList; /* allowed addresses */
-    /* nonzero to prefer the DMA path */
+    /* nonzero to prefer the DMA path; must be 0 with
+     * WOLFHSM_CFG_DMA_NONCOHERENT */
     uint32_t preferDma;
 } whClientDmaConfig;
 
@@ -520,12 +522,14 @@ int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
  * not contact the server.
  *
  * Always available: without WOLFHSM_CFG_DMA it does nothing and returns
- * success, so you need not guard the call with #ifdef.
+ * success, so you need not guard the call with #ifdef. With
+ * WOLFHSM_CFG_DMA_NONCOHERENT, turning DMA on is refused.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] useDma Nonzero to use DMA where supported, zero for the normal
  *                   path.
- * @return int 0 on success, or WH_ERROR_BADARGS on invalid input.
+ * @return int 0 on success, or WH_ERROR_BADARGS on invalid input or when
+ *         turning DMA on with WOLFHSM_CFG_DMA_NONCOHERENT.
  */
 int wh_Client_SetDmaMode(whClientContext* c, int useDma);
 

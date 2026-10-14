@@ -66,4 +66,14 @@
 
 #define WOLFHSM_CFG_ENABLE_TIMEOUT
 
+/* Route the single-line cache operations to a recorder, so
+ * misc/wh_test_cache.c can check which lines wh_Utils_CacheFlush and
+ * wh_Utils_CacheInvalidate visit. The recorder only stores addresses while
+ * that test runs, otherwise these are no-ops like the defaults. */
+#define WOLFHSM_CFG_TEST_CACHE_RECORD
+#include <stdint.h>
+void whTest_CacheRecord(int invalidate, uintptr_t addr);
+#define XCACHEFLUSH(_p) whTest_CacheRecord(0, (uintptr_t)(_p))
+#define XCACHEINVLD(_p) whTest_CacheRecord(1, (uintptr_t)(_p))
+
 #endif /* WOLFHSM_CFG_H_ */

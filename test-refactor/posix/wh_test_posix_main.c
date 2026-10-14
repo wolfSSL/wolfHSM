@@ -92,6 +92,9 @@ int whTest_LogPosixFile(void* ctx);
 int whTest_LogPosixFileConcurrent(void* ctx);
 int whTest_LogClientServerMemTransport(void* ctx);
 
+/* POSIX shared memory DMA callback: client buffers used in place */
+int whTest_PosixShmDmaInPlace(void* ctx);
+
 /*
  * Port-owned contexts. The thread functions fill these in and
  * hand them to the group functions, paralleling the firmware
@@ -339,6 +342,11 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_LogClientServerMemTransport",
             whTest_LogClientServerMemTransport, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_PosixShmDmaInPlace",
+                                whTest_PosixShmDmaInPlace, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

@@ -455,7 +455,7 @@ static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
     int           ret   = 0;
     int           tmp;
     Aes           aes[1];
-    uint8_t       cipher[AES_BLOCK_SIZE]  = {0};
+    WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)] = {0};
     const uint8_t key[]                   = {0x2b, 0x7e, 0x15, 0x16,
                                               0x28, 0xae, 0xd2, 0xa6,
                                               0xab, 0xf7, 0x15, 0x88,
@@ -782,7 +782,9 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
     }
 #endif /* HAVE_AESGCM */
 
-#ifdef WOLFHSM_CFG_DMA
+/* These go through wolfCrypt on WH_DEV_ID_DMA, which non-coherent DMA builds
+ * refuse */
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
 #ifdef WOLFSSL_AES_COUNTER
     /* AES-CTR DMA: encrypt without ENCRYPT flag */
     {
@@ -1092,7 +1094,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
         goto done;
     }
 #endif /* HAVE_AESGCM */
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
 
 done:
     wc_FreeRng(rng);

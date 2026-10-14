@@ -30,7 +30,7 @@
  * (see the vectors below) instead of generating them. The verify path is
  * therefore guarded only by WOLFSSL_HAVE_LMS, while keygen/sign additionally
  * require !WOLFSSL_LMS_VERIFY_ONLY. */
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_LMS)
 
 #include <string.h>
 #include "wolfssl/wolfcrypt/random.h"
@@ -563,13 +563,13 @@ exit:
 
 #endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_LMS */
+#endif /* WH_BENCH_CRYPTOCB_DMA && WOLFSSL_HAVE_LMS */
 
 /* Public benchmark module functions for LMS */
 int wh_Bench_Mod_LmsKeyGen(whClientContext* client, whBenchOpContext* ctx,
                            int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS) && \
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_LMS) && \
     !defined(WOLFSSL_LMS_VERIFY_ONLY)
     (void)params;
     return _benchLmsKeyGen(client, ctx, id);
@@ -585,7 +585,7 @@ int wh_Bench_Mod_LmsKeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_LmsSign(whClientContext* client, whBenchOpContext* ctx, int id,
                          void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS) && \
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_LMS) && \
     !defined(WOLFSSL_LMS_VERIFY_ONLY)
     (void)params;
     return _benchLmsSign(client, ctx, id);
@@ -601,7 +601,7 @@ int wh_Bench_Mod_LmsSign(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_LmsVerify(whClientContext* client, whBenchOpContext* ctx,
                            int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_LMS)
     (void)params;
     return _benchLmsVerify(client, ctx, id);
 #else

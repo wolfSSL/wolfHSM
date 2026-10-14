@@ -166,6 +166,28 @@
  *  AEAD request carries inside the message instead of over DMA.
  *      Default: 128
  *
+ *  WOLFHSM_CFG_DMA_NONCOHERENT - Define when client memory the server writes
+ *  over DMA is cached and not kept coherent by the hardware. Output buffers
+ *  of the wh_Client_*Dma APIs must then start on a WOLFHSM_CFG_DMA_ALIGN
+ *  boundary and be padded to a multiple of it (WH_DMA_ALIGNED,
+ *  WH_DMA_PAD_SIZE()). wolfCrypt cannot guarantee that for the buffers it
+ *  passes, so every operation on WH_DEV_ID_DMA fails with WC_HW_E and
+ *  preferDma cannot be enabled. Requires WOLFHSM_CFG_DMA.
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_DMA_ALIGN - Alignment and padding, in bytes, of client buffers
+ *  the server writes over DMA. A power of two and a multiple of XCACHELINE.
+ *  Only used with WOLFHSM_CFG_DMA_NONCOHERENT.
+ *      Default: XCACHELINE
+ *
+ *  WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK - Test builds only. Abort when a client
+ *  buffer the server writes over DMA does not start on a
+ *  WOLFHSM_CFG_DMA_ALIGN boundary or, in ASAN builds, is not padded to a
+ *  multiple of it. Checked in wh_Client_DmaProcessClientAddress, so it covers
+ *  wolfHSM's own buffers and those passed to the wh_Client_*Dma APIs.
+ *  Requires WOLFHSM_CFG_DMA_NONCOHERENT.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
  *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the
  *  non-DMA wire request fits within WOLFHSM_CFG_COMM_DATA_LEN alongside the
@@ -737,6 +759,15 @@
 
 /* DMA Configuration */
 
+#if defined(WOLFHSM_CFG_DMA_NONCOHERENT) && !defined(WOLFHSM_CFG_DMA)
+#error "WOLFHSM_CFG_DMA_NONCOHERENT requires WOLFHSM_CFG_DMA"
+#endif
+
+#if defined(WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK) && \
+    !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+#error "WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK requires WOLFHSM_CFG_DMA_NONCOHERENT"
+#endif
+
 #ifdef WOLFHSM_CFG_DMA
 
 /* Attempt to discover pointer size from build system/architecture */
@@ -797,5 +828,56 @@
 #endif
 
 #endif /* WOLFHSM_CFG_DMA */
+
+/* Alignment and padding of client buffers the server writes into over DMA.
+ * Only needed with non-coherent DMA, no-ops otherwise. */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+
+#ifndef WOLFHSM_CFG_DMA_ALIGN
+#define WOLFHSM_CFG_DMA_ALIGN XCACHELINE
+#endif
+
+#if (WOLFHSM_CFG_DMA_ALIGN <= 0) || \
+    ((WOLFHSM_CFG_DMA_ALIGN & (WOLFHSM_CFG_DMA_ALIGN - 1)) != 0)
+#error "WOLFHSM_CFG_DMA_ALIGN must be a power of two"
+#endif
+
+#if (WOLFHSM_CFG_DMA_ALIGN % XCACHELINE) != 0
+#error "WOLFHSM_CFG_DMA_ALIGN must be a multiple of XCACHELINE"
+#endif
+
+/* Round a buffer size up to a multiple of WOLFHSM_CFG_DMA_ALIGN */
+#define WH_DMA_PAD_SIZE(_n)                                   \
+    ((((size_t)(_n)) + ((size_t)WOLFHSM_CFG_DMA_ALIGN - 1)) & \
+     ~((size_t)WOLFHSM_CFG_DMA_ALIGN - 1))
+
+/* Nonzero if the address is aligned to WOLFHSM_CFG_DMA_ALIGN */
+#define WH_DMA_IS_ALIGNED(_p) \
+    ((((uintptr_t)(_p)) & ((uintptr_t)WOLFHSM_CFG_DMA_ALIGN - 1)) == 0)
+
+/* Compiler-specific attribute aligning a buffer to WOLFHSM_CFG_DMA_ALIGN.
+ * wolfHSM's own DMA buffers rely on it, so an unknown compiler must provide
+ * its own definition rather than silently get unaligned buffers. */
+#ifndef WH_DMA_ALIGNED
+#if defined(__GNUC__) || defined(__clang__) || defined(__IAR_SYSTEMS_ICC__)
+#define WH_DMA_ALIGNED __attribute__((aligned(WOLFHSM_CFG_DMA_ALIGN)))
+#elif defined(_MSC_VER)
+#define WH_DMA_ALIGNED __declspec(align(WOLFHSM_CFG_DMA_ALIGN))
+#elif defined(__CC_ARM)
+#define WH_DMA_ALIGNED __align(WOLFHSM_CFG_DMA_ALIGN)
+#else
+#error "Define WH_DMA_ALIGNED for this compiler (see WOLFHSM_CFG_DMA_ALIGN)"
+#endif
+#endif
+
+#else
+
+#define WH_DMA_PAD_SIZE(_n) (_n)
+#define WH_DMA_IS_ALIGNED(_p) ((void)(_p), 1)
+#ifndef WH_DMA_ALIGNED
+#define WH_DMA_ALIGNED
+#endif
+
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
 
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */
