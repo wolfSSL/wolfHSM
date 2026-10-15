@@ -553,6 +553,33 @@ static int _ExportEd25519PublicKey(whServerContext* server, whKeyId keyId,
 }
 #endif
 
+#ifdef HAVE_FALCON
+static int _ExportFalconPublicKey(whServerContext* server, whKeyId keyId,
+                                  uint8_t* out, uint16_t* outSz)
+{
+    int        ret;
+    falcon_key key[1];
+    int        pub_ret;
+    int        devId = (server->crypto != NULL) ? server->devId : INVALID_DEVID;
+
+    ret = wc_falcon_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = wh_Server_FalconKeyCacheExport(server, keyId, key);
+        if (ret == 0) {
+            pub_ret = wc_Falcon_PublicKeyToDer(key, out, (word32)*outSz, 1);
+            if (pub_ret > 0) {
+                *outSz = (uint16_t)pub_ret;
+            }
+            else {
+                ret = (pub_ret == 0) ? WH_ERROR_ABORTED : pub_ret;
+            }
+        }
+        wc_falcon_free(key);
+    }
+    return ret;
+}
+#endif /* HAVE_FALCON */
+
 #if defined(WOLFSSL_HAVE_MLDSA) && defined(WOLFSSL_MLDSA_PUBLIC_KEY)
 static int _ExportMldsaPublicKey(whServerContext* server, whKeyId keyId,
     uint8_t* out, uint16_t* outSz)
@@ -2970,6 +2997,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                        stage, &stageMax);
                             break;
                     #endif /* WOLFSSL_HAVE_XMSS */
+#ifdef HAVE_FALCON
+                        case WH_KEY_ALGO_FALCON:
+                            ret = _ExportFalconPublicKey(server, serverKeyId,
+                                                         stage, &stageMax);
+                            break;
+#endif /* HAVE_FALCON */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;
@@ -3185,6 +3218,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                                                        out, &max_der);
                             break;
                     #endif /* WOLFSSL_HAVE_XMSS */
+#ifdef HAVE_FALCON
+                        case WH_KEY_ALGO_FALCON:
+                            ret = _ExportFalconPublicKey(server, serverKeyId,
+                                                         out, &max_der);
+                            break;
+#endif /* HAVE_FALCON */
                         default:
                             ret = WH_ERROR_BADARGS;
                             break;

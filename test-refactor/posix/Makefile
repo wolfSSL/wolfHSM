@@ -135,6 +135,15 @@ ifeq ($(MLDSA_VERIFY_ONLY),1)
     DEF += -DWOLFSSL_MLDSA_VERIFY_ONLY
 endif
 
+ifeq ($(FALCON_VERIFY_ONLY),1)
+    DEF += -DWOLFSSL_FALCON_VERIFY_ONLY
+endif
+
+# Build Falcon as the only post-quantum algorithm
+ifeq ($(PQ_FALCON_ONLY),1)
+    DEF += -DWOLFHSM_CFG_TEST_FALCON_ONLY
+endif
+
 ifneq ($(KEYCACHE_BIG_BUFSIZE),)
     DEF += -DWOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE=$(KEYCACHE_BIG_BUFSIZE)
 endif
