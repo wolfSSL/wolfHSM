@@ -11598,7 +11598,7 @@ static int _SlhDsaMakeKey(whClientContext* ctx, int param, const byte* seed,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     if (dataPtr != NULL) {
@@ -11834,7 +11834,7 @@ int wh_Client_SlhDsaSign(whClientContext* ctx, const byte* in, word32 in_len,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict key material on error */
@@ -11978,7 +11978,7 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
         }
         else {
             /* Request length is too long */
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict key material on error */
@@ -12087,7 +12087,7 @@ int wh_Client_SlhDsaCheckPrivKey(whClientContext* ctx, SlhDsaKey* key,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     if (evict != 0) {
@@ -12345,7 +12345,7 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
         }
     }
     else {
-        ret = WH_ERROR_BADARGS;
+        ret = WH_ERROR_REQUEST_SIZE;
     }
     /* Report a deferred POST error */
     if ((ret >= 0) && (postErr != WH_ERROR_OK)) {
@@ -12578,7 +12578,7 @@ int wh_Client_SlhDsaSignDma(whClientContext* ctx, const byte* in, word32 in_len,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
     /* Evict key material on error */
@@ -12752,7 +12752,7 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
             }
         }
         else {
-            ret = WH_ERROR_BADARGS;
+            ret = WH_ERROR_REQUEST_SIZE;
         }
     }
 

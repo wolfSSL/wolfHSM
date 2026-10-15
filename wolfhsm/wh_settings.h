@@ -194,7 +194,8 @@
  *  With the default buffer no parameter set fits; at 8192 only 128s does, and
  *  a maximum-length context with a 64-byte pre-hash still overflows it. The
  *  server reports WH_ERROR_BUFFER_SIZE rather than truncating. Use the DMA
- *  sign and verify calls for the other parameter sets.
+ *  sign and verify calls for the other parameter sets. If the verify request
+    *  is too large for the comm buffer, it can fall back to software.
  *
  *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
  *  accepted in a single wh_Server_CertVerifyMultiRoot request. Bounded so the
