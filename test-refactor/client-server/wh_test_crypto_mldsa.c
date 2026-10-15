@@ -1262,6 +1262,101 @@ static int whTest_CryptoMlDsaWolfCryptImpl(whClientContext* ctx, int devId)
     return ret;
 }
 
+/* Without DMA a message the size of the comm buffer does not fit next to its
+ * signature. The client has the public key, so wolfCrypt verifies it in
+ * software. */
+static int _whTest_CryptoMlDsaVerifyLongMsg(int devId)
+{
+    static byte msg[WOLFHSM_CFG_COMM_DATA_LEN];
+    int         ret      = 0;
+    int         verified = 0;
+    MlDsaKey    signKey[1];
+    MlDsaKey    key[1];
+    WC_RNG      rng[1];
+    byte        sig[DILITHIUM_MAX_SIG_SIZE];
+    byte        pub[DILITHIUM_MAX_PUB_KEY_SIZE];
+    word32      sigSz = sizeof(sig);
+    word32      pubSz = sizeof(pub);
+    word32      i;
+
+    for (i = 0; i < sizeof(msg); i++) {
+        msg[i] = (byte)i;
+    }
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    /* Signing would not fit either, so sign in software */
+    ret = wc_MlDsaKey_Init(signKey, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+    ret = wc_MlDsaKey_SetParams(signKey, WC_ML_DSA_44);
+    if (ret == 0) {
+        ret = wc_MlDsaKey_MakeKey(signKey, rng);
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_SignCtx(signKey, NULL, 0, sig, &sigSz, msg,
+                                  (word32)sizeof(msg), rng);
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_ExportPubRaw(signKey, pub, &pubSz);
+    }
+    wc_MlDsaKey_Free(signKey);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to sign long ML-DSA message: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_MlDsaKey_Init(key, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize ML-DSA key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+    ret = wc_MlDsaKey_SetParams(key, WC_ML_DSA_44);
+    if (ret == 0) {
+        ret = wc_MlDsaKey_ImportPubRaw(key, pub, pubSz);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to import ML-DSA public key: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_MlDsaKey_VerifyCtx(key, sig, sigSz, NULL, 0, msg,
+                                    (word32)sizeof(msg), &verified);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to verify long ML-DSA message: %d\n", ret);
+        }
+        else if (!verified) {
+            WH_ERROR_PRINT("Long ML-DSA message did not verify\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+    if (ret == 0) {
+        msg[0] ^= 1;
+        ret = wc_MlDsaKey_VerifyCtx(key, sig, sigSz, NULL, 0, msg,
+                                    (word32)sizeof(msg), &verified);
+        if ((ret == 0) && verified) {
+            WH_ERROR_PRINT("ML-DSA verified a modified long message\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA VERIFY LONG MESSAGE DEVID=0x%X SUCCESS\n", devId);
+    }
+
+    wc_MlDsaKey_Free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+
 /* Exercises wh_Client_MlDsaSign with an undersized output buffer: must return
  * WH_ERROR_BUFFER_SIZE and report a required length greater than the buffer. */
 static int _whTest_CryptoMlDsaBufferTooSmall(whClientContext* ctx)
@@ -1354,6 +1449,8 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
         (void)wh_Client_SetDmaMode(ctx, i);
         WH_TEST_RETURN_ON_FAIL(
             whTest_CryptoMlDsaWolfCryptImpl(ctx, WH_CLIENT_DEVID(ctx)));
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_CryptoMlDsaVerifyLongMsg(WH_CLIENT_DEVID(ctx)));
     }
     (void)wh_Client_SetDmaMode(ctx, 0);
 

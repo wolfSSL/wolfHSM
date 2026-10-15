@@ -1405,6 +1405,32 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     return ret;
 }
 
+/* Returns 1 if pub key is present and can be used for verification without
+ * going to the server. Returns 0 when CB_ONLY is enabled. */
+static int _PqcSigCanVerifyLocally(int type, const void* key)
+{
+    int ret = 0;
+
+    switch (type) {
+#if defined(WOLFSSL_HAVE_MLDSA) && !defined(WOLF_CRYPTO_CB_ONLY_MLDSA)
+        case WC_PQC_SIG_TYPE_MLDSA:
+            ret = (((const wc_MlDsaKey*)key)->pubKeySet != 0);
+            break;
+#endif
+#if defined(WOLFSSL_HAVE_SLHDSA) && !defined(WOLF_CRYPTO_CB_ONLY_SLHDSA)
+        case WC_PQC_SIG_TYPE_SLHDSA:
+            ret =
+                ((((const SlhDsaKey*)key)->flags & WC_SLHDSA_FLAG_PUBLIC) != 0);
+            break;
+#endif
+        default:
+            break;
+    }
+
+    (void)key;
+    return ret;
+}
+
 static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
                             int useDma)
 {
@@ -1472,6 +1498,11 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
+    }
+
+    /* When request is too big, verify via software fallback, if possible. */
+    if ((ret == WH_ERROR_REQUEST_SIZE) && _PqcSigCanVerifyLocally(type, key)) {
+        ret = CRYPTOCB_UNAVAILABLE;
     }
 
     return ret;
