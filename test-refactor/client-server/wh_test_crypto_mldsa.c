@@ -112,6 +112,19 @@ static int _whTest_CryptoMlDsaClient(whClientContext* ctx)
                     WH_ERROR_PRINT("ML-DSA non-DMA verified bad signature\n");
                     ret = -1;
                 }
+                else {
+                    verified = 1;
+                    /* A failed request must still clear the result */
+                    vret = wh_Client_MlDsaVerify(ctx, sig, sigLen - 1, msg,
+                                                 sizeof(msg), &verified, key,
+                                                 NULL, 0, WC_HASH_TYPE_NONE);
+                    if ((vret == 0) || verified) {
+                        WH_ERROR_PRINT("ML-DSA non-DMA short signature: "
+                                       "ret %d, verified %d\n",
+                                       vret, verified);
+                        ret = -1;
+                    }
+                }
             }
         }
     }
@@ -463,7 +476,20 @@ static int _whTest_CryptoMlDsaDmaClient(whClientContext* ctx)
                     ret = -1;
                 }
                 else {
-                    ret = 0;
+                    verified = 1;
+                    /* A failed request must still clear the result */
+                    ret = wh_Client_MlDsaVerifyDma(ctx, sig, sigLen - 1, msg,
+                                                   sizeof(msg), &verified, key,
+                                                   NULL, 0, WC_HASH_TYPE_NONE);
+                    if ((ret == 0) || verified) {
+                        WH_ERROR_PRINT("ML-DSA DMA short signature: "
+                                       "ret %d, verified %d\n",
+                                       ret, verified);
+                        ret = -1;
+                    }
+                    else {
+                        ret = 0;
+                    }
                 }
             }
         }

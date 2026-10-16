@@ -10604,6 +10604,8 @@ int wh_Client_MlDsaVerify(whClientContext* ctx, const byte* sig, word32 sig_len,
         return WH_ERROR_BADARGS;
     }
 
+    *out_res = 0;
+
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
     /* Import key if necessary */
@@ -11191,6 +11193,8 @@ int wh_Client_MlDsaVerifyDma(whClientContext* ctx, const byte* sig,
         ((msg == NULL) && (msg_len > 0)) || (out_res == NULL)) {
         return WH_ERROR_BADARGS;
     }
+
+    *out_res = 0;
 
     key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
 
