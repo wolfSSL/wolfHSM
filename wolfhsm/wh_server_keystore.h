@@ -232,7 +232,7 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId);
  */
 int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
 /**
  * @brief Copy a keystore key into a hardware key
  *
@@ -250,7 +250,7 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
  */
 int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
                              whKeyId srcId);
-#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
 /**
  * @brief Handle key management requests from clients

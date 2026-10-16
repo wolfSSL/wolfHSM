@@ -21,25 +21,23 @@
  *
  * Server-side hardware keystore coverage that needs no client:
  *
- *   _whTest_HwKeystoreModule     - wh_HwKeystore_Init/GetKey/Cleanup argument
- *                                  validation and GetKey dispatch, using a
- *                                  local context (the shared server context
- *                                  is not touched)
- *   _whTest_HwKeystoreLifecycle  - optional backend Init/Cleanup callback
- *                                  dispatch and the Init-failure return path,
- *                                  using a backend that records its calls
+ *   _whTest_HwKeystoreModule     - wh_HwKeystore_Init/Register/CheckUse/
+ *                                  KeyRef/Cleanup: argument validation, the
+ *                                  records, and the owner, usage and trust
+ *                                  checks, using a local context (the shared
+ *                                  server context is not touched)
+ *   _whTest_HwKeystoreLifecycle  - optional backend Init/Cleanup hook dispatch
+ *                                  and the Init-failure return path, using a
+ *                                  backend that records its calls
  *   _whTest_KeystoreHwOnlyReject - every public keystore entry point must
- *                                  reject a hardware-only keyId with
- *                                  WH_ERROR_ACCESS before reaching the cache,
- *                                  NVM, or any hardware backend (none is
- *                                  bound to the shared server). FreshenKey is
- *                                  also the choke point through which all
- *                                  crypto handlers resolve keys, so this
- *                                  covers crypto key use of hardware-only ids
+ *                                  reject a hardware keyId with
+ *                                  WH_ERROR_ACCESS before reaching the cache
+ *                                  or NVM
  *
- * End-to-end keywrap use of hardware-only KEKs is covered by the misc group
- * test misc/wh_test_hwkeystore.c, which binds a hardware keystore to its own
- * private client/server pair.
+ * End-to-end use of hardware keys is covered by the misc group tests
+ * misc/wh_test_hwkeystore.c (key wrap KEKs) and
+ * misc/wh_test_hwkeystore_crypto.c (AES, CMAC and client loading), which bind
+ * a hardware keystore to their own client/server pairs.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -60,53 +58,15 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-/* Id and material of the only key served by the local test backend */
+/* ID and size of the hardware key the module tests register first */
 #define WH_TEST_HWKEK_ID 3
 #define WH_TEST_HWKEK_SIZE 32
 
-/* USER field value for constructing server-internal hardware-only keyIds */
+/* USER field value for constructing server-internal hardware keyIds */
 #define WH_TEST_HW_USER 1
 
-static const uint8_t _hwKekMaterial[WH_TEST_HWKEK_SIZE] = {
-    0x9a, 0x4e, 0x21, 0xc7, 0x5d, 0x10, 0xfb, 0x33, 0x6f, 0x82, 0xd4,
-    0x59, 0xee, 0x07, 0xb1, 0x2c, 0x48, 0x95, 0x3a, 0xc6, 0x71, 0x0d,
-    0xb8, 0xe5, 0x12, 0x6a, 0xf9, 0x84, 0x2f, 0xd0, 0x5b, 0xa7};
-
-static int _HwKeystoreGetKey(void* context, whKeyId keyId, uint8_t* out,
-                             uint16_t* inout_len)
-{
-    (void)context;
-
-    /* Only hardware-only keyIds should ever reach a hardware keystore */
-    if (WH_KEYID_TYPE(keyId) != WH_KEYTYPE_HW) {
-        return WH_ERROR_ACCESS;
-    }
-
-    /* Serve only the known test KEK id, refuse everything else */
-    if (WH_KEYID_ID(keyId) != WH_TEST_HWKEK_ID) {
-        return WH_ERROR_NOTFOUND;
-    }
-
-    if ((out == NULL) || (inout_len == NULL) ||
-        (*inout_len < sizeof(_hwKekMaterial))) {
-        return WH_ERROR_BUFFER_SIZE;
-    }
-
-    memcpy(out, _hwKekMaterial, sizeof(_hwKekMaterial));
-    *inout_len = sizeof(_hwKekMaterial);
-    return WH_ERROR_OK;
-}
-
-/* clang-format off */
-static const whHwKeystoreCb _hwKeystoreCb = {
-    .Init    = NULL,
-    .Cleanup = NULL,
-    .GetKey  = _HwKeystoreGetKey,
-};
-/* clang-format on */
-
-/* Backend context recording optional Init/Cleanup callback dispatch. initRet
- * and cleanupRet let a test force the Init/Cleanup failure paths; initConfig
+/* Backend context recording optional Init/Cleanup hook dispatch. initRet and
+ * cleanupRet let a test force the Init/Cleanup failure paths; initConfig
  * captures the config pointer forwarded to Init to prove it is plumbed
  * through */
 typedef struct {
@@ -142,108 +102,181 @@ static int _HwKeystoreCleanup(void* context)
 static const whHwKeystoreCb _hwKeystoreLifecycleCb = {
     .Init    = _HwKeystoreInit,
     .Cleanup = _HwKeystoreCleanup,
-    .GetKey  = _HwKeystoreGetKey,
 };
 /* clang-format on */
 
-/* wh_HwKeystore module front-end in isolation: argument validation, callback
- * dispatch, and lifecycle */
+/* wh_HwKeystore front end in isolation: argument validation, the records, and
+ * the checks the server makes on every use of a hardware key */
 static int _whTest_HwKeystoreModule(void)
 {
-    int                 ret;
-    whHwKeystoreContext hwks[1]    = {{0}};
-    whHwKeystoreConfig  conf[1]    = {{0}};
-    whHwKeystoreConfig  badConf[1] = {{0}};
-    whKeyId             servedId =
+    whHwKeystoreContext hwks[1] = {{0}};
+    whHwKeystoreConfig  conf[1] = {{0}};
+    /* A shared port key, and a port key for one client */
+    whKeyId shared =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_TEST_HWKEK_ID);
+    whKeyId owned =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, WH_TEST_HWKEK_ID + 1);
+    /* The same keys as the client and another client name them */
+    whKeyId sharedByUser =
         WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, WH_TEST_HWKEK_ID);
-    uint8_t  out[WH_TEST_HWKEK_SIZE] = {0};
-    uint16_t outLen                  = sizeof(out);
+    whKeyId ownedByOther =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER + 1, WH_TEST_HWKEK_ID + 1);
+    whKeyId out = WH_KEYID_ERASED;
+    uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+    int     i;
 
-    conf->cb = &_hwKeystoreCb;
-
-    /* Init argument validation: NULL context/config/getKey are rejected */
+    /* Init needs a context and a config; the hook table is optional */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_HwKeystore_Init(NULL, conf));
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_HwKeystore_Init(hwks, NULL));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_Init(hwks, badConf));
 
-    /* GetKey must reject NULL and uninitialized contexts */
+    /* An uninitialized context is refused */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(NULL, servedId, out, &outLen));
+                          wh_HwKeystore_Register(hwks, shared,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 WH_TEST_HWKEK_SIZE));
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
+                          wh_HwKeystore_CheckUse(hwks, sharedByUser,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 &out));
 
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwks, conf));
 
-    /* GetKey argument validation on an initialized context */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, NULL, &outLen));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, NULL));
+    /* The key reference is the server keyId, big-endian */
+    wh_HwKeystore_KeyRef(shared, ref);
+    WH_TEST_ASSERT_RETURN((ref[0] == (uint8_t)(shared >> 8)) &&
+                          (ref[1] == (uint8_t)shared));
 
-    /* Served id: material and reported length must match the backend's */
-    ret = wh_HwKeystore_GetKey(hwks, servedId, out, &outLen);
-    WH_TEST_ASSERT_RETURN(WH_ERROR_OK == ret);
-    WH_TEST_ASSERT_RETURN(outLen == sizeof(_hwKekMaterial));
-    WH_TEST_ASSERT_RETURN(0 ==
-                          memcmp(out, _hwKekMaterial, sizeof(_hwKekMaterial)));
+    /* Only hardware keyIds with a nonzero ID can be registered */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_Register(hwks,
+                               WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                             WH_KEYUSER_GLOBAL,
+                                             WH_TEST_HWKEK_ID),
+                               WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_Register(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 0),
+            WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
 
-    /* Backend policy: unserved id, undersized buffer, non-HW type */
-    outLen = sizeof(out);
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        hwks, shared, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        hwks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        16));
+
+    /* One record per hardware key number, whoever owns it */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_HwKeystore_Register(hwks, sharedByUser,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 WH_TEST_HWKEK_SIZE));
+
+    /* A shared key: any client can use it, and the recorded keyId comes back
+     * for the key reference */
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_CheckUse(
+        hwks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP, &out));
+    WH_TEST_ASSERT_RETURN(out == shared);
+
+    /* Port keys are trusted */
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_CheckUse(
+        hwks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP | WH_NVM_FLAGS_TRUSTED,
+        &out));
+
+    /* The usage must match, and some usage is needed */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          wh_HwKeystore_CheckUse(hwks, sharedByUser,
+                                                 WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                                 &out));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          wh_HwKeystore_CheckUse(hwks, sharedByUser, 0, &out));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_USAGE ==
+        wh_HwKeystore_CheckUse(hwks, sharedByUser, WH_NVM_FLAGS_TRUSTED, &out));
+
+    /* A key for one client: only that client can use it */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_HwKeystore_CheckUse(hwks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT, &out));
+    WH_TEST_ASSERT_RETURN(out == owned);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_HwKeystore_CheckUse(hwks, ownedByOther,
+                                                 WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                                 &out));
+
+    /* No record, a non-hardware keyId, ID 0, and no output */
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_NOTFOUND ==
-        wh_HwKeystore_GetKey(
-            hwks,
-            WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, WH_TEST_HWKEK_ID + 1),
-            out, &outLen));
-    outLen = WH_TEST_HWKEK_SIZE - 1;
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BUFFER_SIZE ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
-    outLen = sizeof(out);
+        wh_HwKeystore_CheckUse(hwks,
+                               WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, 9),
+                               WH_NVM_FLAGS_USAGE_ENCRYPT, &out));
     WH_TEST_ASSERT_RETURN(
-        WH_ERROR_ACCESS ==
-        wh_HwKeystore_GetKey(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_CheckUse(
             hwks,
             WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_HW_USER, WH_TEST_HWKEK_ID),
-            out, &outLen));
+            WH_NVM_FLAGS_USAGE_WRAP, &out));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_CheckUse(hwks,
+                               WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, 0),
+                               WH_NVM_FLAGS_USAGE_WRAP, &out));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_HwKeystore_CheckUse(hwks, sharedByUser,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 NULL));
 
-    /* Cleanup zeroizes the context, after which GetKey must reject it */
+    /* The records run out */
+    for (i = 2; i < WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS; i++) {
+        WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 10 + i),
+            WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+    }
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOSPACE ==
+        wh_HwKeystore_Register(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 9),
+            WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+
+    /* Cleanup zeroizes the context, after which it is refused */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_HwKeystore_Cleanup(NULL));
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Cleanup(hwks));
-    outLen = sizeof(out);
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
+                          wh_HwKeystore_CheckUse(hwks, sharedByUser,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 &out));
 
     return WH_ERROR_OK;
 }
 
-/* Optional backend Init/Cleanup dispatch and the Init-failure return path,
- * using a backend that records its callback invocations */
+/* Optional backend Init/Cleanup hook dispatch and the Init-failure return
+ * path, using a backend that records its hook calls */
 static int _whTest_HwKeystoreLifecycle(void)
 {
     HwKeystoreLifecycle lc            = {0};
     whHwKeystoreContext hwks[1]       = {{0}};
     whHwKeystoreConfig  conf[1]       = {{0}};
     const int           backendConfig = 0; /* sentinel forwarded to Init */
-    whKeyId             servedId =
-        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, WH_TEST_HWKEK_ID);
-    uint8_t  out[WH_TEST_HWKEK_SIZE] = {0};
-    uint16_t outLen                  = sizeof(out);
+    whKeyId             keyId =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_TEST_HWKEK_ID);
+    whKeyId out = WH_KEYID_ERASED;
 
     conf->cb      = &_hwKeystoreLifecycleCb;
     conf->context = &lc;
     conf->config  = &backendConfig;
 
     /* Init-failure path: the backend Init rc is propagated, the config pointer
-     * was forwarded, and the context is left uninitialized (GetKey rejects it).
-     * Cleanup must NOT have run for a backend whose Init never succeeded */
+     * was forwarded, and the context is left uninitialized (Register refuses
+     * it). Cleanup must NOT have run for a backend whose Init never
+     * succeeded */
     lc.initRet = WH_ERROR_ABORTED;
     WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED == wh_HwKeystore_Init(hwks, conf));
     WH_TEST_ASSERT_RETURN(lc.initCalls == 1);
     WH_TEST_ASSERT_RETURN(lc.initConfig == &backendConfig);
     WH_TEST_ASSERT_RETURN(lc.cleanupCalls == 0);
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
+                          wh_HwKeystore_Register(hwks, keyId,
+                                                 WH_NVM_FLAGS_USAGE_WRAP,
+                                                 WH_TEST_HWKEK_SIZE));
 
     /* Init-success path: the backend Init is dispatched exactly once and the
      * context becomes usable */
@@ -251,17 +284,15 @@ static int _whTest_HwKeystoreLifecycle(void)
     lc.initCalls = 0;
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwks, conf));
     WH_TEST_ASSERT_RETURN(lc.initCalls == 1);
-
-    outLen = sizeof(out);
-    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
-    WH_TEST_ASSERT_RETURN(outLen == sizeof(_hwKekMaterial));
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        hwks, keyId, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
 
     /* Cleanup dispatches the backend Cleanup exactly once */
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Cleanup(hwks));
     WH_TEST_ASSERT_RETURN(lc.cleanupCalls == 1);
 
     /* Cleanup-failure path: a backend Cleanup error is surfaced to the caller,
-     * yet the context is still torn down (a subsequent GetKey rejects it) */
+     * yet the context is still torn down (it is refused afterwards) */
     lc.initRet      = WH_ERROR_OK;
     lc.initCalls    = 0;
     lc.cleanupCalls = 0;
@@ -269,14 +300,14 @@ static int _whTest_HwKeystoreLifecycle(void)
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwks, conf));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED == wh_HwKeystore_Cleanup(hwks));
     WH_TEST_ASSERT_RETURN(lc.cleanupCalls == 1);
-    outLen = sizeof(out);
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_GetKey(hwks, servedId, out, &outLen));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_CheckUse(hwks, keyId, WH_NVM_FLAGS_USAGE_WRAP, &out));
 
     return WH_ERROR_OK;
 }
 
-/* Hardware-only keyIds must be rejected by every public keystore entry point
+/* Hardware keyIds must be rejected by every public keystore entry point
  * with WH_ERROR_ACCESS (or WH_ERROR_BADARGS for id generation). These checks
  * are pure keyId-type checks: they fire whether or not a hardware keystore
  * is bound to the server, and before the cache or NVM is consulted */
@@ -291,8 +322,8 @@ static int _whTest_KeystoreHwOnlyReject(whServerContext* server)
     uint32_t       outSz                      = sizeof(keyBuf);
     whNvmId        uniqueId;
 
-    /* Id generation: hardware-only ids are assigned by the backend, never by
-     * the keystore */
+    /* Id generation: the port defines hardware key ids, so the keystore never
+     * assigns one */
     uniqueId = WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, 0);
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
                           wh_Server_KeystoreGetUniqueId(server, &uniqueId));
@@ -302,18 +333,18 @@ static int _whTest_KeystoreHwOnlyReject(whServerContext* server)
                           wh_Server_KeystoreGetCacheSlot(
                               server, hwId, sizeof(keyBuf), &outBuf, &outMeta));
 
-    /* Caching key material under a hardware-only id */
+    /* Caching key material under a hardware key id */
     meta.id  = hwId;
     meta.len = sizeof(keyBuf);
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_Server_KeystoreCacheKey(server, &meta, keyBuf));
 
-    /* Freshen: the resolution path used by all crypto handlers, so this also
-     * proves crypto operations cannot use hardware-only keys */
+    /* Freshen: how crypto handlers resolve keystore keys. A hardware key never
+     * resolves here; the handlers use it by reference instead */
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == wh_Server_KeystoreFreshenKey(
                                                  server, hwId, NULL, NULL));
 
-    /* Reading hardware-only key material out of the keystore */
+    /* Reading hardware key material out of the keystore */
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_ACCESS ==
         wh_Server_KeystoreReadKey(server, hwId, NULL, keyBuf, &outSz));

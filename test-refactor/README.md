@@ -116,7 +116,7 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
 | `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining coverage is the custom-callback round-trip (`_testCallbacks`) and the server-side DMA register/copy/allowlist exercise (`_testDma`). The sequential test is dropped, as is the FLASH_LOG NVM matrix variant. |
 | `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out: the AES async family (comm-buffer `whTest_CryptoAesAsync`/`AesAsyncKat` + DMA `whTest_CryptoAesDmaAsync`/`AesDmaAsyncKat`, round-trip & KAT). ECC DMA export-public and the ML-DSA wolfCrypt-API path are now migrated. |
-| `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | Policy coverage (sw-KEK round trip, trusted-KEK negatives, data-wrap usage) and the key/data unwrap underflow negatives are ported to `client-server/wh_test_keywrap.c`; the remaining legacy coverage (hardware-KEK cryptocb use of a cached wrapped key, unwrap oversize negatives) is not |
+| `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | Policy coverage (sw-KEK round trip, trusted-KEK negatives, data-wrap usage) and the key/data unwrap underflow negatives are ported to `client-server/wh_test_keywrap.c`; the unwrap oversize negatives are not. The legacy hardware-KEK tests, including cryptocb use of a cached wrapped key, no longer build: legacy `test/` does not enable `WOLFHSM_CFG_HWKEYSTORE` |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |
 | `wh_test_nvmflags.c::whTest_NvmFlags` | |
 | `wh_test_flash_fault_inject.c` | |

@@ -19,8 +19,8 @@
 /*
  * src/wh_hwkeystore.c
  *
- * Hardware keystore front-end implementation. Dispatches to a backend callback
- * table (whHwKeystoreCb) with argument validation and lock serialization. See
+ * Hardware keystore front end: the records of the hardware keys clients may
+ * use, and the calls into the port's keystore callback. See
  * wolfhsm/wh_hwkeystore.h for the module description.
  */
 
@@ -36,7 +36,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_hwkeystore.h"
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/wc_keystore.h"
@@ -45,8 +45,7 @@
 int wh_HwKeystore_Init(whHwKeystoreContext*      context,
                        const whHwKeystoreConfig* config)
 {
-    if ((context == NULL) || (config == NULL) || (config->cb == NULL) ||
-        (config->cb->GetKey == NULL)) {
+    if ((context == NULL) || (config == NULL)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -71,7 +70,7 @@ int wh_HwKeystore_Init(whHwKeystoreContext*      context,
     /* Initialize the backend if it provides an Init callback. Done last so it
      * is the only fallible step after the lock: on failure, undo the lock so a
      * successful backend Init is never left without a paired Cleanup */
-    if (context->cb->Init != NULL) {
+    if ((context->cb != NULL) && (context->cb->Init != NULL)) {
         int rc = context->cb->Init(context->context, config->config);
         if (rc != WH_ERROR_OK) {
 #ifdef WOLFHSM_CFG_THREADSAFE
@@ -114,42 +113,6 @@ int wh_HwKeystore_Cleanup(whHwKeystoreContext* context)
     memset(context, 0, sizeof(*context));
     return rc;
 }
-
-int wh_HwKeystore_GetKey(whHwKeystoreContext* context, whKeyId keyId,
-                         uint8_t* out, uint16_t* inout_len)
-{
-    int rc;
-
-    if ((context == NULL) || (context->initialized == 0) ||
-        (context->cb == NULL) || (context->cb->GetKey == NULL) ||
-        (out == NULL) || (inout_len == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-#ifdef WOLFHSM_CFG_THREADSAFE
-    rc = wh_Lock_Acquire(&context->lock);
-    if (rc != WH_ERROR_OK) {
-        return rc;
-    }
-#endif /* WOLFHSM_CFG_THREADSAFE */
-
-    rc = context->cb->GetKey(context->context, keyId, out, inout_len);
-
-#ifdef WOLFHSM_CFG_THREADSAFE
-    {
-        /* Preserve the backend result; only surface a release failure when the
-         * GetKey call itself succeeded so a real lock error is not hidden */
-        int relRc = wh_Lock_Release(&context->lock);
-        if (rc == WH_ERROR_OK) {
-            rc = relRc;
-        }
-    }
-#endif /* WOLFHSM_CFG_THREADSAFE */
-
-    return rc;
-}
-
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
 
 static int _Lock(whHwKeystoreContext* context)
 {
@@ -204,6 +167,87 @@ static whHwKeystoreKey* _FindFree(whHwKeystoreContext* context)
     return NULL;
 }
 
+void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref)
+{
+    ref[0] = (uint8_t)(keyId >> 8);
+    ref[1] = (uint8_t)keyId;
+}
+
+int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
+                           whNvmFlags flags, uint16_t len)
+{
+    whHwKeystoreKey* entry;
+    int              ret;
+
+    if (!_Valid(context, keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _Lock(context);
+    if (ret == WH_ERROR_OK) {
+        if (_Find(context, keyId) != NULL) {
+            ret = WH_ERROR_ACCESS;
+        }
+        else {
+            entry = _FindFree(context);
+            if (entry == NULL) {
+                ret = WH_ERROR_NOSPACE;
+            }
+            else {
+                entry->id    = keyId;
+                entry->srcId = WH_KEYID_ERASED;
+                /* Clients can't clear or replace a port key, or set or
+                 * read it, so it is also a trusted KEK */
+                entry->flags = (flags & WH_NVM_FLAGS_USAGE_ANY) |
+                               WH_NVM_FLAGS_NONDESTROYABLE |
+                               WH_NVM_FLAGS_TRUSTED;
+                entry->len = len;
+            }
+        }
+        (void)_Unlock(context);
+    } /* _Lock() */
+    return ret;
+}
+
+int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
+                           whNvmFlags flags, whKeyId* outKeyId)
+{
+    whHwKeystoreKey* entry;
+    whNvmFlags       usage;
+    int              ret;
+
+    if (!_Valid(context, keyId) || (outKeyId == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    usage = flags & WH_NVM_FLAGS_USAGE_ANY;
+
+    ret = _Lock(context);
+    if (ret == WH_ERROR_OK) {
+        entry = _Find(context, keyId);
+        if (entry == NULL) {
+            ret = WH_ERROR_NOTFOUND;
+        }
+        else if ((WH_KEYID_USER(entry->id) != WH_KEYUSER_GLOBAL) &&
+                 (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId))) {
+            ret = WH_ERROR_ACCESS;
+        }
+        else if (((flags & WH_NVM_FLAGS_TRUSTED) != 0) &&
+                 ((entry->flags & WH_NVM_FLAGS_TRUSTED) == 0)) {
+            ret = WH_ERROR_ACCESS;
+        }
+        else if ((usage == 0) || ((entry->flags & usage) != usage)) {
+            ret = WH_ERROR_USAGE;
+        }
+        else {
+            *outKeyId = entry->id;
+        }
+        (void)_Unlock(context);
+    } /* _Lock() */
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
+
 static int _PortImport(int devId, whKeyId keyId, const uint8_t* key,
                        uint16_t keySz)
 {
@@ -235,45 +279,6 @@ static int _Remove(int devId, whHwKeystoreKey* entry)
     if (ret == 0) {
         memset(entry, 0, sizeof(*entry));
     }
-    return ret;
-}
-
-void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref)
-{
-    ref[0] = (uint8_t)(keyId >> 8);
-    ref[1] = (uint8_t)keyId;
-}
-
-int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
-                           whNvmFlags flags, uint16_t len)
-{
-    whHwKeystoreKey* entry;
-    int              ret;
-
-    if (!_Valid(context, keyId)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = _Lock(context);
-    if (ret == WH_ERROR_OK) {
-        if (_Find(context, keyId) != NULL) {
-            ret = WH_ERROR_ACCESS;
-        }
-        else {
-            entry = _FindFree(context);
-            if (entry == NULL) {
-                ret = WH_ERROR_NOSPACE;
-            }
-            else {
-                entry->id    = keyId;
-                entry->srcId = WH_KEYID_ERASED;
-                entry->flags = (flags & WH_NVM_FLAGS_USAGE_ANY) |
-                               WH_NVM_FLAGS_NONDESTROYABLE;
-                entry->len = len;
-            }
-        }
-        (void)_Unlock(context);
-    } /* _Lock() */
     return ret;
 }
 
@@ -434,38 +439,6 @@ int wh_HwKeystore_ClearSource(whHwKeystoreContext* context, int devId,
     return ret;
 }
 
-int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
-                           whNvmFlags usage, whKeyId* outKeyId)
-{
-    whHwKeystoreKey* entry;
-    int              ret;
-
-    if (!_Valid(context, keyId) || (outKeyId == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-    usage &= WH_NVM_FLAGS_USAGE_ANY;
-
-    ret = _Lock(context);
-    if (ret == WH_ERROR_OK) {
-        entry = _Find(context, keyId);
-        if (entry == NULL) {
-            ret = WH_ERROR_NOTFOUND;
-        }
-        else if ((WH_KEYID_USER(entry->id) != WH_KEYUSER_GLOBAL) &&
-                 (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId))) {
-            ret = WH_ERROR_ACCESS;
-        }
-        else if ((usage == 0) || ((entry->flags & usage) != usage)) {
-            ret = WH_ERROR_USAGE;
-        }
-        else {
-            *outKeyId = entry->id;
-        }
-        (void)_Unlock(context);
-    } /* _Lock() */
-    return ret;
-}
-
 int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, int devId,
                           whKeyId keyId, whHwKeystoreInfo* info)
 {
@@ -496,6 +469,6 @@ int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, int devId,
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
 #endif /* WOLFHSM_CFG_HWKEYSTORE */

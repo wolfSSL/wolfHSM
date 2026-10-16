@@ -81,8 +81,9 @@ typedef uint16_t whNvmFlags;
 /* Cannot be destroyed (but can be modified) */
 #define WH_NVM_FLAGS_NONDESTROYABLE ((whNvmFlags)1 << 11)
 /* Trusted key. Server-only: set exclusively by trusted provisioning
- * (whnvmtool image or server-internal code). Required for a software
- * key to act as a KEK */
+ * (whnvmtool image or server-internal code). A software KEK needs it for
+ * wrap-export and unwrap-and-cache. The hardware keystore also sets it on
+ * port keys */
 #define WH_NVM_FLAGS_TRUSTED ((whNvmFlags)1 << 12)
 
 /* Flags a client may never set; stripped from all client-supplied metadata. */

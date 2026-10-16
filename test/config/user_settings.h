@@ -37,6 +37,11 @@
 
 /** wolfHSM required settings for wolfCrypt */
 #define WOLF_CRYPTO_CB
+
+/* Hardware keys are used by reference (WOLFHSM_CFG_HWKEYSTORE) */
+#ifndef WOLF_PRIVATE_KEY_ID
+#define WOLF_PRIVATE_KEY_ID
+#endif
 /* Allow test makefile to turn keygen on/off */
 #ifndef WOLFHSM_CFG_TEST_NO_KEY_GEN
 #define WOLFSSL_KEY_GEN
