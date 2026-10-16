@@ -218,9 +218,10 @@ static int _whTest_WcIdCmacCase(int devId, whKeyId id, const uint8_t* key,
 
 static uint8_t wcIdBigMsg[WH_MESSAGE_CRYPTO_CMAC_MAX_INLINE_GENERATE_SZ + 1];
 
-/* Keyed one-shot too large to inline, on a cmac bound to id or left unset */
-static int _whTest_WcIdCmacBigOneshot(int devId, whKeyId id,
-                                      const uint8_t* expect, const char* what)
+/* Keyed one-shot that cannot inline, on a cmac bound to id or left unset */
+static int _whTest_WcIdCmacOneshot(int devId, whKeyId id, const uint8_t* in,
+                                   word32 inSz, const uint8_t* expect,
+                                   const char* what)
 {
     Cmac    cmac[1];
     uint8_t tag[AES_BLOCK_SIZE];
@@ -233,8 +234,7 @@ static int _whTest_WcIdCmacBigOneshot(int devId, whKeyId id,
                              (unsigned char*)&id, sizeof(id), NULL, devId);
     }
     if (ret == 0) {
-        ret = wc_AesCmacGenerate_ex(cmac, tag, &tagSz, wcIdBigMsg,
-                                    sizeof(wcIdBigMsg), wcIdKeyB,
+        ret = wc_AesCmacGenerate_ex(cmac, tag, &tagSz, in, inSz, wcIdKeyB,
                                     sizeof(wcIdKeyB), NULL, devId);
     }
     if (ret == 0 && memcmp(tag, expect, sizeof(tag)) != 0) {
@@ -243,6 +243,128 @@ static int _whTest_WcIdCmacBigOneshot(int devId, whKeyId id,
     }
     if (!WH_KEYID_ISERASED(id)) {
         (void)wc_CmacFree(cmac);
+    }
+    return ret;
+}
+
+/* Async keyed one-shot on a cmac bound to id: uses the key, drops the id */
+static int _whTest_WcIdCmacAsync(whClientContext* ctx, int devId, whKeyId id,
+                                 int dma, const uint8_t* expect)
+{
+    Cmac     cmac[1];
+    uint8_t  tag[AES_BLOCK_SIZE];
+    uint32_t tagSz = sizeof(tag);
+    int      ret;
+
+    ret = wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, (unsigned char*)&id,
+                         sizeof(id), NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+    if (!dma) {
+        ret = wh_Client_CmacGenerateRequest(ctx, cmac, WC_CMAC_AES, wcIdKeyB,
+                                            sizeof(wcIdKeyB), wcIdMsg,
+                                            sizeof(wcIdMsg), tagSz);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_CmacGenerateResponse(ctx, cmac, tag, &tagSz);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+#ifdef WOLFHSM_CFG_DMA
+    else {
+        ret = wh_Client_CmacGenerateDmaRequest(ctx, cmac, WC_CMAC_AES, wcIdKeyB,
+                                               sizeof(wcIdKeyB), wcIdMsg,
+                                               sizeof(wcIdMsg), tagSz);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_CmacGenerateDmaResponse(ctx, cmac, tag, &tagSz);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+#endif
+    if (ret == 0 && memcmp(tag, expect, sizeof(tag)) != 0) {
+        WH_ERROR_PRINT("CMAC id slot: async one-shot key lost to the "
+                       "bound id\n");
+        ret = -1;
+    }
+    if (ret == 0 && cmac->idLen != 0) {
+        WH_ERROR_PRINT("CMAC id slot: async one-shot left the id bound\n");
+        ret = -1;
+    }
+    (void)wc_CmacFree(cmac);
+    return ret;
+}
+
+static int _whTest_WcIdCmacCall(whClientContext* ctx, Cmac* cmac, int dma,
+                                const uint8_t* key, uint32_t keyLen,
+                                const uint8_t* in, uint32_t inLen, uint8_t* tag,
+                                uint32_t* tagSz)
+{
+#ifdef WOLFHSM_CFG_DMA
+    if (dma) {
+        return wh_Client_CmacDma(ctx, cmac, WC_CMAC_AES, key, keyLen, in, inLen,
+                                 tag, tagSz);
+    }
+#else
+    (void)dma;
+#endif
+    return wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, key, keyLen, in, inLen, tag,
+                          tagSz);
+}
+
+/* Direct keyed one-shots: a rejected key keeps the binding, and the cmac's
+ * own cached key buffer works as the key */
+static int _whTest_WcIdCmacDirect(whClientContext* ctx, int devId, whKeyId id,
+                                  int dma, const uint8_t* expectEmpty)
+{
+    Cmac     cmac[1];
+    uint8_t  badKey[AES_256_KEY_SIZE + 1];
+    uint8_t  tag[AES_BLOCK_SIZE];
+    uint32_t tagSz = sizeof(tag);
+    int      ret;
+    int      rc;
+
+    memset(badKey, 0x11, sizeof(badKey));
+    ret = wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, (unsigned char*)&id,
+                         sizeof(id), NULL, devId);
+    if (ret != 0) {
+        return ret;
+    }
+    rc = _whTest_WcIdCmacCall(ctx, cmac, dma, badKey, sizeof(badKey), NULL, 0,
+                              tag, &tagSz);
+    if (rc != WH_ERROR_BADARGS || cmac->idLen != (int)sizeof(id)) {
+        WH_ERROR_PRINT("CMAC id slot: rejected empty one-shot dropped the "
+                       "bound id (rc=%d)\n",
+                       rc);
+        ret = -1;
+    }
+    if (ret == 0) {
+        rc = _whTest_WcIdCmacCall(ctx, cmac, dma, badKey, sizeof(badKey),
+                                  wcIdMsg, sizeof(wcIdMsg), tag, &tagSz);
+        if (rc != WH_ERROR_BADARGS || cmac->idLen != (int)sizeof(id)) {
+            WH_ERROR_PRINT("CMAC id slot: rejected one-shot dropped the "
+                           "bound id (rc=%d)\n",
+                           rc);
+            ret = -1;
+        }
+    }
+    (void)wc_CmacFree(cmac);
+
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, wcIdKeyB, sizeof(wcIdKeyB), WC_CMAC_AES,
+                             NULL, NULL, devId);
+        if (ret == 0) {
+            ret = _whTest_WcIdCmacCall(ctx, cmac, dma,
+                                       (const uint8_t*)cmac->aes.devKey,
+                                       sizeof(wcIdKeyB), NULL, 0, tag, &tagSz);
+            if (ret == 0 && memcmp(tag, expectEmpty, sizeof(tag)) != 0) {
+                WH_ERROR_PRINT("CMAC id slot: one-shot on the cached key "
+                               "buffer lost the key\n");
+                ret = -1;
+            }
+            (void)wc_CmacFree(cmac);
+        }
     }
     return ret;
 }
@@ -256,21 +378,26 @@ static int _whTest_CryptoWcIdCmac(whClientContext* ctx, int devId)
     uint8_t swA[AES_BLOCK_SIZE];
     uint8_t swB[AES_BLOCK_SIZE];
     uint8_t swBigB[AES_BLOCK_SIZE];
+    uint8_t swEmptyB[AES_BLOCK_SIZE];
     uint8_t tag[AES_BLOCK_SIZE];
-    word32  tagSz                   = sizeof(swA);
+    word32  tagSz = sizeof(swA);
 
     memset(wcIdBigMsg, 0x3C, sizeof(wcIdBigMsg));
-    ret = wc_AesCmacGenerate_ex(cmac, swA, &tagSz, wcIdMsg, sizeof(wcIdMsg),
-                                wcIdKeyA, sizeof(wcIdKeyA), NULL,
-                                INVALID_DEVID);
+    ret =
+        wc_AesCmacGenerate_ex(cmac, swA, &tagSz, wcIdMsg, sizeof(wcIdMsg),
+                              wcIdKeyA, sizeof(wcIdKeyA), NULL, INVALID_DEVID);
     if (ret == 0) {
-        ret = wc_AesCmacGenerate_ex(cmac, swB, &tagSz, wcIdMsg,
-                                    sizeof(wcIdMsg), wcIdKeyB,
-                                    sizeof(wcIdKeyB), NULL, INVALID_DEVID);
+        ret = wc_AesCmacGenerate_ex(cmac, swB, &tagSz, wcIdMsg, sizeof(wcIdMsg),
+                                    wcIdKeyB, sizeof(wcIdKeyB), NULL,
+                                    INVALID_DEVID);
     }
     if (ret == 0) {
         ret = wc_AesCmacGenerate_ex(cmac, swBigB, &tagSz, wcIdBigMsg,
                                     sizeof(wcIdBigMsg), wcIdKeyB,
+                                    sizeof(wcIdKeyB), NULL, INVALID_DEVID);
+    }
+    if (ret == 0) {
+        ret = wc_AesCmacGenerate_ex(cmac, swEmptyB, &tagSz, NULL, 0, wcIdKeyB,
                                     sizeof(wcIdKeyB), NULL, INVALID_DEVID);
     }
     if (ret == 0) {
@@ -299,6 +426,10 @@ static int _whTest_CryptoWcIdCmac(whClientContext* ctx, int devId)
                                "bound id\n");
                 ret = -1;
             }
+            if (ret == 0 && cmac->idLen != 0) {
+                WH_ERROR_PRINT("CMAC id slot: one-shot left the id bound\n");
+                ret = -1;
+            }
             (void)wc_CmacFree(cmac);
         }
     }
@@ -315,14 +446,40 @@ static int _whTest_CryptoWcIdCmac(whClientContext* ctx, int devId)
     }
 
     if (ret == 0) {
-        ret = _whTest_WcIdCmacBigOneshot(devId, idA, swBigB,
-                                         "large one-shot key lost to the "
-                                         "bound id");
+        ret = _whTest_WcIdCmacOneshot(devId, idA, wcIdBigMsg,
+                                      sizeof(wcIdBigMsg), swBigB,
+                                      "large one-shot key lost to the "
+                                      "bound id");
     }
     if (ret == 0) {
-        ret = _whTest_WcIdCmacBigOneshot(devId, WH_KEYID_ERASED, swBigB,
-                                         "large one-shot read an "
-                                         "uninitialized cmac");
+        ret = _whTest_WcIdCmacOneshot(devId, WH_KEYID_ERASED, wcIdBigMsg,
+                                      sizeof(wcIdBigMsg), swBigB,
+                                      "large one-shot read an "
+                                      "uninitialized cmac");
+    }
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacAsync(ctx, devId, idA, 0, swB);
+    }
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacDirect(ctx, devId, idA, 0, swEmptyB);
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacAsync(ctx, devId, idA, 1, swB);
+    }
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacDirect(ctx, devId, idA, 1, swEmptyB);
+    }
+#endif
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacOneshot(devId, idA, NULL, 0, swEmptyB,
+                                      "empty one-shot key lost to the "
+                                      "bound id");
+    }
+    if (ret == 0) {
+        ret = _whTest_WcIdCmacOneshot(devId, WH_KEYID_ERASED, NULL, 0, swEmptyB,
+                                      "empty one-shot read an "
+                                      "uninitialized cmac");
     }
 
     if (!WH_KEYID_ISERASED(idA)) {
