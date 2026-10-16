@@ -21,7 +21,7 @@
  *
  * Server-cached keys bound through wolfCrypt's init-by-id calls
  * (wc_AesInit_Id, wc_InitCmac_Id, wc_ecc_init_id, wc_InitRsaKey_Id,
- * wc_MlDsaKey_InitId) instead of wh_Client_*SetKeyId.
+ * wc_MlDsaKey_InitId, wc_ed25519_init_id) instead of wh_Client_*SetKeyId.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -37,6 +37,7 @@
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/dilithium.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 
@@ -583,6 +584,76 @@ static int _whTest_CryptoWcIdMlDsa(whClientContext* ctx, int devId)
 }
 #endif
 
+#if defined(HAVE_ED25519) && defined(ED25519_MAX_ID_LEN)
+/* Sign and verify on the server with key, then verify locally with pub */
+static int _whTest_WcIdEd25519Use(ed25519_key* key, ed25519_key* pub)
+{
+    byte   sig[ED25519_SIG_SIZE];
+    word32 sigSz    = sizeof(sig);
+    int    verified = 0;
+    int    ret;
+
+    ret = wc_ed25519_sign_msg(wcIdMsg, sizeof(wcIdMsg), sig, &sigSz, key);
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, wcIdMsg, sizeof(wcIdMsg),
+                                    &verified, key);
+    }
+    if (ret == 0 && verified == 1) {
+        verified = 0;
+        ret      = wc_ed25519_verify_msg(sig, sigSz, wcIdMsg, sizeof(wcIdMsg),
+                                         &verified, pub);
+    }
+    if (ret == 0 && verified != 1) {
+        WH_ERROR_PRINT("Ed25519 id slot signature did not verify\n");
+        ret = -1;
+    }
+    return ret;
+}
+
+static int _whTest_CryptoWcIdEd25519(whClientContext* ctx, int devId)
+{
+    int         ret = 0;
+    ed25519_key key[1];
+    ed25519_key pub[1];
+    whKeyId     keyId = WH_KEYID_ERASED;
+
+    ret = wc_ed25519_init_ex(pub, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        return ret;
+    }
+    ret = wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+        ctx, &keyId, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+        NULL, pub);
+    /* Keep the local check off the HSM */
+    pub->devId = INVALID_DEVID;
+    if (ret == 0) {
+        ret = wc_ed25519_init_id(key, (unsigned char*)&keyId, sizeof(keyId),
+                                 NULL, devId);
+        if (ret == 0) {
+            ret = _whTest_WcIdEd25519Use(key, pub);
+            if (ret == 0) {
+                ret = wh_Client_Ed25519SetKeyId(key, WH_KEYID_ERASED);
+            }
+            if (ret == 0 && _whTest_WcIdEd25519Use(key, pub) == 0) {
+                WH_ERROR_PRINT("Ed25519 id slot: SetKeyId(ERASED) did not "
+                               "clear it\n");
+                ret = -1;
+            }
+            wc_ed25519_free(key);
+        }
+    }
+    wc_ed25519_free(pub);
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 wolfCrypt id slot SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* HAVE_ED25519 && ED25519_MAX_ID_LEN */
+
 int whTest_Crypto_WcId(whClientContext* ctx)
 {
     int i;
@@ -600,6 +671,10 @@ int whTest_Crypto_WcId(whClientContext* ctx)
 #ifdef WH_TEST_WCID_MLDSA
         WH_TEST_RETURN_ON_FAIL(
             _whTest_CryptoWcIdMlDsa(ctx, WH_CLIENT_DEVID(ctx)));
+#endif
+#if defined(HAVE_ED25519) && defined(ED25519_MAX_ID_LEN)
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_CryptoWcIdEd25519(ctx, WH_CLIENT_DEVID(ctx)));
 #endif
     }
     (void)wh_Client_SetDmaMode(ctx, 0);

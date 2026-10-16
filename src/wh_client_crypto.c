@@ -105,6 +105,15 @@ static WC_MAYBE_UNUSED whKeyId _KeyIdFromWcId(whKeyId              fromDevCtx,
 #define WH_KEYID_CLEAR_WC_ID(_key) ((void)0)
 #endif /* WOLF_PRIVATE_KEY_ID */
 
+/* No Ed25519 id slot in v5.9.4, the oldest wolfSSL wolfHSM builds with */
+#ifdef ED25519_MAX_ID_LEN
+#define WH_KEYID_FROM_WC_ED25519(_key) WH_KEYID_FROM_WC(_key)
+#define WH_KEYID_CLEAR_WC_ID_ED25519(_key) WH_KEYID_CLEAR_WC_ID(_key)
+#else
+#define WH_KEYID_FROM_WC_ED25519(_key) WH_DEVCTX_TO_KEYID((_key)->devCtx)
+#define WH_KEYID_CLEAR_WC_ID_ED25519(_key) ((void)0)
+#endif
+
 /** Forward declarations */
 #ifdef HAVE_ECC
 /* Async halves of the keygen path used by the public Request/Response APIs
@@ -3792,6 +3801,7 @@ int wh_Client_Ed25519SetKeyId(ed25519_key* key, whKeyId keyId)
         return WH_ERROR_BADARGS;
     }
     key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+    WH_KEYID_CLEAR_WC_ID_ED25519(key);
     return WH_ERROR_OK;
 }
 
@@ -4065,7 +4075,7 @@ int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
-    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    key_id = WH_KEYID_FROM_WC_ED25519(key);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4207,7 +4217,7 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
-    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    key_id = WH_KEYID_FROM_WC_ED25519(key);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4343,7 +4353,7 @@ int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
-    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    key_id = WH_KEYID_FROM_WC_ED25519(key);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
@@ -4492,7 +4502,7 @@ int wh_Client_Ed25519VerifyDma(whClientContext* ctx, ed25519_key* key,
         (out_res == NULL) || ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
-    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+    key_id = WH_KEYID_FROM_WC_ED25519(key);
 
     if ((type != (byte)Ed25519) && (type != (byte)Ed25519ctx) &&
         (type != (byte)Ed25519ph)) {
