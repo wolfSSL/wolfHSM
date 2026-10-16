@@ -143,6 +143,20 @@
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
+
+/* FrodoKEM Options. Experimental in wolfSSL. The AES and ephemeral variants
+ * are enabled so the tests can check that a cached key keeps its full type.
+ *
+ * Only FrodoKEM-640 is enabled. Every FrodoKEM object is large, and the server
+ * key cache slot has to hold a whole private key: 19,888 bytes at 640, but
+ * 31,296 at 976 and 43,088 at 1344. Enabling the larger sets means raising
+ * WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE to match, at three slots each. */
+#define WOLFSSL_HAVE_FRODOKEM
+#define WOLFSSL_FRODOKEM_SHAKE
+#define WOLFSSL_FRODOKEM_AES
+#define WOLFSSL_FRODOKEM_EPHEMERAL
+#define WOLFSSL_NO_FRODOKEM_976
+#define WOLFSSL_NO_FRODOKEM_1344
 /* LMS / HSS Options (RFC 8554, NIST SP 800-208) */
 #define WOLFSSL_HAVE_LMS
 

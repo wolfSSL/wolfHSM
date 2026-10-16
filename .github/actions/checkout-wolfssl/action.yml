@@ -10,7 +10,7 @@ inputs:
     description: >
       wolfSSL git ref to check out
     required: false
-    default: 'v5.9.4-stable'
+    default: 'refs/pull/11238/head'
 
 runs:
   using: 'composite'
