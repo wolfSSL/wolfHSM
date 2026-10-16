@@ -2152,6 +2152,10 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
  * operations, depending on the input arguments. Input larger than one comm
  * buffer message is split into multiple Update requests.
  *
+ * A call with key bytes and outMac is a oneshot, like wc_AesCmacGenerate_ex:
+ * it discards prior state and any bound key id, and cmac may be
+ * uninitialized. To finalize a stream, pass key as NULL.
+ *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in,out] cmac Pointer to the CMAC structure.
  * @param[in] type The type of CMAC operation.
@@ -2181,7 +2185,8 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
  * whClientContext. The caller MUST call wh_Client_CmacGenerateResponse before
  * issuing any other async Request on the same ctx. Any existing streaming
  * state in the cmac struct is silently reset — this is a oneshot, equivalent
- * to wc_AesCmacGenerate_ex.
+ * to wc_AesCmacGenerate_ex. Key bytes, when given, are used even if a key id
+ * is bound to the cmac; on success they replace that binding in the cmac.
  *
  * @param[in] ctx       Client context.
  * @param[in,out] cmac  CMAC context (type and non-HSM key bytes are cached on
@@ -2330,6 +2335,10 @@ int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
  * DMA for efficient data transfer between client and server. The operation
  * performed depends on which parameters are non-NULL.
  *
+ * A call with key bytes and outMac is a oneshot, like wc_AesCmacGenerate_ex:
+ * it discards prior state and any bound key id, and cmac may be
+ * uninitialized. To finalize a stream, pass key as NULL.
+ *
  * @param[in] ctx Pointer to the client context structure.
  * @param[in,out] cmac Pointer to the CMAC structure to be used.
  * @param[in] type The type of CMAC operation (e.g., WC_CMAC_AES).
@@ -2359,7 +2368,8 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
  * before issuing any other async Request on the same ctx, and must keep in
  * valid until the Response completes. Any existing streaming state in the
  * cmac struct is silently reset — this is a oneshot, equivalent to
- * wc_AesCmacGenerate_ex.
+ * wc_AesCmacGenerate_ex. Key bytes, when given, are used even if a key id is
+ * bound to the cmac; on success they replace that binding in the cmac.
  */
 int wh_Client_CmacGenerateDmaRequest(whClientContext* ctx, Cmac* cmac,
                                      CmacType type, const uint8_t* key,

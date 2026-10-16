@@ -5792,9 +5792,10 @@ static int _CmacValidateLocalKeyLen(uint32_t keyLen)
 static void _CmacStashClientKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
                                 whKeyId key_id)
 {
-    if (key != NULL && keyLen > 0 && WH_KEYID_ISERASED(key_id) &&
-        key != (const uint8_t*)cmac->aes.devKey) {
-        memcpy((void*)cmac->aes.devKey, key, keyLen);
+    if (key != NULL && keyLen > 0 && WH_KEYID_ISERASED(key_id)) {
+        if (key != (const uint8_t*)cmac->aes.devKey) {
+            memcpy((void*)cmac->aes.devKey, key, keyLen);
+        }
         cmac->aes.keylen = keyLen;
     }
 }
@@ -5822,6 +5823,7 @@ int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
     uint8_t*                        req_key;
     uint32_t                        hdr_sz;
     whKeyId                         key_id;
+    bool                            keyed = (key != NULL && keyLen > 0);
     int                             ret;
 
     if (ctx == NULL || cmac == NULL || in == NULL || inLen == 0 ||
@@ -5873,6 +5875,9 @@ int wh_Client_CmacGenerateRequest(whClientContext* ctx, Cmac* cmac,
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_CMAC,
                                 (uint16_t)(hdr_sz + inLen + keyLen), dataPtr);
     if (ret == WH_ERROR_OK) {
+        if (keyed) {
+            _CmacResetForOneshot(cmac);
+        }
         cmac->type = type;
         _CmacStashClientKey(cmac, key, keyLen, key_id);
     }
@@ -6212,9 +6217,13 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
         return ret;
     }
 
-    /* Buffer too big for oneshot: clear the context and stream/chunk it */
-    if (in != NULL && inLen > 0 && outMac != NULL && outMacLen != NULL &&
-        *outMacLen > 0 && key != NULL && keyLen > 0) {
+    /* A keyed oneshot that streams starts fresh, like wc_AesCmacGenerate_ex */
+    if (outMac != NULL && outMacLen != NULL && *outMacLen > 0 && key != NULL &&
+        keyLen > 0) {
+        ret = _CmacValidateLocalKeyLen(keyLen);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
         _CmacResetForOneshot(cmac);
     }
 
@@ -6296,6 +6305,7 @@ int wh_Client_CmacGenerateDmaRequest(whClientContext* ctx, Cmac* cmac,
     uint32_t                           hdr_sz;
     uintptr_t                          inAddr         = 0;
     bool                               inAddrAcquired = false;
+    bool                               keyed = (key != NULL && keyLen > 0);
     whKeyId                            key_id;
     int                                ret;
 
@@ -6364,12 +6374,11 @@ int wh_Client_CmacGenerateDmaRequest(whClientContext* ctx, Cmac* cmac,
     }
 
     if (ret == WH_ERROR_OK) {
-        cmac->type = type;
-        if (key != NULL && keyLen > 0 && WH_KEYID_ISERASED(key_id) &&
-            key != (const uint8_t*)cmac->aes.devKey) {
-            memcpy((void*)cmac->aes.devKey, key, keyLen);
-            cmac->aes.keylen = keyLen;
+        if (keyed) {
+            _CmacResetForOneshot(cmac);
         }
+        cmac->type = type;
+        _CmacStashClientKey(cmac, key, keyLen, key_id);
     }
     else if (inAddrAcquired) {
         _CmacDmaPostCleanup(ctx);
@@ -6729,6 +6738,16 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
             } while (ret == WH_ERROR_NOTREADY);
         }
         return ret;
+    }
+
+    /* A keyed oneshot that streams starts fresh, like wc_AesCmacGenerate_ex */
+    if (outMac != NULL && outMacLen != NULL && *outMacLen > 0 && key != NULL &&
+        keyLen > 0) {
+        ret = _CmacValidateLocalKeyLen(keyLen);
+        if (ret != WH_ERROR_OK) {
+            return ret;
+        }
+        _CmacResetForOneshot(cmac);
     }
 
     /* Streaming path: DMA Update + DMA Final. The existing blocking semantic
