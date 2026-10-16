@@ -3171,13 +3171,52 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_ED25519 */
 
 #ifndef NO_AES
+/* Check that the client may use a hardware key for this request. On success
+ * *outHwKey is the key to pass to wolfCrypt by reference */
+static int _HwKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
+                          whNvmFlags usage, whKeyId* outHwKey)
+{
+#ifdef WOLFHSM_CFG_HWKEYSTORE
+    if ((ctx->hwKeystore == NULL) || (devId == INVALID_DEVID)) {
+        return WH_ERROR_NOTFOUND;
+    }
+    return wh_HwKeystore_CheckUse(ctx->hwKeystore, keyId, usage, outHwKey);
+#else
+    /* No hardware keystore is built in */
+    (void)ctx;
+    (void)devId;
+    (void)keyId;
+    (void)usage;
+    (void)outHwKey;
+    return WH_ERROR_ACCESS;
+#endif
+}
+
+/* Init aes for a request. A hardware key goes to wolfCrypt by reference: no
+ * key is set, and the crypto callback runs every operation */
+static int _AesInitForKey(Aes* aes, int devId, whKeyId hwKey)
+{
+#ifdef WOLFHSM_CFG_HWKEYSTORE
+    if (hwKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+
+        wh_HwKeystore_KeyRef(hwKey, ref);
+        return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, devId);
+    }
+#else
+    (void)hwKey;
+#endif
+    return wc_AesInit(aes, NULL, devId);
+}
+
 #ifdef WOLFSSL_AES_COUNTER
 static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    Aes                            aes[1];
+    whKeyId                        hwKey = WH_KEYID_ERASED;
     whMessageCrypto_AesCtrRequest  req;
     whMessageCrypto_AesCtrResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3222,7 +3261,14 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
-    if (!WH_KEYID_ISERASED(key_id)) {
+    if (WH_KEYID_ISHW(key_id)) {
+        /* Hardware key: used by reference, never read */
+        ret = _HwKeyCheckUse(ctx, devId, key_id,
+                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
+                             &hwKey);
+    }
+    else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
@@ -3242,19 +3288,26 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
-        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
+        key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCtr] Invalid key size: %d", key_len);
         ret = WH_ERROR_BADARGS;
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, devId);
+        ret = _AesInitForKey(aes, devId, hwKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key */
-        ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
-                                 enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        /* load the key. A hardware key only needs the counter */
+        if (hwKey != WH_KEYID_ERASED) {
+            ret = wc_AesSetIV(aes, (byte*)iv);
+        }
+        else {
+            ret =
+                wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
+                                   enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        }
         if (ret == WH_ERROR_OK) {
             /* Reject client-supplied left values outside the valid range.
              * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left;
@@ -3316,7 +3369,9 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesCtrDmaRequest  req;
     whMessageCrypto_AesCtrDmaResponse res;
-    Aes                               aes[1] = {0};
+    Aes                               aes[1];
+    int                               aesInit = 0;
+    whKeyId                           hwKey   = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -3376,7 +3431,14 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (!WH_KEYID_ISERASED(keyId)) {
+        if (WH_KEYID_ISHW(keyId)) {
+            /* Hardware key: used by reference, never read */
+            ret = _HwKeyCheckUse(ctx, devId, keyId,
+                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                 &hwKey);
+        }
+        else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
              * usage policy against the same locked snapshot that is read. The
              * crypto below then runs entirely on the private copy. */
@@ -3394,8 +3456,9 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
-        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+        keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCtr] Invalid key size: %d", keyLen);
         ret = WH_ERROR_BADARGS;
     }
@@ -3423,13 +3486,20 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, devId);
+        ret     = _AesInitForKey(aes, devId, hwKey);
+        aesInit = (ret == WH_ERROR_OK);
     }
 
     if (ret == WH_ERROR_OK) {
-        /* load the key */
-        ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
-                                 enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        /* load the key. A hardware key only needs the counter */
+        if (hwKey != WH_KEYID_ERASED) {
+            ret = wc_AesSetIV(aes, (byte*)iv);
+        }
+        else {
+            ret =
+                wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
+                                   enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        }
         if (ret == WH_ERROR_OK) {
             /* Reject client-supplied left values outside the valid range.
              * wc_AesCtrEncrypt indexes aes->tmp via AES_BLOCK_SIZE - aes->left;
@@ -3489,7 +3559,9 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    wc_AesFree(aes);
+    if (aesInit) {
+        wc_AesFree(aes);
+    }
 
     /* Set response */
     res.outSz = outSz;
@@ -3513,7 +3585,8 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    Aes                            aes[1];
+    whKeyId                        hwKey = WH_KEYID_ERASED;
     whMessageCrypto_AesEcbRequest  req;
     whMessageCrypto_AesEcbResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3554,7 +3627,14 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
 
     /* Freshen key and validate usage policy if key is not erased */
-    if (!WH_KEYID_ISERASED(key_id)) {
+    if (WH_KEYID_ISHW(key_id)) {
+        /* Hardware key: used by reference, never read */
+        ret = _HwKeyCheckUse(ctx, devId, key_id,
+                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
+                             &hwKey);
+    }
+    else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
@@ -3574,19 +3654,23 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
-        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
+        key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesEcb] Invalid key size: %d", key_len);
         ret = WH_ERROR_BADARGS;
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, devId);
+        ret = _AesInitForKey(aes, devId, hwKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key. AES-ECB does not use IV */
-        ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, NULL,
-                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        /* load the key. AES-ECB does not use IV. A hardware key needs no
+         * setup */
+        if (hwKey == WH_KEYID_ERASED) {
+            ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, NULL,
+                               enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        }
         if (ret == WH_ERROR_OK) {
             /* do the crypto operation */
             if (enc != 0) {
@@ -3629,7 +3713,9 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesEcbDmaRequest  req;
     whMessageCrypto_AesEcbDmaResponse res;
-    Aes                               aes[1] = {0};
+    Aes                               aes[1];
+    int                               aesInit = 0;
+    whKeyId                           hwKey   = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -3678,7 +3764,14 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (!WH_KEYID_ISERASED(keyId)) {
+        if (WH_KEYID_ISHW(keyId)) {
+            /* Hardware key: used by reference, never read */
+            ret = _HwKeyCheckUse(ctx, devId, keyId,
+                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                 &hwKey);
+        }
+        else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
              * usage policy against the same locked snapshot that is read. The
              * crypto below then runs entirely on the private copy. */
@@ -3696,8 +3789,9 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
-        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+        keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesEcb] Invalid key size: %d", keyLen);
         ret = WH_ERROR_BADARGS;
     }
@@ -3723,10 +3817,11 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, devId);
+        ret     = _AesInitForKey(aes, devId, hwKey);
+        aesInit = (ret == WH_ERROR_OK);
     }
 
-    if (ret == WH_ERROR_OK) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED) {
         ret = wc_AesSetKey(aes, (byte*)key, (word32)keyLen, NULL,
                            req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
     }
@@ -3776,7 +3871,9 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    wc_AesFree(aes);
+    if (aesInit) {
+        wc_AesFree(aes);
+    }
 
     /* Set response */
     res.outSz = outSz;
@@ -3798,7 +3895,8 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int                            ret    = WH_ERROR_OK;
-    Aes                            aes[1] = {0};
+    Aes                            aes[1];
+    whKeyId                        hwKey = WH_KEYID_ERASED;
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3844,7 +3942,14 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
-    if (!WH_KEYID_ISERASED(key_id)) {
+    if (WH_KEYID_ISHW(key_id)) {
+        /* Hardware key: used by reference, never read */
+        ret = _HwKeyCheckUse(ctx, devId, key_id,
+                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
+                             &hwKey);
+    }
+    else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
@@ -3864,19 +3969,25 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
-        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
+        key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", key_len);
         ret = WH_ERROR_BADARGS;
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, devId);
+        ret = _AesInitForKey(aes, devId, hwKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key */
-        ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
-                           enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        /* load the key. A hardware key only needs the IV */
+        if (hwKey != WH_KEYID_ERASED) {
+            ret = wc_AesSetIV(aes, (byte*)iv);
+        }
+        else {
+            ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, (byte*)iv,
+                               enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        }
         if (ret == WH_ERROR_OK) {
             /* do the crypto operation */
             if (enc != 0) {
@@ -3920,7 +4031,9 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesCbcDmaRequest  req;
     whMessageCrypto_AesCbcDmaResponse res;
-    Aes                               aes[1] = {0};
+    Aes                               aes[1];
+    int                               aesInit = 0;
+    whKeyId                           hwKey   = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -3975,7 +4088,14 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (!WH_KEYID_ISERASED(keyId)) {
+        if (WH_KEYID_ISHW(keyId)) {
+            /* Hardware key: used by reference, never read */
+            ret = _HwKeyCheckUse(ctx, devId, keyId,
+                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                 &hwKey);
+        }
+        else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
              * usage policy against the same locked snapshot that is read. The
              * crypto below then runs entirely on the private copy. */
@@ -3993,8 +4113,9 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
-        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+        keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", keyLen);
         ret = WH_ERROR_BADARGS;
     }
@@ -4020,12 +4141,19 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, devId);
+        ret     = _AesInitForKey(aes, devId, hwKey);
+        aesInit = (ret == WH_ERROR_OK);
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesSetKey(aes, (byte*)key, keyLen, (byte*)iv,
-                           req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        /* A hardware key only needs the IV */
+        if (hwKey != WH_KEYID_ERASED) {
+            ret = wc_AesSetIV(aes, (byte*)iv);
+        }
+        else {
+            ret = wc_AesSetKey(aes, (byte*)key, keyLen, (byte*)iv,
+                               req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+        }
     }
 
     if (ret == WH_ERROR_OK) {
@@ -4073,7 +4201,9 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    wc_AesFree(aes);
+    if (aesInit) {
+        wc_AesFree(aes);
+    }
 
     /* Set response */
     res.outSz = outSz;
@@ -4095,7 +4225,8 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
                          void* cryptoDataOut, uint16_t* outSize)
 {
     int            ret       = WH_ERROR_OK;
-    Aes            aes[1]    = {0};
+    Aes            aes[1];
+    whKeyId        hwKey = WH_KEYID_ERASED;
     uint8_t        cachedKey[AES_256_KEY_SIZE];
     whNvmMetadata  keyMeta[1];
 
@@ -4164,7 +4295,14 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
             (uint32_t)needed_size);
 
     /* Freshen key and validate usage policy if key is not erased */
-    if (!WH_KEYID_ISERASED(key_id)) {
+    if (WH_KEYID_ISHW(key_id)) {
+        /* Hardware key: used by reference, never read */
+        ret = _HwKeyCheckUse(ctx, devId, key_id,
+                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
+                             &hwKey);
+    }
+    else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
@@ -4182,18 +4320,21 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && key_len != AES_128_KEY_SIZE &&
-        key_len != AES_192_KEY_SIZE && key_len != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
+        key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", key_len);
         ret = WH_ERROR_BADARGS;
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = wc_AesInit(aes, NULL, devId);
+        ret = _AesInitForKey(aes, devId, hwKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key */
-        ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
+        /* load the key. A hardware key needs no setup */
+        if (hwKey == WH_KEYID_ERASED) {
+            ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
+        }
         WH_DEBUG_SERVER_VERBOSE("AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
                key_len, ret);
         WH_DEBUG_VERBOSE_HEXDUMP("[server] key: ", key, key_len);
@@ -4256,7 +4397,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     int                               ret = WH_ERROR_OK;
     whMessageCrypto_AesGcmDmaRequest  req;
     whMessageCrypto_AesGcmDmaResponse res;
-    Aes                               aes[1] = {0};
+    Aes                               aes[1];
+    int                               aesInit = 0;
+    whKeyId                           hwKey   = WH_KEYID_ERASED;
 
     void*          inAddr  = NULL;
     void*          outAddr = NULL;
@@ -4330,7 +4473,14 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (!WH_KEYID_ISERASED(keyId)) {
+        if (WH_KEYID_ISHW(keyId)) {
+            /* Hardware key: used by reference, never read */
+            ret = _HwKeyCheckUse(ctx, devId, keyId,
+                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                 &hwKey);
+        }
+        else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
              * usage policy against the same locked snapshot that is read. The
              * crypto below then runs entirely on the private copy. */
@@ -4348,8 +4498,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && keyLen != AES_128_KEY_SIZE &&
-        keyLen != AES_192_KEY_SIZE && keyLen != AES_256_KEY_SIZE) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+        keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
+        keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", keyLen);
         ret = WH_ERROR_BADARGS;
     }
@@ -4395,10 +4546,11 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = wc_AesInit(aes, NULL, devId);
+        ret     = _AesInitForKey(aes, devId, hwKey);
+        aesInit = (ret == WH_ERROR_OK);
     }
 
-    if (ret == WH_ERROR_OK) {
+    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED) {
         ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)keyLen);
     }
 
@@ -4451,7 +4603,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
 
-    wc_AesFree(aes);
+    if (aesInit) {
+        wc_AesFree(aes);
+    }
 
     /* Set response */
     res.outSz = outSz;
@@ -4472,12 +4626,16 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
 /* Resolve CMAC key from request (inline key or keystore ID).
- * outKey must be at least AES_256_KEY_SIZE bytes. */
-static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
-                           uint32_t requestKeySz, whKeyId clientKeyId,
-                           uint8_t* outKey, uint32_t* outKeyLen)
+ * outKey must be at least AES_256_KEY_SIZE bytes. A hardware key is returned
+ * in *outHwKey instead, to use by reference */
+static int _CmacResolveKey(whServerContext* ctx, int devId,
+                           const uint8_t* requestKey, uint32_t requestKeySz,
+                           whKeyId clientKeyId, uint8_t* outKey,
+                           uint32_t* outKeyLen, whKeyId* outHwKey)
 {
     int ret = WH_ERROR_OK;
+
+    *outHwKey = WH_KEYID_ERASED;
 
     if (requestKeySz != 0) {
         /* Client provided the key directly in the request */
@@ -4489,6 +4647,18 @@ static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
         whKeyId keyId = wh_KeyId_TranslateFromClient(
             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
 
+        if (WH_KEYID_ISHW(keyId)) {
+            /* Hardware key: used by reference, never read. CMAC accepts sign
+             * or verify usage */
+            ret = _HwKeyCheckUse(ctx, devId, keyId, WH_NVM_FLAGS_USAGE_SIGN,
+                                 outHwKey);
+            if (ret == WH_ERROR_USAGE) {
+                ret = _HwKeyCheckUse(ctx, devId, keyId,
+                                     WH_NVM_FLAGS_USAGE_VERIFY, outHwKey);
+            }
+            *outKeyLen = 0;
+            return ret;
+        }
         /* Copy the key into the caller's private buffer, enforcing the usage
          * policy against the same locked snapshot that is read. CMAC accepts
          * sign or verify usage, so retry with verify on a usage failure; each
@@ -4517,6 +4687,25 @@ static int _CmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
     }
 
     return ret;
+}
+
+/* Init cmac with key bytes, or with a hardware key by reference */
+static int _CmacInitForKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
+                           whKeyId hwKey, int devId)
+{
+#ifdef WOLFHSM_CFG_HWKEYSTORE
+    if (hwKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+
+        wh_HwKeystore_KeyRef(hwKey, ref);
+        return wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, ref,
+                              (int)sizeof(ref), NULL, devId);
+    }
+#else
+    (void)hwKey;
+#endif
+    return wc_InitCmac_ex(cmac, key, (word32)keyLen, WC_CMAC_AES, NULL, NULL,
+                          devId);
 }
 
 static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
@@ -4566,9 +4755,11 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t tmpKey[AES_256_KEY_SIZE];
     uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
+    whKeyId  hwKey = WH_KEYID_ERASED;
 
     /* Resolve the key to use */
-    ret = _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey, &tmpKeyLen);
+    ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
+                          &tmpKeyLen, &hwKey);
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
@@ -4576,8 +4767,18 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
-        ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
-                                    (word32)tmpKeyLen, NULL, devId);
+        if (hwKey != WH_KEYID_ERASED) {
+            /* A hardware key is set up by reference first */
+            ret = _CmacInitForKey(cmac, NULL, 0, hwKey, devId);
+            if (ret == 0) {
+                ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, NULL,
+                                            0, NULL, devId);
+            }
+        }
+        else {
+            ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
+                                        (word32)tmpKeyLen, NULL, devId);
+        }
 
         if (ret == 0) {
             res.outSz = len;
@@ -4591,8 +4792,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
             req.inSz, req.outSz, req.keyId);
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
-        ret = wc_InitCmac_ex(cmac, tmpKey, tmpKeyLen, WC_CMAC_AES, NULL, NULL,
-                             devId);
+        ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
         WH_DEBUG_SERVER_VERBOSE("cmac init with keylen:%d ret:%d\n", tmpKeyLen,
                                 ret);
 
@@ -9017,6 +9217,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t tmpKey[AES_256_KEY_SIZE];
     uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
+    whKeyId  hwKey = WH_KEYID_ERASED;
 
     /* Oneshot fast path: DMA input only (no inline), output requested. The
      * streaming protocol never produces outSz>0 with DMA input (Final is
@@ -9034,8 +9235,8 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Resolve key */
         if (ret == WH_ERROR_OK) {
-            ret = _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey,
-                                  &tmpKeyLen);
+            ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
+                                  &tmpKeyLen, &hwKey);
         }
 
         if (ret == WH_ERROR_OK && req.keySz != 0) {
@@ -9050,8 +9251,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot with keyId:%x\n",
                                     req.keyId);
 
-            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
-                                 NULL, NULL, devId);
+            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
 
             if (ret == WH_ERROR_OK) {
                 ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr,
@@ -9075,13 +9275,12 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             (int)req.outSz, req.keyId);
 
         /* Resolve key */
-        ret =
-            _CmacResolveKey(ctx, key, req.keySz, req.keyId, tmpKey, &tmpKeyLen);
+        ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
+                              &tmpKeyLen, &hwKey);
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         if (ret == 0) {
-            ret = wc_InitCmac_ex(cmac, tmpKey, (word32)tmpKeyLen, WC_CMAC_AES,
-                                 NULL, NULL, devId);
+            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
             WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
                                     tmpKeyLen, ret);
         }

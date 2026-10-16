@@ -46,6 +46,7 @@ WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_HwKeystore);
+WH_TEST_DECL(whTest_HwKeystoreCrypto);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MessageNvmTranslate);
 WH_TEST_DECL(whTest_MultiClient);
@@ -114,20 +115,21 @@ WH_TEST_DECL(whTest_AuthSetCredentials);
 WH_TEST_DECL(whTest_AuthRequestAuthorization);
 
 const whTestCase whTestsMisc[] = {
-    { "whTest_ClientDevId",      whTest_ClientDevId },
-    { "whTest_Comm",             whTest_Comm },
-    { "whTest_Dma",              whTest_Dma },
-    { "whTest_CryptoAffinity",   whTest_CryptoAffinity },
-    { "whTest_CryptoAesGcmDmaAad", whTest_CryptoAesGcmDmaAad },
-    { "whTest_KeystoreReqSize",  whTest_KeystoreReqSize },
-    { "whTest_MessageNvmTranslate", whTest_MessageNvmTranslate },
-    { "whTest_MultiClient",      whTest_MultiClient },
-    { "whTest_HwKeystore",       whTest_HwKeystore },
-    { "whTest_Lock",             whTest_Lock },
-    { "whTest_Log",              whTest_Log },
-    { "whTest_SheKeywrapInterop", whTest_SheKeywrapInterop },
-    { "whTest_SheNoNvm",         whTest_SheNoNvm },
-    { "whTest_SheUidCb",         whTest_SheUidCb },
+    {"whTest_ClientDevId",         whTest_ClientDevId        },
+    {"whTest_Comm",                whTest_Comm               },
+    {"whTest_Dma",                 whTest_Dma                },
+    {"whTest_CryptoAffinity",      whTest_CryptoAffinity     },
+    {"whTest_CryptoAesGcmDmaAad",  whTest_CryptoAesGcmDmaAad },
+    {"whTest_KeystoreReqSize",     whTest_KeystoreReqSize    },
+    {"whTest_MessageNvmTranslate", whTest_MessageNvmTranslate},
+    {"whTest_MultiClient",         whTest_MultiClient        },
+    {"whTest_HwKeystore",          whTest_HwKeystore         },
+    {"whTest_HwKeystoreCrypto",    whTest_HwKeystoreCrypto   },
+    {"whTest_Lock",                whTest_Lock               },
+    {"whTest_Log",                 whTest_Log                },
+    {"whTest_SheKeywrapInterop",   whTest_SheKeywrapInterop  },
+    {"whTest_SheNoNvm",            whTest_SheNoNvm           },
+    {"whTest_SheUidCb",            whTest_SheUidCb           },
 };
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 

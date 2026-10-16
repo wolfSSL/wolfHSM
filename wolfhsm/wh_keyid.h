@@ -75,11 +75,9 @@ typedef uint16_t whKeyId;
 /* Bit 9: Client-to-server signal for wrapped key */
 #define WH_KEYID_CLIENT_WRAPPED_FLAG ((whKeyId)0x0200)
 
-/* Bit 10: Client-to-server signal for a hardware-only key. The key material
- * lives exclusively in a hardware keystore (see wolfhsm/wh_hwkeystore.h) and
- * is fetched on demand by the server. It never enters the key cache or NVM
- * and is never returned to a client. Such keys are only usable as KEKs in
- * the keywrap API */
+/* Bit 10: Client-to-server signal for a hardware key (see
+ * wolfhsm/wh_hwkeystore.h). The server uses it by reference: it never enters
+ * the key cache or NVM and is never returned to a client */
 #define WH_KEYID_CLIENT_HW_FLAG ((whKeyId)0x0400)
 
 /* Combined mask of all client-facing flags */

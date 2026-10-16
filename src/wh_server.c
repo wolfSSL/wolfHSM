@@ -654,6 +654,12 @@ static uint16_t _FormatErrorResponse(uint16_t magic, uint16_t group,
                     size = sizeof(whMessageKeystore_DataUnwrapResponse);
                     break;
 #endif /* WOLFHSM_CFG_KEYWRAP */
+                case WH_KEY_HW_LOAD:
+                case WH_KEY_HW_CLEAR:
+                case WH_KEY_HW_INFO:
+                    /* rc comes first in all three, so the largest fits all */
+                    size = sizeof(whMessageKeystore_HwInfoResponse);
+                    break;
                 default:
                     size = sizeof(int32_t);
                     break;

@@ -249,6 +249,78 @@ int wh_MessageKeystore_TranslateRevokeResponse(
     return 0;
 }
 
+int wh_MessageKeystore_TranslateHwLoadRequest(
+    uint16_t magic, const whMessageKeystore_HwLoadRequest* src,
+    whMessageKeystore_HwLoadRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, hwId);
+    WH_T16(magic, dest, src, srcId);
+    return 0;
+}
+
+int wh_MessageKeystore_TranslateHwLoadResponse(
+    uint16_t magic, const whMessageKeystore_HwLoadResponse* src,
+    whMessageKeystore_HwLoadResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T16(magic, dest, src, hwId);
+    return 0;
+}
+
+int wh_MessageKeystore_TranslateHwClearRequest(
+    uint16_t magic, const whMessageKeystore_HwClearRequest* src,
+    whMessageKeystore_HwClearRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, hwId);
+    return 0;
+}
+
+int wh_MessageKeystore_TranslateHwClearResponse(
+    uint16_t magic, const whMessageKeystore_HwClearResponse* src,
+    whMessageKeystore_HwClearResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    return 0;
+}
+
+int wh_MessageKeystore_TranslateHwInfoRequest(
+    uint16_t magic, const whMessageKeystore_HwInfoRequest* src,
+    whMessageKeystore_HwInfoRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T16(magic, dest, src, hwId);
+    return 0;
+}
+
+int wh_MessageKeystore_TranslateHwInfoResponse(
+    uint16_t magic, const whMessageKeystore_HwInfoResponse* src,
+    whMessageKeystore_HwInfoResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, rc);
+    WH_T32(magic, dest, src, keyType);
+    WH_T32(magic, dest, src, keyBits);
+    WH_T16(magic, dest, src, flags);
+    WH_T16(magic, dest, src, owner);
+    return 0;
+}
+
 #ifdef WOLFHSM_CFG_DMA
 /*
  * DMA-based keystore operations

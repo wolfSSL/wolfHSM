@@ -171,6 +171,11 @@ ifeq ($(CRYPTO_AFFINITY),1)
     DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
 endif
 
+# Let clients load keys into hardware keys, and enable its unit test
+ifeq ($(HWKEYSTORE_LOAD),1)
+    DEF += -DWOLFHSM_CFG_HWKEYSTORE_LOAD -DWOLF_CRYPTO_CB_KEYSTORE
+endif
+
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
