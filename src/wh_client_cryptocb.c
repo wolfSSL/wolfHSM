@@ -1240,6 +1240,9 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
     void*   key  = info->pk.pqc_sig_kg.key;
     int     type = info->pk.pqc_sig_kg.type;
 
+    /* Not every algorithm below needs the caller-supplied size */
+    (void)size;
+
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         /* DMA support not available - user passed wrong devId */
@@ -1262,8 +1265,20 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
             }
         } break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef HAVE_FALCON
+        case WC_PQC_SIG_TYPE_FALCON: {
+            int level = ((falcon_key*)key)->level;
+            if (useDma) {
+                /* Falcon DMA is not implemented; fall back to software */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            else {
+                ret = wh_Client_FalconMakeExportKey(ctx, level, key);
+            }
+        } break;
+#endif /* HAVE_FALCON */
 
-        /* Support for additional PQC algorithms should be added here */
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -1287,6 +1302,11 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
     const byte* context     = info->pk.pqc_sign.context;
     byte        contextLen  = info->pk.pqc_sign.contextLen;
     word32      preHashType = info->pk.pqc_sign.preHashType;
+
+    /* Not every algorithm below signs over a context or a pre-hash */
+    (void)context;
+    (void)contextLen;
+    (void)preHashType;
 
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
@@ -1312,8 +1332,19 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
             }
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef HAVE_FALCON
+        case WC_PQC_SIG_TYPE_FALCON:
+            if (useDma) {
+                /* Falcon DMA is not implemented; fall back to software */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            else {
+                ret = wh_Client_FalconSign(ctx, in, in_len, out, out_len, key);
+            }
+            break;
+#endif /* HAVE_FALCON */
 
-        /* Support for additional PQC algorithms should be added here */
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -1340,6 +1371,11 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
     byte        contextLen  = info->pk.pqc_verify.contextLen;
     word32      preHashType = info->pk.pqc_verify.preHashType;
 
+    /* Not every algorithm below signs over a context or a pre-hash */
+    (void)context;
+    (void)contextLen;
+    (void)preHashType;
+
 #ifndef WOLFHSM_CFG_DMA
     if (useDma) {
         /* DMA support not available - user passed wrong devId */
@@ -1365,8 +1401,20 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
             }
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef HAVE_FALCON
+        case WC_PQC_SIG_TYPE_FALCON:
+            if (useDma) {
+                /* Falcon DMA is not implemented; fall back to software */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            else {
+                ret = wh_Client_FalconVerify(ctx, sig, sig_len, msg, msg_len,
+                                             res, key);
+            }
+            break;
+#endif /* HAVE_FALCON */
 
-        /* Support for additional PQC algorithms should be added here */
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -1409,6 +1457,17 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
             }
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef HAVE_FALCON
+        case WC_PQC_SIG_TYPE_FALCON:
+            if (useDma) {
+                /* Falcon DMA is not implemented; fall back to software */
+                ret = CRYPTOCB_UNAVAILABLE;
+            }
+            else {
+                ret = wh_Client_FalconCheckPrivKey(ctx, key, pubKey, pubKeySz);
+            }
+            break;
+#endif /* HAVE_FALCON */
 
             /* Support for additional PQC algorithms should be added here */
 

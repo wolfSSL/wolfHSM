@@ -308,6 +308,89 @@ int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
 }
 #endif /* HAVE_ED25519 */
 
+#ifdef HAVE_FALCON
+int wh_Crypto_FalconSerializeKeyDer(falcon_key* key, uint16_t max_size,
+                                    uint8_t* buffer, uint16_t* out_size)
+{
+    int ret;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Pick the encoding that matches what the key holds. */
+    if (key->prvKeySet && key->pubKeySet) {
+        ret = wc_Falcon_KeyToDer(key, buffer, max_size);
+    }
+    else if (key->pubKeySet) {
+        /* SPKI form, so the server can hand it back as a public key */
+        ret = wc_Falcon_PublicKeyToDer(key, buffer, max_size, 1);
+    }
+    else if (key->prvKeySet) {
+        ret = wc_Falcon_PrivateKeyToDer(key, buffer, max_size);
+    }
+    else {
+        /* No key data set */
+        return WH_ERROR_BADARGS;
+    }
+
+    /* ASN.1 functions return the size of the DER encoded key on success */
+    if (ret > 0) {
+        *out_size = (uint16_t)ret;
+        ret       = WH_ERROR_OK;
+    }
+    return ret;
+}
+
+int wh_Crypto_FalconDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                      falcon_key* key)
+{
+    const byte levels[] = {FALCON_LEVEL1, FALCON_LEVEL5};
+    const int  levelCnt = (int)(sizeof(levels) / sizeof(levels[0]));
+    byte       saved;
+    int        ret = WH_ERROR_BADARGS;
+    int        i;
+
+    if ((buffer == NULL) || (key == NULL) || (size == 0)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    saved = key->level;
+
+    /* Decode needs the level, so try the key's level first then probe */
+    for (i = -1; i < levelCnt; i++) {
+        word32 idx   = 0;
+        byte   level = (i < 0) ? saved : levels[i];
+
+        if ((level != FALCON_LEVEL1) && (level != FALCON_LEVEL5)) {
+            continue;
+        }
+        if ((i >= 0) && (level == saved)) {
+            continue;
+        }
+        if (wc_falcon_set_level(key, level) != 0) {
+            continue;
+        }
+
+        /* Try private key first, if that fails try public key */
+        ret = wc_Falcon_PrivateKeyDecode(buffer, &idx, key, size);
+        if (ret != 0) {
+            /* Reset index before trying public key */
+            idx = 0;
+            ret = wc_Falcon_PublicKeyDecode(buffer, &idx, key, size);
+        }
+        if (ret == 0) {
+            break;
+        }
+    }
+
+    if ((ret != 0) && ((saved == FALCON_LEVEL1) || (saved == FALCON_LEVEL5))) {
+        (void)wc_falcon_set_level(key, saved);
+    }
+    return ret;
+}
+#endif /* HAVE_FALCON */
+
 #ifdef WOLFSSL_HAVE_MLDSA
 int wh_Crypto_MlDsaSerializeKeyDer(wc_MlDsaKey* key, uint16_t max_size,
                                    uint8_t* buffer, uint16_t* out_size)

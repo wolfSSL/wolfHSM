@@ -923,6 +923,121 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
     return 0;
 }
 
+/* Falcon Key Generation Request translation */
+int wh_MessageCrypto_TranslateFalconKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_FalconKeyGenRequest* src,
+    whMessageCrypto_FalconKeyGenRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, flags);
+    WH_T32(magic, dest, src, access);
+    /* Label is just a byte array, no translation needed */
+    if (src != dest) {
+        memcpy(dest->label, src->label, sizeof(src->label));
+    }
+    return 0;
+}
+
+/* Falcon Key Generation Response translation */
+int wh_MessageCrypto_TranslateFalconKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_FalconKeyGenResponse* src,
+    whMessageCrypto_FalconKeyGenResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, len);
+    return 0;
+}
+
+/* Falcon Sign Request translation */
+int wh_MessageCrypto_TranslateFalconSignRequest(
+    uint16_t magic, const whMessageCrypto_FalconSignRequest* src,
+    whMessageCrypto_FalconSignRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* Falcon Sign Response translation */
+int wh_MessageCrypto_TranslateFalconSignResponse(
+    uint16_t magic, const whMessageCrypto_FalconSignResponse* src,
+    whMessageCrypto_FalconSignResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, sz);
+    return 0;
+}
+
+/* Falcon Verify Request translation */
+int wh_MessageCrypto_TranslateFalconVerifyRequest(
+    uint16_t magic, const whMessageCrypto_FalconVerifyRequest* src,
+    whMessageCrypto_FalconVerifyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, sigSz);
+    WH_T32(magic, dest, src, msgSz);
+    return 0;
+}
+
+/* Falcon Verify Response translation */
+int wh_MessageCrypto_TranslateFalconVerifyResponse(
+    uint16_t magic, const whMessageCrypto_FalconVerifyResponse* src,
+    whMessageCrypto_FalconVerifyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, res);
+    return 0;
+}
+
+/* Falcon Check Private Key Request translation */
+int wh_MessageCrypto_TranslateFalconCheckPrivKeyRequest(
+    uint16_t magic, const whMessageCrypto_FalconCheckPrivKeyRequest* src,
+    whMessageCrypto_FalconCheckPrivKeyRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, options);
+    WH_T32(magic, dest, src, level);
+    WH_T32(magic, dest, src, keyId);
+    WH_T32(magic, dest, src, pubKeySz);
+    return 0;
+}
+
+/* Falcon Check Private Key Response translation */
+int wh_MessageCrypto_TranslateFalconCheckPrivKeyResponse(
+    uint16_t magic, const whMessageCrypto_FalconCheckPrivKeyResponse* src,
+    whMessageCrypto_FalconCheckPrivKeyResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, ok);
+    return 0;
+}
+
 /* ML-KEM Key Generation Request translation */
 int wh_MessageCrypto_TranslateMlKemKeyGenRequest(
     uint16_t magic, const whMessageCrypto_MlKemKeyGenRequest* src,
