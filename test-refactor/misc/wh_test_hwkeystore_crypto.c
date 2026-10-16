@@ -19,8 +19,9 @@
 /*
  * test-refactor/misc/wh_test_hwkeystore_crypto.c
  *
- * End-to-end test of hardware keys in AES and CMAC requests
- * (WOLFHSM_CFG_HWKEYSTORE_CRYPTO). Two clients talk to two servers that share
+ * End-to-end test of hardware keys in AES and CMAC requests and as key wrap
+ * KEKs, with clients loading keys (WOLFHSM_CFG_HWKEYSTORE_LOAD). Two clients
+ * talk to two servers that share
  * one NVM and one hardware keystore, like one HSM serving two cores.
  *
  * The servers' crypto callback is a mock AES engine with eight write-only
@@ -52,16 +53,18 @@
  *   _whTest_HwKeyShared       - keys loaded with the global flag
  *   _whTest_HwKeyNoFallback   - a key the hardware lost fails instead of
  *                               running in software
+ *   _whTest_HwKeyKek          - the port key and client-loaded keys as key wrap
+ *                               KEKs: only port keys are trusted
  *   _whTest_HwKeyPortKeyOwner - a port key registered for one client
  */
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT) &&                              \
-    defined(WOLFHSM_CFG_ENABLE_SERVER) &&                              \
-    defined(WOLFHSM_CFG_HWKEYSTORE_CRYPTO) && defined(HAVE_AES_ECB) && \
-    defined(HAVE_AES_CBC) && defined(WOLFSSL_AES_COUNTER) &&           \
-    defined(HAVE_AESGCM) && defined(WOLFSSL_CMAC) &&                   \
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) &&                            \
+    defined(WOLFHSM_CFG_ENABLE_SERVER) &&                            \
+    defined(WOLFHSM_CFG_HWKEYSTORE_LOAD) && defined(HAVE_AES_ECB) && \
+    defined(HAVE_AES_CBC) && defined(WOLFSSL_AES_COUNTER) &&         \
+    defined(HAVE_AESGCM) && defined(WOLFSSL_CMAC) &&                 \
     defined(WOLFSSL_AES_DIRECT)
 
 #include <stdint.h>
@@ -442,37 +445,19 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
     }
 }
 
-/* Slots can't be read, so hardware keys can't be key encryption keys */
-static int _MockGetKey(void* context, whKeyId keyId, uint8_t* out,
-                       uint16_t* inout_len)
-{
-    (void)context;
-    (void)keyId;
-    (void)out;
-    (void)inout_len;
-    return WH_ERROR_ACCESS;
-}
-
-/* clang-format off */
-static const whHwKeystoreCb _mockHwKeystoreCb = {
-    .Init    = NULL,
-    .Cleanup = NULL,
-    .GetKey  = _MockGetKey,
-};
-/* clang-format on */
-
 /* Boot the mock engine: empty every slot, load the port key into K2 and record
  * it with the hardware keystore. owner is the client that may use it, or 0
- * for every client */
-static int _MockBoot(whHwKeystoreContext* hwKeystore, uint16_t owner)
+ * for every client, and flags the usage it allows */
+static int _MockBoot(whHwKeystoreContext* hwKeystore, uint16_t owner,
+                     whNvmFlags flags)
 {
     memset(&_mock, 0, sizeof(_mock));
     memcpy(_mock.key[MOCK_PORT_SLOT], _portKey, sizeof(_portKey));
     _mock.loaded[MOCK_PORT_SLOT] = 1;
 
     return wh_HwKeystore_Register(
-        hwKeystore, WH_MAKE_KEYID(WH_KEYTYPE_HW, owner, MOCK_PORT_SLOT),
-        USAGE_AES_CMAC, AES_128_KEY_SIZE);
+        hwKeystore, WH_MAKE_KEYID(WH_KEYTYPE_HW, owner, MOCK_PORT_SLOT), flags,
+        AES_128_KEY_SIZE);
 }
 
 /* ------------------------------------------------------------------------
@@ -608,7 +593,7 @@ static int _Setup(TestCtx* t)
         .config  = t->nf_conf,
     };
     t->hwks_conf[0] = (whHwKeystoreConfig){
-        .cb = &_mockHwKeystoreCb,
+        .cb = NULL,
     };
 
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
@@ -616,7 +601,8 @@ static int _Setup(TestCtx* t)
         wc_CryptoCb_RegisterDevice(MOCK_DEVID, _MockCryptoCb, NULL));
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(t->nvm, t->n_conf));
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(t->hwKeystore, t->hwks_conf));
-    WH_TEST_RETURN_ON_FAIL(_MockBoot(t->hwKeystore, WH_KEYUSER_GLOBAL));
+    WH_TEST_RETURN_ON_FAIL(
+        _MockBoot(t->hwKeystore, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC));
     WH_TEST_RETURN_ON_FAIL(
         _SetupPair(t, &t->pair[0], CLIENT1_ID, CLIENT1_DEVID, 201));
     WH_TEST_RETURN_ON_FAIL(
@@ -641,12 +627,12 @@ static void _Cleanup(TestCtx* t)
 }
 
 /* Simulate an HSM reset: the slots and the hardware keystore start empty and
- * the port registers its key again, this time for owner */
-static int _Reboot(TestCtx* t, uint16_t owner)
+ * the port registers its key again, this time for owner with flags */
+static int _Reboot(TestCtx* t, uint16_t owner, whNvmFlags flags)
 {
     (void)wh_HwKeystore_Cleanup(t->hwKeystore);
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(t->hwKeystore, t->hwks_conf));
-    return _MockBoot(t->hwKeystore, owner);
+    return _MockBoot(t->hwKeystore, owner, flags);
 }
 
 /* ------------------------------------------------------------------------
@@ -1636,6 +1622,133 @@ static int _whTest_HwKeyNoFallback(TestCtx* t)
     return WH_ERROR_OK;
 }
 
+#ifdef WOLFHSM_CFG_KEYWRAP
+/* Wrapped size of an AES-128 key */
+#define TEST_WRAPPED_SZ \
+    (WH_KEYWRAP_AES_GCM_HEADER_SIZE + sizeof(whNvmMetadata) + AES_128_KEY_SIZE)
+
+/* Wrap _keyB under kekId, then unwrap it and check the round trip */
+static int _WrapRoundTrip(whClientContext* c, whKeyId kekId)
+{
+    whNvmMetadata meta;
+    whNvmMetadata outMeta;
+    uint8_t       wrapped[TEST_WRAPPED_SZ];
+    uint16_t      wrappedSz = sizeof(wrapped);
+    uint8_t       key[AES_128_KEY_SIZE];
+    uint16_t      keySz = sizeof(key);
+    int           ret;
+
+    memset(&meta, 0, sizeof(meta));
+    meta.id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(c->comm->client_id, 0x30);
+    meta.len   = AES_128_KEY_SIZE;
+    meta.flags = WH_NVM_FLAGS_USAGE_ENCRYPT;
+
+    ret = wh_Client_KeyWrap(c, WC_CIPHER_AES_GCM, kekId, _keyB, sizeof(_keyB),
+                            &meta, wrapped, &wrappedSz);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Client_KeyUnwrapAndExport(c, WC_CIPHER_AES_GCM, kekId, wrapped,
+                                           wrappedSz, &outMeta, key, &keySz);
+    }
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_ASSERT_RETURN(keySz == sizeof(_keyB));
+        WH_TEST_ASSERT_RETURN(memcmp(key, _keyB, sizeof(_keyB)) == 0);
+    }
+    return ret;
+}
+
+/* Hardware keys as key wrap KEKs. The port key is trusted, since no client can
+ * set or read it, so it also works for wrap-export and unwrap-and-cache. A
+ * client-loaded key is an ordinary KEK, since the client may know its bytes.
+ * Either needs WRAP usage, and a WRAP-only key is not a cipher key */
+static int _whTest_HwKeyKek(TestCtx* t)
+{
+    whClientContext* c1       = t->pair[0].client;
+    whClientContext* c2       = t->pair[1].client;
+    whKeyId          src      = WH_KEYID_ERASED;
+    whKeyId          plainSrc = WH_KEYID_ERASED;
+    whKeyId          cachedId = WH_KEYID_ERASED;
+    whKeyId          hwId;
+    whNvmMetadata    meta;
+    uint8_t          wrapped[TEST_WRAPPED_SZ];
+    uint16_t         wrappedSz = sizeof(wrapped);
+    uint8_t          data[]    = "hardware KEK data";
+    uint8_t          wrappedData[WH_KEYWRAP_AES_GCM_HEADER_SIZE + sizeof(data)];
+    uint32_t         wrappedDataSz = sizeof(wrappedData);
+    uint8_t          dataOut[sizeof(data)];
+    uint32_t         dataOutSz = sizeof(dataOut);
+    int              ops;
+
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &plainSrc));
+
+    /* The port key as a WRAP-only KEK. The engine runs every wrap step with
+     * the key in its slot */
+    WH_TEST_RETURN_ON_FAIL(
+        _Reboot(t, WH_KEYUSER_GLOBAL, WH_NVM_FLAGS_USAGE_WRAP));
+    ops = _mock.ops;
+    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c2, HW(MOCK_PORT_SLOT)));
+    WH_TEST_ASSERT_RETURN(_mock.ops == ops + 2);
+
+    /* It is trusted: wrap-export a server-held key, then cache it back */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExport(
+        c1, WC_CIPHER_AES_GCM, plainSrc, WH_KEYTYPE_CRYPTO, HW(MOCK_PORT_SLOT),
+        wrapped, &wrappedSz));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_KeyUnwrapAndCache(c1, WC_CIPHER_AES_GCM, HW(MOCK_PORT_SLOT),
+                                    wrapped, wrappedSz, &cachedId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, cachedId));
+
+    /* WRAP-only, so not a cipher key */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c1, HW(MOCK_PORT_SLOT), 1));
+
+    /* The usual port key has no WRAP usage */
+    WH_TEST_RETURN_ON_FAIL(_Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _WrapRoundTrip(c1, HW(MOCK_PORT_SLOT)));
+
+    /* A client-loaded WRAP key is an ordinary KEK */
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c1, WH_NVM_FLAGS_USAGE_WRAP, _keyC, sizeof(_keyC), &src));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c1, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_DataWrap(c1, WC_CIPHER_AES_GCM, hwId, data,
+                                              sizeof(data), wrappedData,
+                                              &wrappedDataSz));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_DataUnwrap(c1, WC_CIPHER_AES_GCM, hwId,
+                                                wrappedData, wrappedDataSz,
+                                                dataOut, &dataOutSz));
+    WH_TEST_ASSERT_RETURN((dataOutSz == sizeof(data)) &&
+                          (memcmp(dataOut, data, sizeof(data)) == 0));
+
+    /* Not trusted: the client may know its bytes */
+    wrappedSz = sizeof(wrapped);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Client_KeyWrapExport(c1, WC_CIPHER_AES_GCM,
+                                                  plainSrc, WH_KEYTYPE_CRYPTO,
+                                                  hwId, wrapped, &wrappedSz));
+    memset(&meta, 0, sizeof(meta));
+    meta.id   = WH_CLIENT_KEYID_MAKE_WRAPPED_META(c1->comm->client_id, 0x30);
+    meta.len  = AES_128_KEY_SIZE;
+    wrappedSz = sizeof(wrapped);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(c1, WC_CIPHER_AES_GCM, hwId, _keyB,
+                                             sizeof(_keyB), &meta, wrapped,
+                                             &wrappedSz));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Client_KeyUnwrapAndCache(c1, WC_CIPHER_AES_GCM,
+                                                      hwId, wrapped, wrappedSz,
+                                                      &cachedId));
+
+    /* WRAP-only, and only for its owner */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c1, hwId, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _WrapRoundTrip(c2, hwId));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c1, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, plainSrc));
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
 /* A port key registered for one client: only that client can use it, and no
  * client can set or clear it */
 static int _whTest_HwKeyPortKeyOwner(TestCtx* t)
@@ -1645,7 +1758,7 @@ static int _whTest_HwKeyPortKeyOwner(TestCtx* t)
     whKeyId          src = WH_KEYID_ERASED;
     whKeyId          hwId;
 
-    WH_TEST_RETURN_ON_FAIL(_Reboot(t, CLIENT1_ID));
+    WH_TEST_RETURN_ON_FAIL(_Reboot(t, CLIENT1_ID, USAGE_AES_CMAC));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c2, MOCK_PORT_SLOT, 1, USAGE_AES_CMAC, CLIENT1_ID));
 
@@ -1666,7 +1779,7 @@ static int _whTest_HwKeyPortKeyOwner(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
 
     /* Back to a shared port key */
-    return _Reboot(t, WH_KEYUSER_GLOBAL);
+    return _Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC);
 }
 
 int whTest_HwKeystoreCrypto(void* ctx)
@@ -1709,6 +1822,11 @@ int whTest_HwKeystoreCrypto(void* ctx)
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeyNoFallback(t);
     }
+#ifdef WOLFHSM_CFG_KEYWRAP
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeyKek(t);
+    }
+#endif
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeyPortKeyOwner(t);
     }
@@ -1718,7 +1836,7 @@ int whTest_HwKeystoreCrypto(void* ctx)
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER &&        \
-          WOLFHSM_CFG_HWKEYSTORE_CRYPTO && HAVE_AES_ECB && HAVE_AES_CBC && \
-          WOLFSSL_AES_COUNTER && HAVE_AESGCM && WOLFSSL_CMAC &&            \
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER &&      \
+          WOLFHSM_CFG_HWKEYSTORE_LOAD && HAVE_AES_ECB && HAVE_AES_CBC && \
+          WOLFSSL_AES_COUNTER && HAVE_AESGCM && WOLFSSL_CMAC &&          \
           WOLFSSL_AES_DIRECT */

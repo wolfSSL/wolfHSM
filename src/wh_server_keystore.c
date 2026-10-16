@@ -736,7 +736,7 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
     }
 
 #ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only key ids are assigned by the hardware backend */
+    /* The port defines hardware key ids, so the keystore never assigns one */
     if (type == WH_KEYTYPE_HW) {
         return WH_ERROR_BADARGS;
     }
@@ -990,9 +990,9 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
     }
 
 #ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys are never cached and are not usable through the
-     * keystore. The keywrap KEK path fetches them directly from the hardware
-     * keystore instead */
+    /* Hardware keys are never cached and are not usable through the
+     * keystore. Key wrap and the crypto handlers use them by reference
+     * instead */
     if (WH_KEYID_ISHW(keyId)) {
         return WH_ERROR_ACCESS;
     }
@@ -1292,7 +1292,7 @@ int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId)
 /* An erased or revoked key must not stay usable through a hardware copy */
 static void _ClearHwCopies(whServerContext* server, whKeyId keyId)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
     if (server->hwKeystore != NULL) {
         (void)wh_HwKeystore_ClearSource(server->hwKeystore, server->devId,
                                         keyId);
@@ -1459,7 +1459,7 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
     return ret;
 }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
 int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
                              whKeyId srcId)
 {
@@ -1502,52 +1502,56 @@ int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
     wh_Utils_ForceZero(key, sizeof(key));
     return ret;
 }
-#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
-/* Resolve the KEK for a keywrap operation. Hardware-only KEKs (TYPE=HW)
- * are fetched from the server's hardware keystore into hwKekBuf, which the
- * caller must keep local and zeroize after use; they carry no NVM metadata,
- * so usage policy is delegated to the hardware keystore backend. All other
- * KEKs are freshened into the key cache and must carry WH_NVM_FLAGS_USAGE_WRAP.
+/* The KEK of a keywrap operation: key bytes from the keystore, or a hardware
+ * key the port uses by reference */
+typedef struct {
+    const uint8_t* key;
+    uint32_t       keySz;
+    whKeyId        hwKey; /* WH_KEYID_ERASED unless a hardware key */
+} whKeywrapKek;
+
+/* Resolve the KEK for a keywrap operation. A hardware KEK (TYPE=HW) needs a
+ * record allowing WH_NVM_FLAGS_USAGE_WRAP and is used by reference, so its
+ * bytes never leave the hardware. All other KEKs are freshened into the key
+ * cache and must carry WH_NVM_FLAGS_USAGE_WRAP.
  *
  * When enforceTrustedKek is nonzero the KEK must be one the client cannot know
- * or set: a hardware key (returned above) or a software key carrying
- * WH_NVM_FLAGS_TRUSTED. This is the unified eligibility predicate
- * isTrustedKek = WH_KEYID_ISHW(id) || (flags & WH_NVM_FLAGS_TRUSTED), required
- * by the ops that move a server secret across the client boundary
- * (KeyWrapExport, KeyUnwrapAndCache). */
+ * or set: a port key (its hardware record is WH_NVM_FLAGS_TRUSTED) or a
+ * software key carrying WH_NVM_FLAGS_TRUSTED. The ops that move a server
+ * secret across the client boundary (KeyWrapExport, KeyUnwrapAndCache)
+ * require this. */
 static int _KeywrapResolveKek(whServerContext* server, whKeyId serverKeyId,
-                              int enforceTrustedKek, uint8_t* hwKekBuf,
-                              uint16_t hwKekBufSz, const uint8_t** outKek,
-                              uint32_t* outKekSz)
+                              int enforceTrustedKek, whKeywrapKek* outKek)
 {
     int            ret;
     whNvmMetadata* kekMeta = NULL;
     uint8_t*       kek     = NULL;
 
+    outKek->key   = NULL;
+    outKek->keySz = 0;
+    outKek->hwKey = WH_KEYID_ERASED;
+
 #ifdef WOLFHSM_CFG_HWKEYSTORE
     if (WH_KEYID_ISHW(serverKeyId)) {
-        uint16_t hwKekSz = hwKekBufSz;
-        if (server->hwKeystore == NULL) {
-            /* No hardware keystore bound to this server */
+        whNvmFlags need = WH_NVM_FLAGS_USAGE_WRAP;
+
+        if ((server->hwKeystore == NULL) || (server->devId == INVALID_DEVID)) {
+            /* No hardware keystore, or no device to run the key */
             return WH_ERROR_NOTFOUND;
         }
-        ret = wh_HwKeystore_GetKey(server->hwKeystore, serverKeyId, hwKekBuf,
-                                   &hwKekSz);
-        if (ret == WH_ERROR_OK) {
-            *outKek   = hwKekBuf;
-            *outKekSz = hwKekSz;
+        if (enforceTrustedKek) {
+            need |= WH_NVM_FLAGS_TRUSTED;
         }
-        return ret;
+        return wh_HwKeystore_CheckUse(server->hwKeystore, serverKeyId, need,
+                                      &outKek->hwKey);
     }
-#else
-    (void)hwKekBuf;
-    (void)hwKekBufSz;
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
 
     ret = wh_Server_KeystoreFreshenKey(server, serverKeyId, &kek, &kekMeta);
@@ -1561,34 +1565,49 @@ static int _KeywrapResolveKek(whServerContext* server, whKeyId serverKeyId,
         return ret;
     }
 
-    /* A hardware KEK already returned above and is inherently trusted; a
-     * software KEK qualifies only if it was provisioned with
-     * WH_NVM_FLAGS_TRUSTED (which a client can never set). */
+    /* A software KEK is trusted only if it was provisioned with
+     * WH_NVM_FLAGS_TRUSTED (which a client can never set) */
     if (enforceTrustedKek && !(kekMeta->flags & WH_NVM_FLAGS_TRUSTED)) {
         return WH_ERROR_ACCESS;
     }
 
-    *outKek   = kek;
-    *outKekSz = kekMeta->len;
+    outKek->key   = kek;
+    outKek->keySz = kekMeta->len;
     return WH_ERROR_OK;
 }
 
-/* Size of the local storage each keywrap helper provides for a hardware-only
- * KEK. Minimal when no hardware keystore is configured, since the resolver
- * then never writes to it */
+/* Set up aes with the KEK: by reference for a hardware key, else with its key
+ * bytes. Nothing needs freeing on failure */
+static int _KeywrapAesInit(whServerContext* server, Aes* aes,
+                           const whKeywrapKek* kek)
+{
+    int ret;
+
 #ifdef WOLFHSM_CFG_HWKEYSTORE
-#define WH_KEYWRAP_HWKEK_BUF_SIZE WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE
-#else
-#define WH_KEYWRAP_HWKEK_BUF_SIZE 1
+    if (kek->hwKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+
+        wh_HwKeystore_KeyRef(kek->hwKey, ref);
+        return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, server->devId);
+    }
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
+
+    ret = wc_AesInit(aes, NULL, server->devId);
+    if (ret == 0) {
+        ret = wc_AesGcmSetKey(aes, kek->key, kek->keySz);
+        if (ret != 0) {
+            wc_AesFree(aes);
+        }
+    }
+    return ret;
+}
 
 static const uint8_t WH_KEYWRAP_AAD_KEY[]  = WH_KEYWRAP_AAD_KEY_STR;
 static const uint8_t WH_KEYWRAP_AAD_DATA[] = WH_KEYWRAP_AAD_DATA_STR;
 
-static int _AesGcmKeyWrapWithKek(whServerContext* server,
-                                 const uint8_t* serverKey, uint32_t serverKeySz,
-                                 uint8_t* keyIn, uint16_t keySz,
-                                 whNvmMetadata* metadataIn,
+static int _AesGcmKeyWrapWithKek(whServerContext*    server,
+                                 const whKeywrapKek* kek, uint8_t* keyIn,
+                                 uint16_t keySz, whNvmMetadata* metadataIn,
                                  uint8_t* wrappedKeyOut, uint16_t wrappedKeySz)
 {
     int      ret = 0;
@@ -1599,7 +1618,7 @@ static int _AesGcmKeyWrapWithKek(whServerContext* server,
     uint32_t plainBlobSz = sizeof(*metadataIn) + keySz;
     uint8_t* encBlob;
 
-    if (server == NULL || keyIn == NULL || metadataIn == NULL ||
+    if (server == NULL || kek == NULL || keyIn == NULL || metadataIn == NULL ||
         wrappedKeyOut == NULL || plainBlobSz > sizeof(plainBlob)) {
         return WH_ERROR_BADARGS;
     }
@@ -1610,15 +1629,9 @@ static int _AesGcmKeyWrapWithKek(whServerContext* server,
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->devId);
+    /* Initialize AES context with the KEK */
+    ret = _KeywrapAesInit(server, aes, kek);
     if (ret != 0) {
-        return ret;
-    }
-
-    ret = wc_AesGcmSetKey(aes, serverKey, serverKeySz);
-    if (ret != 0) {
-        wc_AesFree(aes);
         return ret;
     }
 
@@ -1659,33 +1672,25 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
                           whNvmMetadata* metadataIn, uint8_t* wrappedKeyOut,
                           uint16_t wrappedKeySz)
 {
-    int            ret;
-    const uint8_t* serverKey   = NULL;
-    uint32_t       serverKeySz = 0;
-    uint8_t        hwKek[WH_KEYWRAP_HWKEK_BUF_SIZE];
+    int          ret;
+    whKeywrapKek kek;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Get the server side key (KEK) */
-    ret = _KeywrapResolveKek(server, serverKeyId, requireTrustedKek, hwKek,
-                             (uint16_t)sizeof(hwKek), &serverKey, &serverKeySz);
+    ret = _KeywrapResolveKek(server, serverKeyId, requireTrustedKek, &kek);
     if (ret == WH_ERROR_OK) {
-        ret =
-            _AesGcmKeyWrapWithKek(server, serverKey, serverKeySz, keyIn, keySz,
-                                  metadataIn, wrappedKeyOut, wrappedKeySz);
+        ret = _AesGcmKeyWrapWithKek(server, &kek, keyIn, keySz, metadataIn,
+                                    wrappedKeyOut, wrappedKeySz);
     }
-
-    /* Wipe any hardware KEK material from local storage */
-    wh_Utils_ForceZero(hwKek, sizeof(hwKek));
 
     return ret;
 }
 
-static int _AesGcmKeyUnwrapWithKek(whServerContext* server,
-                                   const uint8_t*   serverKey,
-                                   uint32_t serverKeySz, void* wrappedKeyIn,
+static int _AesGcmKeyUnwrapWithKek(whServerContext*    server,
+                                   const whKeywrapKek* kek, void* wrappedKeyIn,
                                    uint16_t       wrappedKeySz,
                                    whNvmMetadata* metadataOut, void* keyOut,
                                    uint16_t keySz)
@@ -1698,8 +1703,9 @@ static int _AesGcmKeyUnwrapWithKek(whServerContext* server,
     uint16_t encBlobSz;
     uint8_t  plainBlob[sizeof(*metadataOut) + WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE];
 
-    if (server == NULL || wrappedKeyIn == NULL || metadataOut == NULL ||
-        keyOut == NULL || keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
+    if (server == NULL || kek == NULL || wrappedKeyIn == NULL ||
+        metadataOut == NULL || keyOut == NULL ||
+        keySz > WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1710,15 +1716,9 @@ static int _AesGcmKeyUnwrapWithKek(whServerContext* server,
     encBlob   = (uint8_t*)wrappedKeyIn + sizeof(iv) + sizeof(authTag);
     encBlobSz = wrappedKeySz - sizeof(iv) - sizeof(authTag);
 
-    /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->devId);
+    /* Initialize AES context with the KEK */
+    ret = _KeywrapAesInit(server, aes, kek);
     if (ret != 0) {
-        return ret;
-    }
-
-    ret = wc_AesGcmSetKey(aes, serverKey, serverKeySz);
-    if (ret != 0) {
-        wc_AesFree(aes);
         return ret;
     }
 
@@ -1749,33 +1749,25 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
                             uint16_t wrappedKeySz, whNvmMetadata* metadataOut,
                             void* keyOut, uint16_t keySz)
 {
-    int            ret;
-    const uint8_t* serverKey   = NULL;
-    uint32_t       serverKeySz = 0;
-    uint8_t        hwKek[WH_KEYWRAP_HWKEK_BUF_SIZE];
+    int          ret;
+    whKeywrapKek kek;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
     }
 
     /* Get the server side key (KEK) */
-    ret = _KeywrapResolveKek(server, serverKeyId, requireTrustedKek, hwKek,
-                             (uint16_t)sizeof(hwKek), &serverKey, &serverKeySz);
+    ret = _KeywrapResolveKek(server, serverKeyId, requireTrustedKek, &kek);
     if (ret == WH_ERROR_OK) {
-        ret = _AesGcmKeyUnwrapWithKek(server, serverKey, serverKeySz,
-                                      wrappedKeyIn, wrappedKeySz, metadataOut,
-                                      keyOut, keySz);
+        ret = _AesGcmKeyUnwrapWithKek(server, &kek, wrappedKeyIn, wrappedKeySz,
+                                      metadataOut, keyOut, keySz);
     }
-
-    /* Wipe any hardware KEK material from local storage */
-    wh_Utils_ForceZero(hwKek, sizeof(hwKek));
 
     return ret;
 }
 
-static int _AesGcmDataWrapWithKek(whServerContext* server,
-                                  const uint8_t*   serverKey,
-                                  uint32_t serverKeySz, uint8_t* dataIn,
+static int _AesGcmDataWrapWithKek(whServerContext*    server,
+                                  const whKeywrapKek* kek, uint8_t* dataIn,
                                   uint16_t dataSz, uint8_t* wrappedDataOut,
                                   uint16_t wrappedDataSz)
 {
@@ -1785,8 +1777,8 @@ static int _AesGcmDataWrapWithKek(whServerContext* server,
     uint8_t  iv[WH_KEYWRAP_AES_GCM_IV_SIZE];
     uint8_t* encBlob;
 
-    if (server == NULL || dataIn == NULL || wrappedDataOut == NULL ||
-        dataSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
+    if (server == NULL || kek == NULL || dataIn == NULL ||
+        wrappedDataOut == NULL || dataSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1795,15 +1787,9 @@ static int _AesGcmDataWrapWithKek(whServerContext* server,
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->devId);
+    /* Initialize AES context with the KEK */
+    ret = _KeywrapAesInit(server, aes, kek);
     if (ret != 0) {
-        return ret;
-    }
-
-    ret = wc_AesGcmSetKey(aes, serverKey, serverKeySz);
-    if (ret != 0) {
-        wc_AesFree(aes);
         return ret;
     }
 
@@ -1836,10 +1822,8 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
                            uint8_t* dataIn, uint16_t dataSz,
                            uint8_t* wrappedDataOut, uint16_t wrappedDataSz)
 {
-    int            ret;
-    const uint8_t* serverKey   = NULL;
-    uint32_t       serverKeySz = 0;
-    uint8_t        hwKek[WH_KEYWRAP_HWKEK_BUF_SIZE];
+    int          ret;
+    whKeywrapKek kek;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
@@ -1848,24 +1832,19 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
     /* Get the server side key (KEK). Data wrap requires the KEK to carry
      * USAGE_WRAP, but not to be a trusted KEK (no server secret crosses the
      * boundary). */
-    ret = _KeywrapResolveKek(server, serverKeyId, 0, hwKek,
-                             (uint16_t)sizeof(hwKek), &serverKey, &serverKeySz);
+    ret = _KeywrapResolveKek(server, serverKeyId, 0, &kek);
     if (ret == WH_ERROR_OK) {
-        ret = _AesGcmDataWrapWithKek(server, serverKey, serverKeySz, dataIn,
-                                     dataSz, wrappedDataOut, wrappedDataSz);
+        ret = _AesGcmDataWrapWithKek(server, &kek, dataIn, dataSz,
+                                     wrappedDataOut, wrappedDataSz);
     }
-
-    /* Wipe any hardware KEK material from local storage */
-    wh_Utils_ForceZero(hwKek, sizeof(hwKek));
 
     return ret;
 }
 
-static int _AesGcmDataUnwrapWithKek(whServerContext* server,
-                                    const uint8_t*   serverKey,
-                                    uint32_t serverKeySz, void* wrappedDataIn,
-                                    uint16_t wrappedDataSz, void* dataOut,
-                                    uint16_t dataSz)
+static int _AesGcmDataUnwrapWithKek(whServerContext*    server,
+                                    const whKeywrapKek* kek,
+                                    void* wrappedDataIn, uint16_t wrappedDataSz,
+                                    void* dataOut, uint16_t dataSz)
 {
     int      ret = 0;
     Aes      aes[1];
@@ -1874,8 +1853,8 @@ static int _AesGcmDataUnwrapWithKek(whServerContext* server,
     uint8_t* encBlob;
     uint16_t encBlobSz;
 
-    if (server == NULL || wrappedDataIn == NULL || dataOut == NULL ||
-        dataSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
+    if (server == NULL || kek == NULL || wrappedDataIn == NULL ||
+        dataOut == NULL || dataSz > WOLFHSM_CFG_KEYWRAP_MAX_DATA_SIZE) {
         return WH_ERROR_BADARGS;
     }
 
@@ -1890,15 +1869,9 @@ static int _AesGcmDataUnwrapWithKek(whServerContext* server,
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    /* Initialize AES context and set it to use the server side key */
-    ret = wc_AesInit(aes, NULL, server->devId);
+    /* Initialize AES context with the KEK */
+    ret = _KeywrapAesInit(server, aes, kek);
     if (ret != 0) {
-        return ret;
-    }
-
-    ret = wc_AesGcmSetKey(aes, serverKey, serverKeySz);
-    if (ret != 0) {
-        wc_AesFree(aes);
         return ret;
     }
 
@@ -1919,10 +1892,8 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
                              void* wrappedDataIn, uint16_t wrappedDataSz,
                              void* dataOut, uint16_t dataSz)
 {
-    int            ret;
-    const uint8_t* serverKey   = NULL;
-    uint32_t       serverKeySz = 0;
-    uint8_t        hwKek[WH_KEYWRAP_HWKEK_BUF_SIZE];
+    int          ret;
+    whKeywrapKek kek;
 
     if (server == NULL) {
         return WH_ERROR_BADARGS;
@@ -1931,16 +1902,11 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
     /* Get the server side key (KEK). Data unwrap requires the KEK to carry
      * USAGE_WRAP, but not to be a trusted KEK (no server secret crosses the
      * boundary). */
-    ret = _KeywrapResolveKek(server, serverKeyId, 0, hwKek,
-                             (uint16_t)sizeof(hwKek), &serverKey, &serverKeySz);
+    ret = _KeywrapResolveKek(server, serverKeyId, 0, &kek);
     if (ret == WH_ERROR_OK) {
-        ret = _AesGcmDataUnwrapWithKek(server, serverKey, serverKeySz,
-                                       wrappedDataIn, wrappedDataSz, dataOut,
-                                       dataSz);
+        ret = _AesGcmDataUnwrapWithKek(server, &kek, wrappedDataIn,
+                                       wrappedDataSz, dataOut, dataSz);
     }
-
-    /* Wipe any hardware KEK material from local storage */
-    wh_Utils_ForceZero(hwKek, sizeof(hwKek));
 
     return ret;
 }
@@ -2144,8 +2110,8 @@ _HandleKeyWrapExportRequest(whServerContext*                        server,
             }
 
             /* Wrap the key with its real metadata. This extracts a server-held
-             * secret to the client, so the KEK must be a trusted (HW or
-             * WH_NVM_FLAGS_TRUSTED) key the client cannot know. */
+             * secret to the client, so the KEK must be a trusted key (a port
+             * key or WH_NVM_FLAGS_TRUSTED) the client cannot know. */
             ret = _AesGcmKeyWrap(server, serverKeyId, /*requireTrustedKek=*/1,
                                  key, (uint16_t)keySz, &metadata,
                                  wrappedKeyStage, wrappedKeySz);
@@ -2390,8 +2356,8 @@ static int _HandleKeyUnwrapAndCacheRequest(
             }
 
             /* Unwrap-and-cache injects a key into the server keystore, so the
-             * KEK must be a trusted (HW or WH_NVM_FLAGS_TRUSTED) key, else a
-             * client could forge a blob under a KEK it knows. */
+             * KEK must be a trusted key (a port key or WH_NVM_FLAGS_TRUSTED),
+             * else a client could forge a blob under a KEK it knows. */
             ret = _AesGcmKeyUnwrap(server, serverKeyId,
                                    /*requireTrustedKek=*/1, wrappedKey,
                                    req->wrappedKeySz, &metadata, keyStage,
@@ -3715,7 +3681,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
         case WH_KEY_HW_LOAD: {
             whMessageKeystore_HwLoadRequest  req  = {0};
             whMessageKeystore_HwLoadResponse resp = {0};
@@ -3836,7 +3802,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                 magic, &resp, (whMessageKeystore_HwInfoResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         } break;
-#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
         default:
             ret = WH_ERROR_NOHANDLER;

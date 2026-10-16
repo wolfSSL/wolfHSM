@@ -19,18 +19,19 @@
 /*
  * test-refactor/misc/wh_test_hwkeystore.c
  *
- * End-to-end hardware-only key (WH_KEYTYPE_HW) coverage. Lives in the
- * misc group because it requires a server with a known hardware keystore
- * backend bound, which the port's shared server does not guarantee: this
- * test spins up its own client/server pair over the mem transport, binds an
- * emulated hardware keystore serving a single AES-256 KEK, and pumps the
- * server inline between the split (non-blocking) client request/response
- * calls so no threading is needed.
+ * End-to-end coverage of hardware keys (WH_KEYTYPE_HW) as key wrap KEKs. Lives
+ * in the misc group because it needs a server with a known hardware keystore,
+ * which the port's shared server does not guarantee: this test spins up its
+ * own client/server pair over the mem transport and pumps the server inline
+ * between the split (non-blocking) client request/response calls, so no
+ * threading is needed. A mock wolfCrypt device holds one AES-256 KEK, which
+ * the port registers as hardware key WH_TEST_HWKEK_ID, and runs AES-GCM with
+ * it when the server passes the key by reference.
  *
  *   _whTest_HwKeystoreKeyWrap    - key wrap / unwrap-export / unwrap-and-cache
- *                                  with a hardware-only KEK; wrapped+hwonly
- *                                  flag precedence; unserved-id and wrong-KEK
- *                                  negative paths
+ *                                  with the hardware KEK; wrapped+hardware
+ *                                  flag precedence; unregistered-id and
+ *                                  wrong-KEK negative paths
  *   _whTest_HwKeystoreWrappedKeyNoNvm - an unwrapped key is cache-only, so
  *                                  commit and erase must reject a wrapped key
  *                                  id while eviction still works
@@ -38,14 +39,17 @@
  *                                  (never presenting plaintext) under the
  *                                  hardware KEK, round-trip it, and enforce
  *                                  NONEXPORTABLE
- *   _whTest_HwKeystoreDataWrap   - data wrap/unwrap roundtrip with a
- *                                  hardware-only KEK
- *   _whTest_HwKeystoreRejections - keystore operations on a hardware-only id
+ *   _whTest_HwKeystoreDataWrap   - data wrap/unwrap roundtrip with the
+ *                                  hardware KEK
+ *   _whTest_HwKeystoreRejections - keystore operations on a hardware key id
  *                                  must fail with WH_ERROR_ACCESS
+ *   _whTest_HwKeystoreKekPolicy  - a hardware key without WRAP usage, or
+ *                                  another client's, is refused as a KEK
+ *   _whTest_HwKeystoreUnbound    - a hardware KEK fails with NOTFOUND on a
+ *                                  server with no hardware keystore bound
  *
- * Crypto key use of a hardware-only id (rejected at the keystore freshen
- * choke point) is covered server-side in server/wh_test_hwkeystore_server.c,
- * since the blocking wolfCrypt callback cannot be pumped single-threaded.
+ * AES and CMAC with hardware keys, and client-loaded keys as KEKs, are covered
+ * in misc/wh_test_hwkeystore_crypto.c.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -60,6 +64,9 @@
 
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_common.h"
@@ -81,7 +88,7 @@
 #define FLASH_SECTOR_SIZE (128 * 1024)
 #define FLASH_PAGE_SIZE 8
 
-/* Id and material of the only KEK served by the emulated hardware keystore */
+/* Id and size of the mock device's KEK, which the port registers */
 #define WH_TEST_HWKEK_ID 3
 #define WH_TEST_HWKEK_SIZE 32
 
@@ -98,38 +105,76 @@ static const uint8_t _hwKekMaterial[WH_TEST_HWKEK_SIZE] = {
     0x59, 0xee, 0x07, 0xb1, 0x2c, 0x48, 0x95, 0x3a, 0xc6, 0x71, 0x0d,
     0xb8, 0xe5, 0x12, 0x6a, 0xf9, 0x84, 0x2f, 0xd0, 0x5b, 0xa7};
 
-static int _HwKeystoreGetKey(void* context, whKeyId keyId, uint8_t* out,
-                             uint16_t* inout_len)
+/* wolfCrypt device of the mock hardware */
+#define WH_TEST_HW_DEVID 0x4D4B454B
+
+/* Hardware keys _whTest_HwKeystoreKekPolicy registers: one without WRAP usage,
+ * and one that belongs to another client */
+#define WH_TEST_HW_NOWRAP_ID (WH_TEST_HWKEK_ID + 2)
+#define WH_TEST_HW_OTHER_ID (WH_TEST_HWKEK_ID + 3)
+
+/* AES-GCM operations the mock device ran with the KEK */
+static int _hwKekOps;
+
+/* Hardware key number named by a key reference, or -1 */
+static int _MockRefId(const unsigned char* ref, int refSz)
 {
-    (void)context;
+    whKeyId keyId;
 
-    /* Only hardware-only keyIds should ever reach a hardware keystore */
-    if (WH_KEYID_TYPE(keyId) != WH_KEYTYPE_HW) {
-        return WH_ERROR_ACCESS;
+    if (refSz != WH_HWKEYSTORE_REF_SIZE) {
+        return -1;
     }
-
-    /* Serve only the known test KEK id, refuse everything else */
-    if (WH_KEYID_ID(keyId) != WH_TEST_HWKEK_ID) {
-        return WH_ERROR_NOTFOUND;
-    }
-
-    if ((out == NULL) || (inout_len == NULL) ||
-        (*inout_len < sizeof(_hwKekMaterial))) {
-        return WH_ERROR_BUFFER_SIZE;
-    }
-
-    memcpy(out, _hwKekMaterial, sizeof(_hwKekMaterial));
-    *inout_len = sizeof(_hwKekMaterial);
-    return WH_ERROR_OK;
+    keyId = (whKeyId)(((whKeyId)ref[0] << 8) | ref[1]);
+    return WH_KEYID_ISHW(keyId) ? (int)WH_KEYID_ID(keyId) : -1;
 }
 
-/* clang-format off */
-static const whHwKeystoreCb _hwKeystoreCb = {
-    .Init    = NULL,
-    .Cleanup = NULL,
-    .GetKey  = _HwKeystoreGetKey,
-};
-/* clang-format on */
+/* Runs AES-GCM with the KEK when the server passes it by reference. Software
+ * keys are left to wolfCrypt */
+static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
+{
+    Aes* aes;
+    Aes  sw[1];
+    int  ret;
+
+    (void)devId;
+    (void)ctx;
+
+    if ((info->algo_type != WC_ALGO_TYPE_CIPHER) ||
+        (info->cipher.type != WC_CIPHER_AES_GCM)) {
+        return CRYPTOCB_UNAVAILABLE;
+    }
+    aes = (info->cipher.enc != 0) ? info->cipher.aesgcm_enc.aes
+                                  : info->cipher.aesgcm_dec.aes;
+    if (aes->idLen == 0) {
+        return CRYPTOCB_UNAVAILABLE;
+    }
+    /* No other hardware key holds a KEK */
+    if (_MockRefId(aes->id, aes->idLen) != WH_TEST_HWKEK_ID) {
+        return WC_HW_E;
+    }
+
+    ret = wc_AesInit(sw, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_AesGcmSetKey(sw, _hwKekMaterial, sizeof(_hwKekMaterial));
+        if ((ret == 0) && (info->cipher.enc != 0)) {
+            wc_CryptoCb_AesAuthEnc* e = &info->cipher.aesgcm_enc;
+            ret = wc_AesGcmEncrypt(sw, e->out, e->in, e->sz, e->iv, e->ivSz,
+                                   e->authTag, e->authTagSz, e->authIn,
+                                   e->authInSz);
+        }
+        else if (ret == 0) {
+            wc_CryptoCb_AesAuthDec* d = &info->cipher.aesgcm_dec;
+            ret = wc_AesGcmDecrypt(sw, d->out, d->in, d->sz, d->iv, d->ivSz,
+                                   d->authTag, d->authTagSz, d->authIn,
+                                   d->authInSz);
+        }
+        wc_AesFree(sw);
+    }
+    if (ret == 0) {
+        _hwKekOps++;
+    }
+    return ret;
+}
 
 /* Self-contained client/server pair over the mem transport. The server is
  * pumped inline (wh_Server_HandleRequestMessage) between each split client
@@ -224,10 +269,9 @@ static int _SetupClientServer(TestCtx* t)
         .config  = t->nf_conf,
     };
 
-    /* Hardware keystore front-end backed by the test getKey callback */
+    /* Hardware keystore with no backend hooks */
     t->hwks_conf[0] = (whHwKeystoreConfig){
-        .cb      = &_hwKeystoreCb,
-        .context = NULL,
+        .cb = NULL,
     };
 
     /* Server config */
@@ -236,14 +280,21 @@ static int _SetupClientServer(TestCtx* t)
         .nvm         = t->nvm,
 #ifndef WOLFHSM_CFG_NO_CRYPTO
         .crypto = t->crypto,
-        .devId  = INVALID_DEVID,
+        .devId  = WH_TEST_HW_DEVID,
 #endif
         .hwKeystore = t->hwKeystore,
     };
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(t->nvm, t->n_conf));
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(t->hwKeystore, t->hwks_conf));
+    /* The port's KEK, shared by all clients */
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        t->hwKeystore,
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_TEST_HWKEK_ID),
+        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
+    WH_TEST_RETURN_ON_FAIL(
+        wc_CryptoCb_RegisterDevice(WH_TEST_HW_DEVID, _MockCryptoCb, NULL));
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(t->crypto->rng, NULL, INVALID_DEVID));
     WH_TEST_RETURN_ON_FAIL(wh_Server_Init(t->server, t->s_conf));
     WH_TEST_RETURN_ON_FAIL(
@@ -267,6 +318,7 @@ static void _CleanupClientServer(TestCtx* t)
     (void)wh_Nvm_Cleanup(t->nvm);
     (void)wh_HwKeystore_Cleanup(t->hwKeystore);
     (void)wc_FreeRng(t->crypto->rng);
+    wc_CryptoCb_UnRegisterDevice(WH_TEST_HW_DEVID);
     (void)wolfCrypt_Cleanup();
 }
 
@@ -396,6 +448,7 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
     uint16_t      unwrappedKeyId = WH_KEYID_ERASED;
     whNvmMetadata metadata       = {0};
     whNvmMetadata tmpMetadata    = {0};
+    int           ops            = _hwKekOps;
     size_t        i;
 
     metadata.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(t->client->comm->client_id,
@@ -409,7 +462,7 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
         plainKey[i] = (uint8_t)(0xA0 ^ i);
     }
 
-    /* Wrap a key using the hardware-only KEK */
+    /* Wrap a key using the hardware KEK */
     ret = _KeyWrap(t, hwKekId, plainKey, sizeof(plainKey), &metadata,
                    wrappedKey, &wrappedKeySz);
     if (ret != WH_ERROR_OK) {
@@ -417,13 +470,16 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
         return ret;
     }
 
-    /* Unwrap and export with the hardware-only KEK, check the roundtrip */
+    /* Unwrap and export with the hardware KEK, check the roundtrip */
     ret = _KeyUnwrapAndExport(t, hwKekId, wrappedKey, wrappedKeySz,
                               &tmpMetadata, tmpPlainKey, &tmpPlainKeySz);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to KeyUnwrapAndExport with HW KEK %d\n", ret);
         return ret;
     }
+
+    /* The mock device ran both operations with the KEK, by reference */
+    WH_TEST_ASSERT_RETURN(_hwKekOps == ops + 2);
 
     if (memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
         WH_ERROR_PRINT("HW KEK wrap/unwrap key failed to match\n");
@@ -435,7 +491,7 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
         return WH_ERROR_ABORTED;
     }
 
-    /* Unwrap-and-cache with the hardware-only KEK: the wrapped payload is an
+    /* Unwrap-and-cache with the hardware KEK: the wrapped payload is an
      * ordinary key and may enter the cache; only the KEK itself is
      * hardware-resident */
     ret = _KeyUnwrapAndCache(t, hwKekId, wrappedKey, wrappedKeySz,
@@ -446,8 +502,8 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
     }
     WH_TEST_RETURN_ON_FAIL(_KeyEvict(t, unwrappedKeyId));
 
-    /* A wrapped+hardware-only KEK id must behave as hardware-only (the
-     * hardware-only flag takes precedence) */
+    /* A KEK id with both the wrapped and hardware flags is a hardware key
+     * (the hardware flag takes precedence) */
     wrappedKeySz = sizeof(wrappedKey);
     ret          = _KeyWrap(t, hwKekId | WH_KEYID_CLIENT_WRAPPED_FLAG, plainKey,
                             sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz);
@@ -481,12 +537,12 @@ static int _whTest_HwKeystoreKeyWrap(TestCtx* t)
         }
     }
 
-    /* A hardware KEK id the backend does not serve must fail */
+    /* A hardware key the server has no record of must fail */
     wrappedKeySz = sizeof(wrappedKey);
     ret = _KeyWrap(t, WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID + 1), plainKey,
                    sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz);
     if (ret != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("KeyWrap with unserved HW KEK expected NOTFOUND, "
+        WH_ERROR_PRINT("KeyWrap with unregistered HW KEK expected NOTFOUND, "
                        "got %d\n",
                        ret);
         return WH_ERROR_ABORTED;
@@ -689,9 +745,8 @@ static int _whTest_HwKeystoreDataWrap(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* Hardware-only keys must be rejected by every keystore operation; only the
- * keywrap KEK paths may resolve them. Crypto key use is rejected at the same
- * keystore choke points, covered in server/wh_test_hwkeystore_server.c */
+/* Hardware keys must be rejected by every keystore operation. Key wrap and
+ * the crypto handlers use them through the hardware keystore instead */
 static int _whTest_HwKeystoreRejections(TestCtx* t)
 {
     int      ret;
@@ -701,7 +756,7 @@ static int _whTest_HwKeystoreRejections(TestCtx* t)
     uint8_t  label[WH_NVM_LABEL_LEN] = "hwonly reject";
     uint16_t cacheKeyId              = hwKeyId;
 
-    /* Caching key material under a hardware-only id must be rejected */
+    /* Caching key material under a hardware key id must be rejected */
     ret = _KeyCache(t, WH_NVM_FLAGS_NONE, label, sizeof(label), buf,
                     sizeof(buf), &cacheKeyId);
     if (ret != WH_ERROR_ACCESS) {
@@ -710,7 +765,7 @@ static int _whTest_HwKeystoreRejections(TestCtx* t)
     }
 
 #ifdef WOLFHSM_CFG_DMA
-    /* The DMA cache path must reject hardware-only ids as well */
+    /* The DMA cache path must reject hardware key ids as well */
     cacheKeyId = hwKeyId;
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyCacheDmaRequest(
         t->client, WH_NVM_FLAGS_NONE, label, sizeof(label), buf, sizeof(buf),
@@ -724,7 +779,7 @@ static int _whTest_HwKeystoreRejections(TestCtx* t)
     }
 #endif
 
-    /* Exporting a hardware-only key must be rejected */
+    /* Exporting a hardware key must be rejected */
     ret = _KeyExport(t, hwKeyId, label, sizeof(label), buf, &bufSz);
     if (ret != WH_ERROR_ACCESS) {
         WH_ERROR_PRINT("KeyExport of HW-only id expected ACCESS, got %d\n",
@@ -732,7 +787,7 @@ static int _whTest_HwKeystoreRejections(TestCtx* t)
         return WH_ERROR_ABORTED;
     }
 
-    /* Commit/evict/erase/revoke of a hardware-only key must be rejected */
+    /* Commit/evict/erase/revoke of a hardware key must be rejected */
     ret = _KeyCommit(t, hwKeyId);
     if (ret != WH_ERROR_ACCESS) {
         WH_ERROR_PRINT("KeyCommit of HW-only id expected ACCESS, got %d\n",
@@ -762,7 +817,55 @@ static int _whTest_HwKeystoreRejections(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* A hardware-only KEK requested against a server that has no hardware keystore
+/* A KEK must allow WRAP usage and belong to the caller or be shared, the same
+ * policy the server applies to every other use of a hardware key */
+static int _whTest_HwKeystoreKekPolicy(TestCtx* t)
+{
+    uint8_t       plainKey[WH_TEST_AES_KEYSIZE] = {0};
+    uint8_t       wrappedKey[WH_TEST_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    uint8_t       data[]       = "Example data!";
+    uint8_t       wrappedData[sizeof(data) + WH_KEYWRAP_AES_GCM_HEADER_SIZE];
+    uint32_t      wrappedDataSz = sizeof(wrappedData);
+    whNvmMetadata metadata      = {0};
+    uint16_t      otherUser     = (uint16_t)(t->client->comm->client_id + 1);
+
+    metadata.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(t->client->comm->client_id,
+                                                     WH_TEST_WRAPPED_KEYID);
+    metadata.len = WH_TEST_AES_KEYSIZE;
+    metadata.flags = WH_NVM_FLAGS_USAGE_ANY;
+
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        t->hwKeystore,
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_TEST_HW_NOWRAP_ID),
+        WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
+        WH_TEST_HWKEK_SIZE));
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        t->hwKeystore,
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, otherUser, WH_TEST_HW_OTHER_ID),
+        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
+
+    /* No WRAP usage */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_USAGE ==
+        _KeyWrap(t, WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HW_NOWRAP_ID), plainKey,
+                 sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_USAGE ==
+        _DataWrap(t, WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HW_NOWRAP_ID), data,
+                  sizeof(data), wrappedData, &wrappedDataSz));
+
+    /* Another client's key */
+    wrappedKeySz = sizeof(wrappedKey);
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        _KeyWrap(t, WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HW_OTHER_ID), plainKey,
+                 sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz));
+
+    return WH_ERROR_OK;
+}
+
+/* A hardware KEK requested against a server that has no hardware keystore
  * bound (HWKEYSTORE compiled in, whServerConfig.hwKeystore left NULL) must fail
  * cleanly with NOTFOUND from the keywrap KEK resolver. Simulate the unbound
  * configuration by detaching the server's keystore for the duration of the
@@ -837,6 +940,9 @@ int whTest_HwKeystore(void* ctx)
     }
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeystoreRejections(t);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeystoreKekPolicy(t);
     }
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeystoreUnbound(t);

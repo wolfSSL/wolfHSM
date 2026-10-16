@@ -171,10 +171,9 @@ ifeq ($(CRYPTO_AFFINITY),1)
     DEF += -DWOLFHSM_CFG_CRYPTO_AFFINITY
 endif
 
-# Enable hardware keys in AES and CMAC requests and their unit test
-ifeq ($(HWKEYSTORE_CRYPTO),1)
-    DEF += -DWOLFHSM_CFG_HWKEYSTORE_CRYPTO
-    DEF += -DWOLF_CRYPTO_CB_KEYSTORE -DWOLF_PRIVATE_KEY_ID
+# Let clients load keys into hardware keys, and enable its unit test
+ifeq ($(HWKEYSTORE_LOAD),1)
+    DEF += -DWOLFHSM_CFG_HWKEYSTORE_LOAD -DWOLF_CRYPTO_CB_KEYSTORE
 endif
 
 # Build the wolfCrypt test suite as a wolfHSM client

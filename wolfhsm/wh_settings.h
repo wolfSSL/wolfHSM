@@ -78,25 +78,24 @@
  *  way as WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
  *      Default: 2000, or what WOLFHSM_CFG_COMM_DATA_LEN leaves when smaller
  *
- *  WOLFHSM_CFG_HWKEYSTORE - If defined, include the hardware keystore
- *  front-end module and hardware-only key (WH_KEYTYPE_HW) support
- *      Default: Not defined
- *
- *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE - The maximum size (in bytes) of a key
- *  served by a hardware keystore backend
- *      Default: 32
- *
- *  WOLFHSM_CFG_HWKEYSTORE_CRYPTO - If defined, clients can load keys into
- *  the hardware keystore and use hardware keys in AES and CMAC requests. The
- *  server passes a hardware key to wolfCrypt by reference, so the crypto
- *  callback must handle every operation on it. Requires
- *  WOLFHSM_CFG_HWKEYSTORE, and WOLF_CRYPTO_CB_KEYSTORE and WOLF_PRIVATE_KEY_ID
- *  in wolfCrypt
+ *  WOLFHSM_CFG_HWKEYSTORE - If defined, clients can use hardware keys
+ *  (WH_KEYTYPE_HW) in AES and CMAC requests and as key wrap KEKs. The server
+ *  passes a hardware key to wolfCrypt by reference, so the crypto callback
+ *  must run every operation on it. Requires WOLF_PRIVATE_KEY_ID in wolfCrypt
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS - The number of hardware keys the server
- *  tracks for crypto use
+ *  tracks
  *      Default: 8
+ *
+ *  WOLFHSM_CFG_HWKEYSTORE_LOAD - If defined, clients can also load keystore
+ *  keys into hardware keys, clear them, and describe hardware keys. Requires
+ *  WOLFHSM_CFG_HWKEYSTORE, and WOLF_CRYPTO_CB_KEYSTORE in wolfCrypt
+ *      Default: Not defined
+ *
+ *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE - The largest keystore key (in bytes)
+ *  a client can load into a hardware key
+ *      Default: 32
  *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
  *                          using stdio.h
@@ -599,10 +598,12 @@
 #error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
 #endif
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE_CRYPTO) && \
-    (!defined(WOLF_CRYPTO_CB_KEYSTORE) || !defined(WOLF_PRIVATE_KEY_ID))
-#error \
-    "WOLFHSM_CFG_HWKEYSTORE_CRYPTO requires WOLF_CRYPTO_CB_KEYSTORE and WOLF_PRIVATE_KEY_ID"
+#if defined(WOLFHSM_CFG_HWKEYSTORE) && !defined(WOLF_PRIVATE_KEY_ID)
+#error "WOLFHSM_CFG_HWKEYSTORE requires WOLF_PRIVATE_KEY_ID"
+#endif
+
+#if defined(WOLFHSM_CFG_HWKEYSTORE_LOAD) && !defined(WOLF_CRYPTO_CB_KEYSTORE)
+#error "WOLFHSM_CFG_HWKEYSTORE_LOAD requires WOLF_CRYPTO_CB_KEYSTORE"
 #endif
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
@@ -652,23 +653,22 @@
 #endif
 
 #if defined(WOLFHSM_CFG_HWKEYSTORE)
+#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS
+#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS 8
+#endif
 #ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE
 #define WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE 32
 #endif
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE_CRYPTO)
+#if defined(WOLFHSM_CFG_HWKEYSTORE_LOAD)
 #if !defined(WOLFHSM_CFG_HWKEYSTORE)
-#error "WOLFHSM_CFG_HWKEYSTORE_CRYPTO requires WOLFHSM_CFG_HWKEYSTORE"
+#error "WOLFHSM_CFG_HWKEYSTORE_LOAD requires WOLFHSM_CFG_HWKEYSTORE"
 #endif
 #if defined(WOLFHSM_CFG_NO_CRYPTO)
-#error \
-    "WOLFHSM_CFG_HWKEYSTORE_CRYPTO is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#error "WOLFHSM_CFG_HWKEYSTORE_LOAD is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
-#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS
-#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS 8
-#endif
-#endif /* WOLFHSM_CFG_HWKEYSTORE_CRYPTO */
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
 /* Trusted cert verify cache requires the certificate manager and crypto.
  * Enforce here so downstream code can gate on

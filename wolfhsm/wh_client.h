@@ -1042,14 +1042,14 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
 /**
  * @brief Sends a request to copy a keystore key into a hardware key.
  *
- * The hardware key keeps the source key's usage flags and can then be used in
- * AES and CMAC operations through wh_Client_AesSetKeyId() and
- * wh_Client_CmacSetKeyId(). Which hardware keyIds exist and what they can hold
+ * The hardware key keeps the source key's usage flags and can then be used
+ * like any key ID wherever hardware keys are supported, for example with
+ * wh_Client_AesSetKeyId(). Which hardware keyIds exist and what they can hold
  * depends on the port. The key belongs to this client unless hwKeyId has the
  * global flag. Erasing or revoking a key clears every hardware key loaded from
  * that key ID; evicting it does not. Hardware keys are lost when the HSM
  * resets.
- * Requires a server built with WOLFHSM_CFG_HWKEYSTORE_CRYPTO.
+ * Requires a server built with WOLFHSM_CFG_HWKEYSTORE_LOAD.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] hwKeyId Hardware key to load, from WH_CLIENT_KEYID_MAKE_HW(). An
@@ -4053,27 +4053,23 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
     ((_id) | WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
 
 /**
- * @brief Mark a key ID as hardware-only
+ * @brief Make a hardware key ID
  *
- * Sets the hardware-only flag in a client keyId to indicate to the server
- * that this key's material lives exclusively in a hardware keystore. The
- * server will translate this to KEYTYPE=WH_KEYTYPE_HW and fetch the
- * material from its hardware keystore backend on demand.
- *
- * Hardware-only keys never enter the server key cache or NVM and are never
- * returned to a client. They are only usable as KEKs in the keywrap API
- * (key/data wrap and unwrap); all other keystore and crypto operations
- * reject them with WH_ERROR_ACCESS.
+ * Sets the hardware flag in a client keyId. The server translates it to
+ * KEYTYPE=WH_KEYTYPE_HW: a key held in hardware, which the server uses by
+ * reference and never caches, stores in NVM or returns to a client. The port
+ * decides what each number names. Hardware keys work in the operations that
+ * support them, such as AES and CMAC requests and as key wrap KEKs; keystore
+ * operations reject them with WH_ERROR_ACCESS.
  *
  * @note Requires the server to be built with WOLFHSM_CFG_HWKEYSTORE. On a
- *       server without hardware keystore support the hardware-only flag is
+ *       server without hardware keystore support the hardware flag is
  *       ignored and the request is treated as an ordinary key ID (looked up
  *       in the normal cache/NVM keystore), which typically fails with a
  *       key-not-found error.
  *
- * @param _id The key ID (0-255), as understood by the server's hardware
- *            keystore backend
- * @return keyId with hardware-only flag set
+ * @param _id The hardware key number (0-255), as defined by the port
+ * @return keyId with the hardware flag set
  *
  * Example:
  *   whKeyId hwKek = WH_CLIENT_KEYID_MAKE_HW(2);

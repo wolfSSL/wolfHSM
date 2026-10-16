@@ -3176,13 +3176,13 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
 static int _HwKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
                           whNvmFlags usage, whKeyId* outHwKey)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE
     if ((ctx->hwKeystore == NULL) || (devId == INVALID_DEVID)) {
         return WH_ERROR_NOTFOUND;
     }
     return wh_HwKeystore_CheckUse(ctx->hwKeystore, keyId, usage, outHwKey);
 #else
-    /* Without it, hardware keys are only key encryption keys */
+    /* No hardware keystore is built in */
     (void)ctx;
     (void)devId;
     (void)keyId;
@@ -3196,7 +3196,7 @@ static int _HwKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
  * key is set, and the crypto callback runs every operation */
 static int _AesInitForKey(Aes* aes, int devId, whKeyId hwKey)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE
     if (hwKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 
@@ -4693,7 +4693,7 @@ static int _CmacResolveKey(whServerContext* ctx, int devId,
 static int _CmacInitForKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
                            whKeyId hwKey, int devId)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE_CRYPTO
+#ifdef WOLFHSM_CFG_HWKEYSTORE
     if (hwKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 

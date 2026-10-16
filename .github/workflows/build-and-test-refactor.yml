@@ -140,17 +140,17 @@ jobs:
       if: matrix.group == 'wolfcrypt'
       run: cd test-refactor/posix && make clean && make -j CRYPTO_AFFINITY=1 DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
-    # Build and test with hardware keys in crypto requests (runs the hardware
-    # keystore crypto test, gated behind WOLFHSM_CFG_HWKEYSTORE_CRYPTO)
-    - name: Build and test refactor HWKEYSTORE_CRYPTO ASAN
+    # Build and test with clients loading hardware keys (runs the hardware
+    # keystore crypto test, gated behind WOLFHSM_CFG_HWKEYSTORE_LOAD)
+    - name: Build and test refactor HWKEYSTORE_LOAD ASAN
       if: matrix.group == 'wolfcrypt'
-      run: cd test-refactor/posix && make clean && make -j HWKEYSTORE_CRYPTO=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+      run: cd test-refactor/posix && make clean && make -j HWKEYSTORE_LOAD=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test hardware keys alongside DMA (exercises the DMA handlers)
     # LMS/XMSS verify-only; full PQ runs in DMA ASAN and THREADSAFE everything
-    - name: Build and test refactor HWKEYSTORE_CRYPTO DMA ASAN
+    - name: Build and test refactor HWKEYSTORE_LOAD DMA ASAN
       if: matrix.group == 'wolfcrypt'
-      run: cd test-refactor/posix && make clean && make -j HWKEYSTORE_CRYPTO=1 DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
+      run: cd test-refactor/posix && make clean && make -j HWKEYSTORE_LOAD=1 DMA=1 ASAN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with global SHE keys (all SHE slots shared across clients)
     - name: Build and test refactor ASAN SHE_GLOBAL
