@@ -87,6 +87,8 @@ make run
 
 Feature-specific builds are selected with the same makefile variables documented in [9-Configuration.md](9-Configuration.md) — for example `DMA=1`, `SHE=1`, `AUTH=1`, `TLS=1`, `THREADSAFE=1`, `TESTWOLFCRYPT=1`. Development and CI builds also commonly set `ASAN=1` (address sanitizer), `TSAN=1` (thread sanitizer, mutually exclusive with `ASAN`), `DEBUG=1`, or `COVERAGE=1` (instruments the build for `gcovr`; see `make coverage`).
 
+`SM=1` enables the SM2/SM3/SM4 tests. It requires the [wolfsm](https://github.com/wolfSSL/wolfsm) sources installed into the wolfSSL tree with its `install.sh`.
+
 To build a client-only driver that connects to an already-running server over TCP (or TLS when `TLS=1` is set), pass `CLIENT_ONLY=1`:
 
 ```sh

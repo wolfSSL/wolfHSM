@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -45,6 +45,7 @@
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
 #include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/sm4.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
@@ -406,6 +407,387 @@ int wh_Client_Curve25519SharedSecretCacheKeyResponse(whClientContext* ctx,
                                                      whKeyId* out_key_id);
 
 #endif /* HAVE_CURVE25519 */
+
+#if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
+
+/* SM2 keys are ecc_key values on the SM2 curve, so they use the existing ECC
+ * key id binding (wh_Client_EccSetKeyId) and the ECC key cache. A key that is
+ * only a handle is used by id; one holding material is imported for the call
+ * and evicted afterwards. */
+
+/**
+ * @brief Sign a hash with an SM2 key held by the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key SM2 key, either server-resident or holding key material
+ * @param[in] in Hash to sign
+ * @param[in] in_len Length of in in bytes
+ * @param[out] sig Buffer to receive the signature
+ * @param[in,out] inout_sig_len Capacity on entry, signature length on exit
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2Sign(whClientContext* ctx, ecc_key* key, const uint8_t* in,
+                      uint16_t in_len, uint8_t* sig, uint16_t* inout_sig_len);
+
+/**
+ * @brief Verify an SM2 signature with a key held by the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] key SM2 key, either server-resident or holding key material
+ * @param[in] sig Signature to verify
+ * @param[in] sig_len Length of sig in bytes
+ * @param[in] hash Hash that was signed
+ * @param[in] hash_len Length of hash in bytes
+ * @param[out] out_res Set to 1 when the signature verifies, 0 otherwise
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2Verify(whClientContext* ctx, ecc_key* key, const uint8_t* sig,
+                        uint16_t sig_len, const uint8_t* hash,
+                        uint16_t hash_len, int* out_res);
+
+/**
+ * @brief Compute an SM2 shared secret on the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] priv_key Private key, server-resident or holding material
+ * @param[in] pub_key Public key, server-resident or holding material
+ * @param[out] out Buffer to receive the shared secret
+ * @param[in,out] inout_size Capacity on entry, secret length on exit
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm2SharedSecret(whClientContext* ctx, ecc_key* priv_key,
+                              ecc_key* pub_key, uint8_t* out,
+                              uint16_t* inout_size);
+
+#endif /* WOLFSSL_SM2 && HAVE_ECC */
+
+#ifdef WOLFSSL_SM4
+
+/* Every SM4 call sends the key held in sm4->devKey together with the key id
+ * bound into sm4->devCtx. The server uses the key id when one is set, so a
+ * key that lives in the HSM is never transmitted, and falls back to the
+ * inline key otherwise. */
+
+/**
+ * @brief Associate an SM4 context with a server-resident key.
+ *
+ * @param[in] sm4 SM4 context
+ * @param[in] keyId Key ID to bind
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4SetKeyId(wc_Sm4* sm4, whKeyId keyId);
+
+/**
+ * @brief Get the key ID bound to an SM4 context.
+ *
+ * @param[in] sm4 SM4 context
+ * @param[out] outId Receives the key ID
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4GetKeyId(wc_Sm4* sm4, whKeyId* outId);
+
+#ifdef WOLFSSL_SM4_ECB
+/**
+ * @brief Send an SM4-ECB request to the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4EcbRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the response to an SM4-ECB request.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[out] out Buffer to receive the output, at least the input length
+ * @param[out] out_size Bytes written, may be NULL
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4EcbResponse(whClientContext* ctx, uint8_t* out,
+                             uint32_t* out_size);
+
+/**
+ * @brief Perform a blocking SM4-ECB operation.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4Ecb(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                     const uint8_t* in, uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_ECB */
+
+#ifdef WOLFSSL_SM4_CBC
+/**
+ * @brief Send an SM4-CBC request to the server.
+ *
+ * The IV currently held in sm4 is sent with the request.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key, key id and IV
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CbcRequest(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the response to an SM4-CBC request.
+ *
+ * The IV in sm4 is updated from the response so chained calls continue
+ * correctly.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context whose IV is updated
+ * @param[out] out Buffer to receive the output
+ * @param[out] out_size Bytes written, may be NULL
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CbcResponse(whClientContext* ctx, wc_Sm4* sm4, uint8_t* out,
+                             uint32_t* out_size);
+
+/**
+ * @brief Perform a blocking SM4-CBC operation.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context holding the key, key id and IV
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4Cbc(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                     const uint8_t* in, uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFSSL_SM4_CTR
+/**
+ * @brief Send an SM4-CTR request to the server.
+ *
+ * CTR encrypts and decrypts with the same operation, so there is no direction
+ * argument. The counter and any leftover keystream block are sent along so a
+ * stream split across calls resumes exactly.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key, key id and counter state
+ * @param[in] in Input data, any length
+ * @param[in] len Length of in in bytes
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CtrRequest(whClientContext* ctx, wc_Sm4* sm4,
+                            const uint8_t* in, uint32_t len);
+
+/**
+ * @brief Receive the response to an SM4-CTR request.
+ *
+ * The counter and leftover keystream in sm4 are updated from the response.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context whose counter state is updated
+ * @param[out] out Buffer to receive the output
+ * @param[out] out_size Bytes written, may be NULL
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CtrResponse(whClientContext* ctx, wc_Sm4* sm4, uint8_t* out,
+                             uint32_t* out_size);
+
+/**
+ * @brief Perform a blocking SM4-CTR operation.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context holding the key, key id and counter state
+ * @param[in] in Input data, any length
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4Ctr(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
+                     uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_CTR */
+
+#ifdef WOLFSSL_SM4_GCM
+/**
+ * @brief Perform a blocking SM4-GCM operation.
+ *
+ * On encrypt the tag is written to tag. On decrypt tag is the tag to check,
+ * and a mismatch is reported as an error from the server.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data
+ * @param[in] len Length of in in bytes
+ * @param[in] iv Nonce
+ * @param[in] iv_len Length of iv in bytes
+ * @param[in] authin Additional authenticated data, may be NULL
+ * @param[in] authin_len Length of authin in bytes
+ * @param[in,out] tag Auth tag, output on encrypt and input on decrypt
+ * @param[in] tag_len Length of tag in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4Gcm(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                     const uint8_t* in, uint32_t len, const uint8_t* iv,
+                     uint32_t iv_len, const uint8_t* authin,
+                     uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
+                     uint8_t* out);
+#endif /* WOLFSSL_SM4_GCM */
+
+#ifdef WOLFSSL_SM4_CCM
+/**
+ * @brief Perform a blocking SM4-CCM operation.
+ *
+ * Arguments match wh_Client_Sm4Gcm.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data
+ * @param[in] len Length of in in bytes
+ * @param[in] iv Nonce
+ * @param[in] iv_len Length of iv in bytes
+ * @param[in] authin Additional authenticated data, may be NULL
+ * @param[in] authin_len Length of authin in bytes
+ * @param[in,out] tag Auth tag, output on encrypt and input on decrypt
+ * @param[in] tag_len Length of tag in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4Ccm(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                     const uint8_t* in, uint32_t len, const uint8_t* iv,
+                     uint32_t iv_len, const uint8_t* authin,
+                     uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
+                     uint8_t* out);
+#endif /* WOLFSSL_SM4_CCM */
+
+
+#ifdef WOLFHSM_CFG_DMA
+
+/* The DMA forms move the bulk data by DMA and keep the key, IV and tag
+ * inline. They are blocking: a request is sent and its response consumed
+ * before returning, so no asynchronous state is held in the client context. */
+
+#ifdef WOLFSSL_SM4_ECB
+/**
+ * @brief Perform an SM4-ECB operation with the data moved by DMA.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4EcbDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_ECB */
+
+#ifdef WOLFSSL_SM4_CBC
+/**
+ * @brief Perform an SM4-CBC operation with the data moved by DMA.
+ *
+ * The IV in sm4 is sent with the request and updated from the response.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context holding the key, key id and IV
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data, a whole number of SM4 blocks
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CbcDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                        const uint8_t* in, uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_CBC */
+
+#ifdef WOLFSSL_SM4_CTR
+/**
+ * @brief Perform an SM4-CTR operation with the data moved by DMA.
+ *
+ * The counter and leftover keystream travel both ways so a split stream
+ * resumes exactly.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in,out] sm4 SM4 context holding the key, key id and counter state
+ * @param[in] in Input data, any length
+ * @param[in] len Length of in in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CtrDma(whClientContext* ctx, wc_Sm4* sm4, const uint8_t* in,
+                        uint32_t len, uint8_t* out);
+#endif /* WOLFSSL_SM4_CTR */
+
+#ifdef WOLFSSL_SM4_GCM
+/**
+ * @brief Perform an SM4-GCM operation with the data and AAD moved by DMA.
+ *
+ * Arguments match wh_Client_Sm4Gcm.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data
+ * @param[in] len Length of in in bytes
+ * @param[in] iv Nonce
+ * @param[in] iv_len Length of iv in bytes
+ * @param[in] authin Additional authenticated data, may be NULL
+ * @param[in] authin_len Length of authin in bytes
+ * @param[in,out] tag Auth tag, output on encrypt and input on decrypt
+ * @param[in] tag_len Length of tag in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4GcmDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                        const uint8_t* in, uint32_t len, const uint8_t* iv,
+                        uint32_t iv_len, const uint8_t* authin,
+                        uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
+                        uint8_t* out);
+#endif /* WOLFSSL_SM4_GCM */
+
+#ifdef WOLFSSL_SM4_CCM
+/**
+ * @brief Perform an SM4-CCM operation with the data and AAD moved by DMA.
+ *
+ * Arguments match wh_Client_Sm4Ccm.
+ *
+ * @param[in] ctx Pointer to the client context
+ * @param[in] sm4 SM4 context holding the key and key id
+ * @param[in] enc 1 to encrypt, 0 to decrypt
+ * @param[in] in Input data
+ * @param[in] len Length of in in bytes
+ * @param[in] iv Nonce
+ * @param[in] iv_len Length of iv in bytes
+ * @param[in] authin Additional authenticated data, may be NULL
+ * @param[in] authin_len Length of authin in bytes
+ * @param[in,out] tag Auth tag, output on encrypt and input on decrypt
+ * @param[in] tag_len Length of tag in bytes
+ * @param[out] out Buffer to receive the output
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_Sm4CcmDma(whClientContext* ctx, wc_Sm4* sm4, int enc,
+                        const uint8_t* in, uint32_t len, const uint8_t* iv,
+                        uint32_t iv_len, const uint8_t* authin,
+                        uint32_t authin_len, uint8_t* tag, uint32_t tag_len,
+                        uint8_t* out);
+#endif /* WOLFSSL_SM4_CCM */
+
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* WOLFSSL_SM4 */
 
 #ifdef HAVE_ECC
 /**

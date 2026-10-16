@@ -1,16 +1,17 @@
 name: 'Checkout wolfSSL'
 description: >
-  Check out wolfssl/wolfssl into ./wolfssl at the pinned ref below. This is
-  the one place the CI wolfSSL version lives: change the default of `ref`
-  here to move every workflow at once, or pass `ref` from a workflow to
-  override it for that job only.
+  Check out wolfssl/wolfssl into ./wolfssl at the pinned ref below and
+  install the pinned wolfsm (SM2/SM3/SM4) sources into it. This is the one
+  place the CI wolfSSL version lives: change the default of `ref` here to
+  move every workflow at once, or pass `ref` from a workflow to override it
+  for that job only. Sets SM=1 in the job environment.
 
 inputs:
   ref:
     description: >
       wolfSSL git ref to check out
     required: false
-    default: 'v5.9.4-stable'
+    default: 'd526f9d020483afbbc1cee4d1b834c53f1d4af70'
 
 runs:
   using: 'composite'
@@ -21,3 +22,19 @@ runs:
         repository: wolfssl/wolfssl
         ref: ${{ inputs.ref }}
         path: wolfssl
+
+    - name: Checkout wolfsm
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfsm
+        ref: 'a7650b11d30eb0e69e218ffc6fc8767cee3e6d1b'
+        path: wolfsm
+
+    # wolfSSL only contains stubs for the SM sources. SM=1 then enables the
+    # SM tests in the test Makefiles for the rest of the job.
+    - name: Install wolfsm into wolfssl
+      shell: bash
+      working-directory: wolfsm
+      run: |
+        ./install.sh "$GITHUB_WORKSPACE/wolfssl"
+        echo "SM=1" >> "$GITHUB_ENV"
