@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -149,6 +149,13 @@ extern "C" {
 #if 0
 #define WOLFSSL_MLDSA_NO_MAKE_KEY
 #endif
+
+/* SLH-DSA: only 128s (7856-byte signature) fits in the default
+ * WOLFHSM_CFG_COMM_DATA_LEN */
+#define WOLFSSL_HAVE_SLHDSA
+#define WOLFSSL_SLHDSA_PARAM_NO_128F
+#define WOLFSSL_SLHDSA_PARAM_NO_192
+#define WOLFSSL_SLHDSA_PARAM_NO_256
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
