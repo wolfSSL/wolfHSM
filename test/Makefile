@@ -230,6 +230,8 @@ endif
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)
 	DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST
+	# Some wolfCrypt tests read ./certs, so point them at the wolfSSL tree
+	DEF += -DCERT_PREFIX=\"$(abspath $(WOLFSSL_DIR))/\"
 endif
 
 ifeq ($(CLIENT_ONLY),1)
