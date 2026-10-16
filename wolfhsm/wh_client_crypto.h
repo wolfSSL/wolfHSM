@@ -1032,6 +1032,8 @@ int wh_Client_Ed25519SetKeyId(ed25519_key* key, whKeyId keyId);
 
 /**
  * @brief Retrieves the key ID from an Ed25519 key device context.
+ *
+ * @note Does not report a key id bound through wolfCrypt's init-by-id calls.
  */
 int wh_Client_Ed25519GetKeyId(ed25519_key* key, whKeyId* outId);
 
