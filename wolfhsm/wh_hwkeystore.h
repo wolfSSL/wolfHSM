@@ -85,7 +85,7 @@ typedef struct whHwKeystoreKey_t {
     whKeyId    srcId; /* Keystore key it was loaded from, or ERASED */
     whNvmFlags flags; /* WH_NVM_FLAGS_USAGE_*. Port keys add NONDESTROYABLE and
                        * TRUSTED */
-    uint16_t   len;   /* Key size in bytes */
+    uint16_t len;     /* Key size in bytes */
 } whHwKeystoreKey;
 
 /* Context structure associated with a hardware keystore instance */
