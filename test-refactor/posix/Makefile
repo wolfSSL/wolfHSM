@@ -233,6 +233,9 @@ SRC_C += $(wildcard $(WOLFHSM_PORT_DIR)/*.c)
 SRC_C += $(REFACTOR_DIR)/wh_test_groups.c
 SRC_C += $(REFACTOR_DIR)/wh_test_list.c
 
+# Test certificate data, shared by the server and client groups.
+SRC_C += $(REFACTOR_DIR)/wh_test_cert_data.c
+
 # Grouped test sources
 SRC_C += $(wildcard $(REFACTOR_DIR)/server/*.c)
 SRC_C += $(wildcard $(REFACTOR_DIR)/client-server/*.c)

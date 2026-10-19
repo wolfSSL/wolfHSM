@@ -36,7 +36,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
-#include "wh_test_cert_data.h"
+#include "wh_test_cert_data_extern.h"
 
 
 /*
