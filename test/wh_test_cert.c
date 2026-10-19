@@ -32,6 +32,7 @@
 #ifdef WOLFHSM_CFG_ENABLE_SERVER
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_cert.h"
+#include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_message_cert.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_nvm_flash.h"
@@ -621,12 +622,43 @@ static int whTest_CertPerClientIsolation(whServerConfig* serverCfg)
 }
 
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+/* Checks the verify-callback count of a repeat verify of a cached chain.
+ * Cached CAs skip the callback. The leaf is still checked, so the count is
+ * above zero but below the cold count. With
+ * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN the whole chain is cached, so
+ * the callback never runs. */
+static int _whTest_CertCheckWarmCount(int warmCount, int coldCount)
+{
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+    (void)coldCount;
+    WH_TEST_ASSERT_RETURN(warmCount == 0);
+#else
+    WH_TEST_ASSERT_RETURN(warmCount > 0);
+    WH_TEST_ASSERT_RETURN(warmCount < coldCount);
+#endif
+    return WH_ERROR_OK;
+}
+
+#ifndef NO_ASN_TIME
+/* Fake clock for the verify-cache tests, installed with wc_SetTimeCb */
+static time_t s_verifyCacheFakeNow = 0;
+static time_t whTest_verifyCacheFakeTime(time_t* t)
+{
+    if (t != NULL) {
+        *t = s_verifyCacheFakeNow;
+    }
+    return s_verifyCacheFakeNow;
+}
+#endif
+
 /* Exercises the trusted-cert verify cache directly through the server API:
  *  - repeat-verify of the same chain under the same root stays successful
  *  - cache entries are bound to the trusted root NVM ID: chain A under root B
  *    must fail even after chain A has been cached by a verify under root A
  *    (regression test against cross-root cache bypass)
- *  - clearing the cache leaves the cross-root case still failing */
+ *  - clearing the cache leaves the cross-root case still failing
+ *  - a hit skips the date check: a cached CA still verifies after it expires,
+ *    until the cache is cleared */
 static int whTest_CertServerVerifyCache(whServerConfig* serverCfg)
 {
     whServerContext server[1] = {0};
@@ -669,6 +701,34 @@ static int whTest_CertServerVerifyCache(whServerConfig* serverCfg)
                                                RAW_CERT_CHAIN_A_len, rootCertB,
                                                WH_CERT_FLAGS_NONE,
                                                WH_NVM_FLAGS_USAGE_ANY, NULL));
+
+#ifndef NO_ASN_TIME
+    /* 4. A hit skips the date check. Cache intermediate A, then move the clock
+     * past its expiry (2031-05-08; root A lasts until 2036-05-06):
+     * intermediate A alone still verifies. Once the cache is cleared, it
+     * fails. The clock is restored before any result is checked. */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    {
+        int cachedRc;
+        int clearedRc;
+
+        s_verifyCacheFakeNow = (time_t)1988150400; /* 2033-01-01 */
+        (void)wc_SetTimeCb(whTest_verifyCacheFakeTime);
+        cachedRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        wh_Server_CertVerifyCache_Clear(server);
+        clearedRc = wh_Server_CertVerify(
+            server, INTERMEDIATE_A_CERT, INTERMEDIATE_A_CERT_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        (void)wc_SetTimeCb(NULL);
+
+        WH_TEST_ASSERT_RETURN(cachedRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(clearedRc == WH_ERROR_CERT_VERIFY);
+    }
+#endif
 
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertA));
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertB));
@@ -746,8 +806,7 @@ static int whTest_CertServerVerifyCacheEvictOnReAdd(whServerConfig* serverCfg)
         server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootId,
         WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
     warmCount = s_evictReAddCb_count;
-    WH_TEST_ASSERT_RETURN(warmCount > 0);
-    WH_TEST_ASSERT_RETURN(warmCount < coldCount);
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertCheckWarmCount(warmCount, coldCount));
 
     /* 3. Re-add root B at the SAME id. The eviction hook must drop every
      * slot whose stored root set contains id N. */
@@ -866,8 +925,7 @@ whTest_CertServerVerifyCacheMultiRootSubset(whServerConfig* serverCfg)
         server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, roots_AB, 2,
         WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
     warmMulti = s_subsetRuleCb_count;
-    WH_TEST_ASSERT_RETURN(warmMulti > 0);
-    WH_TEST_ASSERT_RETURN(warmMulti < coldSingle);
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertCheckWarmCount(warmMulti, coldSingle));
 
     /* === Direction 2: stored {A, B} does NOT hit lookup against {A} === */
 
@@ -968,8 +1026,7 @@ static int whTest_CertServerVerifyCacheSetEnabled(whServerConfig* serverCfg)
         server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
         WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
     warmCount = s_setEnabledCb_count;
-    WH_TEST_ASSERT_RETURN(warmCount > 0);
-    WH_TEST_ASSERT_RETURN(warmCount < coldCount);
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertCheckWarmCount(warmCount, coldCount));
 
     /* 3. Disable the cache. Entries from steps 1-2 must be flushed and new
      * inserts suppressed: the next verify should be cold again (count back
@@ -1012,6 +1069,162 @@ static int whTest_CertServerVerifyCacheSetEnabled(whServerConfig* serverCfg)
     WH_TEST_PRINT("Server cert verify-cache set-enabled test PASSED\n");
     return WH_ERROR_OK;
 }
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+/* Counts verify-callback invocations for the full-chain cache test */
+static int s_fullChainCacheCb_count = 0;
+static int whTest_fullChainCacheVerifyCb(int                     preverify,
+                                         WOLFSSL_X509_STORE_CTX* store)
+{
+    (void)store;
+    s_fullChainCacheCb_count++;
+    return preverify;
+}
+
+/* Exercises WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN:
+ *  - a repeat verify of a chain skips every check, leaf included
+ *  - the cached leaf only helps the exact chain it came in: the leaf alone,
+ *    or after another chain's intermediate, still fails
+ *  - a failed verify is not cached
+ *  - asking for the leaf public key on a cached chain still caches it
+ *  - a cached chain still passes after its leaf or intermediate expires,
+ *    until the cache is cleared */
+static int whTest_CertServerVerifyCacheFullChain(whServerConfig* serverCfg)
+{
+    whServerContext     server[1] = {0};
+    whServerCertConfig  certCfg   = {.verifyCb = whTest_fullChainCacheVerifyCb};
+    whServerCertConfig* savedCertConfig;
+    const whNvmId       rootCertA   = 1;
+    const whNvmId       rootCertB   = 2;
+    whNvmId             roots_AB[2] = {rootCertA, rootCertB};
+    static uint8_t      otherChain[4096];
+    uint32_t            otherChainLen;
+    whKeyId             keyId = WH_KEYID_ERASED;
+    whNvmMetadata       meta;
+    uint8_t             pubKey[512];
+    uint32_t            pubKeyLen = sizeof(pubKey);
+    int                 i;
+
+    WH_TEST_PRINT("=== Server cert verify-cache full-chain test ===\n");
+
+    /* Leaf A after chain B's intermediate, which did not sign it */
+    WH_TEST_ASSERT_RETURN(INTERMEDIATE_B_CERT_len + LEAF_A_CERT_len <=
+                          sizeof(otherChain));
+    memcpy(otherChain, INTERMEDIATE_B_CERT, INTERMEDIATE_B_CERT_len);
+    memcpy(otherChain + INTERMEDIATE_B_CERT_len, LEAF_A_CERT, LEAF_A_CERT_len);
+    otherChainLen = (uint32_t)(INTERMEDIATE_B_CERT_len + LEAF_A_CERT_len);
+
+    savedCertConfig       = serverCfg->certConfig;
+    serverCfg->certConfig = &certCfg;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, serverCfg));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertInit(server));
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootCertA, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONMODIFIABLE, NULL,
+        0, ROOT_A_CERT, ROOT_A_CERT_len));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertAddTrusted(
+        server, rootCertB, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONMODIFIABLE, NULL,
+        0, ROOT_B_CERT, ROOT_B_CERT_len));
+
+    /* Start cold under the global-shared cache mode where prior tests may
+     * have populated entries. Per-client mode is already clean. */
+    wh_Server_CertVerifyCache_Clear(server);
+
+    /* 1. Cold verify of chain A checks every cert */
+    s_fullChainCacheCb_count = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    WH_TEST_ASSERT_RETURN(s_fullChainCacheCb_count > 0);
+
+    /* 2. Repeat verify hits the whole-chain entry: nothing is checked */
+    s_fullChainCacheCb_count = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+        WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
+    WH_TEST_ASSERT_RETURN(s_fullChainCacheCb_count == 0);
+
+    /* 3. The leaf alone, and the leaf after chain B's intermediate, are
+     * checked the normal way and fail. Both roots are loaded for the second
+     * so that intermediate itself verifies. Try twice: a failed verify must
+     * not be cached. */
+    for (i = 0; i < 2; i++) {
+        s_fullChainCacheCb_count = 0;
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerify(server, LEAF_A_CERT, LEAF_A_CERT_len,
+                                 rootCertA, WH_CERT_FLAGS_NONE,
+                                 WH_NVM_FLAGS_USAGE_ANY, NULL));
+        WH_TEST_ASSERT_RETURN(s_fullChainCacheCb_count > 0);
+
+        s_fullChainCacheCb_count = 0;
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_CERT_VERIFY ==
+            wh_Server_CertVerifyMultiRoot(server, otherChain, otherChainLen,
+                                          roots_AB, 2, WH_CERT_FLAGS_NONE,
+                                          WH_NVM_FLAGS_USAGE_ANY, NULL));
+        WH_TEST_ASSERT_RETURN(s_fullChainCacheCb_count > 0);
+    }
+
+    /* 4. A cached chain still caches the leaf public key when asked */
+    s_fullChainCacheCb_count = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
+        server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+        WH_CERT_FLAGS_CACHE_LEAF_PUBKEY, WH_NVM_FLAGS_USAGE_VERIFY, &keyId));
+    WH_TEST_ASSERT_RETURN(s_fullChainCacheCb_count == 0);
+    WH_TEST_ASSERT_RETURN(!WH_KEYID_ISERASED(keyId));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_KeystoreReadKey(server, keyId, &meta, pubKey, &pubKeyLen));
+    WH_TEST_ASSERT_RETURN(pubKeyLen == LEAF_A_PUBKEY_len);
+    WH_TEST_ASSERT_RETURN(0 == memcmp(pubKey, LEAF_A_PUBKEY, pubKeyLen));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEvictKey(server, keyId));
+
+#ifndef NO_ASN_TIME
+    /* 5. A hit skips the date checks too. Past leaf A's expiry (2027-05-09),
+     * and past intermediate A's (2031-05-08; root A lasts until 2036-05-06),
+     * the cached chain still passes and the callback does not run. Once the
+     * cache is cleared, the same verify fails. The clock is restored before
+     * any result is checked. */
+    {
+        int leafExpiredRc;
+        int caExpiredRc;
+        int cbCount;
+        int clearedRc;
+
+        s_verifyCacheFakeNow = (time_t)1861920000; /* 2029-01-01 */
+        (void)wc_SetTimeCb(whTest_verifyCacheFakeTime);
+        s_fullChainCacheCb_count = 0;
+        leafExpiredRc            = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        s_verifyCacheFakeNow = (time_t)1988150400; /* 2033-01-01 */
+        caExpiredRc          = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        cbCount = s_fullChainCacheCb_count;
+        wh_Server_CertVerifyCache_Clear(server);
+        clearedRc = wh_Server_CertVerify(
+            server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
+            WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL);
+        (void)wc_SetTimeCb(NULL);
+
+        WH_TEST_ASSERT_RETURN(leafExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(caExpiredRc == WH_ERROR_OK);
+        WH_TEST_ASSERT_RETURN(cbCount == 0);
+        WH_TEST_ASSERT_RETURN(clearedRc == WH_ERROR_CERT_VERIFY);
+    }
+#endif
+
+    /* Cleanup */
+    wh_Server_CertVerifyCache_Clear(server);
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertA));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCertB));
+    serverCfg->certConfig = savedCertConfig;
+    WH_TEST_PRINT("Server cert verify-cache full-chain test PASSED\n");
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN */
 #endif /* WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE) && \
@@ -1132,13 +1345,15 @@ static int whTest_CertServerVerifyCacheGlobalShared(whServerConfig* serverCfg)
      * cached (caching it would let an isolated "leaf alone" verify falsely
      * succeed via cache hit), so the leaf's callback still fires. The
      * re-verify therefore invokes the callback fewer times than the cold
-     * verify but still at least once. */
+     * verify but still at least once. With
+     * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN the whole chain hits and
+     * the callback does not fire. */
     beforeCount = s_globalCacheCb_count;
     WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
         serverB, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
         WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
-    WH_TEST_ASSERT_RETURN(s_globalCacheCb_count > beforeCount);
-    WH_TEST_ASSERT_RETURN(s_globalCacheCb_count - beforeCount < beforeCount);
+    WH_TEST_RETURN_ON_FAIL(_whTest_CertCheckWarmCount(
+        s_globalCacheCb_count - beforeCount, beforeCount));
 
     /* 3. Cross-root: chain A under rootB must still fail on B even though
      * chain A was cached under rootA. The cache is keyed on (root, hash);
@@ -1201,7 +1416,8 @@ static int whTest_recordingVerifyCb(int                     preverify,
  *  - cache hits on CA certs bypass the callback (when the verify cache
  *    is enabled). Leaf certs are intentionally not cached, so the leaf's
  *    signature is re-verified (and the callback re-invoked) on every
- *    verify call. */
+ *    verify call, unless WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN caches
+ *    the whole chain. */
 static int whTest_CertServerVerifyCallback(whServerConfig* serverCfg)
 {
     int                 rc;
@@ -1240,13 +1456,14 @@ static int whTest_CertServerVerifyCallback(whServerConfig* serverCfg)
          * cached (caching them would let an isolated "leaf alone" verify
          * falsely succeed via cache hit), so the leaf's callback fires on
          * every re-verify. The re-verify therefore invokes the callback
-         * fewer times than the cold verify but still at least once. */
+         * fewer times than the cold verify but still at least once. With
+         * WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN it does not fire. */
         int firstRunCount = s_verifyCb_count;
         WH_TEST_RETURN_ON_FAIL(wh_Server_CertVerify(
             server, RAW_CERT_CHAIN_A, RAW_CERT_CHAIN_A_len, rootCertA,
             WH_CERT_FLAGS_NONE, WH_NVM_FLAGS_USAGE_ANY, NULL));
-        WH_TEST_ASSERT_RETURN(s_verifyCb_count > firstRunCount);
-        WH_TEST_ASSERT_RETURN(s_verifyCb_count - firstRunCount < firstRunCount);
+        WH_TEST_RETURN_ON_FAIL(_whTest_CertCheckWarmCount(
+            s_verifyCb_count - firstRunCount, firstRunCount));
 
         /* Clear cache so the next verify re-enters wolfSSL and the cb. */
         wh_Server_CertVerifyCache_Clear(server);
@@ -2244,6 +2461,15 @@ int whTest_CertRamSim(whTestNvmBackendType nvmType)
                            rc);
         }
     }
+#ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+    if (rc == WH_ERROR_OK) {
+        rc = whTest_CertServerVerifyCacheFullChain(s_conf);
+        if (rc != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Cert verify-cache full-chain tests failed: %d\n",
+                           rc);
+        }
+    }
+#endif
 #ifdef WOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
     if (rc == WH_ERROR_OK) {
         rc = whTest_CertServerVerifyCacheGlobalShared(s_conf);

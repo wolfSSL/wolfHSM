@@ -226,6 +226,13 @@ ifeq ($(CERT_VERIFY_CACHE_GLOBAL),1)
 	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_GLOBAL
 endif
 
+# Also cache whole chains, leaf included, in the trusted-cert verify cache.
+# Implies CERT_VERIFY_CACHE.
+ifeq ($(CERT_VERIFY_CACHE_FULLCHAIN),1)
+	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE
+	DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
+endif
+
 ## Project defines
 # Option to build wolfcrypt tests
 ifeq ($(TESTWOLFCRYPT),1)
