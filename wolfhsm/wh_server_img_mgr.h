@@ -49,6 +49,7 @@
 /* wolfBoot auth key types (from high byte of img_type) */
 #define WH_IMG_MGR_WOLFBOOT_AUTH_ECC256 0x02
 #define WH_IMG_MGR_WOLFBOOT_AUTH_RSA4096 0x04
+#define WH_IMG_MGR_WOLFBOOT_AUTH_RSAPSS4096 0x0E
 #define WH_IMG_MGR_WOLFBOOT_HDR_IMG_TYPE_AUTH_MASK 0xFF00
 
 /* Image type enum controlling how the framework loads keys/signatures */
@@ -326,8 +327,8 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
 /**
  * @brief wolfBoot RSA4096+SHA256 verification method
  *
- * Verifies a wolfBoot image using RSA4096 signature with SHA256 hash.
- * The public key is provided by the framework (loaded from keystore).
+ * Verifies a wolfBoot image using RSA4096 PKCS#1 v1.5 signature with SHA256
+ * hash. The public key is provided by the framework (loaded from keystore).
  * The signature is extracted from the wolfBoot header at img->hdrAddr.
  *
  * @param[in] context Image manager context
@@ -341,6 +342,28 @@ int wh_Server_ImgMgrVerifyMethodRsaSslWithSha256(
  * failure
  */
 int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz);
+
+/**
+ * @brief wolfBoot RSA4096 PSS+SHA256 verification method
+ *
+ * Same as wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256, but for an
+ * image signed with RSA-PSS (wolfBoot SIGN=RSAPSS4096). Uses MGF1-SHA256 and
+ * a salt as long as the hash, like the wolfBoot sign tool. Requires
+ * WC_RSA_PSS.
+ *
+ * @param[in] context Image manager context
+ * @param[in] img Image structure with hdrAddr pointing to wolfBoot header
+ *                (must be 2-byte aligned) and addr pointing to firmware payload
+ * @param[in] key RSA4096 public key data (DER format)
+ * @param[in] keySz Size of key data
+ * @param[in] sig Unused (NULL), signature is read from wolfBoot header
+ * @param[in] sigSz Unused (0)
+ * @return WH_ERROR_OK on successful verification, negative error code on
+ * failure
+ */
+int wh_Server_ImgMgrVerifyMethodWolfBootRsaPss4096WithSha256(
     whServerImgMgrContext* context, const whServerImgMgrImg* img,
     const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz);
 
@@ -366,8 +389,8 @@ int wh_Server_ImgMgrVerifyMethodWolfBootEcc256WithSha256(
 /**
  * @brief wolfBoot RSA4096+SHA256 cert chain verification method
  *
- * Verifies a wolfBoot image using RSA4096 signature with SHA256 hash,
- * where the signing key is validated through a certificate chain.
+ * Verifies a wolfBoot image using RSA4096 PKCS#1 v1.5 signature with SHA256
+ * hash, where the signing key is validated through a certificate chain.
  * The chain may anchor to any of the img->numRoots root CA certs listed in
  * img->rootNvmIds. Listed roots that are not in NVM are skipped.
  * The cert chain and signature are extracted from the wolfBoot header.
@@ -384,6 +407,29 @@ int wh_Server_ImgMgrVerifyMethodWolfBootEcc256WithSha256(
  * listed roots are in NVM, other negative error code on failure
  */
 int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz);
+
+/**
+ * @brief wolfBoot RSA4096 PSS+SHA256 cert chain verification method
+ *
+ * Same as wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256,
+ * but for an image signed with RSA-PSS (wolfBoot SIGN=RSAPSS4096). Only the
+ * image signature uses PSS; the cert chain is checked as before. Requires
+ * WC_RSA_PSS.
+ *
+ * @param[in] context Image manager context
+ * @param[in] img Image structure with hdrAddr pointing to wolfBoot header
+ *                (must be 2-byte aligned) and addr pointing to firmware payload
+ * @param[in] key Unused (NULL), leaf key is extracted from cert chain
+ * @param[in] keySz Unused (0)
+ * @param[in] sig Unused (NULL), signature is read from wolfBoot header
+ * @param[in] sigSz Unused (0)
+ * @return WH_ERROR_OK on successful verification, WH_ERROR_CERT_VERIFY if the
+ * chain does not anchor to any listed root, WH_ERROR_NOTFOUND if none of the
+ * listed roots are in NVM, other negative error code on failure
+ */
+int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256(
     whServerImgMgrContext* context, const whServerImgMgrImg* img,
     const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz);
 

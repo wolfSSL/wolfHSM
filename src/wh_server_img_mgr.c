@@ -679,18 +679,22 @@ static int _wolfBootImgDecodeRsaDigestInfo(uint8_t** pInput, int inputSz)
 }
 
 /**
- * Verify RSA4096 signature against a hash using PKCS#1 v1.5.
+ * Verify RSA4096 signature against a hash. Uses RSA-PSS when authType is
+ * WH_IMG_MGR_WOLFBOOT_AUTH_RSAPSS4096, otherwise PKCS#1 v1.5.
  */
 static int _wolfBootImgVerifySigRsa4096(const uint8_t* sig, uint16_t sigSz,
                                         const uint8_t* hash, uint32_t hashSz,
                                         const uint8_t* pubkey,
-                                        uint32_t pubkeySz, int devId)
+                                        uint32_t pubkeySz, int devId,
+                                        uint8_t authType)
 {
     int      ret;
     RsaKey   rsa;
     uint8_t  output[512]; /* RSA4096_SIG_SIZE */
     uint8_t* digest_out = NULL;
     word32   inOutIdx   = 0;
+
+    (void)authType;
 
     if (sigSz != 512) {
         return WH_ERROR_BADARGS;
@@ -708,6 +712,23 @@ static int _wolfBootImgVerifySigRsa4096(const uint8_t* sig, uint16_t sigSz,
     }
 
     memcpy(output, sig, 512);
+
+#ifdef WC_RSA_PSS
+    if (authType == WH_IMG_MGR_WOLFBOOT_AUTH_RSAPSS4096) {
+        /* Same settings as the wolfBoot sign tool: MGF1-SHA256 and a salt as
+         * long as the hash. Also checks the hash. */
+        ret = wc_RsaPSS_VerifyCheckInline(output, 512, &digest_out, hash,
+                                          hashSz, WC_HASH_TYPE_SHA256,
+                                          WC_MGF1SHA256, &rsa);
+        wc_FreeRsaKey(&rsa);
+
+        if (ret <= 0 || digest_out == NULL) {
+            return WH_ERROR_NOTVERIFIED;
+        }
+        return WH_ERROR_OK;
+    }
+#endif /* WC_RSA_PSS */
+
     ret = wc_RsaSSL_VerifyInline(output, 512, &digest_out, &rsa);
     wc_FreeRsaKey(&rsa);
 
@@ -922,9 +943,12 @@ static int _wolfBootImgValidateAndHash(
 
 
 #ifndef NO_RSA
-int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
-    whServerImgMgrContext* context, const whServerImgMgrImg* img,
-    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+/* Shared body of the wolfBoot RSA4096 verify methods. authType must match the
+ * header and picks PKCS#1 v1.5 or PSS. */
+static int _wolfBootImgVerifyRsa4096(whServerImgMgrContext*   context,
+                                     const whServerImgMgrImg* img,
+                                     const uint8_t* key, size_t keySz,
+                                     uint8_t authType)
 {
     int              ret;
     uint8_t          computed_hash[WC_SHA256_DIGEST_SIZE];
@@ -943,9 +967,6 @@ int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
     uint32_t peekedImgSize    = 0;
     int      payloadMapped    = 0;
 #endif
-
-    (void)sig;
-    (void)sigSz;
 
     if (context == NULL || context->server == NULL || img == NULL ||
         key == NULL || keySz == 0) {
@@ -996,7 +1017,7 @@ int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
     /* Validate header, compute and verify hash, extract signature */
     ret = _wolfBootImgValidateAndHash(hdr, img->hdrSize, payload, payloadSize,
                                       computed_hash, &hdr_sig, &hdr_sig_sz,
-                                      devId, WH_IMG_MGR_WOLFBOOT_AUTH_RSA4096);
+                                      devId, authType);
     if (ret != WH_ERROR_OK) {
         goto cleanup;
     }
@@ -1013,7 +1034,7 @@ int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
     /* Verify RSA4096 signature */
     ret = _wolfBootImgVerifySigRsa4096(hdr_sig, hdr_sig_sz, computed_hash,
                                        WC_SHA256_DIGEST_SIZE, key,
-                                       (uint32_t)keySz, devId);
+                                       (uint32_t)keySz, devId, authType);
 
 cleanup:
 #ifdef WOLFHSM_CFG_DMA
@@ -1028,6 +1049,30 @@ cleanup:
 #endif
     return ret;
 }
+
+int wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+{
+    (void)sig;
+    (void)sigSz;
+
+    return _wolfBootImgVerifyRsa4096(context, img, key, keySz,
+                                     WH_IMG_MGR_WOLFBOOT_AUTH_RSA4096);
+}
+
+#ifdef WC_RSA_PSS
+int wh_Server_ImgMgrVerifyMethodWolfBootRsaPss4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+{
+    (void)sig;
+    (void)sigSz;
+
+    return _wolfBootImgVerifyRsa4096(context, img, key, keySz,
+                                     WH_IMG_MGR_WOLFBOOT_AUTH_RSAPSS4096);
+}
+#endif /* WC_RSA_PSS */
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
@@ -1236,9 +1281,12 @@ cleanup:
 #endif /* HAVE_ECC */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(NO_RSA)
-int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
-    whServerImgMgrContext* context, const whServerImgMgrImg* img,
-    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+/* Shared body of the wolfBoot RSA4096 cert chain verify methods. authType
+ * must match the header and picks PKCS#1 v1.5 or PSS for the image
+ * signature. */
+static int _wolfBootImgVerifyCertChainRsa4096(whServerImgMgrContext*   context,
+                                              const whServerImgMgrImg* img,
+                                              uint8_t                  authType)
 {
     int              ret;
     uint8_t          computed_hash[WC_SHA256_DIGEST_SIZE];
@@ -1262,11 +1310,6 @@ int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
     uint32_t peekedImgSize    = 0;
     int      payloadMapped    = 0;
 #endif
-
-    (void)key;
-    (void)keySz;
-    (void)sig;
-    (void)sigSz;
 
     if (context == NULL || img == NULL) {
         return WH_ERROR_BADARGS;
@@ -1319,7 +1362,7 @@ int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
     /* Validate header, compute and verify hash, extract signature */
     ret = _wolfBootImgValidateAndHash(hdr, img->hdrSize, payload, payloadSize,
                                       computed_hash, &hdr_sig, &hdr_sig_sz,
-                                      devId, WH_IMG_MGR_WOLFBOOT_AUTH_RSA4096);
+                                      devId, authType);
     if (ret != WH_ERROR_OK) {
         goto cleanup;
     }
@@ -1359,7 +1402,7 @@ int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
     /* Verify RSA4096 signature using leaf pubkey */
     ret = _wolfBootImgVerifySigRsa4096(hdr_sig, hdr_sig_sz, computed_hash,
                                        WC_SHA256_DIGEST_SIZE, leafKeyBuf,
-                                       leafKeyMeta->len, devId);
+                                       leafKeyMeta->len, devId, authType);
 
 evict_cleanup:
     /* Evict cached leaf key */
@@ -1378,6 +1421,34 @@ cleanup:
 #endif
     return ret;
 }
+
+int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+{
+    (void)key;
+    (void)keySz;
+    (void)sig;
+    (void)sigSz;
+
+    return _wolfBootImgVerifyCertChainRsa4096(context, img,
+                                              WH_IMG_MGR_WOLFBOOT_AUTH_RSA4096);
+}
+
+#ifdef WC_RSA_PSS
+int wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256(
+    whServerImgMgrContext* context, const whServerImgMgrImg* img,
+    const uint8_t* key, size_t keySz, const uint8_t* sig, size_t sigSz)
+{
+    (void)key;
+    (void)keySz;
+    (void)sig;
+    (void)sigSz;
+
+    return _wolfBootImgVerifyCertChainRsa4096(
+        context, img, WH_IMG_MGR_WOLFBOOT_AUTH_RSAPSS4096);
+}
+#endif /* WC_RSA_PSS */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !NO_RSA */
 
 #endif /* !NO_RSA || HAVE_ECC */

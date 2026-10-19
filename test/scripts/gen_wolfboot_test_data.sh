@@ -9,7 +9,9 @@
 #   4. Signed wolfBoot images (RSA4096 standard and cert-chain variants)
 #   5. ECC P-256 signing key pair (DER and raw X||Y public key)
 #   6. Signed wolfBoot image (ECC256+SHA256) over the same firmware payload
-#   7. C header with all artifacts as byte arrays
+#   7. Signed wolfBoot images (RSAPSS4096 standard and cert-chain variants)
+#      with the same RSA4096 key, cert chain, and firmware payload
+#   8. C header with all artifacts as byte arrays
 #
 # Requires:
 #   - wolfBoot keygen and sign tools
@@ -227,7 +229,62 @@ if ! cmp -s "$WORK_DIR/wolfboot_ecc256_payload.bin" "$WORK_DIR/wolfboot_payload.
 fi
 
 #############################
-# 8. Generate C header file
+# 8. Sign firmware with RSAPSS4096
+#############################
+echo "=== Signing firmware (RSAPSS4096+SHA256) ==="
+# Reuse the RSA4096 key so the tests can check both paddings with one
+# public key.
+"$SIGN" --rsapss4096 --sha256 \
+    "$WORK_DIR/firmware.bin" \
+    "$WORK_DIR/signing_key.der" \
+    4  # version number
+
+SIGNED_PSS_IMG="$WORK_DIR/firmware_v4_signed.bin"
+if [ ! -f "$SIGNED_PSS_IMG" ]; then
+    echo "ERROR: sign tool with RSAPSS4096 did not produce expected output"
+    ls -la "$WORK_DIR"
+    exit 1
+fi
+
+# The RSAPSS4096 header is the same size as the RSA4096 one
+dd if="$SIGNED_PSS_IMG" of="$WORK_DIR/wolfboot_rsapss4096_header.bin" bs=1 count=$HEADER_SIZE 2>/dev/null
+dd if="$SIGNED_PSS_IMG" of="$WORK_DIR/wolfboot_rsapss4096_payload.bin" bs=1 skip=$HEADER_SIZE 2>/dev/null
+if ! cmp -s "$WORK_DIR/wolfboot_rsapss4096_payload.bin" "$WORK_DIR/wolfboot_payload.bin"; then
+    echo "ERROR: RSAPSS4096 image payload differs from the RSA4096 image payload"
+    exit 1
+fi
+
+#############################
+# 9. Sign firmware with RSAPSS4096 and cert chain
+#############################
+echo "=== Signing firmware with cert chain (RSAPSS4096+SHA256) ==="
+"$SIGN" --rsapss4096 --sha256 \
+    --cert-chain "$CERT_CHAIN_FILE" \
+    "$WORK_DIR/firmware.bin" \
+    "$WORK_DIR/signing_key.der" \
+    5  # version number
+
+SIGNED_PSS_CERT_IMG="$WORK_DIR/firmware_v5_signed.bin"
+if [ ! -f "$SIGNED_PSS_CERT_IMG" ]; then
+    echo "ERROR: sign tool with RSAPSS4096 and cert chain did not produce expected output"
+    ls -la "$WORK_DIR"
+    exit 1
+fi
+
+PSS_CERT_SIGNED_SIZE=$(stat -c%s "$SIGNED_PSS_CERT_IMG" 2>/dev/null || stat -f%z "$SIGNED_PSS_CERT_IMG")
+PSS_CERT_HDR_SIZE=$((PSS_CERT_SIGNED_SIZE - FIRMWARE_SIZE))
+echo "  RSAPSS4096 cert chain signed image size: $PSS_CERT_SIGNED_SIZE"
+echo "  RSAPSS4096 cert chain header size: $PSS_CERT_HDR_SIZE"
+
+dd if="$SIGNED_PSS_CERT_IMG" of="$WORK_DIR/wolfboot_rsapss4096_cert_header.bin" bs=1 count=$PSS_CERT_HDR_SIZE 2>/dev/null
+dd if="$SIGNED_PSS_CERT_IMG" of="$WORK_DIR/wolfboot_rsapss4096_cert_payload.bin" bs=1 skip=$PSS_CERT_HDR_SIZE 2>/dev/null
+if ! cmp -s "$WORK_DIR/wolfboot_rsapss4096_cert_payload.bin" "$WORK_DIR/wolfboot_payload.bin"; then
+    echo "ERROR: RSAPSS4096 cert chain image payload differs from the RSA4096 image payload"
+    exit 1
+fi
+
+#############################
+# 10. Generate C header file
 #############################
 echo "=== Generating C header file ==="
 
@@ -323,6 +380,16 @@ bin_to_c_array "$ECC_DIR/ecc256_pubkey.der" \
 bin_to_c_array "$ECC_DIR/ecc256_pubkey_raw.bin" \
     "wolfboot_test_ecc256_pubkey_raw" \
     "ECC P-256 signing public key (raw X||Y, 64 bytes)"
+
+# RSAPSS4096 wolfBoot header (same key and firmware as the RSA4096 image)
+bin_to_c_array "$WORK_DIR/wolfboot_rsapss4096_header.bin" \
+    "wolfboot_test_rsapss4096_header" \
+    "wolfBoot signed header (RSAPSS4096+SHA256, ${HEADER_SIZE} bytes)"
+
+# RSAPSS4096 cert chain wolfBoot header (same chain as the RSA4096 one)
+bin_to_c_array "$WORK_DIR/wolfboot_rsapss4096_cert_header.bin" \
+    "wolfboot_test_rsapss4096_cert_chain_header" \
+    "wolfBoot signed header with cert chain (RSAPSS4096+SHA256, ${PSS_CERT_HDR_SIZE} bytes)"
 
 # Close header guard
 echo "#endif /* WH_TEST_WOLFBOOT_IMG_DATA_H */" >> "$HEADER_FILE"

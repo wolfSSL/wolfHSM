@@ -1864,6 +1864,335 @@ static int whTest_ServerImgMgrServerCfgWolfBootCertChainMultiRoot(
     return 0;
 }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+
+#ifdef WC_RSA_PSS
+static int
+whTest_ServerImgMgrServerCfgWolfBootRsaPss4096(whServerConfig* serverCfg)
+{
+    int                        ret          = 0;
+    whServerContext            server[1]    = {0};
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          testImage    = {0};
+    whServerImgMgrImg          altImage;
+    const whNvmId              testKeyId = 6;
+    whServerImgMgrVerifyResult result;
+
+    /* Set up image manager config for wolfBoot RSA-PSS verification */
+    testImage.addr    = (uintptr_t)wolfboot_test_firmware;
+    testImage.size    = sizeof(wolfboot_test_firmware);
+    testImage.hdrAddr = (uintptr_t)wolfboot_test_rsapss4096_header;
+    testImage.hdrSize = sizeof(wolfboot_test_rsapss4096_header);
+    testImage.keyId   = testKeyId;
+    testImage.imgType = WH_IMG_MGR_IMG_TYPE_WOLFBOOT;
+    testImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootRsaPss4096WithSha256;
+    testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = &testImage;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+
+    /* Initialize server */
+    ret = wh_Server_Init(server, serverCfg);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
+        return ret;
+    }
+
+    /* Initialize the image manager */
+    ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    /* Cache the public key in the keystore. The same key signed the PKCS#1
+     * v1.5 image. */
+    {
+        whNvmMetadata keyMeta = {0};
+        keyMeta.id            = testKeyId;
+        keyMeta.access        = WH_NVM_ACCESS_ANY;
+        keyMeta.flags         = WH_NVM_FLAGS_NONE;
+        keyMeta.len           = sizeof(wolfboot_test_rsa4096_pubkey_der);
+        snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "WBPssKey");
+
+        ret = wh_Server_KeystoreCacheKey(
+            server, &keyMeta, (uint8_t*)wolfboot_test_rsa4096_pubkey_der);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to cache key: %d\n", ret);
+            wh_Server_Cleanup(server);
+            return ret;
+        }
+
+        ret = wh_Server_KeystoreCommitKey(server, testKeyId);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to commit key: %d\n", ret);
+            wh_Server_Cleanup(server);
+            return ret;
+        }
+    }
+
+    /* Positive test: verify wolfBoot PSS image with correct key */
+    ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("wolfBoot RSAPSS4096 verify failed: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+    if (result.verifyMethodResult != WH_ERROR_OK) {
+        WH_ERROR_PRINT("wolfBoot RSAPSS4096 verify method failed: %d\n",
+                       result.verifyMethodResult);
+        wh_Server_Cleanup(server);
+        return result.verifyMethodResult;
+    }
+    if (result.verifyActionResult != WH_ERROR_OK) {
+        WH_ERROR_PRINT("wolfBoot RSAPSS4096 verify action failed: %d\n",
+                       result.verifyActionResult);
+        wh_Server_Cleanup(server);
+        return result.verifyActionResult;
+    }
+
+    /* Negative test: flip a bit in firmware payload copy and verify fails */
+    {
+        uint8_t corrupt_fw[sizeof(wolfboot_test_firmware)];
+        altImage = testImage;
+        memcpy(corrupt_fw, wolfboot_test_firmware,
+               sizeof(wolfboot_test_firmware));
+        corrupt_fw[0] ^= 0x01;
+        altImage.addr = (uintptr_t)corrupt_fw;
+
+        ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+        if (ret == WH_ERROR_OK) {
+            WH_ERROR_PRINT("wolfBoot RSAPSS4096 corrupt verify should have "
+                           "failed but succeeded\n");
+            wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+        if (ret != result.verifyMethodResult) {
+            WH_ERROR_PRINT("wolfBoot RSAPSS4096 corrupt verify return %d does "
+                           "not match verify method result %d\n",
+                           ret, result.verifyMethodResult);
+            wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+    }
+
+    /* Negative test: a PKCS#1 v1.5 header must be rejected */
+    altImage         = testImage;
+    altImage.hdrAddr = (uintptr_t)wolfboot_test_rsa4096_header;
+    altImage.hdrSize = sizeof(wolfboot_test_rsa4096_header);
+    ret              = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    if (ret != WH_ERROR_NOTVERIFIED) {
+        WH_ERROR_PRINT("wolfBoot RSAPSS4096 verify of an RSA4096 header "
+                       "returned %d, expected %d\n",
+                       ret, WH_ERROR_NOTVERIFIED);
+        wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Negative test: the PKCS#1 v1.5 method must reject the PSS header */
+    altImage = testImage;
+    altImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256;
+    ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    if (ret != WH_ERROR_NOTVERIFIED) {
+        WH_ERROR_PRINT("wolfBoot RSA4096 verify of an RSAPSS4096 header "
+                       "returned %d, expected %d\n",
+                       ret, WH_ERROR_NOTVERIFIED);
+        wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Negative test: corrupt the signature so only the RSA check can reject */
+    {
+        XALIGNED(4)
+        uint8_t corrupt_hdr[sizeof(wolfboot_test_rsapss4096_header)];
+        ret = _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr,
+                                        "wolfBoot RSAPSS4096");
+        if (ret != WH_ERROR_OK) {
+            wh_Server_Cleanup(server);
+            return ret;
+        }
+    }
+
+    /* Remove the test key */
+    ret = wh_Server_KeystoreEraseKey(server, testKeyId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to erase key: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    wh_Server_Cleanup(server);
+    WH_TEST_PRINT("IMG_MGR wolfBoot RSAPSS4096 Test completed successfully!\n");
+    return 0;
+}
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
+static int whTest_ServerImgMgrServerCfgWolfBootCertChainRsaPss4096(
+    whServerConfig* serverCfg)
+{
+    int                        ret          = 0;
+    whServerContext            server[1]    = {0};
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          testImage    = {0};
+    whServerImgMgrImg          altImage;
+    const whNvmId              rootCaNvmId = 11;
+    whServerImgMgrVerifyResult result;
+    whNvmMetadata              rootCaMeta = {0};
+
+    /* Store root CA cert in NVM. The PSS image uses the same cert chain as
+     * the PKCS#1 v1.5 one. */
+    rootCaMeta.id     = rootCaNvmId;
+    rootCaMeta.access = WH_NVM_ACCESS_ANY;
+    rootCaMeta.flags  = WH_NVM_FLAGS_NONE;
+    rootCaMeta.len    = sizeof(wolfboot_test_rsa4096_root_ca_cert_der);
+    snprintf((char*)rootCaMeta.label, WH_NVM_LABEL_LEN, "RootCA");
+
+    ret = wh_Nvm_AddObject(serverCfg->nvm, &rootCaMeta,
+                           sizeof(wolfboot_test_rsa4096_root_ca_cert_der),
+                           wolfboot_test_rsa4096_root_ca_cert_der);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to add root CA to NVM: %d\n", ret);
+        return ret;
+    }
+
+    /* Set up image manager config for wolfBoot PSS cert chain verification */
+    testImage.addr    = (uintptr_t)wolfboot_test_firmware;
+    testImage.size    = sizeof(wolfboot_test_firmware);
+    testImage.hdrAddr = (uintptr_t)wolfboot_test_rsapss4096_cert_chain_header;
+    testImage.hdrSize = sizeof(wolfboot_test_rsapss4096_cert_chain_header);
+    testImage.rootNvmIds[0] = rootCaNvmId;
+    testImage.numRoots      = 1;
+    testImage.imgType       = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    testImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256;
+    testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = &testImage;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+
+    /* Initialize server */
+    ret = wh_Server_Init(server, serverCfg);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize server: %d\n", ret);
+        return ret;
+    }
+
+    /* Initialize the image manager */
+    ret = wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to initialize image manager: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    /* Positive test: verify wolfBoot PSS image with cert chain */
+    ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("wolfBoot cert chain RSAPSS4096 verify failed: %d\n",
+                       ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+    if (result.verifyMethodResult != WH_ERROR_OK) {
+        WH_ERROR_PRINT(
+            "wolfBoot cert chain RSAPSS4096 verify method failed: %d\n",
+            result.verifyMethodResult);
+        wh_Server_Cleanup(server);
+        return result.verifyMethodResult;
+    }
+    if (result.verifyActionResult != WH_ERROR_OK) {
+        WH_ERROR_PRINT(
+            "wolfBoot cert chain RSAPSS4096 verify action failed: %d\n",
+            result.verifyActionResult);
+        wh_Server_Cleanup(server);
+        return result.verifyActionResult;
+    }
+
+    /* Negative test: flip a bit in firmware payload and verify fails */
+    {
+        uint8_t corrupt_fw[sizeof(wolfboot_test_firmware)];
+        altImage = testImage;
+        memcpy(corrupt_fw, wolfboot_test_firmware,
+               sizeof(wolfboot_test_firmware));
+        corrupt_fw[0] ^= 0x01;
+        altImage.addr = (uintptr_t)corrupt_fw;
+
+        ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+        if (ret == WH_ERROR_OK) {
+            WH_ERROR_PRINT("wolfBoot cert chain RSAPSS4096 corrupt verify "
+                           "should have failed but succeeded\n");
+            wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+        if (ret != result.verifyMethodResult) {
+            WH_ERROR_PRINT("wolfBoot cert chain RSAPSS4096 corrupt verify "
+                           "return %d does not match verify method result "
+                           "%d\n",
+                           ret, result.verifyMethodResult);
+            wh_Server_Cleanup(server);
+            return WH_ERROR_ABORTED;
+        }
+    }
+
+    /* Negative test: a PKCS#1 v1.5 cert chain header must be rejected */
+    altImage         = testImage;
+    altImage.hdrAddr = (uintptr_t)wolfboot_test_rsa4096_cert_chain_header;
+    altImage.hdrSize = sizeof(wolfboot_test_rsa4096_cert_chain_header);
+    ret              = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    if (ret != WH_ERROR_NOTVERIFIED) {
+        WH_ERROR_PRINT("wolfBoot cert chain RSAPSS4096 verify of an RSA4096 "
+                       "header returned %d, expected %d\n",
+                       ret, WH_ERROR_NOTVERIFIED);
+        wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Negative test: the PKCS#1 v1.5 method must reject the PSS header */
+    altImage = testImage;
+    altImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256;
+    ret = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    if (ret != WH_ERROR_NOTVERIFIED) {
+        WH_ERROR_PRINT("wolfBoot cert chain RSA4096 verify of an RSAPSS4096 "
+                       "header returned %d, expected %d\n",
+                       ret, WH_ERROR_NOTVERIFIED);
+        wh_Server_Cleanup(server);
+        return WH_ERROR_ABORTED;
+    }
+
+    /* Negative test: corrupt the signature so only the RSA check can reject */
+    {
+        XALIGNED(4)
+        uint8_t corrupt_hdr[sizeof(wolfboot_test_rsapss4096_cert_chain_header)];
+        ret = _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr,
+                                        "wolfBoot cert chain RSAPSS4096");
+        if (ret != WH_ERROR_OK) {
+            wh_Server_Cleanup(server);
+            return ret;
+        }
+    }
+
+    /* Delete the root CA cert from NVM */
+    ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &rootCaNvmId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to delete root CA cert: %d\n", ret);
+        wh_Server_Cleanup(server);
+        return ret;
+    }
+
+    wh_Server_Cleanup(server);
+    WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain RSAPSS4096 Test completed "
+                  "successfully!\n");
+    return 0;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WC_RSA_PSS */
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
@@ -2200,6 +2529,29 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
         return rc;
     }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+
+#ifdef WC_RSA_PSS
+    /* wolfBoot RSAPSS4096 verify method */
+    rc = whTest_ServerImgMgrServerCfgWolfBootRsaPss4096(s_conf);
+    if (rc != 0) {
+        WH_ERROR_PRINT("wolfBoot RSAPSS4096 image manager tests failed: %d\n",
+                       rc);
+        wh_Nvm_Cleanup(nvm);
+        return rc;
+    }
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
+    /* wolfBoot RSAPSS4096 cert chain verify method */
+    rc = whTest_ServerImgMgrServerCfgWolfBootCertChainRsaPss4096(s_conf);
+    if (rc != 0) {
+        WH_ERROR_PRINT(
+            "wolfBoot cert chain RSAPSS4096 image manager tests failed: %d\n",
+            rc);
+        wh_Nvm_Cleanup(nvm);
+        return rc;
+    }
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WC_RSA_PSS */
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
