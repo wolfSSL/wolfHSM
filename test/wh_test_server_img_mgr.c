@@ -35,6 +35,7 @@
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_img_mgr.h"
 #include "wolfhsm/wh_server_keystore.h"
 #include "wolfhsm/wh_comm.h"
@@ -1713,8 +1714,8 @@ whTest_ServerImgMgrServerCfgWolfBootCertChainRsa4096(whServerConfig* serverCfg)
         }
     }
 
-    /* Delete the root CA cert from NVM */
-    ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &rootCaNvmId);
+    /* Delete the root CA cert and drop its cert verify cache entries */
+    ret = wh_Server_CertEraseTrusted(server, rootCaNvmId);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to delete root CA cert: %d\n", ret);
         wh_Server_Cleanup(server);
@@ -1781,7 +1782,6 @@ static int whTest_ServerImgMgrServerCfgWolfBootCertChainMultiRoot(
     const whNvmId              otherNvmId   = 11;
     const whNvmId              missingNvmId = 12;
     whNvmId                    roots[2];
-    whNvmId                    destroyIds[2];
     uint16_t                   i;
 
     WH_TEST_RETURN_ON_FAIL(_certChainAddRoot(
@@ -1852,11 +1852,9 @@ static int whTest_ServerImgMgrServerCfgWolfBootCertChainMultiRoot(
         WH_ERROR_BADARGS ==
         wh_Server_ImgMgrVerifyImg(&imgMgr, &images[0], &result));
 
-    /* Leave NVM clean for the next test */
-    destroyIds[0] = rootCaNvmId;
-    destroyIds[1] = otherNvmId;
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Nvm_DestroyObjects(serverCfg->nvm, 2, destroyIds));
+    /* Leave NVM and the cert verify cache clean for the next test */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, otherNvmId));
 
     wh_Server_Cleanup(server);
     WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain Multi-Root Test completed "
@@ -2178,8 +2176,8 @@ static int whTest_ServerImgMgrServerCfgWolfBootCertChainRsaPss4096(
         }
     }
 
-    /* Delete the root CA cert from NVM */
-    ret = wh_Nvm_DestroyObjects(serverCfg->nvm, 1, &rootCaNvmId);
+    /* Delete the root CA cert */
+    ret = wh_Server_CertEraseTrusted(server, rootCaNvmId);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to delete root CA cert: %d\n", ret);
         wh_Server_Cleanup(server);

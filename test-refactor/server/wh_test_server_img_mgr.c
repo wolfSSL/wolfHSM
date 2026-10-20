@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_img_mgr.h"
 #include "wolfhsm/wh_server_keystore.h"
 
@@ -729,9 +730,8 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(
         _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr));
 
-    /* Leave NVM clean for the next suite */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Nvm_DestroyObjects(server->nvm, 1, &rootCaNvmId));
+    /* Leave NVM and the cert verify cache clean for the next suite */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
 
     WH_TEST_PRINT(
         "IMG_MGR wolfBoot Cert Chain RSA4096 Test completed successfully!\n");
@@ -791,7 +791,6 @@ _whTest_ServerImgMgrWolfBootCertChainMultiRoot(whServerContext* server)
     const whNvmId              otherNvmId   = 11;
     const whNvmId              missingNvmId = 12;
     whNvmId                    roots[2];
-    whNvmId                    destroyIds[2];
     uint16_t                   i;
 
     WH_TEST_RETURN_ON_FAIL(_certChainAddRoot(
@@ -861,10 +860,9 @@ _whTest_ServerImgMgrWolfBootCertChainMultiRoot(whServerContext* server)
         WH_ERROR_BADARGS ==
         wh_Server_ImgMgrVerifyImg(&imgMgr, &images[0], &result));
 
-    /* Leave NVM clean for the next suite */
-    destroyIds[0] = rootCaNvmId;
-    destroyIds[1] = otherNvmId;
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 2, destroyIds));
+    /* Leave NVM and the cert verify cache clean for the next suite */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, otherNvmId));
 
     WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain Multi-Root Test completed "
                   "successfully!\n");
@@ -1034,8 +1032,8 @@ _whTest_ServerImgMgrWolfBootCertChainRsaPss4096(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(
         _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr));
 
-    /* Leave NVM clean for the next suite */
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 1, &rootCaNvmId));
+    /* Leave NVM and cache clean for the next test */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
 
     WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain RSAPSS4096 Test completed "
                   "successfully!\n");
