@@ -1,0 +1,114 @@
+name: Build and Test AUTOSAR Port
+
+on:
+  push:
+    branches: [ 'master', 'main', 'release/**' ]
+  pull_request:
+    branches: [ '*' ]
+
+permissions:
+  contents: read
+
+jobs:
+  csm-smoke:
+    strategy:
+      matrix:
+        asan: [ 'ASAN=0', 'ASAN=1' ]
+    runs-on: ubuntu-latest
+    # The job compiles wolfSSL + wolfcrypt from scratch three times (POSIX
+    # server, csm_smoke, ap_smoke), each with ML-DSA/ML-KEM enabled, and the
+    # ASAN=1 matrix variant adds substantial compile overhead. 5 minutes was
+    # too tight on a 4-vCPU runner and both matrix jobs hit the wall.
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout wolfssl
+      uses: actions/checkout@v4
+      with:
+        repository: wolfssl/wolfssl
+        path: wolfssl
+
+    - name: Build POSIX server
+      run: |
+        cd examples/posix/wh_posix_server
+        ${{ matrix.asan }} make -j WOLFSSL_DIR=../../../wolfssl
+
+    - name: Build csm_smoke
+      run: |
+        cd port/autosar/classic/examples/csm_smoke
+        ${{ matrix.asan }} make -j WOLFSSL_DIR=../../../../../wolfssl
+
+    - name: Build ap_smoke (Adaptive)
+      run: |
+        cd port/autosar/adaptive/examples/ap_smoke
+        cmake -S . -B build -DWOLFHSM_DIR=../../../../.. -DWOLFSSL_DIR=../../../../../wolfssl
+        cmake --build build --parallel
+
+    # Classic Crypto Driver smoke. Server is started/torn down per
+    # smoke binary because the POSIX server's TCP transport tends to
+    # close after the client disconnects.
+    - name: Run csm_smoke (Classic)
+      run: |
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf --type tcp &
+        SRV=$!
+        # Wait until the server is LISTENING, checking passively with ss.
+        # A connect-probe (e.g. /dev/tcp) would be accept()ed as the
+        # server's single client and consume its only accept slot, leaving
+        # the real client unable to be serviced — so check state, don't
+        # connect. The client also retries connect on its own, so this is
+        # purely to avoid a noisy first-connect race.
+        for i in $(seq 1 50); do
+          ss -ltn 2>/dev/null | grep -q ':23456 ' && break
+          sleep 0.2
+        done
+        # Guard against a blocking-socket hang: the client should finish in
+        # seconds, so cap it well under the job timeout and surface a clear
+        # failure instead of silently eating the whole budget.
+        # Capture exit codes via '|| var=$?': GitHub runs this with
+        # 'bash -e', so a bare non-zero command (the smoke binary failing,
+        # or 'wait' returning the server's SIGTERM code) would abort the
+        # step before we can inspect the code or clean up the server.
+        rc=0
+        ( cd ../../../port/autosar/classic/examples/csm_smoke && timeout 120 ./Build/csm_smoke ) || rc=$?
+        if [ $rc -eq 124 ]; then echo "csm_smoke timed out — likely a hang, not a slow build"; fi
+        # Send TERM, then surface the server's exit status: a crash
+        # mid-test (SIGSEGV / assert) must fail the CI job, not be
+        # masked by the client's clean exit.
+        kill -TERM $SRV 2>/dev/null || true
+        srv_rc=0
+        wait "$SRV" || srv_rc=$?
+        # bash reports 143 (=128+15) for a clean SIGTERM exit; treat
+        # that as success. Any other non-zero is a real server failure.
+        if [ $srv_rc -ne 0 ] && [ $srv_rc -ne 143 ]; then
+          echo "wh_posix_server exited with $srv_rc — failing CI"
+          exit 1
+        fi
+        exit $rc
+
+    # Adaptive CryptoProvider smoke against a fresh server instance.
+    - name: Run ap_smoke (Adaptive)
+      run: |
+        cd examples/posix/wh_posix_server
+        ./Build/wh_posix_server.elf --type tcp &
+        SRV=$!
+        # Passive listen check — see csm_smoke step for why we must not
+        # open a real connection here.
+        for i in $(seq 1 50); do
+          ss -ltn 2>/dev/null | grep -q ':23456 ' && break
+          sleep 0.2
+        done
+        # See csm_smoke step for why exit codes are captured via '|| var=$?'.
+        rc=0
+        ( cd ../../../port/autosar/adaptive/examples/ap_smoke && timeout 120 ./build/ap_smoke ) || rc=$?
+        if [ $rc -eq 124 ]; then echo "ap_smoke timed out — likely a hang, not a slow build"; fi
+        kill -TERM $SRV 2>/dev/null || true
+        srv_rc=0
+        wait "$SRV" || srv_rc=$?
+        if [ $srv_rc -ne 0 ] && [ $srv_rc -ne 143 ]; then
+          echo "wh_posix_server exited with $srv_rc — failing CI"
+          exit 1
+        fi
+        exit $rc
