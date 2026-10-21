@@ -86,10 +86,11 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
                 return WH_ERROR_NOSPACE;
             }
         }
-        else {
+        else
+#endif /* WOLFHSM_CFG_TEST_POSIX */
+        {
             in = WH_BENCH_DMA_BUFFER;
         }
-#endif /* WOLFHSM_CFG_TEST_POSIX */
     }
     else
 #endif

@@ -6102,7 +6102,7 @@ int wh_Client_Cmac(whClientContext* ctx, Cmac* cmac, CmacType type,
     int                          ret = WH_ERROR_OK;
     whMessageCrypto_CmacAesState saved;
 
-    if (ctx == NULL || cmac == NULL) {
+    if (ctx == NULL || cmac == NULL || (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
 
@@ -6623,7 +6623,7 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
 {
     int ret = WH_ERROR_OK;
 
-    if (ctx == NULL || cmac == NULL) {
+    if (ctx == NULL || cmac == NULL || (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
 

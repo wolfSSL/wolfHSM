@@ -611,9 +611,10 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef WOLFSSL_CMAC
     case WC_ALGO_TYPE_CMAC:
     {
-        /* Extract info parameters */
+        /* Extract info parameters. Keep inSz as given so wh_Client_Cmac()
+         * rejects a NULL input with a length. */
         const uint8_t* in          = info->cmac.in;
-        uint32_t       in_len      = (in == NULL) ? 0 : info->cmac.inSz;
+        uint32_t       in_len      = info->cmac.inSz;
         const uint8_t* key         = info->cmac.key;
         uint32_t       key_len     = (key == NULL) ? 0 : info->cmac.keySz;
         uint8_t*       outMac      = info->cmac.out;

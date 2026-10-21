@@ -699,6 +699,59 @@ static int _whTest_CryptoCmacLargeInput(whClientContext* ctx, int devId)
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 #endif /* WOLFSSL_AES_256 */
 
+/* A NULL input with a length must fail, not MAC an empty message */
+static int _whTest_CryptoCmacNullInput(whClientContext* ctx, int devId)
+{
+    int        ret;
+    Cmac       cmac[1];
+    uint8_t    tag[AES_BLOCK_SIZE];
+    word32     tagSz                 = sizeof(tag);
+    uint32_t   outSz                 = sizeof(tag);
+    const byte key[AES_128_KEY_SIZE] = {0};
+
+    /* Each call starts from a clean cmac, so only the NULL input can fail it */
+    ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+    if (ret == 0) {
+        ret = wc_AesCmacGenerate_ex(cmac, tag, &tagSz, NULL, AES_BLOCK_SIZE,
+                                    key, sizeof(key), NULL, devId);
+        if (ret == 0) {
+            WH_ERROR_PRINT("CMAC: NULL input succeeded (want an error)\n");
+            return -1;
+        }
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+    }
+    if (ret == 0) {
+        ret = wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, key, sizeof(key), NULL,
+                             AES_BLOCK_SIZE, tag, &outSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("CMAC: NULL input returned %d (want BADARGS)\n",
+                           ret);
+            return -1;
+        }
+        ret = 0;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+    }
+    if (ret == 0) {
+        outSz = sizeof(tag);
+        ret = wh_Client_CmacDma(ctx, cmac, WC_CMAC_AES, key, sizeof(key), NULL,
+                                AES_BLOCK_SIZE, tag, &outSz);
+        if (ret != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("CMAC DMA: NULL input returned %d (want BADARGS)\n",
+                           ret);
+            return -1;
+        }
+        ret = 0;
+    }
+#endif
+    if (ret != 0) {
+        WH_ERROR_PRINT("CMAC: NULL input test init failed %d\n", ret);
+    }
+    return ret;
+}
+
 int whTest_Crypto_Cmac(whClientContext* ctx)
 {
     int i;
@@ -709,6 +762,8 @@ int whTest_Crypto_Cmac(whClientContext* ctx)
         (void)wh_Client_SetDmaMode(ctx, i);
         WH_TEST_RETURN_ON_FAIL(
             whTest_CryptoCmacImpl(ctx, WH_CLIENT_DEVID(ctx)));
+        WH_TEST_RETURN_ON_FAIL(
+            _whTest_CryptoCmacNullInput(ctx, WH_CLIENT_DEVID(ctx)));
 #ifdef WOLFSSL_AES_256
         WH_TEST_RETURN_ON_FAIL(
             _whTest_CryptoCmacStreaming(ctx, WH_CLIENT_DEVID(ctx)));

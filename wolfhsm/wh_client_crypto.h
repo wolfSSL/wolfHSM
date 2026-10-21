@@ -2151,7 +2151,7 @@ int wh_Client_AesGcmDmaResponse(whClientContext* ctx, Aes* aes,
  * HSM.
  * @param[in] keyLen Length of the key in bytes.
  * @param[in] in Pointer to the input data buffer, or NULL for finalization.
- * @param[in] inLen Length of the input data in bytes.
+ * @param[in] inLen Length of the input data in bytes. Must be 0 if in is NULL.
  * @param[out] outMac Pointer to the output buffer for the CMAC tag.
  * @param[in,out] outMacLen Pointer to the size of the output buffer, updated
  * with actual size.
@@ -2325,7 +2325,7 @@ int wh_Client_CmacGetKeyId(Cmac* key, whNvmId* outId);
  * @param[in] key Pointer to the key data. NULL if using a stored key.
  * @param[in] keyLen Length of the key in bytes.
  * @param[in] in Pointer to the input data. NULL if not performing an update.
- * @param[in] inLen Length of the input data in bytes.
+ * @param[in] inLen Length of the input data in bytes. Must be 0 if in is NULL.
  * @param[out] outMac Pointer to store the CMAC result. NULL if not finalizing.
  * @param[in,out] outMacLen Pointer to the size of the outMac buffer. Updated
  * with actual size on return.
