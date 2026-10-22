@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -184,6 +184,7 @@ enum WH_KEY_ALGO_ENUM {
     WH_KEY_ALGO_MLKEM      = 6,
     WH_KEY_ALGO_LMS        = 7,
     WH_KEY_ALGO_XMSS       = 8,
+    WH_KEY_ALGO_SLHDSA     = 9,
 };
 
 #endif /* !WOLFHSM_WH_COMMON_H_ */

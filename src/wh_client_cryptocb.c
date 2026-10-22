@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -81,7 +81,8 @@ static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
 
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma);
 static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info,
@@ -90,7 +91,7 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
                             int useDma);
 static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
                                      int useDma);
-#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON || WOLFSSL_HAVE_SLHDSA */
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -564,10 +565,16 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
         case WC_PK_TYPE_PQC_SIG_KEYGEN:
             ret = _handlePqcSigKeyGen(ctx, info, 0);
             break;
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PK_TYPE_PQC_SIG_KEYGEN_SEED:
+            ret = _handlePqcSigKeyGen(ctx, info, 0);
+            break;
+#endif
 
         case WC_PK_TYPE_PQC_SIG_SIGN:
             ret = _handlePqcSign(ctx, info, 0);
@@ -581,7 +588,19 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             ret = _handlePqcSigCheckPrivKey(ctx, info, 0);
             break;
 
-#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        /* Only SLH-DSA reaches these: the FIPS 205 internal interface, where
+         * the caller builds M' itself. */
+        case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+            ret = _handlePqcSign(ctx, info, 0);
+            break;
+
+        case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+            ret = _handlePqcVerify(ctx, info, 0);
+            break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON || WOLFSSL_HAVE_SLHDSA */
 
         case WC_PK_TYPE_NONE:
         default:
@@ -1230,7 +1249,8 @@ static int _handlePqcStatefulSigSigsLeft(whClientContext* ctx,
 }
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 
-#if defined(HAVE_FALCON) || defined(WOLFSSL_HAVE_MLDSA)
+#if defined(HAVE_FALCON) || defined(WOLFSSL_HAVE_MLDSA) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
 static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma)
 {
@@ -1264,7 +1284,36 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
         } break;
 #endif /* WOLFSSL_HAVE_MLDSA */
 
-        /* Support for additional PQC algorithms should be added here */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            /* size contains the SlhDsaParam enum, not a byte count */
+            const byte* seed   = info->pk.pqc_sig_kg.seed;
+            word32      seedSz = info->pk.pqc_sig_kg.seedSz;
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                if (seed != NULL) {
+                    ret = wh_Client_SlhDsaMakeExportKeyFromSeedDma(
+                        ctx, size, seed, seedSz, key);
+                }
+                else {
+                    ret = wh_Client_SlhDsaMakeExportKeyDma(ctx, size, key);
+                }
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                if (seed != NULL) {
+                    ret = wh_Client_SlhDsaMakeExportKeyFromSeed(ctx, size, seed,
+                                                                seedSz, key);
+                }
+                else {
+                    ret = wh_Client_SlhDsaMakeExportKey(ctx, size, key);
+                }
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -1273,6 +1322,16 @@ static int _handlePqcSigKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
 
     return ret;
 }
+
+#ifdef WOLFSSL_HAVE_SLHDSA
+/* Returns 1 if key contains key bytes, 0 if it only references a server key.
+ * Some wolfCrypt SLH-DSA routines read PK.seed or PK.root from the struct. */
+static int _SlhDsaKeyHasMaterial(const SlhDsaKey* key)
+{
+    return (key != NULL) && ((key->flags & (WC_SLHDSA_FLAG_PRIVATE |
+                                            WC_SLHDSA_FLAG_PUBLIC)) != 0);
+}
+#endif /* WOLFSSL_HAVE_SLHDSA */
 
 static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
 {
@@ -1314,13 +1373,62 @@ static int _handlePqcSign(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
 
-        /* Support for additional PQC algorithms should be added here */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            const byte* addRnd     = info->pk.pqc_sign.addRnd;
+            byte        addRndSz   = info->pk.pqc_sign.addRndSz;
+            int         randomized = (info->pk.pqc_sign.rng != NULL);
+            int isMPrime = (info->pk.type == WC_PK_TYPE_PQC_SIG_SIGN_MSG);
+
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_SlhDsaSignDma(
+                    ctx, in, in_len, out, out_len, key, context, contextLen,
+                    preHashType, addRnd, addRndSz, randomized, isMPrime);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_SlhDsaSign(
+                    ctx, in, in_len, out, out_len, key, context, contextLen,
+                    preHashType, addRnd, addRndSz, randomized, isMPrime);
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
     }
 
+    return ret;
+}
+
+/* Returns 1 if pub key is present and can be used for verification without
+ * going to the server. Returns 0 when CB_ONLY is enabled. */
+static int _PqcSigCanVerifyLocally(int type, const void* key)
+{
+    int ret = 0;
+
+    switch (type) {
+#if defined(WOLFSSL_HAVE_MLDSA) && !defined(WOLF_CRYPTO_CB_ONLY_MLDSA)
+        case WC_PQC_SIG_TYPE_MLDSA:
+            ret = (((const wc_MlDsaKey*)key)->pubKeySet != 0);
+            break;
+#endif
+#if defined(WOLFSSL_HAVE_SLHDSA) && !defined(WOLF_CRYPTO_CB_ONLY_SLHDSA)
+        case WC_PQC_SIG_TYPE_SLHDSA:
+            ret =
+                ((((const SlhDsaKey*)key)->flags & WC_SLHDSA_FLAG_PUBLIC) != 0);
+            break;
+#endif
+        default:
+            break;
+    }
+
+    (void)key;
     return ret;
 }
 
@@ -1367,11 +1475,35 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
 
-        /* Support for additional PQC algorithms should be added here */
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            int isMPrime = (info->pk.type == WC_PK_TYPE_PQC_SIG_VERIFY_MSG);
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_SlhDsaVerifyDma(ctx, sig, sig_len, msg, msg_len,
+                                                res, key, context, contextLen,
+                                                preHashType, isMPrime);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_SlhDsaVerify(ctx, sig, sig_len, msg, msg_len,
+                                             res, key, context, contextLen,
+                                             preHashType, isMPrime);
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
+            /* Support for additional PQC algorithms should be added here */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
             break;
+    }
+
+    /* When request is too big, verify via software fallback, if possible. */
+    if ((ret == WH_ERROR_REQUEST_SIZE) && _PqcSigCanVerifyLocally(type, key)) {
+        ret = CRYPTOCB_UNAVAILABLE;
     }
 
     return ret;
@@ -1411,6 +1543,30 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
             break;
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef WOLFSSL_HAVE_SLHDSA
+        case WC_PQC_SIG_TYPE_SLHDSA: {
+            const byte* slhPub   = pubKey;
+            word32      slhPubSz = pubKeySz;
+
+            /* If the key struct doesn't have a key, pass NULL and let the
+             * server check its own copy. */
+            if (!_SlhDsaKeyHasMaterial((const SlhDsaKey*)key)) {
+                slhPub   = NULL;
+                slhPubSz = 0;
+            }
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret =
+                    wh_Client_SlhDsaCheckPrivKeyDma(ctx, key, slhPub, slhPubSz);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_SlhDsaCheckPrivKey(ctx, key, slhPub, slhPubSz);
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+
             /* Support for additional PQC algorithms should be added here */
 
         default:
@@ -1420,7 +1576,7 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 
     return ret;
 }
-#endif /* HAVE_FALCON || WOLFSSL_HAVE_MLDSA */
+#endif /* HAVE_FALCON || WOLFSSL_HAVE_MLDSA || WOLFSSL_HAVE_SLHDSA */
 
 
 #ifdef WOLFHSM_CFG_DMA
@@ -1564,10 +1720,16 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                 ret = _handlePqcStatefulSigSigsLeft(ctx, info, 1);
                 break;
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
-#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON)
+#if defined(WOLFSSL_HAVE_MLDSA) || defined(HAVE_FALCON) || \
+    defined(WOLFSSL_HAVE_SLHDSA)
             case WC_PK_TYPE_PQC_SIG_KEYGEN:
                 ret = _handlePqcSigKeyGen(ctx, info, 1);
                 break;
+#ifdef WOLFSSL_HAVE_SLHDSA
+            case WC_PK_TYPE_PQC_SIG_KEYGEN_SEED:
+                ret = _handlePqcSigKeyGen(ctx, info, 1);
+                break;
+#endif
             case WC_PK_TYPE_PQC_SIG_SIGN:
                 ret = _handlePqcSign(ctx, info, 1);
                 break;
@@ -1577,7 +1739,15 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
                 ret = _handlePqcSigCheckPrivKey(ctx, info, 1);
                 break;
-#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+#ifdef WOLFSSL_HAVE_SLHDSA
+            case WC_PK_TYPE_PQC_SIG_SIGN_MSG:
+                ret = _handlePqcSign(ctx, info, 1);
+                break;
+            case WC_PK_TYPE_PQC_SIG_VERIFY_MSG:
+                ret = _handlePqcVerify(ctx, info, 1);
+                break;
+#endif /* WOLFSSL_HAVE_SLHDSA */
+#endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON || WOLFSSL_HAVE_SLHDSA */
 #ifdef HAVE_ED25519
             case WC_PK_TYPE_ED25519_KEYGEN: {
                 ed25519_key* key = info->pk.ed25519kg.key;

@@ -44,6 +44,20 @@
 #define WOLFSSL_CMAC
 #define HAVE_HKDF
 
+/* SLH-DSA: only 128s (7856-byte signature) fits in the default
+ * WOLFHSM_CFG_COMM_DATA_LEN */
+#define WOLFSSL_HAVE_SLHDSA
+#define WOLFSSL_SHA3
+#define WOLFSSL_SHAKE128
+#define WOLFSSL_SHAKE256
+#define WOLFSSL_SLHDSA_PARAM_NO_128F
+#define WOLFSSL_SLHDSA_PARAM_NO_192
+#define WOLFSSL_SLHDSA_PARAM_NO_256
+
+#ifdef WH_CFG_SLHDSA_CB_ONLY
+#define WOLF_CRYPTO_CB_ONLY_SLHDSA
+#endif
+
 /* wolfCrypt benchmark settings */
 #define NO_MAIN_DRIVER
 #define BENCH_EMBEDDED
