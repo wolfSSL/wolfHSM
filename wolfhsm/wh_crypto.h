@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/falcon.h"
 
 #include "wolfhsm/wh_message_crypto.h"
 
@@ -108,6 +109,28 @@ int wh_Crypto_Ed25519SerializeKeyDer(const ed25519_key* key, uint16_t max_size,
 int wh_Crypto_Ed25519DeserializeKeyDer(const uint8_t* buffer, uint16_t size,
                                        ed25519_key* key);
 #endif /* HAVE_ED25519 */
+
+#ifdef HAVE_FALCON
+/* Room for the largest Falcon keypair plus ASN.1 overhead. */
+#define WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE \
+    (FALCON_MAX_KEY_SIZE + FALCON_MAX_PUB_KEY_SIZE + 128U)
+
+/* Key import, export and keygen move the whole keypair in one message */
+WH_UTILS_STATIC_ASSERT(
+    (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) +
+            (uint32_t)sizeof(whMessageCrypto_FalconKeyGenResponse) +
+            (uint32_t)WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE <=
+        (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+    "WOLFHSM_CFG_COMM_DATA_LEN too small for a Falcon keypair");
+
+/* Serialize a Falcon key to DER, in the form matching what it contains */
+int wh_Crypto_FalconSerializeKeyDer(falcon_key* key, uint16_t max_size,
+                                    uint8_t* buffer, uint16_t* out_size);
+
+/* Restore a Falcon key from DER, private form first then public. */
+int wh_Crypto_FalconDeserializeKeyDer(const uint8_t* buffer, uint16_t size,
+                                      falcon_key* key);
+#endif /* HAVE_FALCON */
 
 #ifdef WOLFSSL_HAVE_MLDSA
 #define WH_CRYPTO_MLDSA_MAX_CTX_LEN (255U)

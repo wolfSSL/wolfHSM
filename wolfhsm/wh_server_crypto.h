@@ -104,6 +104,12 @@ int wh_Server_MlDsaKeyCacheExport(whServerContext* ctx, whKeyId keyId,
                                   wc_MlDsaKey* key);
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef HAVE_FALCON
+/* Restore a falcon_key from a server key cache */
+int wh_Server_FalconKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                   falcon_key* key);
+#endif /* HAVE_FALCON */
+
 #ifdef WOLFSSL_HAVE_MLKEM
 /* Store a MlKemKey into a server key cache with optional metadata */
 int wh_Server_MlKemKeyCacheImport(whServerContext* ctx, MlKemKey* key,

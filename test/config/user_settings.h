@@ -132,6 +132,15 @@
 #define WOLFSSL_SHA512
 #define WOLFSSL_SHA512_HASHTYPE
 
+/* Falcon Options: experimental in wolfSSL, needs SHAKE256 */
+#define WOLFSSL_EXPERIMENTAL_SETTINGS
+#define HAVE_FALCON
+#define WOLFSSL_SHA3
+#define WOLFSSL_SHAKE256
+
+/* Leave Falcon as the only post-quantum algorithm when requested */
+#ifndef WOLFHSM_CFG_TEST_FALCON_ONLY
+
 /* ML-DSA Options */
 #define WOLFSSL_HAVE_MLDSA
 #define WOLFSSL_SHA3
@@ -148,6 +157,8 @@
 
 /* XMSS / XMSS^MT Options (RFC 8391, NIST SP 800-208) */
 #define WOLFSSL_HAVE_XMSS
+
+#endif /* !WOLFHSM_CFG_TEST_FALCON_ONLY */
 
 
 /* Ed25519 Options */

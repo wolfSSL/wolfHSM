@@ -1030,6 +1030,477 @@ static int _MlDsaKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
 }
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef HAVE_FALCON
+/* Cache import always requests a max-size slot, so one must fit */
+WH_UTILS_STATIC_ASSERT(WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE >=
+                           WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE,
+                       "WOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE too small for "
+                       "Falcon private key");
+
+#ifndef WOLFSSL_FALCON_VERIFY_ONLY
+/* Cache a Falcon key on the server, keyed by keyId. */
+static int _FalconKeyCacheImport(whServerContext* ctx, falcon_key* key,
+                                 whKeyId keyId, whNvmFlags flags,
+                                 uint16_t label_len, uint8_t* label)
+{
+    int            ret;
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    uint16_t       keySize = WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId)) ||
+        ((label != NULL) && (label_len > WH_NVM_LABEL_LEN))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreGetCacheSlotChecked(ctx, keyId, keySize, &cacheBuf,
+                                                &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FalconSerializeKeyDer(key, keySize, cacheBuf, &keySize);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        cacheMeta->id  = keyId;
+        cacheMeta->len = keySize;
+        /* clients can't set server-only flags (e.g. trusted KEK) */
+        cacheMeta->flags  = flags & ~WH_NVM_FLAGS_SERVER_ONLY;
+        cacheMeta->access = WH_NVM_ACCESS_ANY;
+        if ((label != NULL) && (label_len > 0)) {
+            memcpy(cacheMeta->label, label, label_len);
+        }
+    }
+
+    return ret;
+}
+#endif /* !WOLFSSL_FALCON_VERIFY_ONLY */
+
+/* Restore a falcon_key from the server key cache */
+int wh_Server_FalconKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                   falcon_key* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FalconDeserializeKeyDer(cacheBuf, cacheMeta->len, key);
+        WH_DEBUG_SERVER_VERBOSE("keyId:%u, ret:%d\n", keyId, ret);
+    }
+    return ret;
+}
+
+/* Load a cached Falcon key, enforcing the usage policy recorded with it. */
+static int _FalconKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                        whNvmFlags requiredUsage, byte level,
+                                        falcon_key* key)
+{
+    uint8_t*       cacheBuf;
+    whNvmMetadata* cacheMeta;
+    int            ret;
+
+    if ((ctx == NULL) || (key == NULL) || (WH_KEYID_ISERASED(keyId))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* A known level skips probing; zero means the level is unknown */
+    if ((level == FALCON_LEVEL1) || (level == FALCON_LEVEL5)) {
+        ret = wc_falcon_set_level(key, level);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+
+    /* Lock once so the usage check and key bytes come from one snapshot */
+    ret = WH_SERVER_NVM_LOCK(ctx);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta, requiredUsage);
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = wh_Crypto_FalconDeserializeKeyDer(cacheBuf, cacheMeta->len,
+                                                    key);
+        }
+        (void)WH_SERVER_NVM_UNLOCK(ctx);
+    } /* WH_SERVER_NVM_LOCK() */
+
+    /* A probed level other than the requested one means the wrong key */
+    if ((ret == WH_ERROR_OK) && (level != 0) && (key->level != level)) {
+        ret = WH_ERROR_BADARGS;
+    }
+    return ret;
+}
+
+static int _HandleFalconKeyGen(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_FALCON_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                  ret;
+    falcon_key                           key[1];
+    whMessageCrypto_FalconKeyGenRequest  req;
+    whMessageCrypto_FalconKeyGenResponse res;
+    whKeyId                              key_id;
+    whNvmFlags                           flags;
+    int                                  level;
+    uint8_t*                             res_out;
+    uint16_t                             max_size;
+    uint16_t                             res_size = 0;
+
+    if (inSize < sizeof(whMessageCrypto_FalconKeyGenRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFalconKeyGenRequest(
+        magic, (whMessageCrypto_FalconKeyGenRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    level  = (int)req.level;
+    flags  = (whNvmFlags)req.flags;
+
+    res_out =
+        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_FalconKeyGenResponse);
+    /* cryptoDataOut is past the generic header, so subtract it too */
+    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
+                          sizeof(whMessageCrypto_GenericResponseHeader) -
+                          (size_t)(res_out - (uint8_t*)cryptoDataOut));
+
+    /* Falcon only defines these two parameter sets */
+    if ((level != 1) && (level != 5)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_falcon_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = wc_falcon_set_level(key, (byte)level);
+        if (ret == 0) {
+            ret = wc_falcon_make_key(key, ctx->crypto->rng);
+        }
+        if (ret == 0) {
+            if (flags & WH_NVM_FLAGS_EPHEMERAL) {
+                /* Serialize into the response; nothing is kept server-side */
+                key_id = WH_KEYID_ERASED;
+                ret    = wh_Crypto_FalconSerializeKeyDer(key, max_size, res_out,
+                                                         &res_size);
+            }
+            else {
+                res_size = 0;
+                /* Keep id allocation and cache import atomic */
+                ret = WH_SERVER_NVM_LOCK(ctx);
+                if (ret == WH_ERROR_OK) {
+                    if (WH_KEYID_ISERASED(key_id)) {
+                        ret = wh_Server_KeystoreGetUniqueId(ctx, &key_id);
+                    }
+                    if (ret == WH_ERROR_OK) {
+                        ret =
+                            _FalconKeyCacheImport(ctx, key, key_id, flags,
+                                                  WH_NVM_LABEL_LEN, req.label);
+                    }
+                    (void)WH_SERVER_NVM_UNLOCK(ctx);
+                } /* WH_SERVER_NVM_LOCK() */
+
+                if (ret == WH_ERROR_OK) {
+                    /* Best-effort public key return; empty is not an error */
+                    int pub_ret =
+                        wc_Falcon_PublicKeyToDer(key, res_out, max_size, 1);
+                    res_size = (pub_ret > 0) ? (uint16_t)pub_ret : 0;
+                }
+            }
+        }
+        wc_falcon_free(key);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.keyId = wh_KeyId_TranslateToClient(key_id);
+        res.len   = res_size;
+        (void)wh_MessageCrypto_TranslateFalconKeyGenResponse(
+            magic, &res, (whMessageCrypto_FalconKeyGenResponse*)cryptoDataOut);
+        *outSize =
+            (uint16_t)(sizeof(whMessageCrypto_FalconKeyGenResponse) + res_size);
+    }
+
+    return ret;
+#endif /* WOLFSSL_FALCON_VERIFY_ONLY */
+}
+
+static int _HandleFalconSign(whServerContext* ctx, uint16_t magic, int devId,
+                             const void* cryptoDataIn, uint16_t inSize,
+                             void* cryptoDataOut, uint16_t* outSize)
+{
+#ifdef WOLFSSL_FALCON_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                ret;
+    falcon_key                         key[1];
+    whMessageCrypto_FalconSignRequest  req;
+    whMessageCrypto_FalconSignResponse res;
+    whKeyId                            key_id;
+    const byte*                        in;
+    byte*                              res_out;
+    word32                             in_len;
+    word32                             res_len;
+    word32                             max_len;
+    int                                evict;
+    /* Retries re-read the message, so sign outside the shared buffer */
+    byte sig[FALCON_MAX_SIG_SIZE];
+
+    if (inSize < sizeof(whMessageCrypto_FalconSignRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFalconSignRequest(
+        magic, (whMessageCrypto_FalconSignRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    in_len = req.sz;
+    if (in_len > (word32)(inSize - sizeof(whMessageCrypto_FalconSignRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = ((req.options & WH_MESSAGE_CRYPTO_FALCON_SIGN_OPTIONS_EVICT) != 0);
+
+    in = (const byte*)cryptoDataIn + sizeof(whMessageCrypto_FalconSignRequest);
+    res_out = (byte*)cryptoDataOut + sizeof(whMessageCrypto_FalconSignResponse);
+    /* cryptoDataOut is past the generic header, so subtract it too */
+    max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                       sizeof(whMessageCrypto_GenericResponseHeader) -
+                       (size_t)(res_out - (byte*)cryptoDataOut));
+    res_len = (word32)sizeof(sig);
+
+    ret = wc_falcon_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _FalconKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                           (byte)req.level, key);
+        if (ret == WH_ERROR_OK) {
+            ret = wc_falcon_sign_msg(in, in_len, sig, &res_len, key,
+                                     ctx->crypto->rng);
+        }
+        if (ret == WH_ERROR_OK) {
+            if (res_len > max_len) {
+                ret = WH_ERROR_NOSPACE;
+            }
+            else {
+                memcpy(res_out, sig, res_len);
+            }
+        }
+        wc_ForceZero(sig, sizeof(sig));
+        wc_falcon_free(key);
+    }
+
+    if (evict) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.sz = (uint32_t)res_len;
+        (void)wh_MessageCrypto_TranslateFalconSignResponse(
+            magic, &res, (whMessageCrypto_FalconSignResponse*)cryptoDataOut);
+        *outSize =
+            (uint16_t)(sizeof(whMessageCrypto_FalconSignResponse) + res_len);
+    }
+
+    return ret;
+#endif /* WOLFSSL_FALCON_VERIFY_ONLY */
+}
+
+static int _HandleFalconVerify(whServerContext* ctx, uint16_t magic, int devId,
+                               const void* cryptoDataIn, uint16_t inSize,
+                               void* cryptoDataOut, uint16_t* outSize)
+{
+    int                                  ret;
+    falcon_key                           key[1];
+    whMessageCrypto_FalconVerifyRequest  req;
+    whMessageCrypto_FalconVerifyResponse res;
+    whKeyId                              key_id;
+    const byte*                          sig;
+    const byte*                          msg;
+    word32                               sig_len;
+    word32                               msg_len;
+    word32                               avail;
+    int                                  result = 0;
+    int                                  evict;
+
+    if (inSize < sizeof(whMessageCrypto_FalconVerifyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFalconVerifyRequest(
+        magic, (whMessageCrypto_FalconVerifyRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    /* Both lengths must fit in the payload that follows the header */
+    avail   = (word32)(inSize - sizeof(whMessageCrypto_FalconVerifyRequest));
+    sig_len = req.sigSz;
+    msg_len = req.msgSz;
+    if ((sig_len > avail) || (msg_len > (avail - sig_len))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict =
+        ((req.options & WH_MESSAGE_CRYPTO_FALCON_VERIFY_OPTIONS_EVICT) != 0);
+
+    sig =
+        (const byte*)cryptoDataIn + sizeof(whMessageCrypto_FalconVerifyRequest);
+    msg = sig + sig_len;
+
+    ret = wc_falcon_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _FalconKeyCacheExportEnforce(
+            ctx, key_id, WH_NVM_FLAGS_USAGE_VERIFY, (byte)req.level, key);
+        if (ret == WH_ERROR_OK) {
+            ret =
+                wc_falcon_verify_msg(sig, sig_len, msg, msg_len, &result, key);
+            /* A rejected signature is a verdict, not a transport failure */
+            if (ret == WC_NO_ERR_TRACE(SIG_VERIFY_E)) {
+                result = 0;
+                ret    = WH_ERROR_OK;
+            }
+        }
+        wc_falcon_free(key);
+    }
+
+    if (evict) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.res = (uint32_t)result;
+        (void)wh_MessageCrypto_TranslateFalconVerifyResponse(
+            magic, &res, (whMessageCrypto_FalconVerifyResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_FalconVerifyResponse);
+    }
+
+    return ret;
+}
+
+static int _HandleFalconCheckPrivKey(whServerContext* ctx, uint16_t magic,
+                                     int devId, const void* cryptoDataIn,
+                                     uint16_t inSize, void* cryptoDataOut,
+                                     uint16_t* outSize)
+{
+#ifdef WOLFSSL_FALCON_VERIFY_ONLY
+    (void)ctx;
+    (void)magic;
+    (void)devId;
+    (void)cryptoDataIn;
+    (void)inSize;
+    (void)cryptoDataOut;
+    (void)outSize;
+    return WH_ERROR_NOHANDLER;
+#else
+    int                                        ret;
+    falcon_key                                 key[1];
+    whMessageCrypto_FalconCheckPrivKeyRequest  req;
+    whMessageCrypto_FalconCheckPrivKeyResponse res;
+    whKeyId                                    key_id;
+    word32                                     pub_len;
+    int                                        ok = 0;
+    int                                        evict;
+
+    if (inSize < sizeof(whMessageCrypto_FalconCheckPrivKeyRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateFalconCheckPrivKeyRequest(
+        magic, (whMessageCrypto_FalconCheckPrivKeyRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    pub_len = req.pubKeySz;
+    if (pub_len >
+        (word32)(inSize - sizeof(whMessageCrypto_FalconCheckPrivKeyRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO,
+                                          ctx->comm->client_id, req.keyId);
+    evict  = ((req.options &
+              WH_MESSAGE_CRYPTO_FALCON_CHECKPRIVKEY_OPTIONS_EVICT) != 0);
+
+    ret = wc_falcon_init_ex(key, NULL, devId);
+    if (ret == 0) {
+        ret = _FalconKeyCacheExportEnforce(ctx, key_id, WH_NVM_FLAGS_USAGE_SIGN,
+                                           (byte)req.level, key);
+        if (ret == WH_ERROR_OK) {
+            /* A caller supplied public key must match the cached one */
+            if (pub_len > 0) {
+                const byte* req_pub =
+                    (const byte*)cryptoDataIn +
+                    sizeof(whMessageCrypto_FalconCheckPrivKeyRequest);
+                int pub_size = wc_falcon_pub_size(key);
+
+                if ((pub_size <= 0) || ((word32)pub_size != pub_len) ||
+                    (XMEMCMP(key->p, req_pub, pub_len) != 0)) {
+                    ret = WH_ERROR_BADARGS;
+                }
+            }
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = wc_falcon_check_key(key);
+            ok  = (ret == 0);
+        }
+        wc_falcon_free(key);
+    }
+
+    if (evict) {
+        _CryptoEvictKeyLocked(ctx, key_id);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        res.ok = (uint32_t)ok;
+        (void)wh_MessageCrypto_TranslateFalconCheckPrivKeyResponse(
+            magic, &res,
+            (whMessageCrypto_FalconCheckPrivKeyResponse*)cryptoDataOut);
+        *outSize = sizeof(whMessageCrypto_FalconCheckPrivKeyResponse);
+    }
+
+    return ret;
+#endif /* WOLFSSL_FALCON_VERIFY_ONLY */
+}
+#endif /* HAVE_FALCON */
+
 #ifdef WOLFSSL_HAVE_MLKEM
 /* The cache import below always requests a max-size slot, so a build whose big
  * cache buffer cannot hold one has no working ML-KEM cache keygen or import. */
@@ -5943,6 +6414,35 @@ static int _HandlePqcSigAlgorithm(whServerContext* ctx, uint16_t magic,
             }
         } break;
 #endif /* WOLFSSL_HAVE_MLDSA */
+#ifdef HAVE_FALCON
+        case WC_PQC_SIG_TYPE_FALCON: {
+            switch (pkAlgoType) {
+                case WC_PK_TYPE_PQC_SIG_KEYGEN:
+                    ret = _HandleFalconKeyGen(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_SIGN:
+                    ret = _HandleFalconSign(ctx, magic, devId, cryptoDataIn,
+                                            cryptoInSize, cryptoDataOut,
+                                            cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_VERIFY:
+                    ret = _HandleFalconVerify(ctx, magic, devId, cryptoDataIn,
+                                              cryptoInSize, cryptoDataOut,
+                                              cryptoOutSize);
+                    break;
+                case WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY:
+                    ret = _HandleFalconCheckPrivKey(
+                        ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                        cryptoDataOut, cryptoOutSize);
+                    break;
+                default:
+                    ret = WH_ERROR_NOHANDLER;
+                    break;
+            }
+        } break;
+#endif /* HAVE_FALCON */
         default:
             ret = WH_ERROR_NOHANDLER;
             break;

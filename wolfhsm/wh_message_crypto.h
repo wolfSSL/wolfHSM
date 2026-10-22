@@ -1198,6 +1198,128 @@ int wh_MessageCrypto_TranslateMlDsaVerifyResponse(
     whMessageCrypto_MlDsaVerifyResponse* dest);
 
 /*
+ * Falcon
+ */
+
+/* Falcon Key Generation Request */
+typedef struct {
+    uint32_t sz;
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t flags;
+    uint32_t access;
+    uint8_t  label[WH_NVM_LABEL_LEN];
+} whMessageCrypto_FalconKeyGenRequest;
+
+/* Falcon Key Generation Response */
+typedef struct {
+    uint32_t keyId;
+    uint32_t len;
+    /* Data follows:
+     * uint8_t out[len];
+     */
+} whMessageCrypto_FalconKeyGenResponse;
+
+int wh_MessageCrypto_TranslateFalconKeyGenRequest(
+    uint16_t magic, const whMessageCrypto_FalconKeyGenRequest* src,
+    whMessageCrypto_FalconKeyGenRequest* dest);
+
+int wh_MessageCrypto_TranslateFalconKeyGenResponse(
+    uint16_t magic, const whMessageCrypto_FalconKeyGenResponse* src,
+    whMessageCrypto_FalconKeyGenResponse* dest);
+
+/* Falcon Sign Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_FALCON_SIGN_OPTIONS_EVICT (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t sz;
+    /* Data follows:
+     * uint8_t in[sz];
+     */
+} whMessageCrypto_FalconSignRequest;
+
+/* Falcon Sign Response */
+typedef struct {
+    uint32_t sz;
+    /* Pad to the request size, since both share the comm buffer */
+    uint8_t
+        WH_PAD[sizeof(whMessageCrypto_FalconSignRequest) - sizeof(uint32_t)];
+    /* Data follows:
+     * uint8_t out[sz];
+     */
+} whMessageCrypto_FalconSignResponse;
+
+WH_UTILS_STATIC_ASSERT(
+    sizeof(whMessageCrypto_FalconSignRequest) ==
+        sizeof(whMessageCrypto_FalconSignResponse),
+    "FalconSignRequest and FalconSignResponse must be the same size");
+
+int wh_MessageCrypto_TranslateFalconSignRequest(
+    uint16_t magic, const whMessageCrypto_FalconSignRequest* src,
+    whMessageCrypto_FalconSignRequest* dest);
+
+int wh_MessageCrypto_TranslateFalconSignResponse(
+    uint16_t magic, const whMessageCrypto_FalconSignResponse* src,
+    whMessageCrypto_FalconSignResponse* dest);
+
+/* Falcon Verify Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_FALCON_VERIFY_OPTIONS_EVICT (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t sigSz;
+    uint32_t msgSz;
+    uint8_t  WH_PAD[4];
+    /* Data follows:
+     * uint8_t sig[sigSz];
+     * uint8_t msg[msgSz];
+     */
+} whMessageCrypto_FalconVerifyRequest;
+
+/* Falcon Verify Response */
+typedef struct {
+    uint32_t res;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_FalconVerifyResponse;
+
+int wh_MessageCrypto_TranslateFalconVerifyRequest(
+    uint16_t magic, const whMessageCrypto_FalconVerifyRequest* src,
+    whMessageCrypto_FalconVerifyRequest* dest);
+
+int wh_MessageCrypto_TranslateFalconVerifyResponse(
+    uint16_t magic, const whMessageCrypto_FalconVerifyResponse* src,
+    whMessageCrypto_FalconVerifyResponse* dest);
+
+/* Falcon Check Private Key Request */
+typedef struct {
+    uint32_t options;
+#define WH_MESSAGE_CRYPTO_FALCON_CHECKPRIVKEY_OPTIONS_EVICT (1 << 0)
+    uint32_t level;
+    uint32_t keyId;
+    uint32_t pubKeySz;
+    /* Data follows:
+     * uint8_t pubKey[pubKeySz];
+     */
+} whMessageCrypto_FalconCheckPrivKeyRequest;
+
+/* Falcon Check Private Key Response */
+typedef struct {
+    uint32_t ok;
+    uint8_t  WH_PAD[4];
+} whMessageCrypto_FalconCheckPrivKeyResponse;
+
+int wh_MessageCrypto_TranslateFalconCheckPrivKeyRequest(
+    uint16_t magic, const whMessageCrypto_FalconCheckPrivKeyRequest* src,
+    whMessageCrypto_FalconCheckPrivKeyRequest* dest);
+
+int wh_MessageCrypto_TranslateFalconCheckPrivKeyResponse(
+    uint16_t magic, const whMessageCrypto_FalconCheckPrivKeyResponse* src,
+    whMessageCrypto_FalconCheckPrivKeyResponse* dest);
+
+/*
  * ML-KEM
  */
 
