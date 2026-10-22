@@ -12170,6 +12170,43 @@ static int whTestCrypto_Cmac(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* WOLFSSL_AES_128 */
     }
 
+    /* A NULL input with a length must fail, not MAC an empty message */
+    if (ret == 0) {
+        const byte zeroKey[AES_128_KEY_SIZE] = {0};
+        uint32_t   outSz                     = sizeof(tag);
+
+        /* Each call starts from a clean cmac, so only the NULL input can fail
+         * it */
+        ret   = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        tagSz = sizeof(tag);
+        if (ret == 0 &&
+            wc_AesCmacGenerate_ex(cmac, tag, &tagSz, NULL, sizeof(m), zeroKey,
+                                  sizeof(zeroKey), NULL, devId) == 0) {
+            WH_ERROR_PRINT("CMAC: NULL input succeeded (want an error)\n");
+            ret = -1;
+        }
+        if (ret == 0) {
+            ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        }
+        if (ret == 0 &&
+            wh_Client_Cmac(ctx, cmac, WC_CMAC_AES, zeroKey, sizeof(zeroKey),
+                           NULL, sizeof(m), tag, &outSz) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("CMAC: NULL input not WH_ERROR_BADARGS\n");
+            ret = -1;
+        }
+#ifdef WOLFHSM_CFG_DMA
+        if (ret == 0) {
+            ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, devId);
+        }
+        outSz = sizeof(tag);
+        if (ret == 0 && wh_Client_CmacDma(ctx, cmac, WC_CMAC_AES, zeroKey,
+                                          sizeof(zeroKey), NULL, sizeof(m), tag,
+                                          &outSz) != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("CMAC DMA: NULL input not WH_ERROR_BADARGS\n");
+            ret = -1;
+        }
+#endif
+    }
 
     if (ret == 0) {
         WH_TEST_PRINT("CMAC DEVID=0x%X SUCCESS\n", devId);

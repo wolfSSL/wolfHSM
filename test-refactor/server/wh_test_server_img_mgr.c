@@ -36,6 +36,7 @@
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_server.h"
+#include "wolfhsm/wh_server_cert.h"
 #include "wolfhsm/wh_server_img_mgr.h"
 #include "wolfhsm/wh_server_keystore.h"
 
@@ -729,9 +730,8 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(
         _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr));
 
-    /* Leave NVM clean for the next suite */
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Nvm_DestroyObjects(server->nvm, 1, &rootCaNvmId));
+    /* Leave NVM and the cert verify cache clean for the next suite */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
 
     WH_TEST_PRINT(
         "IMG_MGR wolfBoot Cert Chain RSA4096 Test completed successfully!\n");
@@ -791,7 +791,6 @@ _whTest_ServerImgMgrWolfBootCertChainMultiRoot(whServerContext* server)
     const whNvmId              otherNvmId   = 11;
     const whNvmId              missingNvmId = 12;
     whNvmId                    roots[2];
-    whNvmId                    destroyIds[2];
     uint16_t                   i;
 
     WH_TEST_RETURN_ON_FAIL(_certChainAddRoot(
@@ -861,16 +860,187 @@ _whTest_ServerImgMgrWolfBootCertChainMultiRoot(whServerContext* server)
         WH_ERROR_BADARGS ==
         wh_Server_ImgMgrVerifyImg(&imgMgr, &images[0], &result));
 
-    /* Leave NVM clean for the next suite */
-    destroyIds[0] = rootCaNvmId;
-    destroyIds[1] = otherNvmId;
-    WH_TEST_RETURN_ON_FAIL(wh_Nvm_DestroyObjects(server->nvm, 2, destroyIds));
+    /* Leave NVM and the cert verify cache clean for the next suite */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, otherNvmId));
 
     WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain Multi-Root Test completed "
                   "successfully!\n");
     return WH_TEST_SUCCESS;
 }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+
+#ifdef WC_RSA_PSS
+static int _whTest_ServerImgMgrWolfBootRsaPss4096(whServerContext* server)
+{
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          testImage    = {0};
+    whServerImgMgrImg          altImage;
+    const whNvmId              keyId = 6;
+    int                        rc;
+    whServerImgMgrVerifyResult result;
+    whNvmMetadata              keyMeta = {0};
+    uint8_t                    corrupt_fw[sizeof(wolfboot_test_firmware)];
+    XALIGNED(4) uint8_t corrupt_hdr[sizeof(wolfboot_test_rsapss4096_header)];
+
+    testImage.addr    = (uintptr_t)wolfboot_test_firmware;
+    testImage.size    = sizeof(wolfboot_test_firmware);
+    testImage.hdrAddr = (uintptr_t)wolfboot_test_rsapss4096_header;
+    testImage.hdrSize = sizeof(wolfboot_test_rsapss4096_header);
+    testImage.keyId   = keyId;
+    testImage.imgType = WH_IMG_MGR_IMG_TYPE_WOLFBOOT;
+    testImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootRsaPss4096WithSha256;
+    testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = &testImage;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig));
+
+    /* Cache and commit the wolfBoot public key. The same key signed the
+     * PKCS#1 v1.5 image. */
+    keyMeta.id     = keyId;
+    keyMeta.access = WH_NVM_ACCESS_ANY;
+    keyMeta.flags  = WH_NVM_FLAGS_NONE;
+    keyMeta.len    = sizeof(wolfboot_test_rsa4096_pubkey_der);
+    snprintf((char*)keyMeta.label, WH_NVM_LABEL_LEN, "WBPssKey");
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreCacheKey(
+        server, &keyMeta, (uint8_t*)wolfboot_test_rsa4096_pubkey_der));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreCommitKey(server, keyId));
+
+    /* Positive: verify wolfBoot PSS image with correct key */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result));
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(result.verifyActionResult == WH_ERROR_OK);
+
+    /* Negative: flip a bit in a firmware copy and confirm failure */
+    altImage = testImage;
+    memcpy(corrupt_fw, wolfboot_test_firmware, sizeof(corrupt_fw));
+    corrupt_fw[0] ^= 0x01;
+    altImage.addr = (uintptr_t)corrupt_fw;
+    rc            = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(rc == result.verifyMethodResult);
+
+    /* Negative: a PKCS#1 v1.5 header is rejected */
+    altImage         = testImage;
+    altImage.hdrAddr = (uintptr_t)wolfboot_test_rsa4096_header;
+    altImage.hdrSize = sizeof(wolfboot_test_rsa4096_header);
+    rc               = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTVERIFIED);
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_NOTVERIFIED);
+
+    /* Negative: the PKCS#1 v1.5 method rejects the PSS header */
+    altImage = testImage;
+    altImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256;
+    rc = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTVERIFIED);
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_NOTVERIFIED);
+
+    /* Negative: corrupt the signature so only the RSA check can reject */
+    WH_TEST_RETURN_ON_FAIL(
+        _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr));
+
+    /* Leave the key cache clean for the next suite */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_KeystoreEraseKey(server, keyId));
+
+    WH_TEST_PRINT("IMG_MGR wolfBoot RSAPSS4096 Test completed successfully!\n");
+    return WH_TEST_SUCCESS;
+}
+
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
+static int
+_whTest_ServerImgMgrWolfBootCertChainRsaPss4096(whServerContext* server)
+{
+    whServerImgMgrConfig       imgMgrConfig = {0};
+    whServerImgMgrContext      imgMgr       = {0};
+    whServerImgMgrImg          testImage    = {0};
+    whServerImgMgrImg          altImage;
+    const whNvmId              rootCaNvmId = 11;
+    int                        rc;
+    whServerImgMgrVerifyResult result;
+    whNvmMetadata              rootCaMeta = {0};
+    uint8_t                    corrupt_fw[sizeof(wolfboot_test_firmware)];
+
+    XALIGNED(4)
+    uint8_t corrupt_hdr[sizeof(wolfboot_test_rsapss4096_cert_chain_header)];
+
+    /* Store the root CA cert in NVM. The PSS image uses the same cert chain
+     * as the PKCS#1 v1.5 one. */
+    rootCaMeta.id     = rootCaNvmId;
+    rootCaMeta.access = WH_NVM_ACCESS_ANY;
+    rootCaMeta.flags  = WH_NVM_FLAGS_NONE;
+    rootCaMeta.len    = sizeof(wolfboot_test_rsa4096_root_ca_cert_der);
+    snprintf((char*)rootCaMeta.label, WH_NVM_LABEL_LEN, "RootCA");
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Nvm_AddObject(server->nvm, &rootCaMeta,
+                         sizeof(wolfboot_test_rsa4096_root_ca_cert_der),
+                         wolfboot_test_rsa4096_root_ca_cert_der));
+
+    testImage.addr    = (uintptr_t)wolfboot_test_firmware;
+    testImage.size    = sizeof(wolfboot_test_firmware);
+    testImage.hdrAddr = (uintptr_t)wolfboot_test_rsapss4096_cert_chain_header;
+    testImage.hdrSize = sizeof(wolfboot_test_rsapss4096_cert_chain_header);
+    testImage.rootNvmIds[0] = rootCaNvmId;
+    testImage.numRoots      = 1;
+    testImage.imgType       = WH_IMG_MGR_IMG_TYPE_WOLFBOOT_CERT;
+    testImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256;
+    testImage.verifyAction = wh_Server_ImgMgrVerifyActionDefault;
+
+    imgMgrConfig.images     = &testImage;
+    imgMgrConfig.imageCount = 1;
+    imgMgrConfig.server     = server;
+    WH_TEST_RETURN_ON_FAIL(wh_Server_ImgMgrInit(&imgMgr, &imgMgrConfig));
+
+    /* Positive: verify wolfBoot PSS image against the cert chain */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_ImgMgrVerifyImg(&imgMgr, &testImage, &result));
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(result.verifyActionResult == WH_ERROR_OK);
+
+    /* Negative: flip a bit in a firmware copy and confirm failure */
+    altImage = testImage;
+    memcpy(corrupt_fw, wolfboot_test_firmware, sizeof(corrupt_fw));
+    corrupt_fw[0] ^= 0x01;
+    altImage.addr = (uintptr_t)corrupt_fw;
+    rc            = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(rc == result.verifyMethodResult);
+
+    /* Negative: a PKCS#1 v1.5 cert chain header is rejected */
+    altImage         = testImage;
+    altImage.hdrAddr = (uintptr_t)wolfboot_test_rsa4096_cert_chain_header;
+    altImage.hdrSize = sizeof(wolfboot_test_rsa4096_cert_chain_header);
+    rc               = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTVERIFIED);
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_NOTVERIFIED);
+
+    /* Negative: the PKCS#1 v1.5 method rejects the PSS header */
+    altImage = testImage;
+    altImage.verifyMethod =
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256;
+    rc = wh_Server_ImgMgrVerifyImg(&imgMgr, &altImage, &result);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOTVERIFIED);
+    WH_TEST_ASSERT_RETURN(result.verifyMethodResult == WH_ERROR_NOTVERIFIED);
+
+    /* Negative: corrupt the signature so only the RSA check can reject */
+    WH_TEST_RETURN_ON_FAIL(
+        _wolfBootVerifyCorruptSig(&imgMgr, &testImage, corrupt_hdr));
+
+    /* Leave NVM and cache clean for the next test */
+    WH_TEST_RETURN_ON_FAIL(wh_Server_CertEraseTrusted(server, rootCaNvmId));
+
+    WH_TEST_PRINT("IMG_MGR wolfBoot Cert Chain RSAPSS4096 Test completed "
+                  "successfully!\n");
+    return WH_TEST_SUCCESS;
+}
+#endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER */
+#endif /* WC_RSA_PSS */
 #endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
@@ -1249,6 +1419,12 @@ static int _whTest_ServerImgMgrBadArgs(whServerContext* server)
         WH_ERROR_BADARGS ==
         wh_Server_ImgMgrVerifyMethodWolfBootRsa4096WithSha256(
             &imgMgr, &img, NULL, 0, NULL, 0));
+#ifdef WC_RSA_PSS
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootRsaPss4096WithSha256(
+            &imgMgr, &img, NULL, 0, NULL, 0));
+#endif
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
     /* NULL image, then a context with no server */
     WH_TEST_ASSERT_RETURN(
@@ -1259,6 +1435,16 @@ static int _whTest_ServerImgMgrBadArgs(whServerContext* server)
         WH_ERROR_BADARGS ==
         wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsa4096WithSha256(
             &nullCtx, &img, NULL, 0, NULL, 0));
+#ifdef WC_RSA_PSS
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256(
+            &imgMgr, NULL, NULL, 0, NULL, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Server_ImgMgrVerifyMethodWolfBootCertChainRsaPss4096WithSha256(
+            &nullCtx, &img, NULL, 0, NULL, 0));
+#endif
 #endif
 #endif
 
@@ -1283,6 +1469,13 @@ int whTest_ServerImgMgr(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootCertChainRsa4096(server));
     WH_TEST_RETURN_ON_FAIL(
         _whTest_ServerImgMgrWolfBootCertChainMultiRoot(server));
+#endif
+#ifdef WC_RSA_PSS
+    WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootRsaPss4096(server));
+#ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
+    WH_TEST_RETURN_ON_FAIL(
+        _whTest_ServerImgMgrWolfBootCertChainRsaPss4096(server));
+#endif
 #endif
 #endif
 #ifdef HAVE_ECC
