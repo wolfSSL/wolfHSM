@@ -44,6 +44,7 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
+#include "wolfssl/wolfcrypt/wc_frodokem.h"
 
 #include "wolfhsm/wh_message_crypto.h"
 
@@ -128,6 +129,26 @@ int wh_Crypto_MlKemSerializeKey(MlKemKey* key, uint16_t max_size,
 int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
                                   MlKemKey* key);
 #endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* A serialized FrodoKEM key is one type byte followed by the wolfCrypt key
+ * encoding. The AES and ephemeral modifiers do not change the encoded length,
+ * so the type has to be stored with the key. */
+#define WH_CRYPTO_FRODOKEM_TYPE_SZ 1
+#define WH_CRYPTO_FRODOKEM_MAX_KEY_SZ \
+    (WH_CRYPTO_FRODOKEM_TYPE_SZ + FRODOKEM_MAX_PRIVATE_KEY_SIZE)
+
+/* Store a FrodoKemKey to a byte sequence, private key if present */
+int wh_Crypto_FrodoKemSerializeKey(FrodoKemKey* key, uint16_t max_size,
+                                   uint8_t* buffer, uint16_t* out_size);
+/* Store only the public half of a FrodoKemKey to a byte sequence */
+int wh_Crypto_FrodoKemSerializePublicKey(FrodoKemKey* key, uint16_t max_size,
+                                         uint8_t* buffer, uint16_t* out_size);
+/* Restore a FrodoKemKey from a byte sequence. The key is re-initialized to the
+ * stored type if it differs, keeping its heap and devId. */
+int wh_Crypto_FrodoKemDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                     FrodoKemKey* key);
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 /* Fixed header of a stateful-sig (LMS/XMSS) slot blob.

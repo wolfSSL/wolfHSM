@@ -139,6 +139,11 @@ ifneq ($(KEYCACHE_BIG_BUFSIZE),)
     DEF += -DWOLFHSM_CFG_SERVER_KEYCACHE_BIG_BUFSIZE=$(KEYCACHE_BIG_BUFSIZE)
 endif
 
+# Override the comm buffer size, e.g. to run large-key inline paths
+ifneq ($(COMM_DATA_LEN),)
+    DEF += -DWOLFHSM_CFG_COMM_DATA_LEN=$(COMM_DATA_LEN)
+endif
+
 # Support a SHE-capable build
 ifeq ($(SHE),1)
     DEF += -DWOLFHSM_CFG_SHE_EXTENSION
