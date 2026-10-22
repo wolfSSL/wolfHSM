@@ -4721,8 +4721,9 @@ static int _HandleSha256(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Translate the response */
     if (ret == 0) {
-        ret =
-            wh_MessageCrypto_TranslateSha2Response(magic, &res, cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateSha2Response(
+            magic, &res, cryptoDataOut,
+            req.isLastBlock ? 0 : (uint32_t)sizeof(uint32_t));
         if (ret == 0) {
             *outSize = sizeof(res);
         }
@@ -4812,8 +4813,9 @@ static int _HandleSha224(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Translate the response */
     if (ret == 0) {
-        ret =
-            wh_MessageCrypto_TranslateSha2Response(magic, &res, cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateSha2Response(
+            magic, &res, cryptoDataOut,
+            req.isLastBlock ? 0 : (uint32_t)sizeof(uint32_t));
         if (ret == 0) {
             *outSize = sizeof(res);
         }
@@ -4908,8 +4910,9 @@ static int _HandleSha384(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Translate the response */
     if (ret == 0) {
-        ret =
-            wh_MessageCrypto_TranslateSha2Response(magic, &res, cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateSha2Response(
+            magic, &res, cryptoDataOut,
+            req.isLastBlock ? 0 : (uint32_t)sizeof(uint64_t));
         if (ret == 0) {
             *outSize = sizeof(res);
         }
@@ -5032,8 +5035,9 @@ static int _HandleSha512(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Translate the response */
     if (ret == 0) {
-        ret =
-            wh_MessageCrypto_TranslateSha2Response(magic, &res, cryptoDataOut);
+        ret = wh_MessageCrypto_TranslateSha2Response(
+            magic, &res, cryptoDataOut,
+            req.isLastBlock ? 0 : (uint32_t)sizeof(uint64_t));
         if (ret == 0) {
             *outSize = sizeof(res);
         }
@@ -6447,7 +6451,8 @@ static int _HandleSha256Dma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     (void)wh_MessageCrypto_TranslateSha2DmaResponse(
-        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut,
+        req.isLastBlock ? 0 : (uint32_t)sizeof(uint32_t));
     *outSize = sizeof(res);
 
     return ret;
@@ -6551,7 +6556,8 @@ static int _HandleSha224Dma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     (void)wh_MessageCrypto_TranslateSha2DmaResponse(
-        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut,
+        req.isLastBlock ? 0 : (uint32_t)sizeof(uint32_t));
     *outSize = sizeof(res);
 
     return ret;
@@ -6655,7 +6661,8 @@ static int _HandleSha384Dma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     (void)wh_MessageCrypto_TranslateSha2DmaResponse(
-        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut,
+        req.isLastBlock ? 0 : (uint32_t)sizeof(uint64_t));
     *outSize = sizeof(res);
 
     return ret;
@@ -6793,7 +6800,8 @@ static int _HandleSha512Dma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     (void)wh_MessageCrypto_TranslateSha2DmaResponse(
-        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut);
+        magic, &res, (whMessageCrypto_Sha2DmaResponse*)cryptoDataOut,
+        req.isLastBlock ? 0 : (uint32_t)sizeof(uint64_t));
     *outSize = sizeof(res);
 
     return ret;
