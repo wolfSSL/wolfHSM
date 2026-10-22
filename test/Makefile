@@ -174,6 +174,11 @@ ifeq ($(SHE),1)
 	DEF += -DWOLFHSM_CFG_SHE_EXTENSION
 endif
 
+# Enable SM2/SM3/SM4, which needs wolfsm installed into wolfSSL
+ifeq ($(SM),1)
+	DEF += -DWOLFHSM_CFG_TEST_SM
+endif
+
 # Share all SHE key slots across clients (global SHE device view). Implies
 # SHE=1. WOLFHSM_CFG_GLOBAL_KEYS comes from the test config.
 ifeq ($(SHE_GLOBAL),1)
@@ -301,6 +306,9 @@ ifeq ($(TESTWOLFCRYPT),1)
     # HSM through the always-registered global devIds (TESTWOLFCRYPT_DEVID
     # defaults to WH_DEV_ID; TESTWOLFCRYPT_DMA uses WH_DEV_ID_DMA).
     DEF += -DWC_USE_DEVID=$(TESTWOLFCRYPT_DEVID)
+
+    # Find the wolfSSL certs/ dir from any working directory
+    DEF += -DCERT_PREFIX='"$(abspath $(WOLFSSL_DIR))/"'
 
     # wolfCrypt test source file
     SRC_C += $(WOLFSSL_DIR)/wolfcrypt/test/test.c
