@@ -1785,7 +1785,16 @@ static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
-#if !defined(NO_ECC_MAKE_PUB) || !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+/* The make-pub and check-pub tests build their reference keys with software
+ * keygen on INVALID_DEVID keys. A callback-only client can only do that when
+ * a find callback routes the key to a device. */
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC) || defined(WOLF_CRYPTO_CB_FIND)
+#define WH_TEST_ECC_LOCAL_KEYGEN
+#endif
+
+#if defined(WH_TEST_ECC_LOCAL_KEYGEN) &&                            \
+    (!defined(NO_ECC_MAKE_PUB) || defined(HAVE_ECC_CHECK_KEY) || \
+     defined(WOLFHSM_CFG_DMA))
 
 /* Build a private-key-only ECC key bound to devId, along with a locally
  * generated reference keypair holding the public point it must derive to.
@@ -1825,6 +1834,10 @@ static int whTest_MakePrivOnlyEccKey(int devId, WC_RNG* rng, ecc_key* refKey,
     return ret;
 }
 
+#endif /* WH_TEST_ECC_LOCAL_KEYGEN && (!NO_ECC_MAKE_PUB || HAVE_ECC_CHECK_KEY || \
+          WOLFHSM_CFG_DMA) */
+
+#if !defined(NO_ECC_MAKE_PUB) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
 /* Compare an ecc_point against the public point of key */
 static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
 {
@@ -1835,9 +1848,6 @@ static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
     return 0;
 }
 
-#endif /* !NO_ECC_MAKE_PUB || !WOLF_CRYPTO_CB_ONLY_ECC */
-
-#if !defined(NO_ECC_MAKE_PUB)
 /* Exercise WC_PK_TYPE_EC_MAKE_PUB, both for a key the client holds and for one
  * resident on the server.  Also covers exporting the public half of a resident
  * private-only key, which requires the server to derive it. */
@@ -2127,10 +2137,9 @@ static int whTest_CryptoEccMakePub(whClientContext* ctx, int devId, WC_RNG* rng)
     }
     return ret;
 }
-#endif /* !NO_ECC_MAKE_PUB */
+#endif /* !NO_ECC_MAKE_PUB && WH_TEST_ECC_LOCAL_KEYGEN */
 
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
-#ifdef HAVE_ECC_CHECK_KEY
+#if defined(HAVE_ECC_CHECK_KEY) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
 /* Exercise WC_PK_TYPE_EC_CHECK_PUB_KEY: a private-only key, a full keypair, and
  * a keypair whose public point does not belong to its private scalar. */
 static int whTest_CryptoEccCheckPubKey(whClientContext* ctx, int devId,
@@ -2309,9 +2318,7 @@ static int whTest_CryptoEccCheckPubKey(whClientContext* ctx, int devId,
     }
     return ret;
 }
-#endif /* HAVE_ECC_CHECK_KEY */
-
-#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
+#endif /* HAVE_ECC_CHECK_KEY && WH_TEST_ECC_LOCAL_KEYGEN */
 
 #ifdef WOLFHSM_CFG_DMA
 /* Generic-transport DMA smoke test: cache an ECC keypair, export the
@@ -2402,11 +2409,11 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
         wc_ecc_free(pubKey);
     }
 
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+#if defined(WH_TEST_ECC_LOCAL_KEYGEN)
     /* A resident PRIVATE-only key carries no public half, so the DMA public
      * export must derive it on the server first. Mirrors the non-DMA
-     * private-only export covered by whTest_CryptoEccMakePub. Skipped in
-     * CB_ONLY builds along with the software reference-key helper. */
+     * private-only export covered by whTest_CryptoEccMakePub. Skipped when
+     * the client cannot run the software reference-key helper. */
     if (ret == 0) {
         ecc_key refKey[1];
         ecc_key privOnlyKey[1];
@@ -2459,7 +2466,7 @@ static int whTest_CryptoEccExportPublicDma(whClientContext* ctx, int devId,
 #else
     /* devId is only consumed by the private-only sub-test above */
     (void)devId;
-#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
+#endif /* WH_TEST_ECC_LOCAL_KEYGEN */
 
     if (!WH_KEYID_ISERASED(keyId)) {
         (void)wh_Client_KeyEvict(ctx, keyId);
@@ -18770,18 +18777,16 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_CryptoEccCacheDuplicate(client);
     }
-#if !defined(NO_ECC_MAKE_PUB)
+#if !defined(NO_ECC_MAKE_PUB) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
     if (ret == 0) {
         ret = whTest_CryptoEccMakePub(client, WH_CLIENT_DEVID(client), rng);
     }
-#endif /* !NO_ECC_MAKE_PUB */
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
-#ifdef HAVE_ECC_CHECK_KEY
+#endif /* !NO_ECC_MAKE_PUB && WH_TEST_ECC_LOCAL_KEYGEN */
+#if defined(HAVE_ECC_CHECK_KEY) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
     if (ret == 0) {
         ret = whTest_CryptoEccCheckPubKey(client, WH_CLIENT_DEVID(client), rng);
     }
-#endif /* HAVE_ECC_CHECK_KEY */
-#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
+#endif /* HAVE_ECC_CHECK_KEY && WH_TEST_ECC_LOCAL_KEYGEN */
 #if defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY) && \
     !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     if (ret == 0) {
