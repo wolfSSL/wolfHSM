@@ -5286,10 +5286,9 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     }
     isFinal = (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) && req.isLastBlock;
 
-    inData = (const uint8_t*)cryptoDataIn +
-             sizeof(whMessageCrypto_ShakeRequest);
-    outData =
-        (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_ShakeResponse);
+    inData =
+        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_ShakeRequest);
+    outData = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_ShakeResponse);
 
     ret = ops.initFn(shake, NULL, devId);
     if (ret != 0) {
@@ -5327,8 +5326,8 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     ops.freeFn(shake);
 
     if (ret == 0) {
-        ret = wh_MessageCrypto_TranslateShakeResponse(magic, &res,
-                                                      cryptoDataOut);
+        ret =
+            wh_MessageCrypto_TranslateShakeResponse(magic, &res, cryptoDataOut);
         if (ret == 0) {
             *outSize = (uint16_t)(sizeof(res) + res.outSz);
         }

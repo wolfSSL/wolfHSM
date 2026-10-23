@@ -756,18 +756,16 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 switch (info->hash.type) {
 #ifdef WOLFSSL_SHAKE128
                     case WC_HASH_TYPE_SHAKE128:
-                        ret = wh_Client_Shake128(ctx, sha, info->hash.in,
-                                                 info->hash.inSz,
-                                                 info->hash.digest,
-                                                 info->hash.outSz);
+                        ret = wh_Client_Shake128(
+                            ctx, sha, info->hash.in, info->hash.inSz,
+                            info->hash.digest, info->hash.outSz);
                         break;
 #endif
 #ifdef WOLFSSL_SHAKE256
                     case WC_HASH_TYPE_SHAKE256:
-                        ret = wh_Client_Shake256(ctx, sha, info->hash.in,
-                                                 info->hash.inSz,
-                                                 info->hash.digest,
-                                                 info->hash.outSz);
+                        ret = wh_Client_Shake256(
+                            ctx, sha, info->hash.in, info->hash.inSz,
+                            info->hash.digest, info->hash.outSz);
                         break;
 #endif
                 }
