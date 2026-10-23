@@ -131,6 +131,8 @@ whMessageCrypto_Sha3State    hashSha3State;
 whMessageCrypto_Sha3Request  hashSha3Req;
 whMessageCrypto_Sha3Response hashSha3Res;
 #endif
+whMessageCrypto_ShakeRequest          hashShakeReq;
+whMessageCrypto_ShakeResponse         hashShakeRes;
 whMessageCrypto_HkdfRequest           hkdfReq;
 whMessageCrypto_HkdfResponse          hkdfRes;
 whMessageCrypto_MlDsaKeyGenRequest    pkMldsaKeygenReq;
