@@ -1049,7 +1049,7 @@ typedef struct {
     uint32_t isLastBlock;
     uint32_t inSz;
     /* Bytes of output wanted on a final or squeeze */
-    uint32_t outSz;
+    uint32_t                  outSz;
     uint32_t                  op; /* WH_MESSAGE_CRYPTO_SHAKE_OP_* */
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_ShakeRequest;

@@ -167,16 +167,16 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
     uint32_t j;
     int      ret = WH_ERROR_OK;
     /* Around the block boundary, plus one that spans several messages */
-    const uint32_t inLens[]  = {0u,           1u,          rate - 1u,
-                                rate,         rate + 1u,   2u * rate,
-                                2u * rate + 7u, SHAKE_TEST_MAX_IN};
+    const uint32_t inLens[] = {
+        0u,        1u,        rate - 1u,      rate,
+        rate + 1u, 2u * rate, 2u * rate + 7u, SHAKE_TEST_MAX_IN};
     /* All at once, then patterns that leave partial blocks buffered */
-    const uint32_t chunks[]  = {0u, 1u, 7u, rate, rate + 1u};
+    const uint32_t chunks[] = {0u, 1u, 7u, rate, rate + 1u};
     /* Output lengths, including some that are not block multiples */
-    const uint32_t outSzs[]  = {1u, 32u, 64u, rate, rate + 5u, 3u * rate};
-    const uint32_t inLenCnt  = sizeof(inLens) / sizeof(inLens[0]);
-    const uint32_t chunkCnt  = sizeof(chunks) / sizeof(chunks[0]);
-    const uint32_t outSzCnt  = sizeof(outSzs) / sizeof(outSzs[0]);
+    const uint32_t outSzs[] = {1u, 32u, 64u, rate, rate + 5u, 3u * rate};
+    const uint32_t inLenCnt = sizeof(inLens) / sizeof(inLens[0]);
+    const uint32_t chunkCnt = sizeof(chunks) / sizeof(chunks[0]);
+    const uint32_t outSzCnt = sizeof(outSzs) / sizeof(outSzs[0]);
 
     for (i = 0; (ret == WH_ERROR_OK) && (i < inLenCnt); i++) {
         for (j = 0; (ret == WH_ERROR_OK) && (j < chunkCnt); j++) {
@@ -220,7 +220,7 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
     int      ret;
     wc_Shake sha[1];
     uint8_t  out[64];
-    uint32_t inLen = 3u * v->blockSize + 11u;
+    uint32_t inLen    = 3u * v->blockSize + 11u;
     uint32_t consumed = 0;
 
     ret = _ShakeTestHash(INVALID_DEVID, v, shakeTestIn, inLen, 0u,
@@ -236,15 +236,13 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
 
     while ((ret == WH_ERROR_OK) && (consumed < inLen)) {
         uint32_t remaining = inLen - consumed;
-        uint32_t chunk     = (remaining < v->blockSize) ? remaining
-                                                        : v->blockSize;
-        bool     sent      = false;
+        uint32_t chunk = (remaining < v->blockSize) ? remaining : v->blockSize;
+        bool     sent  = false;
 
 #ifdef WOLFSSL_SHAKE128
         if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-            ret = wh_Client_Shake128UpdateRequest(ctx, sha,
-                                                  shakeTestIn + consumed,
-                                                  chunk, &sent);
+            ret = wh_Client_Shake128UpdateRequest(
+                ctx, sha, shakeTestIn + consumed, chunk, &sent);
             if ((ret == WH_ERROR_OK) && sent) {
                 do {
                     ret = wh_Client_Shake128UpdateResponse(ctx, sha);
@@ -254,9 +252,8 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
 #endif
 #ifdef WOLFSSL_SHAKE256
         if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-            ret = wh_Client_Shake256UpdateRequest(ctx, sha,
-                                                  shakeTestIn + consumed,
-                                                  chunk, &sent);
+            ret = wh_Client_Shake256UpdateRequest(
+                ctx, sha, shakeTestIn + consumed, chunk, &sent);
             if ((ret == WH_ERROR_OK) && sent) {
                 do {
                     ret = wh_Client_Shake256UpdateResponse(ctx, sha);
@@ -418,7 +415,7 @@ static int _ShakeTestAbsorbSqueeze(whClientContext*        ctx,
 }
 
 /* A zero-length finalize must succeed, as it does in software */
-static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
+static int _ShakeTestZeroLengthFinal(whClientContext*        ctx,
                                      const shakeTestVariant* v)
 {
     int      devId = WH_CLIENT_DEVID(ctx);
@@ -472,8 +469,7 @@ static int _ShakeTestZeroLengthFinal(whClientContext* ctx,
 
 #ifdef WOLFSSL_HASH_FLAGS
 /* Keccak mode is software only, so the result must match software */
-static int _ShakeTestKeccakFlag(whClientContext*        ctx,
-                                const shakeTestVariant* v)
+static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
 {
     wc_Shake sha[1];
     uint8_t  dev[32];
@@ -525,44 +521,42 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
 
 #ifdef WOLFSSL_SHAKE128
     if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-        bad = (wh_Client_Shake128(NULL, sha, buf, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake128(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              /* A length with no buffer behind it would digest the state */
-              (wh_Client_Shake128(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                               NULL) != WH_ERROR_BADARGS) ||
-              (wh_Client_Shake128UpdateResponse(ctx, NULL) !=
-               WH_ERROR_BADARGS) ||
-              /* A SHAKE has no natural length, so finalizing needs one */
-              (wh_Client_Shake128FinalRequest(ctx, sha, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake128FinalResponse(ctx, sha, NULL, 32u) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake128FinalResponse(ctx, sha, buf, 0) !=
-               WH_ERROR_BADARGS);
+        bad =
+            (wh_Client_Shake128(NULL, sha, buf, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake128(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            /* A length with no buffer behind it would digest the state */
+            (wh_Client_Shake128(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                             NULL) != WH_ERROR_BADARGS) ||
+            (wh_Client_Shake128UpdateResponse(ctx, NULL) != WH_ERROR_BADARGS) ||
+            /* A SHAKE has no natural length, so finalizing needs one */
+            (wh_Client_Shake128FinalRequest(ctx, sha, 0) != WH_ERROR_BADARGS) ||
+            (wh_Client_Shake128FinalResponse(ctx, sha, NULL, 32u) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake128FinalResponse(ctx, sha, buf, 0) !=
+             WH_ERROR_BADARGS);
     }
 #endif
 #ifdef WOLFSSL_SHAKE256
     if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-        bad = (wh_Client_Shake256(NULL, sha, buf, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                               NULL) != WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256UpdateResponse(ctx, NULL) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256FinalRequest(ctx, sha, 0) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256FinalResponse(ctx, sha, NULL, 32u) !=
-               WH_ERROR_BADARGS) ||
-              (wh_Client_Shake256FinalResponse(ctx, sha, buf, 0) !=
-               WH_ERROR_BADARGS);
+        bad =
+            (wh_Client_Shake256(NULL, sha, buf, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                             NULL) != WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256UpdateResponse(ctx, NULL) != WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256FinalRequest(ctx, sha, 0) != WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256FinalResponse(ctx, sha, NULL, 32u) !=
+             WH_ERROR_BADARGS) ||
+            (wh_Client_Shake256FinalResponse(ctx, sha, buf, 0) !=
+             WH_ERROR_BADARGS);
     }
 #endif
     bad =
@@ -581,20 +575,20 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
         (void)wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
 #ifdef WOLFSSL_SHAKE128
         if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-            bad = (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                                   &sent) !=
-                   WH_ERROR_BADARGS) ||
-                  (wh_Client_Shake128FinalRequest(ctx, sha, 32u) !=
-                   WH_ERROR_BADARGS);
+            bad =
+                (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                                 &sent) != WH_ERROR_BADARGS) ||
+                (wh_Client_Shake128FinalRequest(ctx, sha, 32u) !=
+                 WH_ERROR_BADARGS);
         }
 #endif
 #ifdef WOLFSSL_SHAKE256
         if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-            bad = (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                                   &sent) !=
-                   WH_ERROR_BADARGS) ||
-                  (wh_Client_Shake256FinalRequest(ctx, sha, 32u) !=
-                   WH_ERROR_BADARGS);
+            bad =
+                (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
+                                                 &sent) != WH_ERROR_BADARGS) ||
+                (wh_Client_Shake256FinalRequest(ctx, sha, 32u) !=
+                 WH_ERROR_BADARGS);
         }
 #endif
         bad = bad || (v->clientAbsorbFn(ctx, sha, buf, sizeof(buf)) !=
