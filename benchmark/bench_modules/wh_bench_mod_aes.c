@@ -25,6 +25,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 
 #if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
+#include "wolfhsm/wh_utils.h"
 #include "port/posix/posix_transport_shm.h"
 #endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_TEST_POSIX */
 
@@ -43,7 +44,7 @@ static const byte key256[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 enum { DECRYPT = 0, ENCRYPT = 1 };
 
 #if defined(WOLFSSL_AES_COUNTER)
-#ifdef WOLFHSM_CFG_DMA
+#ifdef WH_BENCH_CRYPTOCB_DMA
 static int _benchAesCtrDma(whClientContext* client, whBenchOpContext* ctx,
                            int id, const uint8_t* key, size_t keyLen,
                            int encrypt)
@@ -172,7 +173,7 @@ exit:
 
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WH_BENCH_CRYPTOCB_DMA */
 
 static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
@@ -305,7 +306,7 @@ int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCtrDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            ENCRYPT);
@@ -322,7 +323,7 @@ int wh_Bench_Mod_Aes128CTRDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCtrDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            DECRYPT);
@@ -339,7 +340,7 @@ int wh_Bench_Mod_Aes256CTREncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCtrDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            ENCRYPT);
@@ -356,7 +357,7 @@ int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCtrDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            DECRYPT);
@@ -371,7 +372,7 @@ int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
 
 #endif /* WOLFSSL_AES_COUNTER */
 #if defined(HAVE_AES_ECB)
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
 static int _benchAesEcbDma(whClientContext* client, whBenchOpContext* ctx,
                            int id, const uint8_t* key, size_t keyLen,
                            int encrypt)
@@ -503,7 +504,7 @@ exit:
 
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WH_BENCH_CRYPTOCB_DMA */
 
 static int _benchAesEcb(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
@@ -642,7 +643,7 @@ int wh_Bench_Mod_Aes128ECBEncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesEcbDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            ENCRYPT);
@@ -659,7 +660,7 @@ int wh_Bench_Mod_Aes128ECBDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesEcbDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            DECRYPT);
@@ -676,7 +677,7 @@ int wh_Bench_Mod_Aes256ECBEncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesEcbDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            ENCRYPT);
@@ -693,7 +694,7 @@ int wh_Bench_Mod_Aes256ECBDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesEcbDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            DECRYPT);
@@ -708,7 +709,7 @@ int wh_Bench_Mod_Aes256ECBDecryptDma(whClientContext*  client,
 #endif /* HAVE_AES_ECB */
 
 #if defined(HAVE_AES_CBC)
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
 static int _benchAesCbcDma(whClientContext* client, whBenchOpContext* ctx,
                            int id, const uint8_t* key, size_t keyLen,
                            int encrypt)
@@ -849,7 +850,7 @@ exit:
 
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WH_BENCH_CRYPTOCB_DMA */
 
 static int _benchAesCbc(whClientContext* client, whBenchOpContext* ctx, int id,
                         const uint8_t* key, size_t keyLen, int encrypt)
@@ -998,7 +999,7 @@ int wh_Bench_Mod_Aes128CBCEncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCbcDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            ENCRYPT);
@@ -1015,7 +1016,7 @@ int wh_Bench_Mod_Aes128CBCDecryptDma(whClientContext*  client,
     whBenchOpContext* ctx, int id,
     void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCbcDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
                            DECRYPT);
@@ -1032,7 +1033,7 @@ int wh_Bench_Mod_Aes256CBCEncryptDma(whClientContext*  client,
     whBenchOpContext* ctx, int id,
     void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCbcDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            ENCRYPT);
@@ -1049,7 +1050,7 @@ int wh_Bench_Mod_Aes256CBCDecryptDma(whClientContext*  client,
     whBenchOpContext* ctx, int id,
     void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchAesCbcDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
                            DECRYPT);
@@ -1088,20 +1089,20 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
     (void)wh_Client_SetDmaMode(client, 1);
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
-    /* Allocate buffers using XMALLOC with heap hints for DMA */
+    /* Allocate aligned, padded buffers from the DMA heap */
     if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         void* heap =
             posixTransportShm_GetDmaHeap(client->comm->transport_context);
-        in = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        in = wh_Utils_DmaAlloc(inLen, heap);
         if (in == NULL) {
             WH_BENCH_PRINTF("Failed to allocate memory for DMA input\n");
             return WH_ERROR_NOSPACE;
         }
 
-        out = XMALLOC(inLen, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        out = wh_Utils_DmaAlloc(inLen, heap);
         if (out == NULL) {
             WH_BENCH_PRINTF("Failed to allocate memory for DMA output\n");
-            XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            wh_Utils_DmaFree((uint8_t*)in, heap);
             return WH_ERROR_NOSPACE;
         }
     }
@@ -1212,11 +1213,11 @@ exit:
 
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
-        /* if static memory was used with DMA then use XFREE */
+        /* free the buffers allocated from the DMA heap */
         void* heap =
             posixTransportShm_GetDmaHeap(client->comm->transport_context);
-        XFREE((uint8_t*)in, heap, DYNAMIC_TYPE_TMP_BUFFER);
-        XFREE(out, heap, DYNAMIC_TYPE_TMP_BUFFER);
+        wh_Utils_DmaFree((uint8_t*)in, heap);
+        wh_Utils_DmaFree(out, heap);
     }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 

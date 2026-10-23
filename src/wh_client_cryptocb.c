@@ -100,7 +100,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
     /* If the client prefers DMA operations, dispatch to the DMA callback first
      * and fall back to the standard (non-DMA) callback if the algorithm is not
      * supported by the DMA callback. */
@@ -111,7 +111,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     }
     else
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
     {
         /* DMA not preferred (or not compiled in); use the standard callback */
         ret = wh_Client_CryptoCbStd(devId, info, inCtx);
@@ -1423,7 +1423,32 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 #endif /* HAVE_FALCON || WOLFSSL_HAVE_MLDSA */
 
 
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+/* With non-coherent DMA the server may only write into buffers that are
+ * aligned and padded to whole cache lines, which wolfCrypt cannot guarantee
+ * for the buffers it passes in. Fail every operation instead of letting
+ * wolfCrypt fall back to software, so misuse of WH_DEV_ID_DMA shows up. */
+int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
+{
+    if ((devId == INVALID_DEVID) || (info == NULL) || (inCtx == NULL)) {
+        return BAD_FUNC_ARG;
+    }
+
+    switch (info->algo_type) {
+        /* Commands and object lifecycle, nothing is transferred */
+        case WC_ALGO_TYPE_NONE:
+        case WC_ALGO_TYPE_COPY:
+        case WC_ALGO_TYPE_FREE:
+            return CRYPTOCB_UNAVAILABLE;
+
+        default:
+            WH_DEBUG_CLIENT("DMA cryptoCb disabled (non-coherent DMA): "
+                            "algo->type:%d\n",
+                            info->algo_type);
+            return WC_HW_E;
+    }
+}
+#elif defined(WOLFHSM_CFG_DMA)
 int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 {
     /* III When possible, return wolfCrypt-enumerated errors */
@@ -1775,6 +1800,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT */

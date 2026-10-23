@@ -132,9 +132,11 @@ static int _whTest_KeyCache(whClientContext* ctx)
     uint16_t keyId;
     WC_RNG   rng[1];
     uint8_t  key[WH_TEST_KEYCACHE_KEYSIZE];
-    uint8_t  keyOut[WH_TEST_KEYCACHE_KEYSIZE]  = {0};
-    uint8_t  labelIn[WH_NVM_LABEL_LEN]         = "KeyCache Test Label";
-    uint8_t  labelOut[WH_NVM_LABEL_LEN]        = {0};
+    uint8_t  labelIn[WH_NVM_LABEL_LEN]  = "KeyCache Test Label";
+    uint8_t  labelOut[WH_NVM_LABEL_LEN] = {0};
+
+    WH_DMA_ALIGNED uint8_t keyOut[WH_DMA_PAD_SIZE(WH_TEST_KEYCACHE_KEYSIZE)] = {
+        0};
 
     ret = wc_InitRng_ex(rng, NULL, devId);
     if (ret != 0) {
@@ -466,7 +468,8 @@ static int _whTest_KeyCache(whClientContext* ctx)
         uint8_t labelBig[WH_NVM_LABEL_LEN]   = "Big DMA Key Label";
 
         /* Buffer for exported key and metadata */
-        uint8_t  exportedKey[WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100];
+        WH_DMA_ALIGNED uint8_t exportedKey[WH_DMA_PAD_SIZE(
+            WOLFHSM_CFG_SERVER_KEYCACHE_BUFSIZE + 100)];
         uint8_t  exportedLabel[WH_NVM_LABEL_LEN];
         uint16_t exportedKeySize;
 
@@ -707,10 +710,12 @@ static int _whTest_NonExportableKeystore(whClientContext* ctx)
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55,
         0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
         0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00};
-    uint8_t  exportedKey[WH_TEST_KEYSTORE_TEST_SZ] = {0};
-    uint8_t  label[WH_NVM_LABEL_LEN]               = "NonExportableTestKey";
-    uint8_t  exportedLabel[WH_NVM_LABEL_LEN]       = {0};
+    uint8_t  label[WH_NVM_LABEL_LEN]         = "NonExportableTestKey";
+    uint8_t  exportedLabel[WH_NVM_LABEL_LEN] = {0};
     uint16_t exportedKeySize;
+
+    WH_DMA_ALIGNED uint8_t
+        exportedKey[WH_DMA_PAD_SIZE(WH_TEST_KEYSTORE_TEST_SZ)] = {0};
 
     WH_TEST_PRINT("Testing non-exportable keystore enforcement...\n");
 

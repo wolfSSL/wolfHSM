@@ -73,7 +73,7 @@ static int _benchSha3(whClientContext* client, whBenchOpContext* ctx, int id,
 
     (void)wh_Client_SetDmaMode(client, useDma);
 
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     if (useDma) {
         in    = WH_BENCH_DMA_BUFFER;
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
@@ -159,7 +159,7 @@ int wh_Bench_Mod_Sha3224(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha3224Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchSha3(client, ctx, id, 1, &benchSha3_224);
 #else
@@ -185,7 +185,7 @@ int wh_Bench_Mod_Sha3256(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha3256Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchSha3(client, ctx, id, 1, &benchSha3_256);
 #else
@@ -211,7 +211,7 @@ int wh_Bench_Mod_Sha3384(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha3384Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchSha3(client, ctx, id, 1, &benchSha3_384);
 #else
@@ -237,7 +237,7 @@ int wh_Bench_Mod_Sha3512(whClientContext* client, whBenchOpContext* ctx, int id,
 int wh_Bench_Mod_Sha3512Dma(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchSha3(client, ctx, id, 1, &benchSha3_512);
 #else

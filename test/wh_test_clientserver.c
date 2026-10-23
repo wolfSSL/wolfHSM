@@ -447,7 +447,7 @@ static int _testClientDmaBounce(whServerContext* server, whClientContext* client
 
     /* key material to cache + export back */
     uint8_t  keyIn[32];
-    uint8_t  keyOut[32];
+    WH_DMA_ALIGNED uint8_t keyOut[WH_DMA_PAD_SIZE(32)];
     uint8_t  labelIn[WH_NVM_LABEL_LEN];
     uint8_t  labelOut[WH_NVM_LABEL_LEN];
     uint16_t keyIdIn  = (uint16_t)WH_KEYID_ERASED;
@@ -458,7 +458,7 @@ static int _testClientDmaBounce(whServerContext* server, whClientContext* client
     whNvmMetadata meta    = {0};
     const char*   dataIn  = "bounce-pool-payload";
     whNvmSize     dataLen = (whNvmSize)strlen(dataIn);
-    uint8_t       dataOut[64];
+    WH_DMA_ALIGNED uint8_t dataOut[WH_DMA_PAD_SIZE(64)];
 
     WH_TEST_PRINT(
         "Testing client *Dma APIs through a translating DMA callback...\n");
@@ -950,7 +950,8 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
     WH_TEST_ASSERT_RETURN(WH_COMM_CONNECTED == server_connected);
 
     int      counter                  = 1;
-    char     recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    WH_DMA_ALIGNED char
+             recv_buffer[WH_DMA_PAD_SIZE(WOLFHSM_CFG_COMM_DATA_LEN)] = {0};
     char     send_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t send_len                 = 0;
     uint16_t recv_len                 = 0;
@@ -1444,7 +1445,8 @@ int whTest_ClientServerClientConfig(whClientConfig* clientCfg)
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, clientCfg));
 
     int counter = 1;
-    char recv_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
+    WH_DMA_ALIGNED char
+             recv_buffer[WH_DMA_PAD_SIZE(WOLFHSM_CFG_COMM_DATA_LEN)] = {0};
     char send_buffer[WOLFHSM_CFG_COMM_DATA_LEN] = {0};
     uint16_t send_len = 0;
     uint16_t recv_len = 0;

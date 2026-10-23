@@ -604,6 +604,13 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
  * the POSIX shared memory transport.
  */
 
+/* Client buffers outside the DMA area are copied through a bounce buffer:
+ * from wh_Utils_DmaAlloc for output, which the server writes, and from XMALLOC
+ * for input, which needs no cache-line isolation. Buffers in the DMA area are
+ * used in place; with WOLFHSM_CFG_DMA_NONCOHERENT an in-place output buffer
+ * must be aligned to WOLFHSM_CFG_DMA_ALIGN (its padding cannot be checked).
+ * POSIX needs no cache maintenance. */
+
 int posixTransportShm_ClientStaticMemDmaCallback(
     struct whClientContext_t* client, uintptr_t clientAddr,
     void** xformedCliAddr, size_t len, whDmaOper oper, whDmaFlags flags)
@@ -645,7 +652,10 @@ int posixTransportShm_ClientStaticMemDmaCallback(
     if (oper == WH_DMA_OPER_CLIENT_READ_PRE ||
         oper == WH_DMA_OPER_CLIENT_WRITE_PRE) {
         if (isInDma == 0) {
-            dmaBuffer = (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            dmaBuffer =
+                (oper == WH_DMA_OPER_CLIENT_WRITE_PRE)
+                    ? (uintptr_t)wh_Utils_DmaAlloc(len, heap)
+                    : (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
             if (dmaBuffer == 0) {
                 return WH_ERROR_NOSPACE;
             }
@@ -653,6 +663,12 @@ int posixTransportShm_ClientStaticMemDmaCallback(
             memcpy((void*)dmaBuffer, (void*)clientAddr, len);
         }
         else {
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+            if ((oper == WH_DMA_OPER_CLIENT_WRITE_PRE) &&
+                !WH_DMA_IS_ALIGNED(clientAddr)) {
+                return WH_ERROR_BADARGS;
+            }
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
             dmaOffset = clientAddr - (uintptr_t)dmaPtr;
         }
         /* return an offset into the DMA area */
@@ -669,7 +685,7 @@ int posixTransportShm_ClientStaticMemDmaCallback(
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
             memcpy((void*)clientAddr, ptr,
                    len); /* copy results of what server wrote */
-            XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+            wh_Utils_DmaFree(ptr, heap);
         }
     }
 

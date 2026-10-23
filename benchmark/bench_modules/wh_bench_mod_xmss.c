@@ -30,7 +30,7 @@
  * (see the vectors below) instead of generating them. The verify path is
  * therefore guarded only by WOLFSSL_HAVE_XMSS, while keygen/sign additionally
  * require !WOLFSSL_XMSS_VERIFY_ONLY. */
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_XMSS)
 
 #include <string.h>
 #include "wolfssl/wolfcrypt/random.h"
@@ -663,13 +663,13 @@ exit:
 
 #endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
-#endif /* WOLFHSM_CFG_DMA && WOLFSSL_HAVE_XMSS */
+#endif /* WH_BENCH_CRYPTOCB_DMA && WOLFSSL_HAVE_XMSS */
 
 /* Public benchmark module functions for XMSS */
 int wh_Bench_Mod_XmssKeyGen(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
     !defined(WOLFSSL_XMSS_VERIFY_ONLY)
     (void)params;
     return _benchXmssKeyGen(client, ctx, id);
@@ -685,7 +685,7 @@ int wh_Bench_Mod_XmssKeyGen(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_XmssSign(whClientContext* client, whBenchOpContext* ctx,
                           int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
     !defined(WOLFSSL_XMSS_VERIFY_ONLY)
     (void)params;
     return _benchXmssSign(client, ctx, id);
@@ -701,7 +701,7 @@ int wh_Bench_Mod_XmssSign(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_XmssVerify(whClientContext* client, whBenchOpContext* ctx,
                             int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS)
+#if defined(WH_BENCH_CRYPTOCB_DMA) && defined(WOLFSSL_HAVE_XMSS)
     (void)params;
     return _benchXmssVerify(client, ctx, id);
 #else

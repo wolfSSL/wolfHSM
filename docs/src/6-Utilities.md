@@ -53,6 +53,8 @@ make DMA=1
 make run
 ```
 
+Add `DMA_NONCOHERENT=1` (with `DMA=1`) to build with `WOLFHSM_CFG_DMA_NONCOHERENT`; the benchmarks of DMA through wolfCrypt are then skipped.
+
 
 ### Running Benchmarks on Real Hardware
 

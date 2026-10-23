@@ -279,7 +279,7 @@ static int _whTest_CryptoRngDmaAsync(whClientContext* ctx)
     int ret = WH_ERROR_OK;
     /* DMA bypasses the comm buffer so we can request more than COMM_DATA_LEN
      * in a single round trip. */
-    uint8_t big[WOLFHSM_CFG_COMM_DATA_LEN * 2];
+    WH_DMA_ALIGNED uint8_t big[WH_DMA_PAD_SIZE(WOLFHSM_CFG_COMM_DATA_LEN * 2)];
 
     /* Case A: basic DMA Request -> Response */
     if (ret == 0) {
@@ -304,15 +304,15 @@ static int _whTest_CryptoRngDmaAsync(whClientContext* ctx)
 
     /* Case B: small DMA request still works (no chunking semantics). */
     if (ret == 0) {
-        uint8_t small[32];
+        WH_DMA_ALIGNED uint8_t small[WH_DMA_PAD_SIZE(32)];
         memset(small, 0, sizeof(small));
-        ret = wh_Client_RngGenerateDmaRequest(ctx, small, sizeof(small));
+        ret = wh_Client_RngGenerateDmaRequest(ctx, small, 32);
         if (ret == 0) {
             do {
                 ret = wh_Client_RngGenerateDmaResponse(ctx);
             } while (ret == WH_ERROR_NOTREADY);
         }
-        if (ret == 0 && whTest_RngBufNonZero(small, sizeof(small)) != 0) {
+        if (ret == 0 && whTest_RngBufNonZero(small, 32) != 0) {
             WH_ERROR_PRINT("Async RNG DMA: small buffer all zeros\n");
             ret = -1;
         }

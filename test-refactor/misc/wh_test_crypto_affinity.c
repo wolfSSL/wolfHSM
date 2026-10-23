@@ -316,7 +316,7 @@ static int _whTest_CryptoAffinityWithCb(void)
         uint8_t key[AES_BLOCK_SIZE]       = {0x01};
         uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
         uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
-        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+        WH_DMA_ALIGNED uint8_t cipherOut[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)] = {0};
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(
@@ -339,7 +339,7 @@ static int _whTest_CryptoAffinityWithCb(void)
         uint8_t key[AES_BLOCK_SIZE]       = {0x01};
         uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
         uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
-        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+        WH_DMA_ALIGNED uint8_t cipherOut[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)] = {0};
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(
@@ -569,7 +569,7 @@ static int _whTest_CryptoAffinityNoCb(void)
         uint8_t key[AES_BLOCK_SIZE]       = {0x01};
         uint8_t iv[AES_BLOCK_SIZE]        = {0x02};
         uint8_t plainIn[AES_BLOCK_SIZE]   = {0x03};
-        uint8_t cipherOut[AES_BLOCK_SIZE] = {0};
+        WH_DMA_ALIGNED uint8_t cipherOut[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)] = {0};
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, INVALID_DEVID));
         WH_TEST_RETURN_ON_FAIL(

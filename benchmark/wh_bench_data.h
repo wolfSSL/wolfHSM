@@ -45,13 +45,23 @@ extern uint8_t wh_bench_data_out_buffer[WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE];
 #define WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE 0x8000
 #endif
 
+/* The AES modules split the buffer into an input half and an output half, each
+ * of which must start on a line boundary with non-coherent DMA */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#if (WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE % (2 * WOLFHSM_CFG_DMA_ALIGN)) != 0
+#error \
+    "WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE must be a multiple of 2 * WOLFHSM_CFG_DMA_ALIGN"
+#endif
+#endif
+
 /* Allow the user to define a custom DMA buffer of size
- * WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE */
+ * WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE, aligned to WOLFHSM_CFG_DMA_ALIGN */
 #if defined(WOLFHSM_CFG_BENCH_CUSTOM_DMA_BUFFER)
 #define WH_BENCH_DMA_BUFFER ((void*)WOLFHSM_CFG_BENCH_CUSTOM_DMA_BUFFER)
 #else
 /* built-in buffer for DMA operations */
-extern uint8_t wh_bench_data_dma_buffer[WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE];
+extern WH_DMA_ALIGNED uint8_t
+    wh_bench_data_dma_buffer[WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE];
 #define WH_BENCH_DMA_BUFFER wh_bench_data_dma_buffer
 #endif
 

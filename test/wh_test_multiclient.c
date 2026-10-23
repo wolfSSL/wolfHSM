@@ -528,7 +528,7 @@ static int _testGlobalKeyDma(whClientContext* client1, whServerContext* server1,
     whKeyId  keyId2       = WH_CLIENT_KEYID_MAKE_GLOBAL(DUMMY_KEYID_2);
     uint8_t  keyData1[32] = "GlobalDmaCacheTestKey123456!";
     uint8_t  keyData2[32] = "GlobalDmaExportTestKey12345!";
-    uint8_t  outBuf[32]  = {0};
+    WH_DMA_ALIGNED uint8_t outBuf[WH_DMA_PAD_SIZE(32)] = {0};
     uint8_t  label[WH_NVM_LABEL_LEN];
     uint16_t labelSz = sizeof(label);
     uint16_t outSz;
@@ -1707,7 +1707,7 @@ static int _testNvmUnboundClientRejected(whClientContext* client1,
     whNvmId       count   = 0;
     whNvmId       list_id = 0;
     whNvmSize     out_len = 0;
-    uint8_t       buf[64] = {0};
+    WH_DMA_ALIGNED uint8_t buf[WH_DMA_PAD_SIZE(64)] = {0};
 
     (void)client2;
     (void)server2;
@@ -1979,7 +1979,7 @@ static int _testNvmGlobalFlagDisabled(whClientContext* client1,
     whNvmId       count   = 0;
     whNvmId       cur     = 0;
     whNvmSize     out_len = 0;
-    uint8_t       buf[64] = {0};
+    WH_DMA_ALIGNED uint8_t buf[WH_DMA_PAD_SIZE(64)] = {0};
 
     (void)client2;
     (void)server2;
@@ -2122,7 +2122,7 @@ static int _testNvmNonAddVerbRejections(whClientContext* client1,
     whNvmSize     out_len = 0;
     whNvmId       list_id = 0;
     whNvmId       count   = 0;
-    uint8_t       buf[64] = {0};
+    WH_DMA_ALIGNED uint8_t buf[WH_DMA_PAD_SIZE(64)] = {0};
 
     (void)client2;
     (void)server2;
@@ -2292,7 +2292,7 @@ static int _testKeystoreUnboundClientRejected(whClientContext* client1,
     const whKeyId globalId =
         WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL, keyId);
     uint8_t  keyData[32]             = "UnboundKeystoreRejectKey12!";
-    uint8_t  outBuf[32]              = {0};
+    WH_DMA_ALIGNED uint8_t outBuf[WH_DMA_PAD_SIZE(32)] = {0};
     uint8_t  label[WH_NVM_LABEL_LEN] = {0};
     uint32_t readSz                  = sizeof(outBuf);
     uint16_t outSz                   = 0;

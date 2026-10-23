@@ -148,27 +148,61 @@ int wh_Utils_ConstantCompare(const uint8_t* a, const uint8_t* b, size_t length)
 }
 
 /** Cache helper functions */
+
+/* Round x down to a multiple of align. Cannot overflow. */
+static uintptr_t _AlignDown(uintptr_t x, uintptr_t align)
+{
+    return x - (x % align);
+}
+
+/* Get the first and last cache lines holding a byte of [p, p + n), n > 0. A
+ * range reaching the top of the address space stops at the last line there. */
+static void _CacheLineRange(const void* p, size_t n, uintptr_t* first,
+                            uintptr_t* last)
+{
+    uintptr_t start = (uintptr_t)p;
+    uintptr_t end   = ((uintptr_t)(n - 1) > UINTPTR_MAX - start)
+                          ? UINTPTR_MAX
+                          : start + (uintptr_t)(n - 1);
+
+    *first = _AlignDown(start, XCACHELINE);
+    *last  = _AlignDown(end, XCACHELINE);
+}
+
+/* The loops stop on the last line before stepping, so they cannot wrap */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
 {
-    int len = (int)n;
-    const uint8_t* ptr = (const uint8_t*)p;
-    do {
-        XCACHEINVLD(ptr);
-        ptr += XCACHELINE;
-        len -= XCACHELINE;
-    } while (len > 0);
+    uintptr_t line;
+    uintptr_t last;
+
+    if (n > 0) {
+        _CacheLineRange(p, n, &line, &last);
+        while (1) {
+            XCACHEINVLD((const uint8_t*)line);
+            if (line >= last) {
+                break;
+            }
+            line += XCACHELINE;
+        }
+    }
     return p;
 }
 
 void* wh_Utils_CacheFlush(void* p, size_t n)
 {
-    int len = (int)n;
-    uint8_t* ptr = (uint8_t*)p;
-    do {
-        XCACHEFLUSH(ptr);
-        ptr += XCACHELINE;
-        len -= XCACHELINE;
-    } while (len > 0);
+    uintptr_t line;
+    uintptr_t last;
+
+    if (n > 0) {
+        _CacheLineRange(p, n, &line, &last);
+        while (1) {
+            XCACHEFLUSH((uint8_t*)line);
+            if (line >= last) {
+                break;
+            }
+            line += XCACHELINE;
+        }
+    }
     return p;
 }
 
@@ -191,6 +225,61 @@ void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
     return XCACHEFLUSHBLK(dst, n);
 }
 
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+/** DMA buffer helpers */
+#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+/* The allocator only guarantees its own alignment, so over-allocate and keep
+ * the raw pointer just before the aligned start */
+void* wh_Utils_DmaAlloc(size_t len, void* heap)
+{
+    uintptr_t raw;
+    uintptr_t aligned;
+
+    (void)heap;
+    /* Fail like XMALLOC, rather than wrap to a short buffer, when the size
+     * below does not fit in a size_t: padding and over-allocation each add up
+     * to WOLFHSM_CFG_DMA_ALIGN - 1 bytes, plus the stored pointer */
+    if (len > SIZE_MAX - sizeof(uintptr_t) -
+                  2 * ((size_t)WOLFHSM_CFG_DMA_ALIGN - 1)) {
+        return NULL;
+    }
+    raw = (uintptr_t)XMALLOC(sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1) +
+                                 WH_DMA_PAD_SIZE(len),
+                             heap, DYNAMIC_TYPE_TMP_BUFFER);
+    if (raw == 0) {
+        return NULL;
+    }
+    aligned = (raw + sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1)) &
+              ~((uintptr_t)WOLFHSM_CFG_DMA_ALIGN - 1);
+    memcpy((void*)(aligned - sizeof(uintptr_t)), &raw, sizeof(raw));
+    return (void*)aligned;
+}
+
+void wh_Utils_DmaFree(void* ptr, void* heap)
+{
+    uintptr_t raw;
+
+    if (ptr == NULL) {
+        return;
+    }
+    (void)heap;
+    memcpy(&raw, (uint8_t*)ptr - sizeof(uintptr_t), sizeof(raw));
+    XFREE((void*)raw, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+#else
+void* wh_Utils_DmaAlloc(size_t len, void* heap)
+{
+    (void)heap;
+    return XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+
+void wh_Utils_DmaFree(void* ptr, void* heap)
+{
+    (void)heap;
+    XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_NO_CRYPTO */
 
 #if defined(WOLFHSM_CFG_HEXDUMP)
 void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)

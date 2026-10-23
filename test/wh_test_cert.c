@@ -1968,7 +1968,7 @@ int whTest_CertClientDma_ClientServerTestInternal(whClientContext* client)
     whNvmId rootCertA_id = 1;
     whNvmId rootCertB_id = 2;
     whKeyId  out_keyId    = WH_KEYID_ERASED;
-    uint8_t  exportedPubKey[LEAF_A_PUBKEY_len];
+    WH_DMA_ALIGNED uint8_t exportedPubKey[WH_DMA_PAD_SIZE(LEAF_A_PUBKEY_len)];
     uint16_t exportedPubKeyLen = sizeof(exportedPubKey);
 
     WH_TEST_PRINT("Starting certificate client DMA test...\n");
@@ -2261,7 +2261,7 @@ static int whTest_CertNonExportable(whClientContext* client)
     int32_t  out_rc                = 0;
     whNvmId  exportable_cert_id    = 101;
     whNvmId  nonexportable_cert_id = 102;
-    uint8_t  cert_buffer[2048]     = {0};
+    WH_DMA_ALIGNED uint8_t cert_buffer[WH_DMA_PAD_SIZE(2048)] = {0};
     uint32_t cert_len              = sizeof(cert_buffer);
 
     WH_TEST_PRINT("Testing non-exportable certificate functionality...\n");

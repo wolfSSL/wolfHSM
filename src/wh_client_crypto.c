@@ -10777,7 +10777,8 @@ int wh_Client_MlDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 uint8_t* label)
 {
     int      ret                                = WH_ERROR_OK;
-    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE] = {0};
+    WH_DMA_ALIGNED byte buffer[WH_DMA_PAD_SIZE(MLDSA_MAX_BOTH_KEY_DER_SIZE)] = {
+        0};
     uint16_t buffer_len                         = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -10800,7 +10801,8 @@ int wh_Client_MlDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
                                       uint8_t* label)
 {
     int      ret;
-    byte     buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE] = {0};
+    WH_DMA_ALIGNED byte buffer[WH_DMA_PAD_SIZE(MLDSA_MAX_BOTH_KEY_DER_SIZE)] = {
+        0};
     uint16_t buffer_len                              = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -10822,7 +10824,7 @@ static int _MlDsaMakeKeyDma(whClientContext* ctx, int level,
 {
     int                                     ret    = WH_ERROR_OK;
     whKeyId                                 key_id = WH_KEYID_ERASED;
-    byte                                    buffer[MLDSA_MAX_BOTH_KEY_DER_SIZE];
+    WH_DMA_ALIGNED byte buffer[WH_DMA_PAD_SIZE(MLDSA_MAX_BOTH_KEY_DER_SIZE)];
     uint8_t*                                dataPtr = NULL;
     whMessageCrypto_MlDsaKeyGenDmaRequest*  req     = NULL;
     whMessageCrypto_MlDsaKeyGenDmaResponse* res     = NULL;
@@ -11916,7 +11918,8 @@ int wh_Client_MlKemExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                 uint8_t* label)
 {
     int      ret = WH_ERROR_OK;
-    uint8_t  buffer[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE] = {0};
+    WH_DMA_ALIGNED uint8_t
+             buffer[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_PRIVATE_KEY_SIZE)] = {0};
     uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -11942,7 +11945,8 @@ int wh_Client_MlKemExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
                                       uint8_t* label)
 {
     int      ret;
-    uint8_t  buffer[WC_ML_KEM_MAX_PUBLIC_KEY_SIZE] = {0};
+    WH_DMA_ALIGNED uint8_t
+             buffer[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_PUBLIC_KEY_SIZE)] = {0};
     uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
@@ -11969,7 +11973,8 @@ static int _MlKemMakeKeyDma(whClientContext* ctx, int level,
     whMessageCrypto_MlKemKeyGenDmaResponse* res = NULL;
     uintptr_t                               keyAddr = 0;
 
-    uint8_t  buffer[WC_ML_KEM_MAX_PRIVATE_KEY_SIZE];
+    WH_DMA_ALIGNED uint8_t
+             buffer[WH_DMA_PAD_SIZE(WC_ML_KEM_MAX_PRIVATE_KEY_SIZE)];
     uint16_t buffer_len = sizeof(buffer);
     uint16_t res_len    = 0;
 
@@ -12419,6 +12424,9 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse* res;
     word32                                           pubLen32 = 0;
     uintptr_t                                        pubAddr = 0;
+    /* The server writes the public key here, not into key->pub, which shares
+     * cache lines with the rest of the key struct */
+    WH_DMA_ALIGNED uint8_t pub[WH_DMA_PAD_SIZE(sizeof(key->pub))];
 
     if ((ctx == NULL) || (key == NULL) || (key->params == NULL)) {
         return WH_ERROR_BADARGS;
@@ -12430,7 +12438,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
     }
 
     ret = wc_LmsKey_GetPubLen(key, &pubLen32);
-    if (ret != 0) {
+    if ((ret != 0) || (pubLen32 > sizeof(key->pub))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -12469,7 +12477,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         req->pub.sz        = pubLen32;
 
         ret = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)key->pub, (void**)&pubAddr, pubLen32,
+            ctx, (uintptr_t)pub, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         if (ret == WH_ERROR_OK) {
             req->pub.addr = (uint64_t)(uintptr_t)pubAddr;
@@ -12496,7 +12504,7 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         }
 
         postRet = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)key->pub, (void**)&pubAddr, pubLen32,
+            ctx, (uintptr_t)pub, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
         if (ret == WH_ERROR_OK) {
@@ -12523,6 +12531,13 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
         /* Prioritize server errors over POST errors */
         if (ret == WH_ERROR_OK) {
             ret = postRet;
+        }
+        /* pub is only valid if the server wrote the whole public key */
+        if ((ret == WH_ERROR_OK) && (res->pubSize != pubLen32)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret == WH_ERROR_OK) {
+            memcpy(key->pub, pub, pubLen32);
         }
     }
 
@@ -12890,6 +12905,11 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
     whMessageCrypto_PqcStatefulSigKeyGenDmaResponse* res;
     word32                                           pubLen32 = 0;
     uintptr_t                                        pubAddr = 0;
+    /* The server writes the public key here, not into key->pk, which shares
+     * cache lines with the rest of the key struct. wc_XmssKey_GetPubLen()
+     * returns the encoded length, XMSS_OID_LEN more than the raw key that
+     * key->pk holds, and the server transfers that many bytes. */
+    WH_DMA_ALIGNED uint8_t pub[WH_DMA_PAD_SIZE(XMSS_OID_LEN + sizeof(key->pk))];
 
     if ((ctx == NULL) || (key == NULL) || (key->params == NULL)) {
         return WH_ERROR_BADARGS;
@@ -12901,7 +12921,8 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
     }
 
     ret = wc_XmssKey_GetPubLen(key, &pubLen32);
-    if (ret != 0) {
+    if ((ret != 0) || (pubLen32 < XMSS_OID_LEN) ||
+        (pubLen32 - XMSS_OID_LEN > sizeof(key->pk))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -12950,7 +12971,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         }
 
         ret = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)key->pk, (void**)&pubAddr, pubLen32,
+            ctx, (uintptr_t)pub, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_PRE, (whDmaFlags){0});
         if (ret == WH_ERROR_OK) {
             req->pub.addr = (uint64_t)(uintptr_t)pubAddr;
@@ -12977,7 +12998,7 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         }
 
         postRet = wh_Client_DmaProcessClientAddress(
-            ctx, (uintptr_t)key->pk, (void**)&pubAddr, pubLen32,
+            ctx, (uintptr_t)pub, (void**)&pubAddr, pubLen32,
             WH_DMA_OPER_CLIENT_WRITE_POST, (whDmaFlags){0});
 
         if (ret == WH_ERROR_OK) {
@@ -13004,6 +13025,15 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
         /* Prioritize server errors over POST errors */
         if (ret == WH_ERROR_OK) {
             ret = postRet;
+        }
+        /* pub is only valid if the server wrote the whole encoded public key */
+        if ((ret == WH_ERROR_OK) && (res->pubSize != pubLen32)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret == WH_ERROR_OK) {
+            /* key->pk only holds the raw key, the first
+             * pubLen32 - XMSS_OID_LEN bytes */
+            memcpy(key->pk, pub, pubLen32 - XMSS_OID_LEN);
         }
     }
 

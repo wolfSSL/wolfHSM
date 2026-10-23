@@ -86,10 +86,11 @@ void wh_Utils_ForceZero(void* mem, uint32_t size);
 int wh_Utils_ConstantCompare(const uint8_t* a, const uint8_t* b, size_t length);
 
 /** Cache helper functions */
-/* Flush the cache lines starting at p for at least n bytes */
+/* Flush every cache line holding a byte of [p, p + n). No-op when n is 0 */
 void* wh_Utils_CacheFlush(void* p, size_t n);
 
-/* Invalidate the cache lines starting at p for at least n bytes */
+/* Invalidate every cache line holding a byte of [p, p + n). No-op when n is
+ * 0 */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n);
 
 /* Perform memset followed by a cache flush */
@@ -100,6 +101,18 @@ void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n);
 
 /* Perform memcpy followed by a cache flush of dst */
 void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n);
+
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_NO_CRYPTO)
+/** DMA buffer helpers */
+/* XMALLOC/XFREE replacements for heap buffers the server writes over DMA.
+ * With WOLFHSM_CFG_DMA_NONCOHERENT the buffer starts on a
+ * WOLFHSM_CFG_DMA_ALIGN boundary and is padded to a multiple of it; otherwise
+ * these are plain XMALLOC/XFREE. Returns NULL when the allocation fails. */
+void* wh_Utils_DmaAlloc(size_t len, void* heap);
+
+/* Free a buffer from wh_Utils_DmaAlloc. NULL is ignored */
+void wh_Utils_DmaFree(void* ptr, void* heap);
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_NO_CRYPTO */
 
 
 #if defined(WOLFHSM_CFG_HEXDUMP)

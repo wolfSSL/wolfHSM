@@ -39,6 +39,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [DMA Dispatch Mode (`wh_Client_SetDmaMode`)](#dma-dispatch-mode-wh_client_setdmamode)
     - [Pre-Access and Post-Access Callbacks](#pre-access-and-post-access-callbacks)
     - [Address Allowlisting](#address-allowlisting)
+    - [Non-Coherent Caches and Buffer Alignment](#non-coherent-caches-and-buffer-alignment)
     - [32-bit vs. 64-bit Address Handling](#32-bit-vs-64-bit-address-handling)
 - [AUTOSAR SHE Subsystem](#autosar-she-subsystem)
     - [Client API and Command Set](#client-api-and-command-set)
@@ -91,7 +92,7 @@ The wolfHSM client library registers a crypto callback that turns each supported
 In addition to the configured per-client ID, every `wh_Client_Init()` registers the two process-global device IDs:
 
 - `WH_DEV_ID` is registered with the same unified callback as a configured `devId`, so it behaves identically — including honoring the [DMA dispatch mode](#dma-dispatch-mode-wh_client_setdmamode). It is also the ID a client is bound to when its config leaves `.devId` 0.
-- `WH_DEV_ID_DMA` (present only with `WOLFHSM_CFG_DMA`) is registered with the DMA-only callback: operations always use the DMA request forms, and algorithms without a DMA variant fail rather than falling back to the standard path. It is reserved for this purpose and is not valid as a configured `.devId`.
+- `WH_DEV_ID_DMA` (present only with `WOLFHSM_CFG_DMA`) is registered with the DMA-only callback: operations always use the DMA request forms, and algorithms without a DMA variant fail rather than falling back to the standard path. It is reserved for this purpose and is not valid as a configured `.devId`. With `WOLFHSM_CFG_DMA_NONCOHERENT` every operation on it fails (see [Non-Coherent Caches and Buffer Alignment](#non-coherent-caches-and-buffer-alignment)).
 
 The global IDs preserve the behavior of earlier wolfHSM releases: an application with a **single client per process** needs no devId configuration at all and can keep passing `WH_DEV_ID` (or `WH_DEV_ID_DMA`) straight to wolfCrypt functions, exactly as before — they are always registered and available after `wh_Client_Init()`. Because these registrations are process-global and keyed on the integer value, each `wh_Client_Init()` rebinds them to the most recently initialized client, and **any** client's `wh_Client_Cleanup()` unregisters them. In a multi-client process they are therefore unreliable and should not be passed to wolfCrypt; use the per-client configured IDs instead. Both values are overridable at compile time (see [Configuration](9-Configuration.md#cryptography-features)).
 
@@ -642,7 +643,7 @@ The motivating use cases all involve payloads that are either too large or too i
 
 ### DMA Dispatch Mode (`wh_Client_SetDmaMode`)
 
-For wolfCrypt-mediated operations, opt-in to DMA is a per-client dispatch mode rather than a separate device ID: the application calls `wh_Client_SetDmaMode(client, 1)` (or sets `.preferDma` in the client's `whClientDmaConfig` at init), and subsequent wolfCrypt calls made with `WH_CLIENT_DEVID(client)` construct DMA-flavored requests whose payloads carry pointers and lengths into the client's address space rather than inline data. The server-side dispatcher recognizes the DMA request kind and, for each referenced buffer, hands the pointer to the server's DMA address-processing path (described below) before invoking the underlying wolfCrypt primitive. The set of algorithms that have a DMA path mirrors the most performance-sensitive subset of the supported algorithms; with DMA mode preferred, an algorithm without a DMA path automatically falls back to the standard (non-DMA) request, so no call-site changes are needed. The mode can be toggled at any time — `wh_Client_SetDmaMode(client, 0)` returns the client to standard dispatch, and `wh_Client_GetDmaMode()` reads the current setting.
+For wolfCrypt-mediated operations, opt-in to DMA is a per-client dispatch mode rather than a separate device ID: the application calls `wh_Client_SetDmaMode(client, 1)` (or sets `.preferDma` in the client's `whClientDmaConfig` at init), and subsequent wolfCrypt calls made with `WH_CLIENT_DEVID(client)` construct DMA-flavored requests whose payloads carry pointers and lengths into the client's address space rather than inline data. The server-side dispatcher recognizes the DMA request kind and, for each referenced buffer, hands the pointer to the server's DMA address-processing path (described below) before invoking the underlying wolfCrypt primitive. The set of algorithms that have a DMA path mirrors the most performance-sensitive subset of the supported algorithms; with DMA mode preferred, an algorithm without a DMA path automatically falls back to the standard (non-DMA) request, so no call-site changes are needed. The mode can be toggled at any time — `wh_Client_SetDmaMode(client, 0)` returns the client to standard dispatch, and `wh_Client_GetDmaMode()` reads the current setting. With `WOLFHSM_CFG_DMA_NONCOHERENT` the DMA dispatch mode cannot be enabled (see [Non-Coherent Caches and Buffer Alignment](#non-coherent-caches-and-buffer-alignment)).
 
 The global `WH_DEV_ID_DMA` device ID is also always registered when `WOLFHSM_CFG_DMA` is enabled and always produces DMA-flavored requests for the most recently initialized client; unlike the DMA dispatch mode, it does not fall back to the standard path for algorithms without a DMA variant. See [Transparent Offload via Crypto Callbacks](#transparent-offload-via-crypto-callbacks) for the global device IDs' single-client-per-process scope.
 
@@ -687,6 +688,24 @@ The allowlist is two parallel tables — one for client reads (server reads from
 When the allowlist is not registered the server allows every address, which is appropriate only for tightly trusted single-application systems and for development. **Production deployments should always supply an allowlist** that covers exactly the shared-memory regions the application is permitted to use; the allowlist is the primary mechanism that bounds the blast radius of a misbehaving client and is the difference between DMA being a performance feature and DMA being an exfiltration channel. The size of the allowlist is bounded at compile time by `WOLFHSM_CFG_DMAADDR_COUNT` entries per direction; a zero-sized entry is treated as unused.
 
 A symmetric `whDmaAddrAllowList` is also available on the client side for clients that wish to validate addresses locally before issuing a DMA request (`whClientDmaConfig::dmaAddrAllowList`). Client-side validation is advisory — the server's check is the authoritative one — but it lets a client fail fast when its own code accidentally constructs an out-of-range pointer.
+
+### Non-Coherent Caches and Buffer Alignment
+
+When the client's memory is cached and the hardware does not keep that cache coherent with the server's accesses, the port's client DMA callback has to clean the cache lines before the server accesses a buffer and invalidate them after the server has written it (`WH_DMA_OPER_CLIENT_WRITE_POST`). Cache maintenance works on whole lines, so a buffer the server writes must not share a line with other data: an invalidate would discard the CPU's writes to that data, and an eviction could overwrite the server's.
+
+Define `WOLFHSM_CFG_DMA_NONCOHERENT` for these targets. Every buffer the server writes must then start on a `WOLFHSM_CFG_DMA_ALIGN` boundary (default `XCACHELINE`) and be padded to a multiple of it. The length passed to the API stays the real length:
+
+```c
+WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(sizeof(plain))];
+
+ret = wh_Client_AesCtrDma(client, aes, 1, plain, sizeof(plain), cipher);
+```
+
+`WH_DMA_ALIGNED` and `WH_DMA_PAD_SIZE()` are no-ops without `WOLFHSM_CFG_DMA_NONCOHERENT`. wolfHSM's own internal output buffers follow the rule. For caller buffers, the port's callback can check the start with `WH_DMA_IS_ALIGNED()` (as `posixTransportShm_ClientStaticMemDmaCallback` does for buffers it uses in place) or copy through a bounce buffer from `wh_Utils_DmaAlloc()`; padding cannot be checked.
+
+Test builds can define `WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK` (`make DMA_ALIGN_CHECK=1` in `test/` and `test-refactor/posix/`) to abort on any output buffer that does not start on a `WOLFHSM_CFG_DMA_ALIGN` boundary or, in ASAN builds, is not padded to a multiple of it. The check runs in `wh_Client_DmaProcessClientAddress`, so it covers wolfHSM's own buffers and every buffer the tests pass, whatever DMA callback the client registers. The make option also raises `WOLFHSM_CFG_DMA_ALIGN` to 256, so a buffer missing `WH_DMA_ALIGNED` does not pass by being aligned by chance.
+
+wolfCrypt passes the crypto callback buffers it does not control, such as its own stack and structure buffers, so with `WOLFHSM_CFG_DMA_NONCOHERENT` wolfHSM refuses DMA through wolfCrypt: every operation on `WH_DEV_ID_DMA` fails with `WC_HW_E`, and `whClientDmaConfig::preferDma` and `wh_Client_SetDmaMode(client, 1)` fail with `WH_ERROR_BADARGS`. Use `WH_DEV_ID` (or the client's configured devId) for wolfCrypt, and call the `wh_Client_*Dma` APIs directly where zero-copy matters. LMS and XMSS have no non-DMA path, so with this option they are available only through the `wh_Client_Lms*Dma` and `wh_Client_Xmss*Dma` APIs.
 
 ### 32-bit vs. 64-bit Address Handling
 

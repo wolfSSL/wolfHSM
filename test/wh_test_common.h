@@ -92,9 +92,11 @@
  * WH_DEV_ID. The DMA-only WH_DEV_ID_DMA is exercised by running the
  * wolfCrypt test suite against it (TESTWOLFCRYPT=1 defaults WC_USE_DEVID to
  * WH_DEV_ID; TESTWOLFCRYPT_DMA=1 uses WH_DEV_ID_DMA). */
-#ifdef WOLFHSM_CFG_DMA
+#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
 #define WH_TEST_DMA_MODE_CNT 2
 #else
+/* Without DMA, or with WOLFHSM_CFG_DMA_NONCOHERENT (wolfCrypt cannot use DMA
+ * there, so wh_Client_SetDmaMode(client, 1) is refused) */
 #define WH_TEST_DMA_MODE_CNT 1
 #endif
 
