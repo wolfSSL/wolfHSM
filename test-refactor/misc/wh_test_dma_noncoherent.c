@@ -23,7 +23,8 @@
  * WOLFHSM_CFG_DMA_NONCOHERENT refusals: wolfCrypt cannot use DMA when client
  * caches are not coherent, so the client must refuse preferDma (at init and
  * through wh_Client_SetDmaMode) and every wolfCrypt operation on
- * WH_DEV_ID_DMA must fail with WC_HW_E instead of falling back to software.
+ * WH_DEV_ID_DMA (AES-CBC and SHA-256 here) must fail with WC_HW_E instead of
+ * falling back to software.
  * None of this reaches the server, so the test runs a client with no server.
  * Also checks the aligned, padded buffers from wh_Utils_DmaAlloc.
  */
@@ -39,6 +40,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
 #include "wolfhsm/wh_error.h"
@@ -160,9 +162,42 @@ static int _whTest_DmaNonCoherentRefusals(void)
         ret = -1;
     }
 
-#ifndef NO_SHA256
-    /* A wolfCrypt operation on WH_DEV_ID_DMA fails with WC_HW_E (no software
+    /* wolfCrypt operations on WH_DEV_ID_DMA fail with WC_HW_E (no software
      * fallback), and freeing the object afterwards still works */
+#if !defined(NO_AES) && defined(HAVE_AES_CBC)
+    /* Needs a cipher operation that always reaches the cryptoCb: SetKey alone
+     * only does so on builds that route it there, otherwise it returns 0 */
+    if (ret == 0) {
+        Aes           aes[1];
+        const uint8_t key[AES_128_KEY_SIZE] = {0};
+        const uint8_t iv[AES_BLOCK_SIZE]    = {0};
+        uint8_t       in[AES_BLOCK_SIZE]    = {0};
+        uint8_t       out[AES_BLOCK_SIZE]   = {0};
+        int           rc;
+
+        rc = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+        if (rc != 0) {
+            WH_ERROR_PRINT("wc_AesInit on WH_DEV_ID_DMA failed %d\n", rc);
+            ret = -1;
+        }
+        else {
+            /* The key may be handed to the cryptoCb already (SETKEY) */
+            rc = wc_AesSetKey(aes, key, sizeof(key), iv, AES_ENCRYPTION);
+            if (rc == 0) {
+                rc = wc_AesCbcEncrypt(aes, out, in, sizeof(in));
+            }
+            if (rc != WC_HW_E) {
+                WH_ERROR_PRINT("AES on WH_DEV_ID_DMA returned %d, expected "
+                               "WC_HW_E\n",
+                               rc);
+                ret = -1;
+            }
+            wc_AesFree(aes);
+        }
+    }
+#endif /* !NO_AES && HAVE_AES_CBC */
+
+#ifndef NO_SHA256
     if (ret == 0) {
         wc_Sha256     sha[1];
         const uint8_t data[] = "noncoherent";
