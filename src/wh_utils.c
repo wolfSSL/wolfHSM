@@ -225,62 +225,6 @@ void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
     return XCACHEFLUSHBLK(dst, n);
 }
 
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_NO_CRYPTO)
-/** DMA buffer helpers */
-#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
-/* The allocator only guarantees its own alignment, so over-allocate and keep
- * the raw pointer just before the aligned start */
-void* wh_Utils_DmaAlloc(size_t len, void* heap)
-{
-    uintptr_t raw;
-    uintptr_t aligned;
-
-    (void)heap;
-    /* Fail like XMALLOC, rather than wrap to a short buffer, when the size
-     * below does not fit in a size_t: padding and over-allocation each add up
-     * to WOLFHSM_CFG_DMA_ALIGN - 1 bytes, plus the stored pointer */
-    if (len > SIZE_MAX - sizeof(uintptr_t) -
-                  2 * ((size_t)WOLFHSM_CFG_DMA_ALIGN - 1)) {
-        return NULL;
-    }
-    raw = (uintptr_t)XMALLOC(sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1) +
-                                 WH_DMA_PAD_SIZE(len),
-                             heap, DYNAMIC_TYPE_TMP_BUFFER);
-    if (raw == 0) {
-        return NULL;
-    }
-    aligned = (raw + sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1)) &
-              ~((uintptr_t)WOLFHSM_CFG_DMA_ALIGN - 1);
-    memcpy((void*)(aligned - sizeof(uintptr_t)), &raw, sizeof(raw));
-    return (void*)aligned;
-}
-
-void wh_Utils_DmaFree(void* ptr, void* heap)
-{
-    uintptr_t raw;
-
-    if (ptr == NULL) {
-        return;
-    }
-    (void)heap;
-    memcpy(&raw, (uint8_t*)ptr - sizeof(uintptr_t), sizeof(raw));
-    XFREE((void*)raw, heap, DYNAMIC_TYPE_TMP_BUFFER);
-}
-#else
-void* wh_Utils_DmaAlloc(size_t len, void* heap)
-{
-    (void)heap;
-    return XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
-}
-
-void wh_Utils_DmaFree(void* ptr, void* heap)
-{
-    (void)heap;
-    XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
-}
-#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_NO_CRYPTO */
-
 #if defined(WOLFHSM_CFG_HEXDUMP)
 void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)
 {

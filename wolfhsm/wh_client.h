@@ -528,8 +528,9 @@ int wh_Client_GetCryptoAffinity(whClientContext* c, uint32_t* out_affinity);
  * @param[in] c Pointer to the client context.
  * @param[in] useDma Nonzero to use DMA where supported, zero for the normal
  *                   path.
- * @return int 0 on success, or WH_ERROR_BADARGS on invalid input or when
- *         turning DMA on with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT.
+ * @return int 0 on success, WH_ERROR_BADARGS on invalid input, or
+ *         WH_ERROR_NOTIMPL when turning DMA on with
+ *         WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT.
  */
 int wh_Client_SetDmaMode(whClientContext* c, int useDma);
 

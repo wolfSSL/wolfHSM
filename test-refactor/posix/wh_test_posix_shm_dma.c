@@ -19,7 +19,8 @@
 /*
  * test-refactor/posix/wh_test_posix_shm_dma.c
  *
- * In-place buffers in the POSIX shared memory client DMA callback. A client
+ * In-place buffers in the POSIX shared memory client DMA callback, and the
+ * bounce buffers it allocates with posixTransportShm_DmaAlloc. A client
  * buffer already inside the DMA area is passed to the server as its offset,
  * without a bounce copy; with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT a
  * buffer the server writes must also be aligned. The object is mapped twice, as
@@ -36,6 +37,12 @@
     !defined(WOLFHSM_CFG_ENABLE_CLIENT) || !defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 int whTest_PosixShmDmaInPlace(void* ctx)
+{
+    (void)ctx;
+    return WH_TEST_SKIPPED;
+}
+
+int whTest_PosixShmDmaAlloc(void* ctx)
 {
     (void)ctx;
     return WH_TEST_SKIPPED;
@@ -149,6 +156,70 @@ int whTest_PosixShmDmaInPlace(void* ctx)
         (void)shm_unlink(name); /* normally already unlinked by the client */
     }
     return ret;
+}
+
+/* posixTransportShm_DmaAlloc must return a buffer aligned to SHMDMA_ALIGN with
+ * WH_DMA_PAD_SIZE(len) usable bytes, and posixTransportShm_DmaFree must free it
+ * through the raw pointer stored before it. Writing every padded byte and
+ * freeing lets ASAN catch a short buffer or a wrong offset. */
+int whTest_PosixShmDmaAlloc(void* ctx)
+{
+    static const size_t lens[] = {
+        0,
+        1,
+        SHMDMA_ALIGN - 1,
+        SHMDMA_ALIGN,
+        SHMDMA_ALIGN + 1,
+        3 * SHMDMA_ALIGN,
+        10 * SHMDMA_ALIGN + 3,
+    };
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* Allocation sizes that would wrap without the overflow check:
+     * WH_DMA_PAD_SIZE(SIZE_MAX) wraps to 0, and SIZE_MAX -
+     * WOLFHSM_CFG_DMA_ALIGN + 1 pads without wrapping but the over-allocation
+     * then does */
+    static const size_t hugeLens[] = {
+        SIZE_MAX,
+        SIZE_MAX - WOLFHSM_CFG_DMA_ALIGN + 1,
+    };
+#endif
+    uint8_t* buf;
+    size_t   i;
+
+    (void)ctx;
+    for (i = 0; i < sizeof(lens) / sizeof(lens[0]); i++) {
+        buf = (uint8_t*)posixTransportShm_DmaAlloc(lens[i], NULL);
+        WH_TEST_ASSERT_RETURN(buf != NULL || lens[i] == 0);
+        if (!WH_DMA_IS_ALIGNED(buf)) {
+            WH_ERROR_PRINT("posixTransportShm_DmaAlloc(%u) returned unaligned "
+                           "%p\n",
+                           (unsigned)lens[i], (void*)buf);
+            posixTransportShm_DmaFree(buf, NULL);
+            return WH_TEST_FAIL;
+        }
+        if (buf != NULL) {
+            memset(buf, 0xA5, WH_DMA_PAD_SIZE(lens[i]));
+        }
+        posixTransportShm_DmaFree(buf, NULL);
+    }
+
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    for (i = 0; i < sizeof(hugeLens) / sizeof(hugeLens[0]); i++) {
+        buf = (uint8_t*)posixTransportShm_DmaAlloc(hugeLens[i], NULL);
+        if (buf != NULL) {
+            WH_ERROR_PRINT("posixTransportShm_DmaAlloc(SIZE_MAX - %u) did not "
+                           "fail\n",
+                           (unsigned)(SIZE_MAX - hugeLens[i]));
+            posixTransportShm_DmaFree(buf, NULL);
+            return WH_TEST_FAIL;
+        }
+    }
+#endif
+
+    /* NULL is ignored */
+    posixTransportShm_DmaFree(NULL, NULL);
+
+    return 0;
 }
 
 #endif

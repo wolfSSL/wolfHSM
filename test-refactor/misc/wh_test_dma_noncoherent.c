@@ -26,7 +26,6 @@
  * WH_DEV_ID_DMA (AES-CBC and SHA-256 here) must fail with WC_HW_E instead of
  * falling back to software.
  * None of this reaches the server, so the test runs a client with no server.
- * Also checks the aligned, padded buffers from wh_Utils_DmaAlloc.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -48,68 +47,11 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_client.h"
-#include "wolfhsm/wh_utils.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
 #define BUFFER_SIZE 4096
-
-/* wh_Utils_DmaAlloc must return a buffer aligned to WOLFHSM_CFG_DMA_ALIGN with
- * WH_DMA_PAD_SIZE(len) usable bytes, and wh_Utils_DmaFree must free it through
- * the raw pointer stored before it. Writing every padded byte and freeing lets
- * ASAN catch a short buffer or a wrong offset. */
-static int _whTest_DmaNonCoherentAlloc(void)
-{
-    static const size_t lens[] = {
-        0,
-        1,
-        WOLFHSM_CFG_DMA_ALIGN - 1,
-        WOLFHSM_CFG_DMA_ALIGN,
-        WOLFHSM_CFG_DMA_ALIGN + 1,
-        3 * WOLFHSM_CFG_DMA_ALIGN,
-        10 * WOLFHSM_CFG_DMA_ALIGN + 3,
-    };
-    /* Allocation sizes that would wrap without the overflow check:
-     * WH_DMA_PAD_SIZE(SIZE_MAX) wraps to 0, and SIZE_MAX -
-     * WOLFHSM_CFG_DMA_ALIGN + 1 pads without wrapping but the over-allocation
-     * then does */
-    static const size_t hugeLens[] = {
-        SIZE_MAX,
-        SIZE_MAX - WOLFHSM_CFG_DMA_ALIGN + 1,
-    };
-    uint8_t* buf;
-    size_t   i;
-
-    for (i = 0; i < sizeof(lens) / sizeof(lens[0]); i++) {
-        buf = (uint8_t*)wh_Utils_DmaAlloc(lens[i], NULL);
-        WH_TEST_ASSERT_RETURN(buf != NULL);
-        if (!WH_DMA_IS_ALIGNED(buf)) {
-            WH_ERROR_PRINT("wh_Utils_DmaAlloc(%u) returned unaligned %p\n",
-                           (unsigned)lens[i], (void*)buf);
-            wh_Utils_DmaFree(buf, NULL);
-            return WH_TEST_FAIL;
-        }
-        memset(buf, 0xA5, WH_DMA_PAD_SIZE(lens[i]));
-        wh_Utils_DmaFree(buf, NULL);
-    }
-
-    for (i = 0; i < sizeof(hugeLens) / sizeof(hugeLens[0]); i++) {
-        buf = (uint8_t*)wh_Utils_DmaAlloc(hugeLens[i], NULL);
-        if (buf != NULL) {
-            WH_ERROR_PRINT("wh_Utils_DmaAlloc(SIZE_MAX - %u) did not fail\n",
-                           (unsigned)(SIZE_MAX - hugeLens[i]));
-            wh_Utils_DmaFree(buf, NULL);
-            return WH_TEST_FAIL;
-        }
-    }
-
-    /* NULL is ignored */
-    wh_Utils_DmaFree(NULL, NULL);
-
-    WH_TEST_PRINT("DMA non-coherent wh_Utils_DmaAlloc SUCCESS\n");
-    return WH_ERROR_OK;
-}
 
 static int _whTest_DmaNonCoherentRefusals(void)
 {
@@ -141,14 +83,14 @@ static int _whTest_DmaNonCoherentRefusals(void)
 
     /* preferDma in the config is refused before any initialization */
     dmaCfg[0].preferDma = 1;
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_Client_Init(client, c_conf));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTIMPL == wh_Client_Init(client, c_conf));
 
     dmaCfg[0].preferDma = 0;
     WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
 
     /* Turning DMA mode on is refused and leaves it off; turning it off is
      * still accepted */
-    if (wh_Client_SetDmaMode(client, 1) != WH_ERROR_BADARGS) {
+    if (wh_Client_SetDmaMode(client, 1) != WH_ERROR_NOTIMPL) {
         WH_ERROR_PRINT("wh_Client_SetDmaMode(1) was not refused\n");
         ret = -1;
     }
@@ -234,10 +176,7 @@ int whTest_DmaNonCoherent(void* ctx)
 {
     (void)ctx;
 
-    WH_TEST_RETURN_ON_FAIL(_whTest_DmaNonCoherentAlloc());
-    WH_TEST_RETURN_ON_FAIL(_whTest_DmaNonCoherentRefusals());
-
-    return WH_ERROR_OK;
+    return _whTest_DmaNonCoherentRefusals();
 }
 
 #endif /* DMA && DMA_ALIGNED_PADDED_OUTPUT && ENABLE_CLIENT && !NO_CRYPTO */

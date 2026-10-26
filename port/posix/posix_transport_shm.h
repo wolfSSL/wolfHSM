@@ -205,6 +205,16 @@ int posixTransportShm_ServerStaticMemDmaCallback(
     size_t len, whServerDmaOper oper, whServerDmaFlags flags);
 
 #include "wolfhsm/wh_client.h"
+/* XMALLOC/XFREE replacements for buffers the server writes over DMA, from the
+ * DMA heap (posixTransportShm_GetDmaHeap). With
+ * WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT the buffer starts on a
+ * WOLFHSM_CFG_DMA_ALIGN boundary and is padded to a multiple of it; otherwise
+ * these are plain XMALLOC/XFREE. Returns NULL when the allocation fails. */
+void* posixTransportShm_DmaAlloc(size_t len, void* heap);
+
+/* Free a buffer from posixTransportShm_DmaAlloc. NULL is ignored */
+void posixTransportShm_DmaFree(void* ptr, void* heap);
+
 int posixTransportShm_ClientStaticMemDmaCallback(whClientContext* client,
                                                  uintptr_t        clientAddr,
                                                  void** xformedCliAddr,

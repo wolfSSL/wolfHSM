@@ -511,10 +511,10 @@ static int whTest_CryptoDmaNoncoherentRefusal(whClientContext* ctx,
     /* DMA-preferred mode is refused and the mode stays standard */
     if (ret == 0) {
         rc = wh_Client_SetDmaMode(ctx, 1);
-        if ((rc != WH_ERROR_BADARGS) ||
+        if ((rc != WH_ERROR_NOTIMPL) ||
             (wh_Client_GetDmaMode(ctx, &mode) != WH_ERROR_OK) || (mode != 0)) {
             WH_ERROR_PRINT("SetDmaMode(1) returned %d (mode %d), expected "
-                           "WH_ERROR_BADARGS (mode 0)\n",
+                           "WH_ERROR_NOTIMPL (mode 0)\n",
                            rc, mode);
             ret = WH_ERROR_ABORTED;
         }
@@ -537,9 +537,9 @@ static int whTest_CryptoDmaNoncoherentRefusal(whClientContext* ctx,
         otherCfg.dmaConfig = &dmaCfg;
 
         rc = wh_Client_Init(other, &otherCfg);
-        if (rc != WH_ERROR_BADARGS) {
+        if (rc != WH_ERROR_NOTIMPL) {
             WH_ERROR_PRINT("wh_Client_Init with preferDma returned %d, "
-                           "expected WH_ERROR_BADARGS\n",
+                           "expected WH_ERROR_NOTIMPL\n",
                            rc);
             if (rc == WH_ERROR_OK) {
                 (void)wh_Client_Cleanup(other);

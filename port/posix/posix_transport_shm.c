@@ -604,12 +604,65 @@ int posixTransportShm_RecvResponse(void* c, uint16_t* out_len, void* data)
  * the POSIX shared memory transport.
  */
 
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+/* The allocator only guarantees its own alignment, so over-allocate and keep
+ * the raw pointer just before the aligned start */
+void* posixTransportShm_DmaAlloc(size_t len, void* heap)
+{
+    uintptr_t raw;
+    uintptr_t aligned;
+
+    (void)heap;
+    /* Fail like XMALLOC, rather than wrap to a short buffer, when the size
+     * below does not fit in a size_t: padding and over-allocation each add up
+     * to WOLFHSM_CFG_DMA_ALIGN - 1 bytes, plus the stored pointer */
+    if (len > SIZE_MAX - sizeof(uintptr_t) -
+                  2 * ((size_t)WOLFHSM_CFG_DMA_ALIGN - 1)) {
+        return NULL;
+    }
+    raw = (uintptr_t)XMALLOC(sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1) +
+                                 WH_DMA_PAD_SIZE(len),
+                             heap, DYNAMIC_TYPE_TMP_BUFFER);
+    if (raw == 0) {
+        return NULL;
+    }
+    aligned = (raw + sizeof(uintptr_t) + (WOLFHSM_CFG_DMA_ALIGN - 1)) &
+              ~((uintptr_t)WOLFHSM_CFG_DMA_ALIGN - 1);
+    memcpy((void*)(aligned - sizeof(uintptr_t)), &raw, sizeof(raw));
+    return (void*)aligned;
+}
+
+void posixTransportShm_DmaFree(void* ptr, void* heap)
+{
+    uintptr_t raw;
+
+    if (ptr == NULL) {
+        return;
+    }
+    (void)heap;
+    memcpy(&raw, (uint8_t*)ptr - sizeof(uintptr_t), sizeof(raw));
+    XFREE((void*)raw, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+#else
+void* posixTransportShm_DmaAlloc(size_t len, void* heap)
+{
+    (void)heap;
+    return XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+
+void posixTransportShm_DmaFree(void* ptr, void* heap)
+{
+    (void)heap;
+    XFREE(ptr, heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
+
 /* Client buffers outside the DMA area are copied through a bounce buffer:
- * from wh_Utils_DmaAlloc for output, which the server writes, and from XMALLOC
- * for input, which needs no cache-line isolation. Buffers in the DMA area are
- * used in place; with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT an in-place
- * output buffer must be aligned to WOLFHSM_CFG_DMA_ALIGN (its padding cannot be
- * checked). POSIX needs no cache maintenance. */
+ * from posixTransportShm_DmaAlloc for output, which the server writes, and from
+ * XMALLOC for input, which needs no cache-line isolation. Buffers in the DMA
+ * area are used in place; with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT an
+ * in-place output buffer must be aligned to WOLFHSM_CFG_DMA_ALIGN (its padding
+ * cannot be checked). POSIX needs no cache maintenance. */
 
 int posixTransportShm_ClientStaticMemDmaCallback(
     struct whClientContext_t* client, uintptr_t clientAddr,
@@ -654,7 +707,7 @@ int posixTransportShm_ClientStaticMemDmaCallback(
         if (isInDma == 0) {
             dmaBuffer =
                 (oper == WH_DMA_OPER_CLIENT_WRITE_PRE)
-                    ? (uintptr_t)wh_Utils_DmaAlloc(len, heap)
+                    ? (uintptr_t)posixTransportShm_DmaAlloc(len, heap)
                     : (uintptr_t)XMALLOC(len, heap, DYNAMIC_TYPE_TMP_BUFFER);
             if (dmaBuffer == 0) {
                 return WH_ERROR_NOSPACE;
@@ -685,7 +738,7 @@ int posixTransportShm_ClientStaticMemDmaCallback(
             uint8_t* ptr = (uint8_t*)dmaPtr + (uintptr_t)*xformedCliAddr;
             memcpy((void*)clientAddr, ptr,
                    len); /* copy results of what server wrote */
-            wh_Utils_DmaFree(ptr, heap);
+            posixTransportShm_DmaFree(ptr, heap);
         }
     }
 

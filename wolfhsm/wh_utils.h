@@ -102,19 +102,6 @@ void* wh_Utils_memcpy_invalidate(void* dst, const void* src, size_t n);
 /* Perform memcpy followed by a cache flush of dst */
 void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n);
 
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_NO_CRYPTO)
-/** DMA buffer helpers */
-/* XMALLOC/XFREE replacements for heap buffers the server writes over DMA.
- * With WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT the buffer starts on a
- * WOLFHSM_CFG_DMA_ALIGN boundary and is padded to a multiple of it; otherwise
- * these are plain XMALLOC/XFREE. Returns NULL when the allocation fails. */
-void* wh_Utils_DmaAlloc(size_t len, void* heap);
-
-/* Free a buffer from wh_Utils_DmaAlloc. NULL is ignored */
-void wh_Utils_DmaFree(void* ptr, void* heap);
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_NO_CRYPTO */
-
-
 #if defined(WOLFHSM_CFG_HEXDUMP)
 void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size);
 #endif

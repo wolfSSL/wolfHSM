@@ -166,13 +166,13 @@
  *  AEAD request carries inside the message instead of over DMA.
  *      Default: 128
  *
- *  WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT - Define when client memory
- *  the server writes over DMA is cached and not kept coherent by the
- *  hardware. Output buffers of the wh_Client_*Dma APIs must then start on a
- *  WOLFHSM_CFG_DMA_ALIGN boundary and be padded to a multiple of it
- *  (WH_DMA_ALIGNED, WH_DMA_PAD_SIZE()). wolfCrypt cannot guarantee that for
- *  the buffers it passes, so every operation on WH_DEV_ID_DMA fails with
- *  WC_HW_E and preferDma cannot be enabled. Requires WOLFHSM_CFG_DMA.
+ *  WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT - Client buffers the server
+ *  writes over DMA must start on a WOLFHSM_CFG_DMA_ALIGN boundary and be
+ *  padded to a multiple of it (WH_DMA_ALIGNED, WH_DMA_PAD_SIZE()). Define it
+ *  when that client memory is cached and the hardware does not keep it
+ *  coherent with DMA. wolfCrypt cannot guarantee the rule for the buffers it
+ *  passes, so every operation on WH_DEV_ID_DMA fails with WC_HW_E and
+ *  preferDma cannot be enabled. Requires WOLFHSM_CFG_DMA.
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_DMA_ALIGN - Alignment and padding, in bytes, of client buffers

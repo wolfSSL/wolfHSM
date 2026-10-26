@@ -92,8 +92,10 @@ int whTest_LogPosixFile(void* ctx);
 int whTest_LogPosixFileConcurrent(void* ctx);
 int whTest_LogClientServerMemTransport(void* ctx);
 
-/* POSIX shared memory DMA callback: client buffers used in place */
+/* POSIX shared memory DMA callback: client buffers used in place, and the
+ * aligned bounce buffer allocator */
 int whTest_PosixShmDmaInPlace(void* ctx);
+int whTest_PosixShmDmaAlloc(void* ctx);
 
 /*
  * Port-owned contexts. The thread functions fill these in and
@@ -347,6 +349,11 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_PosixShmDmaInPlace",
                                 whTest_PosixShmDmaInPlace, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_PosixShmDmaAlloc",
+                                whTest_PosixShmDmaAlloc, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

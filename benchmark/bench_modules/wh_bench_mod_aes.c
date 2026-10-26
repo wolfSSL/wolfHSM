@@ -25,7 +25,6 @@
 #include "wolfssl/wolfcrypt/aes.h"
 
 #if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_TEST_POSIX)
-#include "wolfhsm/wh_utils.h"
 #include "port/posix/posix_transport_shm.h"
 #endif /* WOLFHSM_CFG_DMA && WOLFHSM_CFG_TEST_POSIX */
 
@@ -1093,16 +1092,16 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
     if (ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         void* heap =
             posixTransportShm_GetDmaHeap(client->comm->transport_context);
-        in = wh_Utils_DmaAlloc(inLen, heap);
+        in = posixTransportShm_DmaAlloc(inLen, heap);
         if (in == NULL) {
             WH_BENCH_PRINTF("Failed to allocate memory for DMA input\n");
             return WH_ERROR_NOSPACE;
         }
 
-        out = wh_Utils_DmaAlloc(inLen, heap);
+        out = posixTransportShm_DmaAlloc(inLen, heap);
         if (out == NULL) {
             WH_BENCH_PRINTF("Failed to allocate memory for DMA output\n");
-            wh_Utils_DmaFree((uint8_t*)in, heap);
+            posixTransportShm_DmaFree((uint8_t*)in, heap);
             return WH_ERROR_NOSPACE;
         }
     }
@@ -1216,8 +1215,8 @@ exit:
         /* free the buffers allocated from the DMA heap */
         void* heap =
             posixTransportShm_GetDmaHeap(client->comm->transport_context);
-        wh_Utils_DmaFree((uint8_t*)in, heap);
-        wh_Utils_DmaFree(out, heap);
+        posixTransportShm_DmaFree((uint8_t*)in, heap);
+        posixTransportShm_DmaFree(out, heap);
     }
 #endif /* WOLFHSM_CFG_TEST_POSIX */
 
