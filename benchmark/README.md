@@ -118,6 +118,10 @@ You can adjust the number of iterations ran for various types of benchmark opera
 - `WOLFHSM_CFG_BENCH_KG_ITERS`: Number of iterations for key generation operations
 - `WOLFHSM_CFG_BENCH_PK_ITERS`: Number of iterations for public key operations (encrypt/decrypt/sign/verify/shared secret)
 
+#### Algorithm parameters
+
+- `WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE`: IV length in bytes used for AES-GCM benchmarks. Defaults to 12 (the recommended 96-bit GCM nonce). Set to 16 to benchmark with a full AES block size IV. Must be between 1 and 16
+
 ## Running the Benchmarks
 
 To build and run the benchmarks:
