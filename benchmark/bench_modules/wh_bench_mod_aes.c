@@ -42,6 +42,21 @@ static const byte key256[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 
 enum { DECRYPT = 0, ENCRYPT = 1 };
 
+#if defined(HAVE_AESGCM)
+/* IV length in bytes used for AES-GCM benchmarks. Defaults to the recommended
+ * 96-bit GCM nonce size (12). Must not exceed the AES block size, as the IV
+ * buffer is also passed to wc_AesSetIV() */
+#ifndef WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE
+#define WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE 12
+#endif
+
+/* WC_AES_BLOCK_SIZE is an enum, so compare against its literal value */
+#if (WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE < 1) || \
+    (WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE > 16)
+#error "WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE must be between 1 and 16"
+#endif
+#endif /* HAVE_AESGCM */
+
 #if defined(WOLFSSL_AES_COUNTER)
 #ifdef WOLFHSM_CFG_DMA
 static int _benchAesCtrDma(whClientContext* client, whBenchOpContext* ctx,
@@ -1163,8 +1178,9 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
             benchStartRet = wh_Bench_StartOp(ctx, id);
 
             ret = wh_Client_AesGcmDma(client, aes, ENCRYPT, in, inLen, iv,
-                                      sizeof(iv), authData, sizeof(authData),
-                                      NULL, authTag, sizeof(authTag), out);
+                                      WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE,
+                                      authData, sizeof(authData), NULL, authTag,
+                                      sizeof(authTag), out);
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
         }
@@ -1172,8 +1188,9 @@ static int _benchAesGcmDma(whClientContext* client, whBenchOpContext* ctx,
             benchStartRet = wh_Bench_StartOp(ctx, id);
 
             ret = wh_Client_AesGcmDma(client, aes, DECRYPT, in, inLen, iv,
-                                      sizeof(iv), authData, sizeof(authData),
-                                      authTag, NULL, sizeof(authTag), out);
+                                      WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE,
+                                      authData, sizeof(authData), authTag, NULL,
+                                      sizeof(authTag), out);
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
 
@@ -1298,8 +1315,8 @@ static int _benchAesGcm(whClientContext* client, whBenchOpContext* ctx, int id,
 
             ret = wc_AesGcmEncrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
                                    WH_BENCH_DATA_IN_BUFFER, inLen, iv,
-                                   sizeof(iv), authTag, sizeof(authTag),
-                                   authData, sizeof(authData));
+                                   WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE, authTag,
+                                   sizeof(authTag), authData, sizeof(authData));
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
         }
@@ -1308,8 +1325,8 @@ static int _benchAesGcm(whClientContext* client, whBenchOpContext* ctx, int id,
 
             ret = wc_AesGcmDecrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
                                    WH_BENCH_DATA_IN_BUFFER, inLen, iv,
-                                   sizeof(iv), authTag, sizeof(authTag),
-                                   authData, sizeof(authData));
+                                   WOLFHSM_CFG_BENCH_AES_GCM_IV_SIZE, authTag,
+                                   sizeof(authTag), authData, sizeof(authData));
 
             benchStopRet = wh_Bench_StopOp(ctx, id);
 
