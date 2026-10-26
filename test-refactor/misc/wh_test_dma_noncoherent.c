@@ -20,9 +20,9 @@
 /*
  * test-refactor/misc/wh_test_dma_noncoherent.c
  *
- * WOLFHSM_CFG_DMA_NONCOHERENT refusals: wolfCrypt cannot use DMA when client
- * caches are not coherent, so the client must refuse preferDma (at init and
- * through wh_Client_SetDmaMode) and every wolfCrypt operation on
+ * WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT refusals: wolfCrypt cannot use
+ * DMA when client caches are not coherent, so the client must refuse preferDma
+ * (at init and through wh_Client_SetDmaMode) and every wolfCrypt operation on
  * WH_DEV_ID_DMA (AES-CBC and SHA-256 here) must fail with WC_HW_E instead of
  * falling back to software.
  * None of this reaches the server, so the test runs a client with no server.
@@ -31,7 +31,8 @@
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_DMA_NONCOHERENT) && \
+#if defined(WOLFHSM_CFG_DMA) &&                               \
+    defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT) && \
     defined(WOLFHSM_CFG_ENABLE_CLIENT) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 
 #include <stdint.h>
@@ -239,4 +240,4 @@ int whTest_DmaNonCoherent(void* ctx)
     return WH_ERROR_OK;
 }
 
-#endif /* DMA && DMA_NONCOHERENT && ENABLE_CLIENT && !NO_CRYPTO */
+#endif /* DMA && DMA_ALIGNED_PADDED_OUTPUT && ENABLE_CLIENT && !NO_CRYPTO */

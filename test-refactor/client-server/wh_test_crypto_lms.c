@@ -24,8 +24,9 @@
  *                               key export and import, and enforcement of the
  *                               no-private-export / no-private-import policy
  *
- * With WOLFHSM_CFG_DMA_NONCOHERENT wolfCrypt cannot use DMA, so the key
- * operations drive the wh_Client_Lms*Dma APIs directly instead of the cryptoCb.
+ * With WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT wolfCrypt cannot use DMA,
+ * so the key operations drive the wh_Client_Lms*Dma APIs directly instead of
+ * the cryptoCb.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -65,7 +66,7 @@ static WH_DMA_ALIGNED byte whTest_LmsSigBuf[WH_DMA_PAD_SIZE(8800)];
 /* Key operations under test. wolfCrypt cannot use DMA with non-coherent
  * caches, so there the wh_Client_Lms*Dma APIs are driven directly instead of
  * going through the cryptoCb (devId is then INVALID_DEVID). */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 static int _whTest_LmsMakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
 {
     int ret;
@@ -129,7 +130,7 @@ static int _whTest_LmsVerify(whClientContext* ctx, LmsKey* key, const byte* sig,
     (void)ctx;
     return wc_LmsKey_Verify(key, sig, sigLen, msg, msgSz);
 }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
                                      WC_RNG* rng)
@@ -556,7 +557,7 @@ int whTest_Crypto_Lms(whClientContext* ctx)
     }
     rngInited = 1;
 
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
     /* No DMA through wolfCrypt: the test drives the DMA APIs directly */
     ret = _whTest_CryptoLmsCryptoCb(ctx, INVALID_DEVID, rng);
 #else

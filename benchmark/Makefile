@@ -122,11 +122,11 @@ ifeq ($(DMA),1)
 endif
 
 # DMA with non-coherent client caches (requires DMA=1)
-ifeq ($(DMA_NONCOHERENT),1)
+ifeq ($(DMA_ALIGNED_PADDED_OUTPUT),1)
     ifneq ($(DMA),1)
-        $(error "DMA_NONCOHERENT=1 requires DMA=1 to be set")
+        $(error "DMA_ALIGNED_PADDED_OUTPUT=1 requires DMA=1 to be set")
     endif
-	DEF += -DWOLFHSM_CFG_DMA_NONCOHERENT
+	DEF += -DWOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 endif
 
 # Support a SHE-capable build

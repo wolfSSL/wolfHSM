@@ -100,7 +100,8 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         return BAD_FUNC_ARG;
     }
 
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+#if defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
     /* If the client prefers DMA operations, dispatch to the DMA callback first
      * and fall back to the standard (non-DMA) callback if the algorithm is not
      * supported by the DMA callback. */
@@ -111,7 +112,7 @@ int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
         }
     }
     else
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
     {
         /* DMA not preferred (or not compiled in); use the standard callback */
         ret = wh_Client_CryptoCbStd(devId, info, inCtx);
@@ -1422,7 +1423,8 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 #endif /* HAVE_FALCON || WOLFSSL_HAVE_MLDSA */
 
 
-#if defined(WOLFHSM_CFG_DMA) && defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+#if defined(WOLFHSM_CFG_DMA) && \
+    defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
 /* With non-coherent DMA the server may only write into buffers that are
  * aligned and padded to whole cache lines, which wolfCrypt cannot guarantee
  * for the buffers it passes in. Fail every operation instead of letting
@@ -1799,6 +1801,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO && WOLFHSM_CFG_ENABLE_CLIENT */

@@ -21,9 +21,10 @@
  *
  * In-place buffers in the POSIX shared memory client DMA callback. A client
  * buffer already inside the DMA area is passed to the server as its offset,
- * without a bounce copy; with WOLFHSM_CFG_DMA_NONCOHERENT a buffer the server
- * writes must also be aligned. The object is mapped twice, as server and as
- * client, so the two mappings sit at different addresses as in two processes.
+ * without a bounce copy; with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT a
+ * buffer the server writes must also be aligned. The object is mapped twice, as
+ * server and as client, so the two mappings sit at different addresses as in
+ * two processes.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -52,8 +53,8 @@ int whTest_PosixShmDmaInPlace(void* ctx)
 #include "wolfhsm/wh_client.h"
 #include "port/posix/posix_transport_shm.h"
 
-/* Without NONCOHERENT any alignment is accepted; 64 just exercises the path */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+/* Without the rule any alignment is accepted; 64 just exercises the path */
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 #define SHMDMA_ALIGN WOLFHSM_CFG_DMA_ALIGN
 #else
 #define SHMDMA_ALIGN 64
@@ -90,7 +91,7 @@ static int _ShmDmaInPlace(whClientContext* client, uint8_t* cliDma,
     ret = posixTransportShm_ClientStaticMemDmaCallback(
         client, (uintptr_t)(buf + 1), &off, SHMDMA_LEN,
         WH_DMA_OPER_CLIENT_WRITE_PRE, flags);
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
 #else
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);

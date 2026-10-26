@@ -79,9 +79,9 @@ jobs:
 
     # Build and test DMA with non-coherent client caches (wolfCrypt DMA refused),
     # aborting on DMA output buffers that are not aligned and padded.
-    - name: Build and test refactor DMA NONCOHERENT THREADSAFE ASAN
+    - name: Build and test refactor DMA ALIGNED_PADDED_OUTPUT THREADSAFE ASAN
       if: matrix.group == 'pq-dma'
-      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 DMA_NONCOHERENT=1 DMA_ALIGN_CHECK=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
+      run: cd test-refactor/posix && make clean && make -j THREADSAFE=1 DMA=1 DMA_ALIGNED_PADDED_OUTPUT=1 DMA_ALIGN_CHECK=1 ASAN=1 WOLFSSL_DIR=../../wolfssl && make run
 
     # Build and test with NVM flash CRC16 integrity checking enabled
     - name: Build and test refactor NVM flash CRC ASAN

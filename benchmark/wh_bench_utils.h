@@ -31,10 +31,12 @@
 #define WH_BENCH_SNPRINTF snprintf
 #endif
 
-/* wolfHSM refuses DMA through wolfCrypt with WOLFHSM_CFG_DMA_NONCOHERENT, so
- * the benchmarks of that path are only built without it. Benchmarks of the
- * direct wh_Client_*Dma APIs only depend on WOLFHSM_CFG_DMA. */
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+/* wolfHSM refuses DMA through wolfCrypt with
+ * WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT, so the benchmarks of that path
+ * are only built without it. Benchmarks of the direct wh_Client_*Dma APIs only
+ * depend on WOLFHSM_CFG_DMA. */
+#if defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
 #define WH_BENCH_CRYPTOCB_DMA
 #endif
 

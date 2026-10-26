@@ -47,7 +47,7 @@ extern uint8_t wh_bench_data_out_buffer[WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE];
 
 /* The AES modules split the buffer into an input half and an output half, each
  * of which must start on a line boundary with non-coherent DMA */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 #if (WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE % (2 * WOLFHSM_CFG_DMA_ALIGN)) != 0
 #error \
     "WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE must be a multiple of 2 * WOLFHSM_CFG_DMA_ALIGN"

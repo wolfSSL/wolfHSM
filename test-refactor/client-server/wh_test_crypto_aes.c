@@ -784,7 +784,8 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
 
 /* These go through wolfCrypt on WH_DEV_ID_DMA, which non-coherent DMA builds
  * refuse */
-#if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
+#if defined(WOLFHSM_CFG_DMA) && \
+    !defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
 #ifdef WOLFSSL_AES_COUNTER
     /* AES-CTR DMA: encrypt without ENCRYPT flag */
     {
@@ -1094,7 +1095,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
         goto done;
     }
 #endif /* HAVE_AESGCM */
-#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA && !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 done:
     wc_FreeRng(rng);

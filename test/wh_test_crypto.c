@@ -450,7 +450,7 @@ static int whTest_CryptoRngDmaAsync(whClientContext* ctx)
 }
 #endif /* WOLFHSM_CFG_DMA */
 
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 /* With non-coherent DMA, wolfCrypt must not reach the DMA path: operations on
  * WH_DEV_ID_DMA fail with WC_HW_E (no silent software fallback), objects
  * created with it can still be freed, and DMA-preferred mode is refused. */
@@ -549,11 +549,11 @@ static int whTest_CryptoDmaNoncoherentRefusal(whClientContext* ctx,
     }
 
     if (ret == 0) {
-        WH_TEST_PRINT("DMA NONCOHERENT REFUSAL SUCCESS\n");
+        WH_TEST_PRINT("DMA ALIGNED PADDED OUTPUT REFUSAL SUCCESS\n");
     }
     return ret;
 }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 #ifndef NO_RSA
 static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -16144,7 +16144,7 @@ static WH_DMA_ALIGNED byte whTest_LmsSigBuf[WH_DMA_PAD_SIZE(8800)];
 /* Key operations under test. wolfCrypt cannot use DMA with non-coherent
  * caches, so there the wh_Client_Lms*Dma APIs are driven directly instead of
  * going through the cryptoCb (devId is then INVALID_DEVID). */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 static int _whTestLms_MakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
 {
     int ret;
@@ -16153,8 +16153,8 @@ static int _whTestLms_MakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
     if (ret == 0) {
         /* wh_Client_LmsMakeExportKeyDma only fills in the public key and
          * keyId, it does not mark the key usable (this predates
-         * WOLFHSM_CFG_DMA_NONCOHERENT). Set what wc_LmsKey_MakeKey
-         * sets after a cryptoCb keygen. */
+         * WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT). Set what
+         * wc_LmsKey_MakeKey sets after a cryptoCb keygen. */
         key->state  = WC_LMS_STATE_OK;
         key->pubSet = 1;
     }
@@ -16209,7 +16209,7 @@ static int _whTestLms_Verify(whClientContext* ctx, LmsKey* key, const byte* sig,
     (void)ctx;
     return wc_LmsKey_Verify(key, sig, sigLen, msg, msgSz);
 }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
                                     WC_RNG* rng)
@@ -16634,7 +16634,7 @@ static WH_DMA_ALIGNED byte whTest_XmssSigBuf[WH_DMA_PAD_SIZE(2500)];
 /* Key operations under test. wolfCrypt cannot use DMA with non-coherent
  * caches, so there the wh_Client_Xmss*Dma APIs are driven directly instead of
  * going through the cryptoCb (devId is then INVALID_DEVID). */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 static int _whTestXmss_MakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
 {
     int ret;
@@ -16643,8 +16643,8 @@ static int _whTestXmss_MakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
     if (ret == 0) {
         /* wh_Client_XmssMakeExportKeyDma only fills in the public key and
          * keyId, it does not mark the key usable (this predates
-         * WOLFHSM_CFG_DMA_NONCOHERENT). Set what wc_XmssKey_MakeKey
-         * sets after a cryptoCb keygen. */
+         * WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT). Set what
+         * wc_XmssKey_MakeKey sets after a cryptoCb keygen. */
         key->state  = WC_XMSS_STATE_OK;
         key->pubSet = 1;
     }
@@ -16701,7 +16701,7 @@ static int _whTestXmss_Verify(whClientContext* ctx, XmssKey* key,
     (void)ctx;
     return wc_XmssKey_Verify(key, sig, sigLen, msg, msgSz);
 }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
                                      WC_RNG* rng)
@@ -18589,11 +18589,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTest_CryptoRngDmaAsync(client);
     }
 #endif /* WOLFHSM_CFG_DMA */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
     if (ret == WH_ERROR_OK) {
         ret = whTest_CryptoDmaNoncoherentRefusal(client, config);
     }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
     /* The remaining once-run tests below historically used the non-DMA devId;
      * select the std (non-DMA) dispatch mode for them. Reinitialize the default
@@ -19155,7 +19155,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
     if (ret == 0) {
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
         ret = whTestCrypto_LmsCryptoCb(client, INVALID_DEVID, rng);
 #else
         ret = whTestCrypto_LmsCryptoCb(client, WH_DEV_ID_DMA, rng);
@@ -19166,7 +19166,7 @@ int whTest_CryptoClientConfig(whClientConfig* config)
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
     if (ret == 0) {
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
         ret = whTestCrypto_XmssCryptoCb(client, INVALID_DEVID, rng);
 #else
         ret = whTestCrypto_XmssCryptoCb(client, WH_DEV_ID_DMA, rng);
@@ -19352,7 +19352,7 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
      * use-after-free class is covered by the single-thread harness. */
     whClientDmaConfig clientDmaConfig = {
         .cb = whTestDma_BounceClientCb,
-#ifndef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifndef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
         /* Refused with non-coherent DMA (no DMA through wolfCrypt) */
         .preferDma = 1,
 #endif

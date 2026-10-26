@@ -166,18 +166,18 @@
  *  AEAD request carries inside the message instead of over DMA.
  *      Default: 128
  *
- *  WOLFHSM_CFG_DMA_NONCOHERENT - Define when client memory the server writes
- *  over DMA is cached and not kept coherent by the hardware. Output buffers
- *  of the wh_Client_*Dma APIs must then start on a WOLFHSM_CFG_DMA_ALIGN
- *  boundary and be padded to a multiple of it (WH_DMA_ALIGNED,
- *  WH_DMA_PAD_SIZE()). wolfCrypt cannot guarantee that for the buffers it
- *  passes, so every operation on WH_DEV_ID_DMA fails with WC_HW_E and
- *  preferDma cannot be enabled. Requires WOLFHSM_CFG_DMA.
+ *  WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT - Define when client memory
+ *  the server writes over DMA is cached and not kept coherent by the
+ *  hardware. Output buffers of the wh_Client_*Dma APIs must then start on a
+ *  WOLFHSM_CFG_DMA_ALIGN boundary and be padded to a multiple of it
+ *  (WH_DMA_ALIGNED, WH_DMA_PAD_SIZE()). wolfCrypt cannot guarantee that for
+ *  the buffers it passes, so every operation on WH_DEV_ID_DMA fails with
+ *  WC_HW_E and preferDma cannot be enabled. Requires WOLFHSM_CFG_DMA.
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_DMA_ALIGN - Alignment and padding, in bytes, of client buffers
  *  the server writes over DMA. A power of two and a multiple of XCACHELINE.
- *  Only used with WOLFHSM_CFG_DMA_NONCOHERENT.
+ *  Only used with WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT.
  *      Default: XCACHELINE
  *
  *  WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK - Test builds only. Abort when a client
@@ -185,7 +185,7 @@
  *  WOLFHSM_CFG_DMA_ALIGN boundary or, in ASAN builds, is not padded to a
  *  multiple of it. Checked in wh_Client_DmaProcessClientAddress, so it covers
  *  wolfHSM's own buffers and those passed to the wh_Client_*Dma APIs.
- *  Requires WOLFHSM_CFG_DMA_NONCOHERENT.
+ *  Requires WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT.
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_CERT_MAX_VERIFY_ROOTS - Maximum number of trusted root NVM IDs
@@ -759,13 +759,15 @@
 
 /* DMA Configuration */
 
-#if defined(WOLFHSM_CFG_DMA_NONCOHERENT) && !defined(WOLFHSM_CFG_DMA)
-#error "WOLFHSM_CFG_DMA_NONCOHERENT requires WOLFHSM_CFG_DMA"
+#if defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT) && \
+    !defined(WOLFHSM_CFG_DMA)
+#error "WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT requires WOLFHSM_CFG_DMA"
 #endif
 
 #if defined(WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK) && \
-    !defined(WOLFHSM_CFG_DMA_NONCOHERENT)
-#error "WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK requires WOLFHSM_CFG_DMA_NONCOHERENT"
+    !defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
+#error \
+    "WOLFHSM_CFG_TEST_DMA_ALIGN_CHECK requires WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT"
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
@@ -831,7 +833,7 @@
 
 /* Alignment and padding of client buffers the server writes into over DMA.
  * Only needed with non-coherent DMA, no-ops otherwise. */
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
 
 #ifndef WOLFHSM_CFG_DMA_ALIGN
 #define WOLFHSM_CFG_DMA_ALIGN XCACHELINE
@@ -878,6 +880,6 @@
 #define WH_DMA_ALIGNED
 #endif
 
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 #endif /* !WOLFHSM_WH_SETTINGS_H_ */

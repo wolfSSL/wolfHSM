@@ -51,8 +51,8 @@ jobs:
       run: cd benchmark && make clean && make WOLFSSL_DIR=../wolfssl DMA=1 && make run
 
     # Benchmark DMA with non-coherent client caches (wolfCrypt DMA refused)
-    - name: Benchmark DMA NONCOHERENT
-      run: cd benchmark && make clean && make WOLFSSL_DIR=../wolfssl DMA=1 DMA_NONCOHERENT=1 && make run
+    - name: Benchmark DMA ALIGNED_PADDED_OUTPUT
+      run: cd benchmark && make clean && make WOLFSSL_DIR=../wolfssl DMA=1 DMA_ALIGNED_PADDED_OUTPUT=1 && make run
 
     # Benchmark with DEBUG_VERBOSE=1 (includes DEBUG)
     - name: Benchmark with DEBUG_VERBOSE

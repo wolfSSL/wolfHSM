@@ -199,7 +199,7 @@ int whTestDma_BounceClientCb(struct whClientContext_t* client,
             break;
 
         case WH_DMA_OPER_CLIENT_WRITE_PRE:
-#ifdef WOLFHSM_CFG_DMA_NONCOHERENT
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
             /* Behave like a zero-copy port on a non-coherent target, which
              * can only accept output buffers starting on a cache line. This
              * catches test buffers that are not declared WH_DMA_ALIGNED. */
@@ -209,7 +209,7 @@ int whTestDma_BounceClientCb(struct whClientContext_t* client,
                                (void*)clientAddr, (unsigned)len);
                 return WH_ERROR_BADARGS;
             }
-#endif /* WOLFHSM_CFG_DMA_NONCOHERENT */
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
             /* Server is about to write client memory: give it a pool slot to
              * write into. */
             s = _bounceAlloc(len);
