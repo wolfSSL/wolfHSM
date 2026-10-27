@@ -910,9 +910,12 @@ int wh_MessageCrypto_TranslateSha512Request(
     uint16_t magic, const whMessageCrypto_Sha512Request* src,
     whMessageCrypto_Sha512Request* dest);
 
+/* hash carries the host-order chaining state on a non-final update and a
+ * finalized digest on the last block, so the caller states which it is:
+ * stateWordSize is 4 (SHA224/256), 8 (SHA384/512), or 0 for a digest. */
 int wh_MessageCrypto_TranslateSha2Response(
     uint16_t magic, const whMessageCrypto_Sha2Response* src,
-    whMessageCrypto_Sha2Response* dest);
+    whMessageCrypto_Sha2Response* dest, uint32_t stateWordSize);
 
 /*
  * SHA3 (all variants: 224/256/384/512)
@@ -1363,7 +1366,7 @@ int wh_MessageCrypto_TranslateSha512DmaRequest(
 
 int wh_MessageCrypto_TranslateSha2DmaResponse(
     uint16_t magic, const whMessageCrypto_Sha2DmaResponse* src,
-    whMessageCrypto_Sha2DmaResponse* dest);
+    whMessageCrypto_Sha2DmaResponse* dest, uint32_t stateWordSize);
 
 /* SHA3 DMA Request - state is passed inline (not via DMA) for
  * cross-architecture safety. Only whole-block input data goes via DMA.
