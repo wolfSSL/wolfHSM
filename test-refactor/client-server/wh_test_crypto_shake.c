@@ -20,12 +20,6 @@
  * test-refactor/client-server/wh_test_crypto_shake.c
  *
  * SHAKE128/256 routed through the server via the per-client devId.
- *
- * Every case runs the same input twice, once with INVALID_DEVID so wolfCrypt
- * computes it locally and once on the server, and requires the two to agree.
- * The software path is the oracle: what is under test is the offload, not
- * Keccak. The size tables are written out here rather than shared with the
- * client, so a wrong block size cannot agree with itself.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -53,7 +47,7 @@
 
 /* Long enough to span several comm-buffer messages at any supported size */
 #define SHAKE_TEST_MAX_IN 20000u
-/* Too big for one response, so it must fall back to software */
+/* Too long for one response */
 #define SHAKE_TEST_LONG_OUT (WOLFHSM_CFG_COMM_DATA_LEN + 1024u)
 
 static uint8_t shakeTestIn[SHAKE_TEST_MAX_IN];
@@ -70,24 +64,39 @@ typedef struct {
     int (*absorbFn)(wc_Shake* sha, const byte* in, word32 inSz);
     int (*squeezeFn)(wc_Shake* sha, byte* out, word32 blockCnt);
     void (*freeFn)(wc_Shake* sha);
+    int (*clientHashFn)(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                        uint32_t inLen, uint8_t* out, uint32_t outSz);
+    int (*clientUpdateRequestFn)(whClientContext* ctx, wc_Shake* sha,
+                                 const uint8_t* in, uint32_t inLen,
+                                 bool* requestSent);
+    int (*clientUpdateResponseFn)(whClientContext* ctx, wc_Shake* sha);
+    int (*clientFinalRequestFn)(whClientContext* ctx, wc_Shake* sha,
+                                uint32_t outSz);
+    int (*clientFinalResponseFn)(whClientContext* ctx, wc_Shake* sha,
+                                 uint8_t* out, uint32_t outSz);
     int (*clientAbsorbFn)(whClientContext* ctx, wc_Shake* sha,
                           const uint8_t* in, uint32_t inLen);
     int (*clientSqueezeFn)(whClientContext* ctx, wc_Shake* sha, uint8_t* out,
                            uint32_t blockCnt);
 } shakeTestVariant;
 
+/* Block sizes are literals, independent of the client's values */
 static const shakeTestVariant shakeTestVariants[] = {
 #ifdef WOLFSSL_SHAKE128
     {WC_HASH_TYPE_SHAKE128, 168u, "SHAKE128", wc_InitShake128,
      wc_Shake128_Update, wc_Shake128_Final, wc_Shake128_Absorb,
-     wc_Shake128_SqueezeBlocks, wc_Shake128_Free, wh_Client_Shake128Absorb,
-     wh_Client_Shake128SqueezeBlocks},
+     wc_Shake128_SqueezeBlocks, wc_Shake128_Free, wh_Client_Shake128,
+     wh_Client_Shake128UpdateRequest, wh_Client_Shake128UpdateResponse,
+     wh_Client_Shake128FinalRequest, wh_Client_Shake128FinalResponse,
+     wh_Client_Shake128Absorb, wh_Client_Shake128SqueezeBlocks},
 #endif
 #ifdef WOLFSSL_SHAKE256
     {WC_HASH_TYPE_SHAKE256, 136u, "SHAKE256", wc_InitShake256,
      wc_Shake256_Update, wc_Shake256_Final, wc_Shake256_Absorb,
-     wc_Shake256_SqueezeBlocks, wc_Shake256_Free, wh_Client_Shake256Absorb,
-     wh_Client_Shake256SqueezeBlocks},
+     wc_Shake256_SqueezeBlocks, wc_Shake256_Free, wh_Client_Shake256,
+     wh_Client_Shake256UpdateRequest, wh_Client_Shake256UpdateResponse,
+     wh_Client_Shake256FinalRequest, wh_Client_Shake256FinalResponse,
+     wh_Client_Shake256Absorb, wh_Client_Shake256SqueezeBlocks},
 #endif
 };
 
@@ -189,7 +198,7 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
         }
     }
 
-    /* Output length is the part SHA3 has no equivalent of, so sweep it */
+    /* Sweep the output length */
     for (i = 0; (ret == WH_ERROR_OK) && (i < outSzCnt); i++) {
         ret = _ShakeTestCompare(devId, v, 2u * rate + 7u, 0u, outSzs[i]);
     }
@@ -200,13 +209,53 @@ static int _ShakeTestVariant(whClientContext* ctx, const shakeTestVariant* v)
     return ret;
 }
 
-/* Output too big for one response must still match software */
+/* Output too long for one response must still run on the server */
 static int _ShakeTestLongOutput(whClientContext* ctx, const shakeTestVariant* v)
 {
-    int devId = WH_CLIENT_DEVID(ctx);
-    int ret;
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ;
+    const uint32_t inLen  = 4096u;
+    /* Just over the limit, whole blocks, and a partial last block */
+    const uint32_t outSzs[] = {maxOut + 1u,
+                               (maxOut / v->blockSize + 2u) * v->blockSize,
+                               SHAKE_TEST_LONG_OUT};
+    const uint32_t cnt      = sizeof(outSzs) / sizeof(outSzs[0]);
+    int            devId    = WH_CLIENT_DEVID(ctx);
+    wc_Shake       sha[1];
+    uint16_t       seq;
+    uint32_t       i;
+    int            ret = WH_ERROR_OK;
 
-    ret = _ShakeTestCompare(devId, v, 4096u, 0u, SHAKE_TEST_LONG_OUT);
+    for (i = 0; (ret == WH_ERROR_OK) && (i < cnt); i++) {
+        ret = _ShakeTestCompare(devId, v, inLen, 0u, outSzs[i]);
+    }
+
+    /* Each final must go to the server and leave sha ready for reuse */
+    if (ret == WH_ERROR_OK) {
+        ret = _ShakeTestHash(INVALID_DEVID, v, shakeTestIn, inLen, 0u,
+                             shakeTestOutSw, SHAKE_TEST_LONG_OUT);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = v->initFn(sha, NULL, devId);
+    }
+    if (ret == WH_ERROR_OK) {
+        for (i = 0; (ret == WH_ERROR_OK) && (i < 2); i++) {
+            ret = v->updateFn(sha, shakeTestIn, inLen);
+            seq = ctx->comm->seq;
+            if (ret == WH_ERROR_OK) {
+                ret = v->finalFn(sha, shakeTestOutDev, SHAKE_TEST_LONG_OUT);
+            }
+            if ((ret == WH_ERROR_OK) &&
+                ((seq == ctx->comm->seq) ||
+                 (memcmp(shakeTestOutDev, shakeTestOutSw,
+                         SHAKE_TEST_LONG_OUT) != 0))) {
+                WH_ERROR_PRINT("%s long final %u not on the server or wrong\n",
+                               v->name, (unsigned)i);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        v->freeFn(sha);
+    }
+
     if (ret == WH_ERROR_OK) {
         WH_TEST_PRINT("%s long output DEVID=0x%X SUCCESS\n", v->name, devId);
     }
@@ -239,54 +288,23 @@ static int _ShakeTestAsync(whClientContext* ctx, const shakeTestVariant* v)
         uint32_t chunk = (remaining < v->blockSize) ? remaining : v->blockSize;
         bool     sent  = false;
 
-#ifdef WOLFSSL_SHAKE128
-        if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-            ret = wh_Client_Shake128UpdateRequest(
-                ctx, sha, shakeTestIn + consumed, chunk, &sent);
-            if ((ret == WH_ERROR_OK) && sent) {
-                do {
-                    ret = wh_Client_Shake128UpdateResponse(ctx, sha);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
+        ret = v->clientUpdateRequestFn(ctx, sha, shakeTestIn + consumed, chunk,
+                                       &sent);
+        if ((ret == WH_ERROR_OK) && sent) {
+            do {
+                ret = v->clientUpdateResponseFn(ctx, sha);
+            } while (ret == WH_ERROR_NOTREADY);
         }
-#endif
-#ifdef WOLFSSL_SHAKE256
-        if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-            ret = wh_Client_Shake256UpdateRequest(
-                ctx, sha, shakeTestIn + consumed, chunk, &sent);
-            if ((ret == WH_ERROR_OK) && sent) {
-                do {
-                    ret = wh_Client_Shake256UpdateResponse(ctx, sha);
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-        }
-#endif
         consumed += chunk;
     }
 
     if (ret == WH_ERROR_OK) {
-#ifdef WOLFSSL_SHAKE128
-        if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-            ret = wh_Client_Shake128FinalRequest(ctx, sha, sizeof(out));
-            if (ret == WH_ERROR_OK) {
-                do {
-                    ret = wh_Client_Shake128FinalResponse(ctx, sha, out,
-                                                          sizeof(out));
-                } while (ret == WH_ERROR_NOTREADY);
-            }
+        ret = v->clientFinalRequestFn(ctx, sha, sizeof(out));
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = v->clientFinalResponseFn(ctx, sha, out, sizeof(out));
+            } while (ret == WH_ERROR_NOTREADY);
         }
-#endif
-#ifdef WOLFSSL_SHAKE256
-        if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-            ret = wh_Client_Shake256FinalRequest(ctx, sha, sizeof(out));
-            if (ret == WH_ERROR_OK) {
-                do {
-                    ret = wh_Client_Shake256FinalResponse(ctx, sha, out,
-                                                          sizeof(out));
-                } while (ret == WH_ERROR_NOTREADY);
-            }
-        }
-#endif
     }
 
     v->freeFn(sha);
@@ -367,7 +385,7 @@ static int _ShakeTestXofRun(whClientContext* ctx, const shakeTestVariant* v,
     }
     v->freeFn(sha);
 
-    /* A silent decline would still match software, so check where it ran */
+    /* Check whether the server was used */
     if ((ret == 0) && (toServer != (seq != ctx->comm->seq))) {
         WH_ERROR_PRINT("%s absorb/squeeze path %d server use %d expected %d\n",
                        v->name, path, (seq != ctx->comm->seq), toServer);
@@ -511,56 +529,34 @@ static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
 /* The client entry points must reject bad arguments before going on the wire */
 static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
 {
-    wc_Shake sha[1];
-    uint8_t  buf[8];
-    int      bad = 0;
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ;
+    const uint16_t seq    = ctx->comm->seq;
+    wc_Shake       sha[1];
+    uint8_t        buf[8];
+    bool           sent = false;
+    int            bad;
+    int            ret;
 
     if (v->initFn(sha, NULL, WH_CLIENT_DEVID(ctx)) != 0) {
         return WH_ERROR_ABORTED;
     }
 
-#ifdef WOLFSSL_SHAKE128
-    if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-        bad =
-            (wh_Client_Shake128(NULL, sha, buf, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake128(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            /* A length with no buffer behind it would digest the state */
-            (wh_Client_Shake128(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                             NULL) != WH_ERROR_BADARGS) ||
-            (wh_Client_Shake128UpdateResponse(ctx, NULL) != WH_ERROR_BADARGS) ||
-            /* A SHAKE has no natural length, so finalizing needs one */
-            (wh_Client_Shake128FinalRequest(ctx, sha, 0) != WH_ERROR_BADARGS) ||
-            (wh_Client_Shake128FinalResponse(ctx, sha, NULL, 32u) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake128FinalResponse(ctx, sha, buf, 0) !=
-             WH_ERROR_BADARGS);
-    }
-#endif
-#ifdef WOLFSSL_SHAKE256
-    if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-        bad =
-            (wh_Client_Shake256(NULL, sha, buf, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                             NULL) != WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256UpdateResponse(ctx, NULL) != WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256FinalRequest(ctx, sha, 0) != WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256FinalResponse(ctx, sha, NULL, 32u) !=
-             WH_ERROR_BADARGS) ||
-            (wh_Client_Shake256FinalResponse(ctx, sha, buf, 0) !=
-             WH_ERROR_BADARGS);
-    }
-#endif
     bad =
-        bad ||
+        (v->clientHashFn(NULL, sha, buf, sizeof(buf), NULL, 0) !=
+         WH_ERROR_BADARGS) ||
+        (v->clientHashFn(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
+         WH_ERROR_BADARGS) ||
+        (v->clientHashFn(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
+         WH_ERROR_BADARGS) ||
+        (v->clientHashFn(ctx, sha, shakeTestIn, 2u * v->blockSize, buf, 0) !=
+         WH_ERROR_BADARGS) ||
+        (v->clientUpdateRequestFn(ctx, sha, buf, sizeof(buf), NULL) !=
+         WH_ERROR_BADARGS) ||
+        (v->clientUpdateRequestFn(ctx, sha, shakeTestIn, SHAKE_TEST_MAX_IN,
+                                  &sent) != WH_ERROR_REQUEST_SIZE) ||
+        (v->clientUpdateResponseFn(ctx, NULL) != WH_ERROR_BADARGS) ||
+        (v->clientFinalRequestFn(ctx, sha, 0) != WH_ERROR_BADARGS) ||
+        (v->clientFinalRequestFn(ctx, sha, maxOut + 1u) != WH_ERROR_NOSPACE) ||
         (v->clientAbsorbFn(NULL, sha, buf, sizeof(buf)) != WH_ERROR_BADARGS) ||
         (v->clientAbsorbFn(ctx, NULL, buf, sizeof(buf)) != WH_ERROR_BADARGS) ||
         (v->clientAbsorbFn(ctx, sha, NULL, sizeof(buf)) != WH_ERROR_BADARGS) ||
@@ -571,31 +567,28 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
 #ifdef WOLFSSL_HASH_FLAGS
     /* Request helpers must reject Keccak mode */
     if (!bad) {
-        bool sent = false;
         (void)wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
-#ifdef WOLFSSL_SHAKE128
-        if (v->hashType == WC_HASH_TYPE_SHAKE128) {
-            bad =
-                (wh_Client_Shake128UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                                 &sent) != WH_ERROR_BADARGS) ||
-                (wh_Client_Shake128FinalRequest(ctx, sha, 32u) !=
-                 WH_ERROR_BADARGS);
-        }
-#endif
-#ifdef WOLFSSL_SHAKE256
-        if (v->hashType == WC_HASH_TYPE_SHAKE256) {
-            bad =
-                (wh_Client_Shake256UpdateRequest(ctx, sha, buf, sizeof(buf),
-                                                 &sent) != WH_ERROR_BADARGS) ||
-                (wh_Client_Shake256FinalRequest(ctx, sha, 32u) !=
-                 WH_ERROR_BADARGS);
-        }
-#endif
-        bad = bad || (v->clientAbsorbFn(ctx, sha, buf, sizeof(buf)) !=
-                      WH_ERROR_BADARGS);
+        bad =
+            (v->clientUpdateRequestFn(ctx, sha, buf, sizeof(buf), &sent) !=
+             WH_ERROR_BADARGS) ||
+            (v->clientFinalRequestFn(ctx, sha, 32u) != WH_ERROR_BADARGS) ||
+            (v->clientAbsorbFn(ctx, sha, buf, sizeof(buf)) != WH_ERROR_BADARGS);
         (void)wc_Sha3_SetFlags(sha, 0);
     }
 #endif
+    bad = bad || (seq != ctx->comm->seq);
+
+    /* A bad response call must still consume the reply */
+    if (!bad) {
+        ret = v->clientFinalRequestFn(ctx, sha, 32u);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = v->clientFinalResponseFn(ctx, sha, NULL, 32u);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        bad =
+            (ret != WH_ERROR_BADARGS) || (wh_Client_IsRequestPending(ctx) != 0);
+    }
 
     v->freeFn(sha);
 
