@@ -65,17 +65,20 @@ typedef union whFlashUnit_t {
 #define WHFU_BYTES_PER_UNIT sizeof(whFlashUnit)
 /* Reject unsupported layouts at compile time. */
 
+WH_UTILS_STATIC_ASSERT(sizeof(whFlashUnit) == WOLFHSM_CFG_FLASH_UNIT_SIZE,
+                       "whFlashUnit size mismatch");
+
+#ifndef WOLFHSM_CFG_FLASH_UNIT_NO_ALIGN8_CHECK
 struct whFlashUnitAlignmentCheck {
     uint8_t     byte;
     whFlashUnit unit;
 };
 
-WH_UTILS_STATIC_ASSERT(sizeof(whFlashUnit) == WOLFHSM_CFG_FLASH_UNIT_SIZE,
-                       "whFlashUnit size mismatch");
 WH_UTILS_STATIC_ASSERT(
     (offsetof(struct whFlashUnitAlignmentCheck, unit) >= 8) &&
         ((offsetof(struct whFlashUnitAlignmentCheck, unit) % 8) == 0),
     "whFlashUnit must be aligned to 8 bytes");
+#endif
 
 #define WHFU_BYTES2UNITS(_b) (((_b) / WHFU_BYTES_PER_UNIT) + \
                               !!((_b) % WHFU_BYTES_PER_UNIT))
