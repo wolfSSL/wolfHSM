@@ -57,9 +57,11 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
 
 #ifndef NO_RSA
 
+#ifdef WOLFSSL_KEY_TO_DER
 /* Store a RsaKey into a server key cache with optional metadata */
 int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
         whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label);
+#endif /* WOLFSSL_KEY_TO_DER */
 
 /* Restore a RsaKey from a server key cache */
 int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,

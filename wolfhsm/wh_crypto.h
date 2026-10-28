@@ -65,9 +65,11 @@ int wh_Crypto_DeserializeAesKey(uint16_t size, const uint8_t* buffer,
 #endif /* !NO_AES */
 
 #ifndef NO_RSA
+#ifdef WOLFSSL_KEY_TO_DER
 /* Store a RsaKey to a byte sequence (currently DER format) */
 int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size);
+#endif /* WOLFSSL_KEY_TO_DER */
 /* Restore a RsaKey from a byte sequence (currently DER format) */
 int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
         RsaKey* key);

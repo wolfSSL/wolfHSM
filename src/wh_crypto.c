@@ -59,6 +59,8 @@
 #include "wolfhsm/wh_crypto.h"
 
 #ifndef NO_RSA
+/* wolfCrypt only provides RSA DER export with WOLFSSL_KEY_TO_DER */
+#ifdef WOLFSSL_KEY_TO_DER
 int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
         uint8_t* buffer, uint16_t *out_size)
 {
@@ -91,6 +93,7 @@ int wh_Crypto_RsaSerializeKeyDer(const RsaKey* key, uint16_t max_size,
     }
     return ret;
 }
+#endif /* WOLFSSL_KEY_TO_DER */
 
 int wh_Crypto_RsaDeserializeKeyDer(uint16_t size, const uint8_t* buffer,
         RsaKey* key)

@@ -1184,6 +1184,7 @@ int wh_Client_RsaSetKeyId(RsaKey* key, whNvmId keyId);
  */
 int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
 
+#ifdef WOLFSSL_KEY_TO_DER
 /**
  * @brief Imports wolfCrypt RSA key as a PCKS1 DER-formatted file into the
  * wolfHSM server key cache.
@@ -1203,6 +1204,7 @@ int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
 int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
         whKeyId *inout_keyId, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
+#endif /* WOLFSSL_KEY_TO_DER */
 
 /**
  * @brief Exports a PKCS1 DER-formated RSA key from the wolfHSM server keycache

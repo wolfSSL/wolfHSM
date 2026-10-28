@@ -69,12 +69,12 @@
 
 /** Forward declarations */
 #ifndef NO_RSA
-#ifdef WOLFSSL_KEY_GEN
+#if defined(WOLFSSL_KEY_GEN) && !defined(WOLFSSL_RSA_PUBLIC_ONLY)
 /* Process a Generate RsaKey request packet and produce a response packet */
 static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize);
-#endif /* WOLFSSL_KEY_GEN */
+#endif /* WOLFSSL_KEY_GEN && !WOLFSSL_RSA_PUBLIC_ONLY */
 
 /* Process a Rng request packet and produce a response packet */
 static int _HandleRng(whServerContext* ctx, uint16_t magic, int devId,
@@ -257,6 +257,7 @@ static void _CryptoEvictKeyLocked(whServerContext* ctx, whKeyId keyId)
 /** Public server crypto functions */
 
 #ifndef NO_RSA
+#ifdef WOLFSSL_KEY_TO_DER
 int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
         whKeyId keyId, whNvmFlags flags, uint32_t label_len, uint8_t* label)
 {
@@ -304,6 +305,7 @@ int wh_Server_CacheImportRsaKey(whServerContext* ctx, RsaKey* key,
     }
     return ret;
 }
+#endif /* WOLFSSL_KEY_TO_DER */
 
 int wh_Server_CacheExportRsaKey(whServerContext* ctx, whKeyId keyId,
         RsaKey* key)
@@ -354,7 +356,7 @@ static int _CacheExportRsaKeyEnforce(whServerContext* ctx, whKeyId keyId,
     return ret;
 }
 
-#ifdef WOLFSSL_KEY_GEN
+#if defined(WOLFSSL_KEY_GEN) && !defined(WOLFSSL_RSA_PUBLIC_ONLY)
 static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
                             const void* cryptoDataIn, uint16_t inSize,
                             void* cryptoDataOut, uint16_t* outSize)
@@ -466,7 +468,7 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
 
     return ret;
 }
-#endif /* WOLFSSL_KEY_GEN */
+#endif /* WOLFSSL_KEY_GEN && !WOLFSSL_RSA_PUBLIC_ONLY */
 
 static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
                               const void* cryptoDataIn, uint16_t inSize,
@@ -6085,13 +6087,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
             WH_DEBUG_SERVER_VERBOSE("PK type:%d\n", rqstHeader.algoType);
             switch (rqstHeader.algoType) {
 #ifndef NO_RSA
-#ifdef WOLFSSL_KEY_GEN
+#if defined(WOLFSSL_KEY_GEN) && !defined(WOLFSSL_RSA_PUBLIC_ONLY)
                 case WC_PK_TYPE_RSA_KEYGEN:
                     ret = _HandleRsaKeyGen(ctx, magic, devId, cryptoDataIn,
                                            cryptoInSize, cryptoDataOut,
                                            &cryptoOutSize);
                     break;
-#endif /* WOLFSSL_KEY_GEN */
+#endif /* WOLFSSL_KEY_GEN && !WOLFSSL_RSA_PUBLIC_ONLY */
                 case WC_PK_TYPE_RSA:
                     ret = _HandleRsaFunction(ctx, magic, devId, cryptoDataIn,
                                              cryptoInSize, cryptoDataOut,
