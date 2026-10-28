@@ -769,10 +769,6 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                         break;
 #endif
                 }
-                /* Output too big for one response; let software produce it */
-                if (ret == WH_ERROR_NOSPACE) {
-                    ret = CRYPTOCB_UNAVAILABLE;
-                }
             } break;
 #endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
             default:
@@ -850,7 +846,6 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 
 #if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
     (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
-/* Declining an unknown op is safe as the wc_Shake state is still current */
 static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info)
 {
     wc_Shake* sha = info->hash.sha3;

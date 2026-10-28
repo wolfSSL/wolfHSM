@@ -5272,60 +5272,53 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
     }
 
     ret = wh_MessageCrypto_TranslateShakeRequest(magic, cryptoDataIn, &req);
-    if (ret != 0) {
-        return ret;
-    }
-
-    if ((uint32_t)req.inSz >
-        (uint32_t)(inSize - sizeof(whMessageCrypto_ShakeRequest))) {
-        return WH_ERROR_BADARGS;
-    }
-    ret = _ShakeCheckRequest(&req, ops.blockSize);
-    if (ret != 0) {
-        return ret;
-    }
-    isFinal = (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) && req.isLastBlock;
-
-    inData =
-        (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_ShakeRequest);
-    outData = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_ShakeResponse);
-
-    ret = ops.initFn(shake, NULL, devId);
-    if (ret != 0) {
-        return ret;
-    }
-
-    /* Return intermediate state to the client; the server is stateless */
-    memcpy(shake->s, req.resumeState.s, sizeof(shake->s));
-
-    if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
-        ret = ops.absorbFn(shake, inData, req.inSz);
-    }
-    else if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE) {
-        ret = ops.squeezeFn(shake, outData, req.outSz / ops.blockSize);
-    }
-    else if (req.inSz > 0) {
-        ret = ops.updateFn(shake, inData, req.inSz);
+    if ((ret == 0) &&
+        ((uint32_t)req.inSz >
+         (uint32_t)(inSize - sizeof(whMessageCrypto_ShakeRequest)))) {
+        ret = WH_ERROR_BADARGS;
     }
     if (ret == 0) {
-        if (isFinal) {
-            ret = ops.finalFn(shake, outData, req.outSz);
+        ret = _ShakeCheckRequest(&req, ops.blockSize);
+    }
+    if (ret == 0) {
+        ret = ops.initFn(shake, NULL, devId);
+    }
+    if (ret == 0) {
+        isFinal =
+            (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) && req.isLastBlock;
+        inData =
+            (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_ShakeRequest);
+        outData =
+            (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_ShakeResponse);
+
+        /* Resume from the client's sponge state */
+        memcpy(shake->s, req.resumeState.s, sizeof(shake->s));
+
+        if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
+            ret = ops.absorbFn(shake, inData, req.inSz);
         }
-        /* Only the sponge goes back, so no partial block may be left. */
-        else if (shake->i != 0) {
-            ret = WH_ERROR_ABORTED;
+        else if (req.op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE) {
+            ret = ops.squeezeFn(shake, outData, req.outSz / ops.blockSize);
         }
-        else {
-            memcpy(res.resumeState.s, shake->s, sizeof(res.resumeState.s));
+        else if (req.inSz > 0) {
+            ret = ops.updateFn(shake, inData, req.inSz);
         }
+        if (ret == 0) {
+            if (isFinal) {
+                ret = ops.finalFn(shake, outData, req.outSz);
+            }
+            /* Only the sponge goes back, so no partial block may be left. */
+            else if (shake->i != 0) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                memcpy(res.resumeState.s, shake->s, sizeof(res.resumeState.s));
+            }
+        }
+        ops.freeFn(shake);
     }
     if (ret == 0) {
         res.outSz = req.outSz;
-    }
-
-    ops.freeFn(shake);
-
-    if (ret == 0) {
         ret =
             wh_MessageCrypto_TranslateShakeResponse(magic, &res, cryptoDataOut);
         if (ret == 0) {
@@ -5333,6 +5326,9 @@ static int _HandleShake(whServerContext* ctx, int hashType, uint16_t magic,
         }
     }
 
+    wc_ForceZero(shake, sizeof(shake));
+    wc_ForceZero(&req, sizeof(req));
+    wc_ForceZero(&res, sizeof(res));
     return ret;
 }
 #endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */

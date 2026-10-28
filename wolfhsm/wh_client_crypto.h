@@ -2990,7 +2990,7 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
 #endif /* !WOLFSSL_NOSHA3_512 */
 
 #if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
-/* Like SHA3, plus outSz. Too large for one response gives WH_ERROR_NOSPACE */
+/* Like SHA3, plus outSz. Only FinalRequest limits outSz to one response. */
 #ifdef WOLFSSL_SHAKE128
 int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz);

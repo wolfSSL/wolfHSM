@@ -1080,13 +1080,13 @@ WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_ShakeResponse) ==
       136u) *                                                   \
      136u)
 
-/* Max output per response. Larger requests fall back to software. */
+/* Max output per response. Longer output takes an absorb and squeezes. */
 #define WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ           \
     (WOLFHSM_CFG_COMM_DATA_LEN -                               \
      (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
      (uint32_t)sizeof(whMessageCrypto_ShakeResponse))
 
-/* Each SHAKE variant must fit one block. Additive to avoid unsigned wrap. */
+/* Each SHAKE variant must fit one block inline */
 #ifdef WOLFSSL_SHAKE128
 WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
                                (uint32_t)sizeof(whMessageCrypto_ShakeRequest) +
