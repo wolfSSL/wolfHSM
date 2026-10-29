@@ -460,10 +460,11 @@ static int _MarkKeyCommitted(whKeyCacheContext* ctx, whKeyId keyId,
     return ret;
 }
 
-#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
+#ifndef NO_RSA
 static int _ExportRsaPublicKey(whServerContext* server, whKeyId keyId,
     uint8_t* out, uint16_t* outSz)
 {
+#ifdef WOLFSSL_KEY_TO_DER
     int    ret = WH_ERROR_OK;
     RsaKey key[1];
     int    pub_ret;
@@ -484,8 +485,16 @@ static int _ExportRsaPublicKey(whServerContext* server, whKeyId keyId,
         wc_FreeRsaKey(key);
     }
     return ret;
+#else
+    /* Without RSA DER export the public key can't be built */
+    (void)server;
+    (void)keyId;
+    (void)out;
+    (void)outSz;
+    return WH_ERROR_NOTIMPL;
+#endif /* WOLFSSL_KEY_TO_DER */
 }
-#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
+#endif /* !NO_RSA */
 
 #ifdef HAVE_ECC
 
@@ -2922,12 +2931,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
                 if (ret == WH_ERROR_OK) {
                     switch (req.algo) {
-#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
+#ifndef NO_RSA
                         case WH_KEY_ALGO_RSA:
                             ret = _ExportRsaPublicKey(server, serverKeyId,
                                                       stage, &stageMax);
                             break;
-#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
+#endif /* !NO_RSA */
 #ifdef HAVE_ECC
                         case WH_KEY_ALGO_ECC:
                             ret = _ExportEccPublicKey(server, serverKeyId,
@@ -3136,12 +3145,12 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
                 if (ret == WH_ERROR_OK) {
                     switch (req.algo) {
-#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
+#ifndef NO_RSA
                         case WH_KEY_ALGO_RSA:
                             ret = _ExportRsaPublicKey(server, serverKeyId,
                                                       out, &max_der);
                             break;
-#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
+#endif /* !NO_RSA */
 #ifdef HAVE_ECC
                         case WH_KEY_ALGO_ECC:
                             ret = _ExportEccPublicKey(server, serverKeyId,

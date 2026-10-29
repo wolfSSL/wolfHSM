@@ -40,6 +40,10 @@
 #endif
 #include "wolfssl/wolfcrypt/wc_mlkem.h"
 #include "wolfssl/wolfcrypt/asn_public.h"
+#if !defined(NO_RSA) && defined(USE_CERT_BUFFERS_2048)
+/* Fixed RSA key for the cached-key test */
+#include "wolfssl/certs_test.h"
+#endif
 
 #include "wolfhsm/wh_error.h"
 
@@ -555,7 +559,7 @@ static int whTest_CryptoDmaNoncoherentRefusal(whClientContext* ctx,
 }
 #endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
-#ifndef NO_RSA
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
 static int whTest_CryptoRsa(whClientContext* ctx, int devId, WC_RNG* rng)
 {
 #define RSA_KEY_BITS 2048
@@ -1258,7 +1262,120 @@ static int whTest_CryptoRsaAsync(whClientContext* ctx, WC_RNG* rng)
     }
     return ret;
 }
-#endif /* !NO_RSA */
+#endif /* !NO_RSA && WOLFSSL_KEY_GEN */
+
+#if !defined(NO_RSA) && defined(USE_CERT_BUFFERS_2048)
+/* RSA with a fixed key cached on the server. Needs no RSA keygen or DER export,
+ * so it also runs without WOLFSSL_KEY_GEN */
+static int whTest_CryptoRsaCachedKey(whClientContext* ctx, int devId,
+                                     WC_RNG* rng)
+{
+    int      ret = WH_ERROR_OK;
+    RsaKey   rsa[1];
+    int      rsaInit                = 0;
+    whKeyId  keyId                  = WH_KEYID_ERASED;
+    uint8_t  label[]                = "RsaCachedKey";
+    char     msg[sizeof(PLAINTEXT)] = PLAINTEXT;
+    byte     sig[2048 / 8];
+    byte     out[2048 / 8];
+    int      sigLen  = 0;
+    int      outLen  = 0;
+    int      sizeRet = 0;
+    int      size    = 0;
+    word32   idx     = 0;
+    byte     pubDer[512];
+    uint16_t pubDerLen = sizeof(pubDer);
+    int      exportRet = 0;
+
+    ret = wh_Client_KeyCache(
+        ctx, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, label,
+        sizeof(label), client_key_der_2048, sizeof_client_key_der_2048, &keyId);
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("Failed to cache RSA key %d\n", ret);
+    }
+
+    /* Sign and verify by key ID */
+    if (ret == WH_ERROR_OK) {
+        ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+        if (ret == 0) {
+            rsaInit = 1;
+            ret     = wh_Client_RsaSetKeyId(rsa, keyId);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to set up RSA key %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        sigLen =
+            wc_RsaSSL_Sign((byte*)msg, sizeof(msg), sig, sizeof(sig), rsa, rng);
+        if (sigLen != (int)sizeof(sig)) {
+            WH_ERROR_PRINT("Failed to sign by key ID %d\n", sigLen);
+            ret = -1;
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        outLen = wc_RsaSSL_Verify(sig, sigLen, out, sizeof(out), rsa);
+        if ((outLen != (int)sizeof(msg)) ||
+            (memcmp(msg, out, sizeof(msg)) != 0)) {
+            WH_ERROR_PRINT("Failed to verify by key ID %d\n", outLen);
+            ret = -1;
+        }
+    }
+    if (rsaInit != 0) {
+        (void)wc_FreeRsaKey(rsa);
+        rsaInit = 0;
+    }
+
+    /* A local key with the HSM devId is sent to the server as DER, and public
+     * key export builds DER on the server. Both need WOLFSSL_KEY_TO_DER and
+     * return WH_ERROR_NOTIMPL without it. */
+    if (ret == WH_ERROR_OK) {
+        ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+        if (ret == 0) {
+            rsaInit = 1;
+            ret     = wc_RsaPublicKeyDecode(client_keypub_der_2048, &idx, rsa,
+                                            sizeof_client_keypub_der_2048);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to load local RSA key %d\n", ret);
+        }
+    }
+    if (ret == WH_ERROR_OK) {
+        memset(out, 0, sizeof(out));
+        outLen    = wc_RsaSSL_Verify(sig, sigLen, out, sizeof(out), rsa);
+        sizeRet   = wh_Client_RsaGetSize(ctx, rsa, &size);
+        exportRet = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_RSA, NULL,
+                                              0, pubDer, &pubDerLen);
+#ifdef WOLFSSL_KEY_TO_DER
+        if ((outLen != (int)sizeof(msg)) ||
+            (memcmp(msg, out, sizeof(msg)) != 0) || (sizeRet != WH_ERROR_OK) ||
+            (size != (int)sizeof(sig)) || (exportRet != WH_ERROR_OK)) {
+            ret = -1;
+        }
+#else
+        if ((outLen != WH_ERROR_NOTIMPL) || (sizeRet != WH_ERROR_NOTIMPL) ||
+            (exportRet != WH_ERROR_NOTIMPL)) {
+            ret = -1;
+        }
+#endif /* WOLFSSL_KEY_TO_DER */
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Verify %d, get size %d, export public key %d\n",
+                           outLen, sizeRet, exportRet);
+        }
+    }
+    if (rsaInit != 0) {
+        (void)wc_FreeRsaKey(rsa);
+    }
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_PRINT("RSA CACHED-KEY SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* !NO_RSA && USE_CERT_BUFFERS_2048 */
 
 #ifdef HAVE_ECC
 static int whTest_CryptoEcc(whClientContext* ctx, int devId, WC_RNG* rng)
@@ -18748,14 +18865,19 @@ int whTest_CryptoClientConfig(whClientConfig* config)
         ret = whTest_CryptoMakeCacheKeyExportPublicArgs(client);
     }
 
-#ifndef NO_RSA
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
     if (ret == 0) {
         ret = whTest_CryptoRsa(client, WH_CLIENT_DEVID(client), rng);
     }
     if (ret == 0) {
         ret = whTest_CryptoRsaAsync(client, rng);
     }
-#endif /* NO_RSA */
+#endif /* !NO_RSA && WOLFSSL_KEY_GEN */
+#if !defined(NO_RSA) && defined(USE_CERT_BUFFERS_2048)
+    if (ret == 0) {
+        ret = whTest_CryptoRsaCachedKey(client, WH_CLIENT_DEVID(client), rng);
+    }
+#endif /* !NO_RSA && USE_CERT_BUFFERS_2048 */
 
 #ifdef HAVE_ECC
     (void)wh_Client_SetDmaMode(client, 0);

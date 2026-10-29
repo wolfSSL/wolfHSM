@@ -1252,7 +1252,8 @@ int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId,
  *                      0 if label is not needed.
  * @param[out] label Optional buffer to receive the key's label. May be NULL.
  * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
- *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS, or
+ *             WH_ERROR_NOTIMPL if the server lacks WOLFSSL_KEY_TO_DER).
  */
 int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
         RsaKey* key, uint32_t label_len, uint8_t* label);

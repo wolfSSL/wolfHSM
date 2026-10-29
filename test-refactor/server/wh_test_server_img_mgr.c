@@ -90,7 +90,7 @@ static const uint8_t testAes128Key[AES_128_KEY_SIZE] = {
     0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
 #endif /* WOLFSSL_CMAC */
 
-#ifndef NO_RSA
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
 /* Hardcoded RSA2048 private key for testing (DER format) */
 static const unsigned char testRsa2048PrivKey[] = {
     0x30, 0x82, 0x04, 0xA4, 0x02, 0x01, 0x00, 0x02, 0x82, 0x01, 0x01, 0x00,
@@ -193,7 +193,7 @@ static const unsigned char testRsa2048PrivKey[] = {
     0xF9, 0x9F, 0x5D, 0x28, 0x95, 0x38, 0xBE, 0x35, 0xAB, 0xCA, 0x5C, 0xE7,
     0x93, 0x53, 0x34, 0xA1, 0x45, 0x5D, 0x13, 0x39, 0x65, 0x42, 0x46, 0xA1,
     0x9F, 0xCD, 0xF5, 0xBF};
-#endif /* !NO_RSA */
+#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
 
 /*
  * Shared signature-based verify flow used by the ECC, AES-CMAC and
@@ -506,6 +506,8 @@ static int _wolfBootVerifyOutOfRangeSig(whServerImgMgrContext*   imgMgr,
 #endif /* !NO_RSA || HAVE_ECC */
 
 #ifndef NO_RSA
+/* Needs wc_RsaKeyToPublicDer to store the public key */
+#ifdef WOLFSSL_KEY_TO_DER
 /* Sign testData with the test RSA key and export its public DER. */
 static int _imgMgrRsaSign(uint8_t* sig, word32* sigLen, uint8_t* pubDer,
                           word32* pubDerLen)
@@ -602,6 +604,7 @@ static int _whTest_ServerImgMgrRsa2048(whServerContext* server)
     WH_TEST_PRINT("IMG_MGR RSA2048 Test completed successfully!\n");
     return WH_TEST_SUCCESS;
 }
+#endif /* WOLFSSL_KEY_TO_DER */
 
 static int _whTest_ServerImgMgrWolfBootRsa4096(whServerContext* server)
 {
@@ -1463,7 +1466,9 @@ int whTest_ServerImgMgr(whServerContext* server)
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrAes128Cmac(server));
 #endif
 #ifndef NO_RSA
+#ifdef WOLFSSL_KEY_TO_DER
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrRsa2048(server));
+#endif
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootRsa4096(server));
 #ifdef WOLFHSM_CFG_CERTIFICATE_MANAGER
     WH_TEST_RETURN_ON_FAIL(_whTest_ServerImgMgrWolfBootCertChainRsa4096(server));
