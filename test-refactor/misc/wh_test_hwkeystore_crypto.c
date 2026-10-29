@@ -1623,9 +1623,11 @@ static int _whTest_HwKeyClear(TestCtx* t)
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
                           wh_Client_HwKeystoreClear(c1, hw1));
 
-    /* ClearAll clears only the caller's keys */
+    /* ClearAll, here as a split request and response, clears only the
+     * caller's keys */
     WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(c1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAllRequest(c1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAllResponse(c1));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hw1), 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c1, WH_KEYID_ID(hw2), 1, USAGE_AES_CMAC, CLIENT2_ID));

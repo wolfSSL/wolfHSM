@@ -1104,9 +1104,28 @@ int wh_Client_HwKeystoreClearResponse(whClientContext* c);
 int wh_Client_HwKeystoreClear(whClientContext* c, whKeyId hwKeyId);
 
 /**
- * @brief Clears every hardware key this client loaded, blocking until done.
+ * @brief Sends a request to clear every hardware key this client loaded.
  *
  * Keys loaded as global and keys the port loaded are not cleared.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_HwKeystoreClearAllRequest(whClientContext* c);
+
+/**
+ * @brief Receives the response to wh_Client_HwKeystoreClearAllRequest().
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *         available yet, or a negative error code on failure.
+ */
+int wh_Client_HwKeystoreClearAllResponse(whClientContext* c);
+
+/**
+ * @brief Clears every hardware key this client loaded, blocking until done.
+ *
+ * See wh_Client_HwKeystoreClearAllRequest().
  */
 int wh_Client_HwKeystoreClearAll(whClientContext* c);
 

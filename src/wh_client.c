@@ -1576,13 +1576,23 @@ int wh_Client_HwKeystoreClear(whClientContext* c, whKeyId hwKeyId)
     return ret;
 }
 
+int wh_Client_HwKeystoreClearAllRequest(whClientContext* c)
+{
+    return _HwKeystoreClearRequest(c, WH_KEYID_ERASED);
+}
+
+int wh_Client_HwKeystoreClearAllResponse(whClientContext* c)
+{
+    return wh_Client_HwKeystoreClearResponse(c);
+}
+
 int wh_Client_HwKeystoreClearAll(whClientContext* c)
 {
     int ret;
-    ret = _HwKeystoreClearRequest(c, WH_KEYID_ERASED);
+    ret = wh_Client_HwKeystoreClearAllRequest(c);
     if (ret == 0) {
         do {
-            ret = wh_Client_HwKeystoreClearResponse(c);
+            ret = wh_Client_HwKeystoreClearAllResponse(c);
         } while (ret == WH_ERROR_NOTREADY);
     }
     return ret;
