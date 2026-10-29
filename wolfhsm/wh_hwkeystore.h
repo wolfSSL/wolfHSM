@@ -210,11 +210,17 @@ int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
                        whKeyId* inout_keyId, whKeyId srcId, whNvmFlags flags,
                        const uint8_t* key, uint16_t keySz);
 
+/*
+ * The clear functions remove the record even if the port fails to clear the
+ * hardware, so the key can't be used again. They then return the port's error.
+ */
+
 /**
  * @brief Clear a hardware key the caller owns.
  *
  * @return int WH_ERROR_OK on success, WH_ERROR_NOTFOUND if the key is not
- *         loaded, WH_ERROR_ACCESS if the caller does not own it
+ *         loaded, WH_ERROR_ACCESS if the caller does not own it, or the
+ *         port's error
  */
 int wh_HwKeystore_Clear(whHwKeystoreContext* context, int devId, whKeyId keyId);
 
@@ -222,6 +228,7 @@ int wh_HwKeystore_Clear(whHwKeystoreContext* context, int devId, whKeyId keyId);
  * @brief Clear every hardware key owned by a client.
  *
  * @param[in] user Client ID. Port keys are never cleared
+ * @return int WH_ERROR_OK on success, or the first error from the port
  */
 int wh_HwKeystore_ClearAll(whHwKeystoreContext* context, int devId,
                            uint16_t user);
@@ -229,6 +236,8 @@ int wh_HwKeystore_ClearAll(whHwKeystoreContext* context, int devId,
 /**
  * @brief Clear every hardware key loaded from a keystore key, for example
  * when that key is erased or revoked.
+ *
+ * @return int WH_ERROR_OK on success, or the first error from the port
  */
 int wh_HwKeystore_ClearSource(whHwKeystoreContext* context, int devId,
                               whKeyId srcId);

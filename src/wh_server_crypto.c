@@ -4778,6 +4778,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
             }
         }
         else {
+            /* wolfCrypt passes cmac to the port before initializing it. Zero
+             * it so no stale key reference gets through */
+            memset(cmac, 0, sizeof(cmac));
             ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, tmpKey,
                                         (word32)tmpKeyLen, NULL, devId);
         }
@@ -9245,6 +9248,9 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             /* Client-supplied key - direct one-shot */
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot\n");
 
+            /* wolfCrypt passes cmac to the port before initializing it. Zero
+             * it so no stale key reference gets through */
+            memset(cmac, 0, sizeof(cmac));
             ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr, req.input.sz,
                                         tmpKey, (word32)tmpKeyLen, NULL, devId);
         }
