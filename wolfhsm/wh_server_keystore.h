@@ -239,7 +239,8 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
  * Reads the source key with the usual keystore policy checks (trusted keys
  * are refused) and loads it through the hardware keystore. The hardware key
  * keeps the usage flags of the source. Erasing or revoking the source later
- * clears the hardware copy.
+ * clears the hardware copy. If the port fails to clear it, the copy still
+ * can't be used, and the erase or revoke returns the port's error.
  *
  * @param[in] server Server context
  * @param[in,out] inout_hwId Hardware key to load, with the owner in the USER

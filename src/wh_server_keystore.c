@@ -1289,18 +1289,20 @@ int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId)
     return wh_Server_KeystoreCommitKey(server, keyId);
 }
 
-/* An erased or revoked key must not stay usable through a hardware copy */
-static void _ClearHwCopies(whServerContext* server, whKeyId keyId)
+/* An erased or revoked key must not stay usable through a hardware copy. On a
+ * port error the copies are unusable anyway, but may still be in hardware */
+static int _ClearHwCopies(whServerContext* server, whKeyId keyId)
 {
 #ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
     if (server->hwKeystore != NULL) {
-        (void)wh_HwKeystore_ClearSource(server->hwKeystore, server->devId,
-                                        keyId);
+        return wh_HwKeystore_ClearSource(server->hwKeystore, server->devId,
+                                         keyId);
     }
 #else
     (void)server;
     (void)keyId;
 #endif
+    return WH_ERROR_OK;
 }
 
 int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
@@ -1328,14 +1330,13 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     /* No NVM means there is nothing to destroy, same as erasing a key that
      * was never there. */
     if (server->nvm == NULL) {
-        _ClearHwCopies(server, keyId);
-        return WH_ERROR_OK;
+        return _ClearHwCopies(server, keyId);
     }
 
     /* destroy the object */
     ret = wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
     if (ret == WH_ERROR_OK) {
-        _ClearHwCopies(server, keyId);
+        ret = _ClearHwCopies(server, keyId);
     }
     return ret;
 }
@@ -1370,13 +1371,12 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
     /* Nothing left to destroy is a successful erase, matching
      * wh_Server_KeystoreEraseKey */
     if (server->nvm == NULL) {
-        _ClearHwCopies(server, keyId);
-        return WH_ERROR_OK;
+        return _ClearHwCopies(server, keyId);
     }
 
     ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
     if (ret == WH_ERROR_OK) {
-        _ClearHwCopies(server, keyId);
+        ret = _ClearHwCopies(server, keyId);
     }
     return ret;
 }
@@ -1454,7 +1454,7 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
     }
 
     if (ret == WH_ERROR_OK) {
-        _ClearHwCopies(server, keyId);
+        ret = _ClearHwCopies(server, keyId);
     }
     return ret;
 }

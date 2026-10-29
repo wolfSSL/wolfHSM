@@ -48,11 +48,15 @@
  *   _whTest_HwKeyUsage        - the copy keeps the source key's usage flags,
  *                               and every AES and CMAC request checks them
  *   _whTest_HwKeySource       - evict keeps the copy, erase and revoke clear it
+ *   _whTest_HwKeyDeleteFails  - a copy the port can't clear can't be used, and
+ *                               erase, revoke and Clear report the error
  *   _whTest_HwKeyRefused      - sources and targets the server or port refuses
  *   _whTest_HwKeyClear        - Clear and ClearAll
  *   _whTest_HwKeyShared       - keys loaded with the global flag
  *   _whTest_HwKeyNoFallback   - a key the hardware lost fails instead of
  *                               running in software
+ *   _whTest_HwKeyCmacAfterHw  - a software key CMAC right after a hardware key
+ *                               one reaches the port with no key reference
  *   _whTest_HwKeyKek          - the port key and client-loaded keys as key wrap
  *                               KEKs: only port keys are trusted
  *   _whTest_HwKeyPortKeyOwner - a port key registered for one client
@@ -161,7 +165,8 @@ static const uint8_t _mockRole[MOCK_SLOTS] = {
 typedef struct {
     uint8_t key[MOCK_SLOTS][AES_128_KEY_SIZE];
     uint8_t loaded[MOCK_SLOTS];
-    int     ops; /* Operations run with a slot key */
+    int     ops;        /* Operations run with a slot key */
+    int     failDelete; /* Fail WC_KEYSTORE_DELETE and keep the key */
 } MockEngine;
 
 static MockEngine _mock;
@@ -234,6 +239,9 @@ static int _MockKeystore(wc_CryptoInfo* info)
                                 info->keystore.op.deleteKey.keyRefSz);
             if ((slot < 0) || (_mockRole[slot] != MOCK_LOAD)) {
                 return BAD_FUNC_ARG;
+            }
+            if (_mock.failDelete != 0) {
+                return WC_HW_E;
             }
             wh_Utils_ForceZero(_mock.key[slot], AES_128_KEY_SIZE);
             _mock.loaded[slot] = 0;
@@ -385,9 +393,10 @@ static int _MockCmac(wc_CryptoInfo* info)
     int   slot;
     int   ret;
 
-    /* Key bytes passed in are a software key */
+    /* Key bytes passed in are a software key. The server clears cmac before
+     * sending them, so fail on a key reference to catch a stale one */
     if (info->cmac.key != NULL) {
-        return CRYPTOCB_UNAVAILABLE;
+        return (cmac->idLen != 0) ? BAD_STATE_E : CRYPTOCB_UNAVAILABLE;
     }
     ret = _MockKeySlot(cmac->id, cmac->idLen, &slot);
     if (ret != 0) {
@@ -823,31 +832,46 @@ static int _Gcm(whClientContext* c, Aes* aes, int dma, int enc,
                             decTag, encTag, AES_BLOCK_SIZE, out);
 }
 
-/* One-shot CMAC of the test message */
-static int _Cmac(whClientContext* c, whKeyId keyId, int dma, uint8_t* tag)
+/* Fresh Cmac that names keyId (0 for key bytes in the request) */
+static int _CmacStart(whClientContext* c, Cmac* cmac, whKeyId keyId)
 {
-    Cmac     cmac[1];
-    uint32_t tagSz = AES_BLOCK_SIZE;
-    int      ret;
+    int ret;
 
     ret = wc_InitCmac_ex(cmac, NULL, 0, WC_CMAC_AES, NULL, NULL, c->devId);
     if (ret == 0) {
         ret = wh_Client_CmacSetKeyId(cmac, keyId);
     }
-    if (ret == 0) {
+    return ret;
+}
+
+/* One-shot CMAC of the test message, with key in the request if not NULL */
+static int _CmacGenerate(whClientContext* c, Cmac* cmac, const uint8_t* key,
+                         int dma, uint8_t* tag)
+{
+    uint32_t keySz = (key != NULL) ? AES_128_KEY_SIZE : 0;
+    uint32_t tagSz = AES_BLOCK_SIZE;
+
 #ifdef WOLFHSM_CFG_DMA
-        if (dma) {
-            ret = wh_Client_CmacDma(c, cmac, WC_CMAC_AES, NULL, 0, _msg,
-                                    TEST_CMAC_SZ, tag, &tagSz);
-        }
-        else
-#endif
-        {
-            ret = wh_Client_Cmac(c, cmac, WC_CMAC_AES, NULL, 0, _msg,
+    if (dma) {
+        return wh_Client_CmacDma(c, cmac, WC_CMAC_AES, key, keySz, _msg,
                                  TEST_CMAC_SZ, tag, &tagSz);
-        }
     }
+#endif
     (void)dma;
+    return wh_Client_Cmac(c, cmac, WC_CMAC_AES, key, keySz, _msg, TEST_CMAC_SZ,
+                          tag, &tagSz);
+}
+
+/* One-shot CMAC of the test message */
+static int _Cmac(whClientContext* c, whKeyId keyId, int dma, uint8_t* tag)
+{
+    Cmac cmac[1];
+    int  ret;
+
+    ret = _CmacStart(c, cmac, keyId);
+    if (ret == 0) {
+        ret = _CmacGenerate(c, cmac, NULL, dma, tag);
+    }
     (void)wc_CmacFree(cmac);
     return ret;
 }
@@ -1438,6 +1462,66 @@ static int _whTest_HwKeySource(TestCtx* t)
     return WH_ERROR_OK;
 }
 
+/* If the port can't clear a copy, erase, revoke and Clear report the error,
+ * and the copy can't be used anyway. The key stays in the slot until a load
+ * replaces it */
+static int _whTest_HwKeyDeleteFails(TestCtx* t)
+{
+    whClientContext* c    = t->pair[0].client;
+    whKeyId          src1 = WH_KEYID_ERASED;
+    whKeyId          src2 = WH_KEYID_ERASED;
+    whKeyId          src3 = WH_KEYID_ERASED;
+    whKeyId          hw1;
+    whKeyId          hw2;
+    whKeyId          tmp;
+
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src1));
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &src2));
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, USAGE_AES_CMAC, _keyC, sizeof(_keyC), &src3));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
+
+    /* Erase. The key is still in the slot, with no owner */
+    _mock.failDelete = 1;
+    WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_KeyErase(c, src1));
+    _mock.failDelete = 0;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw1, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw1));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 1, 0, 0));
+
+    /* Revoke */
+    _mock.failDelete = 1;
+    WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_KeyRevoke(c, src2));
+    _mock.failDelete = 0;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw2, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw2));
+
+    /* The ID 0 search skips both slots. Loading a key by ID replaces the old
+     * one */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE == _Load(c, HW(0), src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, hw1, src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hw1, _keyC));
+
+    /* Clear */
+    _mock.failDelete = 1;
+    WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_HwKeystoreClear(c, hw1));
+    _mock.failDelete = 0;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw1, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_Client_HwKeystoreClear(c, hw1));
+
+    /* Load over both slots so they can be cleared. The revoked key can't be
+     * evicted */
+    WH_TEST_RETURN_ON_FAIL(_Load(c, hw1, src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, hw2, src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src3));
+    return WH_ERROR_OK;
+}
+
 /* Sources and targets the server or the port refuses */
 static int _whTest_HwKeyRefused(TestCtx* t)
 {
@@ -1618,6 +1702,46 @@ static int _whTest_HwKeyNoFallback(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hwId, _keyA));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
+    return WH_ERROR_OK;
+}
+
+/* A one-shot CMAC with a software key, in the request or in the keystore, right
+ * after one with a hardware key. Both requests take the same path with nothing
+ * in between, so the server's Cmac for the second starts out holding the
+ * first's key reference. The mock fails if it gets through */
+static int _whTest_HwKeyCmacAfterHw(TestCtx* t)
+{
+    whClientContext* c   = t->pair[0].client;
+    whKeyId          src = WH_KEYID_ERASED;
+    Expected         e;
+    Cmac             hw[1];
+    Cmac             sw[1];
+    uint8_t          tag[AES_BLOCK_SIZE];
+    int              dma;
+
+    WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
+    for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
+        /* Key in the request */
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, hw, HW(MOCK_PORT_SLOT)));
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, sw, WH_KEYID_ERASED));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, hw, NULL, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, sw, _keyA, dma, tag));
+        WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
+        (void)wc_CmacFree(hw);
+        (void)wc_CmacFree(sw);
+
+        /* Key in the keystore */
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, hw, HW(MOCK_PORT_SLOT)));
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, sw, src));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, hw, NULL, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, sw, NULL, dma, tag));
+        WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
+        (void)wc_CmacFree(hw);
+        (void)wc_CmacFree(sw);
+    }
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
     return WH_ERROR_OK;
 }
@@ -1809,6 +1933,9 @@ int whTest_HwKeystoreCrypto(void* ctx)
         ret = _whTest_HwKeySource(t);
     }
     if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeyDeleteFails(t);
+    }
+    if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeyRefused(t);
     }
     if (ret == WH_ERROR_OK) {
@@ -1821,6 +1948,9 @@ int whTest_HwKeystoreCrypto(void* ctx)
 #endif
     if (ret == WH_ERROR_OK) {
         ret = _whTest_HwKeyNoFallback(t);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_HwKeyCmacAfterHw(t);
     }
 #ifdef WOLFHSM_CFG_KEYWRAP
     if (ret == WH_ERROR_OK) {

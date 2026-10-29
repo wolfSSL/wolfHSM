@@ -268,7 +268,8 @@ static int _PortInfo(int devId, whKeyId keyId, word32* keyType, word32* keyBits)
                                &attrs, NULL);
 }
 
-/* Clear the key in hardware, then free its entry */
+/* Clear the key in hardware and free its entry. The entry is freed even if the
+ * port fails, so the key can't be used again */
 static int _Remove(int devId, whHwKeystoreKey* entry)
 {
     uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
@@ -276,9 +277,7 @@ static int _Remove(int devId, whHwKeystoreKey* entry)
 
     wh_HwKeystore_KeyRef(entry->id, ref);
     ret = wc_KeyStore_Delete(devId, ref, sizeof(ref), NULL);
-    if (ret == 0) {
-        memset(entry, 0, sizeof(*entry));
-    }
+    memset(entry, 0, sizeof(*entry));
     return ret;
 }
 
