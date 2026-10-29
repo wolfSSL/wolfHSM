@@ -1326,6 +1326,18 @@ static int whTest_CryptoRsaCachedKey(whClientContext* ctx, int devId,
         rsaInit = 0;
     }
 
+    /* Export the public key, then evict the cached key so the local key
+     * import below doesn't need a second cache slot */
+    if (ret == WH_ERROR_OK) {
+        exportRet = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_RSA, NULL,
+                                              0, pubDer, &pubDerLen);
+        ret       = wh_Client_KeyEvict(ctx, keyId);
+        if (ret != WH_ERROR_OK) {
+            WH_ERROR_PRINT("Failed to evict RSA key %d\n", ret);
+        }
+        keyId = WH_KEYID_ERASED;
+    }
+
     /* A local key with the HSM devId is sent to the server as DER, and public
      * key export builds DER on the server. Both need WOLFSSL_KEY_TO_DER and
      * return WH_ERROR_NOTIMPL without it. */
@@ -1342,10 +1354,8 @@ static int whTest_CryptoRsaCachedKey(whClientContext* ctx, int devId,
     }
     if (ret == WH_ERROR_OK) {
         memset(out, 0, sizeof(out));
-        outLen    = wc_RsaSSL_Verify(sig, sigLen, out, sizeof(out), rsa);
-        sizeRet   = wh_Client_RsaGetSize(ctx, rsa, &size);
-        exportRet = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_RSA, NULL,
-                                              0, pubDer, &pubDerLen);
+        outLen  = wc_RsaSSL_Verify(sig, sigLen, out, sizeof(out), rsa);
+        sizeRet = wh_Client_RsaGetSize(ctx, rsa, &size);
 #ifdef WOLFSSL_KEY_TO_DER
         if ((outLen != (int)sizeof(msg)) ||
             (memcmp(msg, out, sizeof(msg)) != 0) || (sizeRet != WH_ERROR_OK) ||
