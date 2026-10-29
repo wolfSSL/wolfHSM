@@ -23,6 +23,10 @@
  *   _whTest_CryptoXmssCryptoCb - generate / durability / sign / verify, public
  *                                key export and import, and enforcement of the
  *                                no-private-export / no-private-import policy
+ *
+ * With WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT wolfCrypt cannot use DMA,
+ * so the key operations drive the wh_Client_Xmss*Dma APIs directly instead of
+ * the cryptoCb.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -48,13 +52,84 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-#if defined(WOLFHSM_CFG_DMA) && \
-    defined(WOLFSSL_HAVE_XMSS) && !defined(WOLFSSL_XMSS_VERIFY_ONLY)
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_XMSS) && \
+    !defined(WOLFSSL_XMSS_VERIFY_ONLY)
 
 /* "XMSS-SHA2_10_256" is the smallest standardized XMSS parameter set
  * (height 10, 1024 signatures). pubLen=68, sigLen=2500. */
 #define WH_TEST_XMSS_PARAM_STR "XMSS-SHA2_10_256"
-static byte whTest_XmssSigBuf[2500];
+static WH_DMA_ALIGNED byte whTest_XmssSigBuf[WH_DMA_PAD_SIZE(2500)];
+
+/* Key operations under test. wolfCrypt cannot use DMA with non-coherent
+ * caches, so there the wh_Client_Xmss*Dma APIs are driven directly instead of
+ * going through the cryptoCb (devId is then INVALID_DEVID). */
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+static int _whTest_XmssMakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
+{
+    int ret;
+    (void)rng;
+    ret = wh_Client_XmssMakeExportKeyDma(ctx, key);
+    if (ret == 0) {
+        /* wh_Client_XmssMakeExportKeyDma only fills in the public key and
+         * keyId, it does not mark the key usable. Set what wc_XmssKey_MakeKey
+         * sets after a cryptoCb keygen. */
+        key->state  = WC_XMSS_STATE_OK;
+        key->pubSet = 1;
+    }
+    return ret;
+}
+
+static int _whTest_XmssSigsLeft(whClientContext* ctx, XmssKey* key)
+{
+    return (wh_Client_XmssSigsLeftDma(ctx, key) > 0) ? 1 : 0;
+}
+
+static int _whTest_XmssSign(whClientContext* ctx, XmssKey* key, byte* sig,
+                            word32* sigLen, const byte* msg, int msgSz)
+{
+    return wh_Client_XmssSignDma(ctx, msg, (word32)msgSz, sig, sigLen, key);
+}
+
+static int _whTest_XmssVerify(whClientContext* ctx, XmssKey* key,
+                              const byte* sig, word32 sigLen, const byte* msg,
+                              int msgSz)
+{
+    int res = 0;
+    int ret = wh_Client_XmssVerifyDma(ctx, sig, sigLen, msg, (word32)msgSz,
+                                      &res, key);
+    if ((ret == 0) && (res != 1)) {
+        ret = SIG_VERIFY_E;
+    }
+    return ret;
+}
+#else
+static int _whTest_XmssMakeKey(whClientContext* ctx, XmssKey* key, WC_RNG* rng)
+{
+    (void)ctx;
+    return wc_XmssKey_MakeKey(key, rng);
+}
+
+static int _whTest_XmssSigsLeft(whClientContext* ctx, XmssKey* key)
+{
+    (void)ctx;
+    return wc_XmssKey_SigsLeft(key);
+}
+
+static int _whTest_XmssSign(whClientContext* ctx, XmssKey* key, byte* sig,
+                            word32* sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_XmssKey_Sign(key, sig, sigLen, msg, msgSz);
+}
+
+static int _whTest_XmssVerify(whClientContext* ctx, XmssKey* key,
+                              const byte* sig, word32 sigLen, const byte* msg,
+                              int msgSz)
+{
+    (void)ctx;
+    return wc_XmssKey_Verify(key, sig, sigLen, msg, msgSz);
+}
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
                                       WC_RNG* rng)
@@ -102,7 +177,7 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
     /* MakeKey via cryptocb: the server commits the key to NVM before
      * returning the public key over DMA. */
     if (ret == 0) {
-        ret = wc_XmssKey_MakeKey(key, rng);
+        ret = _whTest_XmssMakeKey(ctx, key, rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS MakeKey ret=%d\n", ret);
         }
@@ -111,7 +186,7 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
     /* wc_XmssKey_SigsLeft returns a boolean: nonzero = signatures available,
      * 0 = exhausted. */
     if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
+        if (_whTest_XmssSigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted on fresh key\n");
             ret = -1;
         }
@@ -229,7 +304,8 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         sigLen = sigCap;
-        ret = wc_XmssKey_Sign(key, whTest_XmssSigBuf, &sigLen, msg, (int)msgSz);
+        ret    = _whTest_XmssSign(ctx, key, whTest_XmssSigBuf, &sigLen, msg,
+                                  (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS Sign ret=%d\n", ret);
         }
@@ -241,7 +317,8 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
     }
 
     if (ret == 0) {
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTest_XmssVerify(ctx, key, whTest_XmssSigBuf, sigLen, msg,
+                                 (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed XMSS Verify ret=%d\n", ret);
         }
@@ -249,7 +326,8 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         whTest_XmssSigBuf[0] ^= 0xFF;
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTest_XmssVerify(ctx, key, whTest_XmssSigBuf, sigLen, msg,
+                                 (int)msgSz);
         whTest_XmssSigBuf[0] ^= 0xFF;
         if (ret == 0) {
             WH_ERROR_PRINT("XMSS Verify unexpectedly accepted tampered sig\n");
@@ -262,8 +340,8 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
 
     if (ret == 0) {
         const byte wrongMsg[] = "wolfHSM XMSS cryptocb wrong";
-        ret = wc_XmssKey_Verify(key, whTest_XmssSigBuf, sigLen, wrongMsg,
-                                (int)(sizeof(wrongMsg) - 1));
+        ret = _whTest_XmssVerify(ctx, key, whTest_XmssSigBuf, sigLen, wrongMsg,
+                                 (int)(sizeof(wrongMsg) - 1));
         if (ret == 0) {
             WH_ERROR_PRINT("XMSS Verify unexpectedly accepted wrong message\n");
             ret = -1;
@@ -276,7 +354,7 @@ static int _whTest_CryptoXmssCryptoCb(whClientContext* ctx, int devId,
     /* H=10 means 1024 sigs total; after one sign, the key is still not
      * exhausted. */
     if (ret == 0) {
-        if (wc_XmssKey_SigsLeft(key) == 0) {
+        if (_whTest_XmssSigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("XMSS reported exhausted after one sign\n");
             ret = -1;
         }
@@ -467,10 +545,15 @@ int whTest_Crypto_Xmss(whClientContext* ctx)
     }
     rngInited = 1;
 
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* No DMA through wolfCrypt: the test drives the DMA APIs directly */
+    ret = _whTest_CryptoXmssCryptoCb(ctx, INVALID_DEVID, rng);
+#else
     /* XMSS dispatches through the DMA-only cryptocb. */
     (void)wh_Client_SetDmaMode(ctx, 1);
     ret = _whTest_CryptoXmssCryptoCb(ctx, WH_DEV_ID_DMA, rng);
     (void)wh_Client_SetDmaMode(ctx, 0);
+#endif
 
     if (rngInited) {
         (void)wc_FreeRng(rng);

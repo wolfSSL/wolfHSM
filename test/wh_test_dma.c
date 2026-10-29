@@ -72,7 +72,9 @@ typedef struct {
     size_t    len;
 } bounceSlot;
 
-static uint8_t    g_bouncePool[BOUNCE_POOL_SIZE];
+/* With non-coherent DMA, slices start on a cache line and are padded to whole
+ * lines, as a port bouncing through non-coherent memory must do */
+static WH_DMA_ALIGNED uint8_t g_bouncePool[BOUNCE_POOL_SIZE];
 static bounceSlot g_bounceSlots[BOUNCE_POOL_SLOTS];
 static size_t     g_bounceUsed;        /* bump offset into the pool */
 static int        g_bounceOutstanding; /* slots currently allocated */
@@ -107,7 +109,8 @@ void whTestDma_BounceSetAllocBudget(int allocs)
 static bounceSlot* _bounceAlloc(size_t len)
 {
     int    i;
-    size_t aligned = (len + 7u) & ~(size_t)7u; /* 8-byte align slices */
+    /* 8-byte align slices, whole cache lines with non-coherent DMA */
+    size_t aligned = WH_DMA_PAD_SIZE((len + 7u) & ~(size_t)7u);
 
     /* Injected failure for exercising leak-recovery paths; no diagnostic. */
     if (g_bounceAllocBudget == 0) {
@@ -196,6 +199,17 @@ int whTestDma_BounceClientCb(struct whClientContext_t* client,
             break;
 
         case WH_DMA_OPER_CLIENT_WRITE_PRE:
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+            /* Behave like a zero-copy port on a non-coherent target, which
+             * can only accept output buffers starting on a cache line. This
+             * catches test buffers that are not declared WH_DMA_ALIGNED. */
+            if (!WH_DMA_IS_ALIGNED(clientAddr)) {
+                WH_ERROR_PRINT("wh_test bounce: output buffer %p (len %u) is "
+                               "not aligned to WOLFHSM_CFG_DMA_ALIGN\n",
+                               (void*)clientAddr, (unsigned)len);
+                return WH_ERROR_BADARGS;
+            }
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
             /* Server is about to write client memory: give it a pool slot to
              * write into. */
             s = _bounceAlloc(len);

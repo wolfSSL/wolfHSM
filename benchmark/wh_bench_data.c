@@ -28,7 +28,8 @@ uint8_t wh_bench_data_out_buffer[WOLFHSM_CFG_BENCH_DATA_BUFFER_SIZE] = {0};
 
 #if defined(WOLFHSM_CFG_DMA) && !defined(WOLFHSM_CFG_BENCH_CUSTOM_DMA_BUFFER)
 /* Define the DMA buffer if using built-in buffer */
-uint8_t wh_bench_data_dma_buffer[WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE] = {0};
+WH_DMA_ALIGNED uint8_t
+    wh_bench_data_dma_buffer[WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE] = {0};
 #endif
 
 #endif /* WOLFHSM_CFG_BENCH_ENABLE */

@@ -148,27 +148,61 @@ int wh_Utils_ConstantCompare(const uint8_t* a, const uint8_t* b, size_t length)
 }
 
 /** Cache helper functions */
+
+/* Round x down to a multiple of align. Cannot overflow. */
+static uintptr_t _AlignDown(uintptr_t x, uintptr_t align)
+{
+    return x - (x % align);
+}
+
+/* Get the first and last cache lines holding a byte of [p, p + n), n > 0. A
+ * range reaching the top of the address space stops at the last line there. */
+static void _CacheLineRange(const void* p, size_t n, uintptr_t* first,
+                            uintptr_t* last)
+{
+    uintptr_t start = (uintptr_t)p;
+    uintptr_t end   = ((uintptr_t)(n - 1) > UINTPTR_MAX - start)
+                          ? UINTPTR_MAX
+                          : start + (uintptr_t)(n - 1);
+
+    *first = _AlignDown(start, XCACHELINE);
+    *last  = _AlignDown(end, XCACHELINE);
+}
+
+/* The loops stop on the last line before stepping, so they cannot wrap */
 const void* wh_Utils_CacheInvalidate(const void* p, size_t n)
 {
-    int len = (int)n;
-    const uint8_t* ptr = (const uint8_t*)p;
-    do {
-        XCACHEINVLD(ptr);
-        ptr += XCACHELINE;
-        len -= XCACHELINE;
-    } while (len > 0);
+    uintptr_t line;
+    uintptr_t last;
+
+    if (n > 0) {
+        _CacheLineRange(p, n, &line, &last);
+        while (1) {
+            XCACHEINVLD((const uint8_t*)line);
+            if (line >= last) {
+                break;
+            }
+            line += XCACHELINE;
+        }
+    }
     return p;
 }
 
 void* wh_Utils_CacheFlush(void* p, size_t n)
 {
-    int len = (int)n;
-    uint8_t* ptr = (uint8_t*)p;
-    do {
-        XCACHEFLUSH(ptr);
-        ptr += XCACHELINE;
-        len -= XCACHELINE;
-    } while (len > 0);
+    uintptr_t line;
+    uintptr_t last;
+
+    if (n > 0) {
+        _CacheLineRange(p, n, &line, &last);
+        while (1) {
+            XCACHEFLUSH((uint8_t*)line);
+            if (line >= last) {
+                break;
+            }
+            line += XCACHELINE;
+        }
+    }
     return p;
 }
 
@@ -190,7 +224,6 @@ void* wh_Utils_memcpy_flush(void* dst, const void* src , size_t n)
     XMEMFENCE();
     return XCACHEFLUSHBLK(dst, n);
 }
-
 
 #if defined(WOLFHSM_CFG_HEXDUMP)
 void wh_Utils_Hexdump(const char* initial, const uint8_t* ptr, size_t size)

@@ -23,6 +23,10 @@
  *   _whTest_CryptoLmsCryptoCb - generate / durability / sign / verify, public
  *                               key export and import, and enforcement of the
  *                               no-private-export / no-private-import policy
+ *
+ * With WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT wolfCrypt cannot use DMA,
+ * so the key operations drive the wh_Client_Lms*Dma APIs directly instead of
+ * the cryptoCb.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -48,8 +52,8 @@
 #include "wh_test_common.h"
 #include "wh_test_list.h"
 
-#if defined(WOLFHSM_CFG_DMA) && \
-    defined(WOLFSSL_HAVE_LMS) && !defined(WOLFSSL_LMS_VERIFY_ONLY)
+#if defined(WOLFHSM_CFG_DMA) && defined(WOLFSSL_HAVE_LMS) && \
+    !defined(WOLFSSL_LMS_VERIFY_ONLY)
 
 /* L=1, H=5, W=8 keeps the signature ~1.3 KB and gives 2^5 = 32 signatures. */
 #define WH_TEST_LMS_LEVELS     (1)
@@ -57,7 +61,76 @@
 #define WH_TEST_LMS_WINTERNITZ (8)
 /* Generous buffer that fits L1_H5_W8 (~1328) and any W<8 variant of the same
  * height (W=1 ~8688). Keeps off the stack so ASAN builds stay happy. */
-static byte whTest_LmsSigBuf[8800];
+static WH_DMA_ALIGNED byte whTest_LmsSigBuf[WH_DMA_PAD_SIZE(8800)];
+
+/* Key operations under test. wolfCrypt cannot use DMA with non-coherent
+ * caches, so there the wh_Client_Lms*Dma APIs are driven directly instead of
+ * going through the cryptoCb (devId is then INVALID_DEVID). */
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+static int _whTest_LmsMakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
+{
+    int ret;
+    (void)rng;
+    ret = wh_Client_LmsMakeExportKeyDma(ctx, key);
+    if (ret == 0) {
+        /* wh_Client_LmsMakeExportKeyDma only fills in the public key and
+         * keyId, it does not mark the key usable. Set what wc_LmsKey_MakeKey
+         * sets after a cryptoCb keygen. */
+        key->state  = WC_LMS_STATE_OK;
+        key->pubSet = 1;
+    }
+    return ret;
+}
+
+static int _whTest_LmsSigsLeft(whClientContext* ctx, LmsKey* key)
+{
+    return (wh_Client_LmsSigsLeftDma(ctx, key) > 0) ? 1 : 0;
+}
+
+static int _whTest_LmsSign(whClientContext* ctx, LmsKey* key, byte* sig,
+                           word32* sigLen, const byte* msg, int msgSz)
+{
+    return wh_Client_LmsSignDma(ctx, msg, (word32)msgSz, sig, sigLen, key);
+}
+
+static int _whTest_LmsVerify(whClientContext* ctx, LmsKey* key, const byte* sig,
+                             word32 sigLen, const byte* msg, int msgSz)
+{
+    int res = 0;
+    int ret =
+        wh_Client_LmsVerifyDma(ctx, sig, sigLen, msg, (word32)msgSz, &res, key);
+    if ((ret == 0) && (res != 1)) {
+        ret = SIG_VERIFY_E;
+    }
+    return ret;
+}
+#else
+static int _whTest_LmsMakeKey(whClientContext* ctx, LmsKey* key, WC_RNG* rng)
+{
+    (void)ctx;
+    return wc_LmsKey_MakeKey(key, rng);
+}
+
+static int _whTest_LmsSigsLeft(whClientContext* ctx, LmsKey* key)
+{
+    (void)ctx;
+    return wc_LmsKey_SigsLeft(key);
+}
+
+static int _whTest_LmsSign(whClientContext* ctx, LmsKey* key, byte* sig,
+                           word32* sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_LmsKey_Sign(key, sig, sigLen, msg, msgSz);
+}
+
+static int _whTest_LmsVerify(whClientContext* ctx, LmsKey* key, const byte* sig,
+                             word32 sigLen, const byte* msg, int msgSz)
+{
+    (void)ctx;
+    return wc_LmsKey_Verify(key, sig, sigLen, msg, msgSz);
+}
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
 static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
                                      WC_RNG* rng)
@@ -106,7 +179,7 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* MakeKey via cryptocb: the server commits the key to NVM before
      * returning the public key over DMA. */
     if (ret == 0) {
-        ret = wc_LmsKey_MakeKey(key, rng);
+        ret = _whTest_LmsMakeKey(ctx, key, rng);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS MakeKey ret=%d\n", ret);
         }
@@ -115,7 +188,7 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* wc_LmsKey_SigsLeft returns a boolean: nonzero = signatures available,
      * 0 = exhausted. Fresh key should report nonzero. */
     if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
+        if (_whTest_LmsSigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("LMS reported exhausted on fresh key\n");
             ret = -1;
         }
@@ -238,7 +311,8 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* Sign via cryptocb. */
     if (ret == 0) {
         sigLen = sigCap;
-        ret = wc_LmsKey_Sign(key, whTest_LmsSigBuf, &sigLen, msg, (int)msgSz);
+        ret    = _whTest_LmsSign(ctx, key, whTest_LmsSigBuf, &sigLen, msg,
+                                 (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS Sign ret=%d\n", ret);
         }
@@ -251,7 +325,8 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
 
     /* Verify the signature via cryptocb. */
     if (ret == 0) {
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTest_LmsVerify(ctx, key, whTest_LmsSigBuf, sigLen, msg,
+                                (int)msgSz);
         if (ret != 0) {
             WH_ERROR_PRINT("Failed LMS Verify ret=%d\n", ret);
         }
@@ -260,7 +335,8 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* Tampered signature must fail to verify. */
     if (ret == 0) {
         whTest_LmsSigBuf[0] ^= 0xFF;
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, msg, (int)msgSz);
+        ret = _whTest_LmsVerify(ctx, key, whTest_LmsSigBuf, sigLen, msg,
+                                (int)msgSz);
         whTest_LmsSigBuf[0] ^= 0xFF;
         if (ret == 0) {
             WH_ERROR_PRINT("LMS Verify unexpectedly accepted tampered sig\n");
@@ -274,8 +350,8 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* Wrong message must also fail to verify. */
     if (ret == 0) {
         const byte wrongMsg[] = "wolfHSM LMS cryptocb wrong";
-        ret = wc_LmsKey_Verify(key, whTest_LmsSigBuf, sigLen, wrongMsg,
-                               (int)(sizeof(wrongMsg) - 1));
+        ret = _whTest_LmsVerify(ctx, key, whTest_LmsSigBuf, sigLen, wrongMsg,
+                                (int)(sizeof(wrongMsg) - 1));
         if (ret == 0) {
             WH_ERROR_PRINT("LMS Verify unexpectedly accepted wrong message\n");
             ret = -1;
@@ -288,7 +364,7 @@ static int _whTest_CryptoLmsCryptoCb(whClientContext* ctx, int devId,
     /* H=5 means 32 sigs total; after one sign, the key is still not
      * exhausted. */
     if (ret == 0) {
-        if (wc_LmsKey_SigsLeft(key) == 0) {
+        if (_whTest_LmsSigsLeft(ctx, key) == 0) {
             WH_ERROR_PRINT("LMS reported exhausted after one sign\n");
             ret = -1;
         }
@@ -481,10 +557,15 @@ int whTest_Crypto_Lms(whClientContext* ctx)
     }
     rngInited = 1;
 
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* No DMA through wolfCrypt: the test drives the DMA APIs directly */
+    ret = _whTest_CryptoLmsCryptoCb(ctx, INVALID_DEVID, rng);
+#else
     /* LMS dispatches through the DMA-only cryptocb. */
     (void)wh_Client_SetDmaMode(ctx, 1);
     ret = _whTest_CryptoLmsCryptoCb(ctx, WH_DEV_ID_DMA, rng);
     (void)wh_Client_SetDmaMode(ctx, 0);
+#endif
 
     if (rngInited) {
         (void)wc_FreeRng(rng);

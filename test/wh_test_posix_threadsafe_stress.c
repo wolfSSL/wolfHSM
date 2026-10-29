@@ -541,8 +541,8 @@ typedef struct {
 
 #ifdef WOLFHSM_CFG_DMA
     /* Per-client DMA buffers */
-    uint8_t dmaKeyBuffer[KEY_DATA_SIZE];
-    uint8_t dmaNvmBuffer[NVM_OBJECT_DATA_SIZE];
+    WH_DMA_ALIGNED uint8_t dmaKeyBuffer[WH_DMA_PAD_SIZE(KEY_DATA_SIZE)];
+    WH_DMA_ALIGNED uint8_t dmaNvmBuffer[WH_DMA_PAD_SIZE(NVM_OBJECT_DATA_SIZE)];
 #endif
 } ClientServerPair;
 
@@ -1313,14 +1313,12 @@ static int doKeyCacheDma(ClientServerPair* pair, whKeyId keyId, int iteration)
     int     rc;
 
     /* Fill key data with pattern */
-    memset(pair->dmaKeyBuffer, (uint8_t)(iteration & 0xFF),
-           sizeof(pair->dmaKeyBuffer));
+    memset(pair->dmaKeyBuffer, (uint8_t)(iteration & 0xFF), KEY_DATA_SIZE);
     snprintf((char*)label, sizeof(label), "DmaKey%04X", keyId);
 
     /* Send DMA request */
     rc = wh_Client_KeyCacheDmaRequest(&pair->client, 0, label, sizeof(label),
-                                      pair->dmaKeyBuffer,
-                                      sizeof(pair->dmaKeyBuffer), keyId);
+                                      pair->dmaKeyBuffer, KEY_DATA_SIZE, keyId);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -1344,7 +1342,7 @@ static int doKeyExportDma(ClientServerPair* pair, whKeyId keyId)
 
     /* Send DMA request - provide buffer for DMA export */
     rc = wh_Client_KeyExportDmaRequest(&pair->client, keyId, pair->dmaKeyBuffer,
-                                       sizeof(pair->dmaKeyBuffer));
+                                       KEY_DATA_SIZE);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -1369,18 +1367,18 @@ static int doNvmAddObjectDma(ClientServerPair* pair, whNvmId id,
     int           rc;
 
     /* Fill DMA buffer with writer pattern */
-    memset(pair->dmaNvmBuffer, pattern, sizeof(pair->dmaNvmBuffer));
+    memset(pair->dmaNvmBuffer, pattern, NVM_OBJECT_DATA_SIZE);
 
     /* Set up metadata */
     memset(&meta, 0, sizeof(meta));
     meta.id     = id;
     meta.access = WH_NVM_ACCESS_ANY;
     meta.flags  = WH_NVM_FLAGS_USAGE_ANY;
-    meta.len    = sizeof(pair->dmaNvmBuffer);
+    meta.len    = NVM_OBJECT_DATA_SIZE;
 
     /* Send DMA request */
     rc = wh_Client_NvmAddObjectDmaRequest(
-        &pair->client, &meta, sizeof(pair->dmaNvmBuffer), pair->dmaNvmBuffer);
+        &pair->client, &meta, NVM_OBJECT_DATA_SIZE, pair->dmaNvmBuffer);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -1407,8 +1405,8 @@ static int doNvmReadDma(ClientServerPair* pair, whNvmId id, int expect)
     int     rc;
 
     /* Send DMA request */
-    rc = wh_Client_NvmReadDmaRequest(
-        &pair->client, id, 0, sizeof(pair->dmaNvmBuffer), pair->dmaNvmBuffer);
+    rc = wh_Client_NvmReadDmaRequest(&pair->client, id, 0, NVM_OBJECT_DATA_SIZE,
+                                     pair->dmaNvmBuffer);
     if (rc != WH_ERROR_OK) {
         return rc;
     }
@@ -1428,7 +1426,7 @@ static int doNvmReadDma(ClientServerPair* pair, whNvmId id, int expect)
         return out_rc;
     }
 
-    return checkNvmData(pair->dmaNvmBuffer, sizeof(pair->dmaNvmBuffer), expect);
+    return checkNvmData(pair->dmaNvmBuffer, NVM_OBJECT_DATA_SIZE, expect);
 }
 #endif /* WOLFHSM_CFG_DMA */
 

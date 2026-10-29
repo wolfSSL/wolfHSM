@@ -65,7 +65,7 @@ int _benchCmacAes(whClientContext* client, whBenchOpContext* ctx, int id,
     }
 
     out = tag; /* default to using tag buffer on the stack */
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     if (useDma) {
         inLen = WOLFHSM_CFG_BENCH_DMA_BUFFER_SIZE;
 #if defined(WOLFHSM_CFG_TEST_POSIX)
@@ -162,7 +162,7 @@ exit:
             ret = evictRet;
         }
     }
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
 #if defined(WOLFHSM_CFG_TEST_POSIX)
     if (useDma && ctx->transportType == WH_BENCH_TRANSPORT_POSIX_DMA) {
         /* if static memory was used with DMA then use XFREE */
@@ -187,7 +187,7 @@ int wh_Bench_Mod_CmacAes128(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_CmacAes128Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchCmacAes(client, ctx, id, key128, sizeof(key128), 1);
 #else
@@ -209,7 +209,7 @@ int wh_Bench_Mod_CmacAes256(whClientContext* client, whBenchOpContext* ctx,
 int wh_Bench_Mod_CmacAes256Dma(whClientContext* client, whBenchOpContext* ctx,
                                int id, void* params)
 {
-#if defined(WOLFHSM_CFG_DMA)
+#if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
     return _benchCmacAes(client, ctx, id, key256, sizeof(key256), 1);
 #else

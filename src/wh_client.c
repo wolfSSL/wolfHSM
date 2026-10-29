@@ -91,6 +91,13 @@ int wh_Client_Init(whClientContext* c, const whClientConfig* config)
     if (config->devId == WH_DEV_ID_DMA) {
         return WH_ERROR_BADARGS;
     }
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* wolfCrypt cannot use DMA with non-coherent caches, see
+     * wh_Client_CryptoCbDma */
+    if ((config->dmaConfig != NULL) && (config->dmaConfig->preferDma != 0)) {
+        return WH_ERROR_NOTIMPL;
+    }
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
@@ -536,6 +543,13 @@ int wh_Client_SetDmaMode(whClientContext* c, int useDma)
         return WH_ERROR_BADARGS;
     }
 #ifdef WOLFHSM_CFG_DMA
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* wolfCrypt cannot use DMA with non-coherent caches, see
+     * wh_Client_CryptoCbDma */
+    if (useDma) {
+        return WH_ERROR_NOTIMPL;
+    }
+#endif /* WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
     c->dma.preferDma = (uint32_t)(useDma ? 1 : 0);
 #else
     (void)useDma;

@@ -372,7 +372,7 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
     whKeyId     signKeyId   = WH_KEYID_ERASED;
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 DMA message";
-    byte        sig[ED25519_SIG_SIZE];
+    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(ED25519_SIG_SIZE)];
     uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 DMA Key";
