@@ -8,7 +8,6 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Transparent Offload via Crypto Callbacks](#transparent-offload-via-crypto-callbacks)
     - [Supported Algorithms](#supported-algorithms)
     - [Referencing Keys by ID](#referencing-keys-by-id)
-    - [Choosing a Key Source](#choosing-a-key-source)
     - [Hardware Acceleration and Crypto Affinity](#hardware-acceleration-and-crypto-affinity)
     - [Blocking and Non-Blocking Interfaces](#blocking-and-non-blocking-interfaces)
     - [Crypto Operation Timeouts](#crypto-operation-timeouts)
@@ -23,13 +22,10 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)
     - [Global Keys](#global-keys)
     - [Wrapped Keys](#wrapped-keys)
-    - [Hardware-Only Keys](#hardware-only-keys)
-        - [Hardware Key Overview](#hardware-key-overview)
-        - [Supported Functionality](#supported-functionality)
-        - [Using Hardware Keys from a Client](#using-hardware-keys-from-a-client)
-        - [Server Architecture for Hardware Keys](#server-architecture-for-hardware-keys)
-        - [Port and Core Library Responsibilities](#port-and-core-library-responsibilities)
-        - [What Each Port Documents](#what-each-port-documents)
+    - [Hardware Keys](#hardware-keys)
+        - [The Hardware Key Abstraction](#the-hardware-key-abstraction)
+        - [Where Hardware Keys Can Be Used](#where-hardware-keys-can-be-used)
+        - [Port and Server Responsibilities](#port-and-server-responsibilities)
     - [Key Usage Policies](#key-usage-policies)
 - [Certificate Management](#certificate-management)
     - [Trusted Root Storage](#trusted-root-storage)
@@ -140,36 +136,16 @@ wh_Client_RsaSetKeyId(&rsa, keyId);
 sigLen = wc_RsaSSL_Sign(msg, msgLen, sig, sizeof(sig), &rsa, &rng);
 ```
 
-The same ID can name a key the client just cached, one provisioned into NVM at the factory, or one the server generated and never exported — the client uses it the same way in every case. How IDs are assigned and structured is covered under [Keystore](#keystore).
-
-### Choosing a Key Source
-
-A client can supply the key for an operation in three ways. The wolfCrypt call is the same in each; only how the key is bound to the wolfCrypt object differs.
-
-| | Key in the request | Keystore key | Hardware key |
-|---|---|---|---|
-| Bind it with | a wolfCrypt set-key call, such as `wc_AesSetKey()` | a `SetKeyId` call with a keystore key ID, such as `wh_Client_AesSetKeyId()` | a `SetKeyId` call with a [hardware key](#hardware-only-keys) ID from `WH_CLIENT_KEYID_MAKE_HW(n)` |
-| Key bytes held by | the client | the server [keystore](#keystore) | the hardware |
-| Key bytes cross the client boundary | in every request | once if the client caches the key; never if the server generated it or it was provisioned | never |
-| Key bytes in server memory during the operation | yes | yes | no |
-| Policy the server checks | none | the keystore key's owner and [usage flags](#key-usage-policies) | the hardware key's owner and usage flags |
-| Where it runs | in hardware if the port supports the algorithm and key size, otherwise in wolfCrypt software, with the same result | same as a key in the request | in hardware only; the request fails if the port can't run it |
-| Decided by the port | which algorithms and key sizes run in hardware | same as a key in the request | which hardware keys exist, what each holds, and which operations each supports |
-
-A hardware key that a client loads is copied from a keystore key, so the keystore column applies to its source.
-
-Send the key in the request when the client owns the key and the server shouldn't keep it. Use a keystore key when the server should guard the key or keep it across resets. Use a hardware key when the key should stay in the hardware: a port key, or a keystore key a client loads once to use many times.
-
-**How ports run keys from requests and the keystore.** For these two key sources the port receives the key bytes with each operation, and how it runs the operation depends on the hardware. An engine that takes a key with every operation can use it directly. An engine that holds keys in slots needs a free slot, so a port might reserve one or more slots for these keys, loading each key before the operation and clearing it after. A port with no slot to spare, or without hardware support for the algorithm or key size, runs the operation in software. The result is the same either way. A slot reserved like this is never a hardware key. A hardware key skips the per-operation key load, so on slot-based hardware it can be faster. Each port's documentation says which approach it uses (see [What Each Port Documents](#what-each-port-documents)).
+The same ID can name a key the client just cached, one provisioned into NVM at the factory, or one the server generated and never exported — the client uses it the same way in every case. It can also name a [hardware key](#hardware-keys) held in the crypto hardware itself. How IDs are assigned and structured is covered under [Keystore](#keystore).
 
 ### Hardware Acceleration and Crypto Affinity
 
-Many of the platforms wolfHSM targets ship a dedicated crypto accelerator alongside their secure core. The server can use these accelerators per-algorithm through the same crypto callback mechanism: a port-supplied callback, registered at server init, redirects supported operations to the vendor's hardware driver, and anything not implemented in hardware falls back to wolfCrypt software. Which algorithms are accelerated depends on the silicon and is documented in each platform's port. With [hardware keys](#hardware-only-keys), the key can also stay in the accelerator: the server passes it to the port by reference and never reads it.
+Many of the platforms wolfHSM targets ship a dedicated crypto accelerator alongside their secure core. The server can use these accelerators per-algorithm through the same crypto callback mechanism: a port-supplied callback, registered at server init, redirects supported operations to the vendor's hardware driver, and anything not implemented in hardware falls back to wolfCrypt software. Which algorithms are accelerated depends on the silicon and is documented in each platform's port. With [hardware keys](#hardware-keys), the key can also stay in the accelerator: the server passes it to the port by reference and never reads it.
 
 Clients control whether a given crypto request should prefer hardware or software execution through the **crypto affinity** API. This feature is compiled in only when `WOLFHSM_CFG_CRYPTO_AFFINITY` is defined; when it is not, the server always uses its configured device ID and the client API below is unavailable. Affinity is a per-client setting with two values:
 
 - `WH_CRYPTO_AFFINITY_HW` (default): the server attempts to execute the operation using the configured hardware crypto device. If the server was not configured with a valid hardware device ID, or if the requested algorithm is not implemented in hardware, the request transparently falls back to wolfCrypt's software implementation.
-- `WH_CRYPTO_AFFINITY_SW`: the server always executes the operation using wolfCrypt's software implementation, bypassing any registered hardware device. Requests that use a [hardware key](#hardware-only-keys) fail with `WH_ERROR_NOTFOUND`, since software has no copy of the key.
+- `WH_CRYPTO_AFFINITY_SW`: the server always executes the operation using wolfCrypt's software implementation, bypassing any registered hardware device. Requests that use a [hardware key](#hardware-keys) fail with `WH_ERROR_NOTFOUND`, since software has no copy of the key.
 
 Affinity is stored on the client and sent in the header of every crypto request, so a change takes effect on the next operation with no extra round-trip.
 
@@ -347,12 +323,12 @@ The keystore is two-tier: a fixed-size **key cache** in server RAM holds the wor
 
 Keys are named by a 16-bit identifier (`whKeyId`), which has two forms — a simple one the client uses and a fuller one the server uses internally:
 
-- **Client-side**: Each client gets a dedicated namespace of 255 key identifiers that are specific to and only accessible by that client. These IDs range from `[1, 255]`, where `0` is the reserved sentinel value `WH_KEYID_ERASED` used internally to mark empty key slots (this sentinel value is also used to request a dynamically assigned ID for a key cache operation — see the keystore API documentation for more information). The client can also set a flag bit in the keyId top byte to ask for special handling — bit 8 for a [global key](#global-keys), bit 9 for a [wrapped key](#wrapped-keys), and bit 10 for a [hardware-only key](#hardware-only-keys). That is all a client ever deals with, and the `WH_CLIENT_KEYID_MAKE_*` macros in `wolfhsm/wh_client.h` set those flags for it.
+- **Client-side**: Each client gets a dedicated namespace of 255 key identifiers that are specific to and only accessible by that client. These IDs range from `[1, 255]`, where `0` is the reserved sentinel value `WH_KEYID_ERASED` used internally to mark empty key slots (this sentinel value is also used to request a dynamically assigned ID for a key cache operation — see the keystore API documentation for more information). The client can also set a flag bit in the keyId top byte to ask for special handling — bit 8 for a [global key](#global-keys), bit 9 for a [wrapped key](#wrapped-keys), and bit 10 for a [hardware key](#hardware-keys). That is all a client ever deals with, and the `WH_CLIENT_KEYID_MAKE_*` macros in `wolfhsm/wh_client.h` set those flags for it.
 - **Server-side**: internally every key has a globally unique id that also encodes *what* the key is and *who* owns it. When a request arrives, the server expands the client's provided keyId number into this full form, and collapses it back on the way out (`wh_KeyId_TranslateFromClient()` and its inverse). Client code never touches the internal fields.
 
 The server-side `whKeyId` packs three fields into its 16 bits:
 
-- **TYPE** (top 4 bits): the kind of object — `WH_KEYTYPE_CRYPTO` for ordinary crypto keys, `WH_KEYTYPE_SHE` for AUTOSAR SHE keys, `WH_KEYTYPE_COUNTER` for monotonic counters, `WH_KEYTYPE_WRAPPED` for wrapped-key metadata, and `WH_KEYTYPE_NVM` for non-key NVM objects (see [Client NVM Access and Per-Client Namespaces](#client-nvm-access-and-per-client-namespaces)).
+- **TYPE** (top 4 bits): the kind of object — `WH_KEYTYPE_CRYPTO` for ordinary crypto keys, `WH_KEYTYPE_SHE` for AUTOSAR SHE keys, `WH_KEYTYPE_COUNTER` for monotonic counters, `WH_KEYTYPE_WRAPPED` for wrapped-key metadata, `WH_KEYTYPE_HW` for [hardware keys](#hardware-keys), and `WH_KEYTYPE_NVM` for non-key NVM objects (see [Client NVM Access and Per-Client Namespaces](#client-nvm-access-and-per-client-namespaces)).
 - **USER** (middle 4 bits): the owning client. Value `0` is reserved for the global-key namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is enabled.
 - **ID** (low 8 bits): the number the client chose.
 
@@ -424,7 +400,7 @@ The lifecycle exposed to clients consists of four primary operations:
 - **Unwrap-and-export**: the client supplies a wrapped blob and the KEK's keyId; the server decrypts the blob, authenticates the tag, and returns the recovered metadata and key bytes to the client. This is the operation used by host-side workflows that need to consume the key off-device, for example to inject it into a non-HSM peer.
 - **Unwrap-and-cache**: the client supplies a wrapped blob and the KEK's keyId; the server decrypts the blob and installs the recovered key directly into the keystore cache as if `wh_Client_KeyCache` had been called locally with the recovered bytes. This is the more common operation in production deployments, since it lets a key live on disk in encrypted form and be hydrated into the HSM at runtime without the plaintext ever transiting the client. Unwrapped keys are cache-only and cannot be committed to NVM. Because this injects a key into the server keystore, the KEK must be a **trusted KEK** (see below).
 
-In every operation the KEK is identified by its existing keyId: a key in the keystore, or a [hardware key](#hardware-only-keys). A software (keystore-resident) KEK must carry the `WH_NVM_FLAGS_USAGE_WRAP` usage flag, enforced server-side by the keystore policy machinery: a key without the `WRAP` usage flag cannot wrap or unwrap — key material or data — regardless of any client request. A hardware KEK needs the same flag, in the server's record of the hardware key.
+In every operation the KEK is identified by its existing keyId: a key in the keystore, or a [hardware key](#hardware-keys). A software (keystore-resident) KEK must carry the `WH_NVM_FLAGS_USAGE_WRAP` usage flag, enforced server-side by the keystore policy machinery: a key without the `WRAP` usage flag cannot wrap or unwrap — key material or data — regardless of any client request. A hardware KEK needs the same flag, in the server's record of the hardware key.
 
 A parallel pair of APIs — `wh_Client_DataWrap` and `wh_Client_DataUnwrap` — applies the same construction to arbitrary application data rather than key material. These are useful when a client needs the same authenticated-encryption guarantee for non-key payloads using a key resident in the HSM. Like the key operations, data wrap and unwrap require the KEK to carry `WH_NVM_FLAGS_USAGE_WRAP`; unlike *wrap-export* and *unwrap-and-cache*, they do not require a **trusted KEK**, since no server-held secret crosses the boundary. Data blobs are cryptographically domain-separated from key blobs, so *data unwrap* cannot recover key material wrapped by *wrap* or *wrap-export*, and a *data wrap* blob cannot be injected as a key through *unwrap-and-cache* (see [Cryptographic Domain Separation](#cryptographic-domain-separation)).
 
@@ -434,7 +410,7 @@ A parallel pair of APIs — `wh_Client_DataWrap` and `wh_Client_DataUnwrap` — 
 
 Two of the operations — **wrap-export** and **unwrap-and-cache** — additionally require the KEK to be a **trusted KEK**, because each moves a *server-held* secret across the client trust boundary: wrap-export extracts one, and unwrap-and-cache injects one. If a client could name a KEK whose plaintext it knows (for example an AES key it cached itself), it could decrypt an extracted blob to recover the target key, or forge a blob to inject a key of its choosing, defeating the wrapped-key confidentiality guarantee. A trusted KEK is one that the client can neither read nor set, and is one of the following:
 
-- a **port key**: a [hardware key](#hardware-only-keys) the port put in place, which no client can set or read
+- a **port key**: a [hardware key](#hardware-keys) the port put in place, which no client can set or read
 - a software key carrying the server-only **`WH_NVM_FLAGS_TRUSTED`** flag.
 
 A hardware key that a client loaded is never trusted, since the client may know its bytes.
@@ -459,7 +435,7 @@ See the `whnvmtool` README for the concrete flag value and provisioning mechanic
 
 **Never grant a KEK any usage beyond `WRAP`** — in particular not `WH_NVM_FLAGS_USAGE_ENCRYPT` or `WH_NVM_FLAGS_USAGE_DECRYPT`, and not the catch-all `WH_NVM_FLAGS_USAGE_ANY`. The server enforces usage flags on every wolfCrypt request through the crypto callback (see [Key Usage Policies](#key-usage-policies)), and that check is the only thing stopping a client from using a KEK as an ordinary cipher key. A wrap blob is just AES-GCM ciphertext under the KEK, so a KEK that also carries `USAGE_DECRYPT` can be fed to a raw AES-GCM decrypt under its keyId — returning the wrapped key's plaintext directly and defeating wrapped-key confidentiality regardless of every other control. A KEK never needs encrypt or decrypt usage to function, so `WRAP`-only is both fully functional and the only safe choice.
 
-**Give each key one role.** A key should be a KEK *or* a general-purpose encryption/signing/derivation key, never both; provision separate keys if an application needs both. Sharing usage across roles is exactly what the crypto callback's usage enforcement exists to prevent. The same rule applies to a [hardware KEK](#hardware-only-keys): the port should register it with `WH_NVM_FLAGS_USAGE_WRAP` only, and the server then refuses it as a cipher key. `wh_HwKeystore_Register()` doesn't check this, and every port key is trusted, so a port KEK that also allows `WH_NVM_FLAGS_USAGE_DECRYPT` is the same decryption oracle.
+**Give each key one role.** A key should be a KEK *or* a general-purpose encryption/signing/derivation key, never both; provision separate keys if an application needs both. Sharing usage across roles is exactly what the crypto callback's usage enforcement exists to prevent. The same rule applies to a [hardware KEK](#hardware-keys): the port should register it with `WH_NVM_FLAGS_USAGE_WRAP` only, and the server then refuses it as a cipher key. `wh_HwKeystore_Register()` doesn't check this, and every port key is trusted, so a port KEK that also allows `WH_NVM_FLAGS_USAGE_DECRYPT` is the same decryption oracle.
 
 #### Cryptographic Domain Separation
 
@@ -469,133 +445,53 @@ This is what keeps the general-purpose data path from becoming a decryption orac
 
 The tag is not stored in or transmitted with the blob; the server and every blob producer derive it from the operation being performed. Any code that builds a blob the server will later unwrap — most commonly an offline provisioning tool that pre-wraps keys for *unwrap-and-cache* — must bind the matching tag as AAD, using `WH_KEYWRAP_AAD_KEY_STR` for key blobs. Because the tag is part of the authenticated wrap format, its byte value is fixed: changing it invalidates every previously produced blob and must not be done once wrapped blobs exist in the field.
 
-### Hardware-Only Keys
+### Hardware Keys
 
-Many HSM platforms keep keys inside the crypto hardware itself: key slots in an AES accelerator, KEKs burned into OTP or fuses, or keys held by an SoC key manager. wolfHSM uses the hardware key abstraction to use these **hardware keys** without requiring server or client ownership of the key material. A client can name a hardware key by ID, just like any other key. The server will check the request, then dispatch to port-specific code to do useful things with the key.
+A **hardware key** is a key that is intrinsic to the device, or that its hardware stores and manages: a key fixed in fuses, OTP or ROM, a device key that a key manager derives at boot, or a key slot in a crypto accelerator. A hardware key usually names where a key is stored, such as an accelerator key slot register or an indexed ROM slot, rather than the key material itself. For a key fixed in fuses, OTP or ROM, the location and the key are one and the same.
+
+These keys live outside the wolfHSM [keystore](#keystore), and what they are differs on every platform. Hardware keys give the port a way to define its platform's keys and key storage locations so that the rest of wolfHSM can use them. A client names a hardware key by ID, like a keystore key. The server checks the request against the key's owner and usage flags, then passes the port a reference to the key instead of key bytes, and the port runs the operation with the key in hardware.
 
 Two build options enable the feature:
 
-- `WOLFHSM_CFG_HWKEYSTORE` adds the hardware keystore front end: the port registers hardware keys, and clients use them in crypto operations and as [key wrap](#wrapped-keys) KEKs. It needs `WOLF_PRIVATE_KEY_ID` in the wolfCrypt build.
-- `WOLFHSM_CFG_HWKEYSTORE_LOAD` also lets clients copy their own keystore keys into hardware keys, clear them, and describe hardware keys. It needs `WOLFHSM_CFG_HWKEYSTORE`, plus `WOLF_CRYPTO_CB_KEYSTORE` in the wolfCrypt build.
+- `WOLFHSM_CFG_HWKEYSTORE` enables hardware keys. It needs `WOLF_PRIVATE_KEY_ID` in the wolfCrypt build.
+- `WOLFHSM_CFG_HWKEYSTORE_LOAD` also lets clients [load keystore keys](#clients-can-load-keys) into hardware keys. It needs `WOLF_CRYPTO_CB_KEYSTORE` in the wolfCrypt build.
 
-[Supported Functionality](#supported-functionality) lists which wolfHSM operations accept hardware keys under each option.
+#### The Hardware Key Abstraction
 
-**Example port.** What hardware keys exist, and what each can do, depends on the port. The examples in this section use a hypothetical port, the one the mock port in `test-refactor/misc/wh_test_hwkeystore_crypto.c` implements: an AES engine with eight key slots that holds AES-128 keys only. Hardware key `n` is slot `n`, and the server is built with `WOLFHSM_CFG_HWKEYSTORE_LOAD`.
+The server keeps track of hardware keys in a **registry** comprised of a table in the hardware keystore front end (`wolfhsm/wh_hwkeystore.h`) with a record for each hardware key that clients can use. A record holds the key's number, its owner, the usage flags it allows, its size, and, for a key loaded from the keystore, the keystore key it came from. The registry never holds any key material. The port fills in the registry at startup by registering its own keys, the **port keys**. With `WOLFHSM_CFG_HWKEYSTORE_LOAD`, the server also is able to dynamically add a record when a client requests to load one of its keystore keys into a hardware key, making a **client-loaded key**, and removes the record when the key is cleared.
 
-- Hardware key 2 is a port key. The port loads the same fixed key into it at every boot, and every client can use it for AES and CMAC.
-- Hardware keys 3 and 4 are loadable. They accept 16-byte keys copied from the keystore.
-- The port keeps its other slots for itself. Keys sent in requests or read from the keystore run in software.
+A hardware key with no record can't be used by the core library, whatever the hardware holds. The registry lives in server RAM, so it starts empty after every reset. It holds up to `WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS` records (default 8), and is normally shared by every server context, so all clients see the same hardware keys.
 
-The example port can run every operation in [Supported Functionality](#supported-functionality) with any of its hardware keys, subject to the server's usage and trust checks. A real port documents the same facts for its own hardware (see [What Each Port Documents](#what-each-port-documents)).
-
-#### Hardware Key Overview
-
-A hardware key ID follows the same client-facing naming scheme as other keystore key IDs: it combines a key number (1-255) with flag bits that identify the key type. For a hardware key, the hardware flag (`WH_KEYID_CLIENT_HW_FLAG`) is set, normally by using the `WH_CLIENT_KEYID_MAKE_HW(n)` helper macro.
-
-The port defines what each hardware key ID represents. It may identify a fixed key, such as one stored in OTP memory or fuses, or a logical key-storage location whose contents can be loaded or changed, such as a "key slot" or input register for a hardware accelerator. Each port lists its hardware keys in its documentation (see [What Each Port Documents](#what-each-port-documents)). Unlike keystore key IDs, hardware key numbers are shared across clients: hardware key `n` refers to the same hardware key for every client, while the server tracks which client owns it.
-
-To control which client may use which hardware key, and for what, the server keeps its own **record** of each hardware key clients may use. A record holds the key's owner (a client ID, or 0 if every client may use it) and the usage flags it allows. For a key copied from the keystore, it also holds the keystore key it came from. The server checks the record on every request that names a hardware key: a client can't use another client's key, every operation needs the matching usage flag, and a hardware key with no record can't be used at all, whatever the hardware holds. Records are kept in server RAM, up to `WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS` of them (default 8). [Server Architecture for Hardware Keys](#server-architecture-for-hardware-keys) describes the runtime key record in more detail.
-
-In general, there are two usage patterns for hardware keys:
-
-- **Client-loaded keys.** A client *loads* a hardware key by asking the server to copy one of its keystore keys into it, with `wh_Client_HwKeystoreLoadFromKeystore()`. The server writes the key into the hardware through the port and creates the record. This is the only way a client can put a key into hardware, and needs `WOLFHSM_CFG_HWKEYSTORE_LOAD`. A key loaded with the [global flag](#global-keys) added to its hardware key ID is shared and useable across clients.
-- **Port keys.** The port can put a key into the hardware itself, for example a device-specific key derived at boot, or offer a key fixed in the hardware, such as a KEK in OTP or fuses. It then *registers* the key with the server, which creates the record. Clients can use a port key but can never replace or clear it.
-
-| | Client-loaded key | Port key |
+| | Port key | Client-loaded key |
 |---|---|---|
-| Usable by | the loading client, or every client if it is shared | every client, or one client, as the port registered it |
-| Usage flags | copied from the source keystore key | set by the port when it registers the key |
-| [Trusted KEK](#trusted-keks) | no: the client may know its bytes | yes: no client can set or read it |
-| Lifetime | until its owner clears it (any client can clear a shared key), its source key is erased or revoked, or the HSM resets | until the HSM resets; the port registers it again at every boot |
+| Usable by | every client, or one client, as the port chose | the client that loaded it, or every client if it was loaded with the global flag |
+| Usage flags | set by the port | copied from the source keystore key |
+| Lasts until | the HSM resets; the port registers it again at startup | its owner clears it, its source key is erased or revoked, or the HSM resets |
+| [Trusted KEK](#trusted-keks) | yes, since no client can set or read it | no, since the client may know its bytes |
 
-The layers stack up like this:
+For example, the mock port in `test-refactor/misc/wh_test_hwkeystore_crypto.c`, which the examples in this section use, drives an AES engine with eight AES-128 key slots, and hardware key `n` is slot `n`. At startup it writes a fixed key into slot 2 and registers it as a port key for every client. It lets clients load slots 3 and 4, and keeps its other slots for itself.
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Client application                                                       │
-│   wolfCrypt or wh_Client_* calls, key named WH_CLIENT_KEYID_MAKE_HW(n)   │
-└─────────────────────────────┬────────────────────────────────────────────┘
-                              │ requests carry key IDs, not key bytes
-┌─────────────────────────────▼────────────────────────────────────────────┐
-│ wolfHSM server (core library)                                            │
-│   keystore  ── load (copy) ──▶  hardware keystore front end:             │
-│   (cache, NVM)                  one record per key: owner, usage, source │
-│   crypto and key wrap handlers: check the key's record, then hand        │
-│   the key to wolfCrypt by reference                                      │
-└─────────────────────────────┬────────────────────────────────────────────┘
-                              │ wolfCrypt crypto callback (server devId)
-┌─────────────────────────────▼────────────────────────────────────────────┐
-│ Port                                                                     │
-│   keystore callbacks: write, clear and describe a hardware key           │
-│   algorithm callbacks: run the operation with the hardware key           │
-│   at boot: put its own keys into the hardware and register them          │
-└─────────────────────────────┬────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────▼────────────────────────────────────────────┐
-│ Hardware: crypto accelerator and its key slots, keys in OTP or fuses     │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+Each layer names a hardware key in its own way:
 
-Client applications simply name keys. The wolfHSM server (core library) decides who may use which key and how. The port-specific logic, through crypto callbacks, drives the hardware and decides what the hardware can hold. [Port and Core Library Responsibilities](#port-and-core-library-responsibilities) lists the split in full.
+- **Client**: the hardware key number (1 to 255) with the hardware flag (`WH_KEYID_CLIENT_HW_FLAG`, bit 10) set, normally built with `WH_CLIENT_KEYID_MAKE_HW(n)`. Unlike keystore key IDs, hardware key numbers aren't per client: `WH_CLIENT_KEYID_MAKE_HW(3)` names slot 3 for every client, and the registry decides who may use it.
+- **Server**: the server translates the hardware flag to the dedicated key type `WH_KEYTYPE_HW` (see [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)). USER is the calling client, or 0 with the [global flag](#global-keys), and ID is the hardware key number. The keystore refuses this type, so a hardware key ID only reaches code that supports hardware keys.
+- **Port**: a key reference in the wolfCrypt key object (see [The Port Runs the Operations](#the-port-runs-the-operations)).
 
-#### Supported Functionality
+#### Where Hardware Keys Can Be Used
 
-Clients name a hardware key in the same calls as any other key, through the wolfCrypt API (via the client's crypto callback) or the native client API. These wolfHSM operations accept hardware keys. The table is the most a port can support: each port supports a subset, depending on its hardware, and lists it in its documentation (see [What Each Port Documents](#what-each-port-documents)).
+A client uses a hardware key ID like any other key ID. It binds the ID to a wolfCrypt object with the algorithm's `SetKeyId` call, such as `wh_Client_AesSetKeyId()`, or passes it as the KEK of a [key wrap](#wrapped-keys) call. These operations accept hardware keys (AES and CMAC in both standard and DMA requests):
 
-| Functionality | Role of the hardware key | Usage flag the key needs | Build option |
-|---|---|---|---|
-| AES-ECB, AES-CBC, AES-CTR and AES-GCM | the cipher key, in standard and DMA requests | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt | `WOLFHSM_CFG_HWKEYSTORE` |
-| AES-CMAC, one-shot or multi-step | the MAC key, in standard and DMA requests | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` | `WOLFHSM_CFG_HWKEYSTORE` |
-| Key wrap: key wrap, wrap-export, unwrap-and-export, unwrap-and-cache, data wrap and data unwrap | the KEK | `WH_NVM_FLAGS_USAGE_WRAP` | `WOLFHSM_CFG_HWKEYSTORE`, with `WOLFHSM_CFG_KEYWRAP` |
+| Operation | Usage flag the hardware key needs |
+|---|---|
+| AES-ECB, AES-CBC, AES-CTR and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
+| AES-CMAC, one-shot or multi-step | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` |
+| Every key wrap and data wrap operation, as the KEK | `WH_NVM_FLAGS_USAGE_WRAP`. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks), so they take only port keys |
 
-- Every operation takes client-loaded keys and port keys.
-- Wrap-export and unwrap-and-cache need a [trusted KEK](#trusted-keks). A port key qualifies; a client-loaded key doesn't, since the client may know its bytes.
-- All other wolfHSM functionality refuses hardware key IDs with `WH_ERROR_ACCESS`. This includes the algorithms that don't support hardware keys yet, such as RSA and ECC, and the keystore operations (cache, export, commit, evict, erase, revoke).
+This is the most a port can support. Each port documents which of these its hardware runs, and with which hardware keys. Every other operation refuses a hardware key ID with `WH_ERROR_ACCESS`, including RSA, ECC and the keystore operations (cache, export, commit, evict, erase and revoke). In key wrap only the KEK is in hardware: a key that unwrap-and-cache recovers is an ordinary cached key.
 
-#### Using Hardware Keys from a Client
+An operation with a hardware key runs in the port or fails, since wolfCrypt has no copy of the key to fall back on in software. A request sent with [`WH_CRYPTO_AFFINITY_SW`](#hardware-acceleration-and-crypto-affinity), or to a server with no crypto device, fails with `WH_ERROR_NOTFOUND`.
 
-Hardware key IDs can be used like any other key ID. Bind it to a wolfCrypt object with the algorithm's `SetKeyId` function, such as `wh_Client_AesSetKeyId()`, and call wolfCrypt as usual, or pass the object to the native client functions, including their DMA forms. [Supported Functionality](#supported-functionality) lists the operations that accept hardware keys; all others refuse them with `WH_ERROR_ACCESS`.
-
-A port key is ready to use. A loadable key must first be loaded with a copy of a keystore key.
-
-**Loading is optional.** A client doesn't need to load a key to use the hardware. A port typically runs keys sent in requests and keystore keys in hardware where it can, and handles any key slot manipulation that this requires itself (see [Choosing a Key Source](#choosing-a-key-source)). A client only needs to manually load a keystore key when it wants that key kept in the hardware across many operations. Operations with the loaded key then skip reading the keystore and loading the key each time, run in hardware or fail, and keep the key bytes out of server memory. The port can't make this choice for the client, so the load API exists to allow the client to do it manually when required.
-
-The examples below use the [example port](#hardware-only-keys).
-
-##### Example: Loading a Keystore Key
-
-A client holds an AES key in the keystore, here keystore key 5, provisioned in NVM with `WH_NVM_FLAGS_USAGE_ENCRYPT`. To run it on the AES engine, the client loads it into hardware key 3, then names hardware key 3 in the AES operation:
-
-```c
-#define HW_AES_KEY  WH_CLIENT_KEYID_MAKE_HW(3) /* loadable, per the port's docs */
-#define APP_AES_KEY 5                          /* keystore key, in NVM */
-
-Aes     aes;
-uint8_t iv[AES_BLOCK_SIZE];
-uint8_t plain[2 * AES_BLOCK_SIZE];
-uint8_t cipher[sizeof(plain)];
-
-/* Copy the keystore key into the hardware key */
-wh_Client_HwKeystoreLoadFromKeystore(client, HW_AES_KEY, APP_AES_KEY, NULL);
-
-/* Name the hardware key like any key ID. The request carries only the ID */
-wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(client));
-wh_Client_AesSetKeyId(&aes, HW_AES_KEY);
-wc_AesSetIV(&aes, iv);
-wc_AesCbcEncrypt(&aes, cipher, plain, sizeof(plain));
-wc_AesFree(&aes);
-
-/* Clear it when done, so other clients can load it */
-wh_Client_HwKeystoreClear(client, HW_AES_KEY);
-```
-
-`wh_Client_HwKeystoreLoadFromKeystore()` takes the hardware key to load and the keystore key to copy. The server reads the keystore key, has the port write it into the hardware key, and records the client as its owner. Until the owner clears it, no other client can use or load it, and the owner can load it again to replace its key. The key bytes stay inside the server, going from the keystore directly to the port and nowhere else.
-
-When a port has several interchangeable loadable keys, like hardware keys 3 and 4 of the example port, a client can pass ID 0 (`WH_CLIENT_KEYID_MAKE_HW(0)`) instead of a fixed number. The server then picks the first empty one the port accepts and returns its ID in the last argument, for the client to use in its operations.
-
-##### Example: Using a Port Key
-
-The port registers its keys at boot, so a client names a port key without loading anything. With the example port, any client can run AES with hardware key 2:
+Using the mock port backend as an example, any client can encrypt with the port key in slot 2 by simply referencing it in a crypto operation:
 
 ```c
 wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(client));
@@ -605,188 +501,52 @@ wc_AesCbcEncrypt(&aes, cipher, plain, sizeof(plain));
 wc_AesFree(&aes);
 ```
 
-No client can clear or replace a port key.
+#### Port and Server Responsibilities
 
-##### Shared Hardware Keys
+Since the core wolfHSM library is hardware agnostic and portable across supported platforms, the port layer is what ultimately knows which hardware keys exist and how to run operations with them. The server simply applies the same policy on every port. Clients can also manage loading hardware keys directly when applicable (e.g. supported by the port) via the client HW key load API.
 
-Two kinds of hardware keys can be used by every client:
+Each port documents:
 
-- A key loaded with the global flag added: `WH_CLIENT_KEYID_MAKE_GLOBAL(WH_CLIENT_KEYID_MAKE_HW(n))`. This needs [global keys](#global-keys) (`WOLFHSM_CFG_GLOBAL_KEYS`). Any client can use it, with or without the global flag, and any client can clear it using the global flag.
-- A port key that the port shares with all clients. A port can also register a key for one client, and only that client can use it. No client can replace or clear a port key.
+- each hardware key number, and whether it is a port key or whether clients can load it (with `WOLFHSM_CFG_HWKEYSTORE_LOAD`)
+- the key types and sizes each hardware key holds, and the operations it supports
+- for each port key, its owner and usage flags, and whether its value is fixed, derived per device, or new at every boot
+- which algorithms run in hardware for keys sent in requests or read from the keystore
 
-##### Inspecting and Clearing Hardware Keys
-`wh_Client_HwKeystoreGetInfo()` fills a `whHwKeystoreInfo` for a hardware key:
+##### How The Port Registers Its Keys
 
-- `keyType` and `keyBits`: what the port says the key holds. `keyType` is a wolfCrypt `enum wc_KeyStoreKeyType` value, such as `WC_KEYSTORE_KEY_AES`, and is `WC_KEYSTORE_KEY_NONE` (0) when the key is empty.
-- `flags` and `owner`: the usage flags and owning client the server recorded. The owner is 0 for a shared key.
-
-Any client can describe any hardware key the port has, including other clients' keys. `wh_Client_HwKeystoreClear()` clears one key the client owns. `wh_Client_HwKeystoreClearAll()` clears every key the client loaded without the global flag. Neither clears a port key. Each of these calls blocks until the server replies. All except `wh_Client_HwKeystoreClearAll()` also come as `Request`/`Response` pairs for [non-blocking use](#blocking-and-non-blocking-interfaces).
-
-##### Usage Restrictions
-
-- The hardware key gets the source key's usage flags, and the server checks them on every request, as it does for keystore keys. [Supported Functionality](#supported-functionality) lists the flag each operation needs. A source key with no usage flags, such as a revoked key, can't be loaded.
-- Erasing or revoking the source key clears every hardware key loaded from it. Evicting it does not, so a client can evict the source from the cache once the hardware key is loaded.
-- The source must be a keystore key the client can reach: its own, or a [global key](#global-keys). A `WH_NVM_FLAGS_NONEXPORTABLE` key can be loaded, because its bytes go to the hardware and not to a client. A key carrying `WH_NVM_FLAGS_TRUSTED`, such as a [trusted](#trusted-keks) software KEK, can't be loaded, and a loaded key is never trusted. To keep a trusted KEK in hardware, the port registers it as a port key. The key must fit in `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE` bytes, and be a size the hardware key accepts, which each port lists in its documentation.
-
-
-##### Hardware Key Errors
-Hardware key requests can return:
-
-| Error | Meaning |
-|---|---|
-| `WH_ERROR_ACCESS` | The key belongs to another client, or is a port key that can't be replaced or cleared. Or the source key carries `WH_NVM_FLAGS_TRUSTED`. Or the operation doesn't support hardware keys. Or wrap-export or unwrap-and-cache named a client-loaded KEK, which is not trusted. |
-| `WH_ERROR_USAGE` | The key's usage flags don't allow the operation, or the source key has no usage flags. |
-| `WH_ERROR_NOTFOUND` | The server has no record of the hardware key (no client loaded it and the port didn't register it), or the source key doesn't exist. Also returned when the server has no hardware keystore, and for crypto requests when it has no crypto device for them, including requests sent with `WH_CRYPTO_AFFINITY_SW`. |
-| `WH_ERROR_NOSPACE` | No empty hardware key for ID 0, the server's table of hardware keys is full, or the source key is larger than `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE`. |
-| `WH_ERROR_BADARGS` | ID 0 where a specific key is needed, or a source ID with the hardware or wrapped flag. |
-| `WH_ERROR_NOTIMPL` | The server was built without `WOLFHSM_CFG_HWKEYSTORE_LOAD` (load, clear and info requests). |
-| a port error | The port refused the key number or the key, for example a size the hardware key can't hold, or the hardware failed. The port's error code is returned as is. |
-
-##### Hardware keys and key-wrapping
-
-Pass `WH_CLIENT_KEYID_MAKE_HW(n)` as the KEK ID to any [key wrap](#wrapped-keys) operation. The server checks the KEK's record like any other use of a hardware key: it needs `WH_NVM_FLAGS_USAGE_WRAP`. The port then runs the AES-GCM with the key in hardware. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks): a port key qualifies, but a client-loaded key doesn't. Only the KEK is in hardware: a key recovered by unwrap-and-cache becomes an ordinary cached key.
-
-#### Server Architecture for Hardware Keys
-
-On the server, a request with a hardware key passes through the core library (the request handlers, then the hardware keystore front end), then wolfCrypt, then the port callbacks, which drive the hardware. The diagram below shows the two paths through these layers. Each box is marked with the code that owns it.
-
-```
-    manage hardware keys                    use a hardware key
-    HW_LOAD, HW_CLEAR, HW_INFO;             in a crypto request or as a
-    erase or revoke of a source             key wrap KEK (standard or DMA)
-    (WOLFHSM_CFG_HWKEYSTORE_LOAD)
-                │                                   │
-┌───────────────▼───────────────────────────────────▼──────────────────────────────┐
-│ [core] request handlers                                                          │
-│   client keyId -> server keyId: TYPE=HW, USER=client (0 if shared), ID=n         │
-│   HW_LOAD reads the source key under the NVM lock, with the keystore's           │
-│   policy checks                                                                  │
-└───────────────┬───────────────────────────────────┬──────────────────────────────┘
-                │                                   │
-┌───────────────▼───────────────────────────────────▼──────────────────────────────┐
-│ [core] hardware keystore front end (one context, shared by all servers)          │
-│   Load, Clear, ClearAll,                  CheckUse: owner, usage and             │
-│   ClearSource, GetInfo                    trust; KeyRef: key reference           │
-│   records: { keyId with owner, source keyId, usage, size } x MAX_KEYS            │
-└───────────────┬───────────────────────────────────┬──────────────────────────────┘
-                │ wc_KeyStore_ImportPlain           │ init by reference, e.g.
-                │ wc_KeyStore_Delete                │ wc_AesInit_Id(ref), then the
-                │ wc_KeyStore_GetInfo               │ usual wolfCrypt call
-┌───────────────▼───────────────────────────────────▼──────────────────────────────┐
-│ [wolfCrypt] crypto callback dispatch to whServerConfig.devId                     │
-└───────────────┬───────────────────────────────────┬──────────────────────────────┘
-                │ WC_ALGO_TYPE_KEYSTORE             │ algorithm request, such as
-                │                                   │ WC_ALGO_TYPE_CIPHER
-┌───────────────▼───────────────────────────────────▼──────────────────────────────┐
-│ [port] crypto callback                                                           │
-│   IMPORT_PLAIN: write the key             reference -> hardware key, run the     │
-│   DELETE: clear the key                   op with it, update the running         │
-│   GET_INFO: type and size                 state                                  │
-└───────────────┬───────────────────────────────────┬──────────────────────────────┘
-                │                                   │
-┌───────────────▼───────────────────────────────────▼──────────────────────────────┐
-│ Hardware: crypto accelerator and its key slots; keys in OTP or fuses             │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Request handlers.** When a request arrives, the server turns the client key ID into a full server key ID (see [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)). The hardware flag selects TYPE `WH_KEYTYPE_HW`, USER is the calling client (or 0 with the global flag), and ID is the hardware key number. Keystore operations refuse this type outright, so a hardware key ID can only reach the code paths in the diagram.
-
-**The front end and its record table.** The front end (`wolfhsm/wh_hwkeystore.h`) is a `whHwKeystoreContext` that the server application creates, initializes once with `wh_HwKeystore_Init()`, and passes to every server context through `whServerConfig.hwKeystore`. All server contexts that share it, typically one per client connection, see the same hardware keys. The context holds the optional backend hooks (`whHwKeystoreCb`) and the table of [records](#hardware-key-overview) (`whHwKeystoreKey`) for the hardware keys clients may use. There are `WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS` records (default 8), each with these fields:
-
-- `id`: the server key ID. USER is the owning client (0 if shared) and ID is the hardware key number. There is at most one record per number, whoever owns it.
-- `srcId`: the keystore key the hardware key was loaded from, so erase and revoke can find its copies. Port keys have none.
-- `flags`: the usage flags the key allows. Port keys are also marked `WH_NVM_FLAGS_NONDESTROYABLE`, which stops clients from replacing or clearing them, and `WH_NVM_FLAGS_TRUSTED`, which makes them trusted KEKs.
-- `len`: the key size in bytes.
-
-The table holds no key material; it is simply a directory enumerating the keys that the port is aware of and able to serve. It lives in RAM, so it is cleared after every reset. A request with a hardware key passes `wh_HwKeystore_CheckUse()` only if a record exists for the number, its owner is the caller or 0, and its flags include every usage the operation needs, plus `WH_NVM_FLAGS_TRUSTED` when it needs a trusted KEK.
-
-**Key references: how wolfCrypt is told which key to use.** wolfCrypt's `WOLF_PRIVATE_KEY_ID` feature lets a key object name a key held by a device instead of holding the key bytes. wolfCrypt functions like `wc_AesInit_Id()` and `wc_InitCmac_Id()` store an opaque ID in the object (`aes->id`, `cmac->id`) and leave the software key schedule empty, so wolfCrypt passes every operation on the object to the crypto callback registered for its `devId`. wolfHSM uses the server key ID, big-endian, as this ID: a 2-byte **key reference** (`WH_HWKEYSTORE_REF_SIZE`) written by `wh_HwKeystore_KeyRef()`. The same reference names the key in the keystore callbacks below. The port looks up the hardware key from the ID field alone (`WH_KEYID_ID()`), as the server front end has already checked the owner, and the USER field can differ between requests for the same key.
-
-Taking AES as the example, a crypto request with a hardware key runs like this:
-
-1. The handler first translates the keyId, and then checks ownership and key usage with `wh_HwKeystore_CheckUse()`.
-2. It sets up the `Aes` with `wc_AesInit_Id(aes, ref, WH_HWKEYSTORE_REF_SIZE, NULL, devId)`, where `devId` is `whServerConfig.devId` and `ref` is the reference for the recorded key.
-3. For CBC and CTR it sets only the IV, with `wc_AesSetIV()`. It skips the key setup a software key would get.
-4. It calls the usual wolfCrypt function, such as `wc_AesGcmEncrypt()`. wolfCrypt passes it to the port's callback as a `WC_ALGO_TYPE_CIPHER` request with the reference in `aes->id`.
-5. It returns the output to the client. For CBC and CTR it also returns the next IV or counter state that the callback left in the `Aes`, so the client can continue the stream in a later request.
-
-CMAC works the same way, with `wc_InitCmac_Id()` and `WC_ALGO_TYPE_CMAC` requests, and accepts a key with either `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY`. For multi-step CMAC, the server rebuilds the `Cmac` on every request from the running state the client sends back, and returns the new state. The port's callback must therefore keep that state in the `Cmac` fields and not in the port.
-
-Key wrap works the same way. The KEK's record must allow `WH_NVM_FLAGS_USAGE_WRAP`, and also be `WH_NVM_FLAGS_TRUSTED` for wrap-export and unwrap-and-cache. The server then runs AES-GCM with the KEK through `wc_AesInit_Id()`, so the KEK never leaves the hardware either.
-
-**Keystore callbacks: how keys get into the hardware.** For client loading (`WOLFHSM_CFG_HWKEYSTORE_LOAD`), wolfCrypt's `WOLF_CRYPTO_CB_KEYSTORE` feature adds key lifecycle requests (`WC_ALGO_TYPE_KEYSTORE`) that reach the same crypto callback as the algorithm requests. The front end uses three of them, always with the server's `devId`:
-
-| Front end call | wolfCrypt call | Request the port's callback gets | Port's job |
-|---|---|---|---|
-| `wh_HwKeystore_Load()` | `wc_KeyStore_ImportPlain()`, key type `WC_KEYSTORE_KEY_AES` | `WC_KEYSTORE_IMPORT_PLAIN` | write the key into the hardware key, or refuse it |
-| `wh_HwKeystore_Clear()`, `wh_HwKeystore_ClearAll()`, `wh_HwKeystore_ClearSource()` | `wc_KeyStore_Delete()` | `WC_KEYSTORE_DELETE` | clear the hardware key |
-| `wh_HwKeystore_GetInfo()`, and `wh_HwKeystore_Load()` with ID 0 | `wc_KeyStore_GetInfo()` | `WC_KEYSTORE_GET_INFO` | report the key type and size (`WC_KEYSTORE_KEY_NONE` when empty), or fail for a number the hardware doesn't have |
-
-wolfHSM doesn't use the other keystore requests (plain export, wrapped import and export, derive).
-
-A load request runs like this:
-
-1. The handler takes the NVM lock and reads the source key with the keystore's usual policy checks, which refuse trusted keys. The key goes into a local buffer of `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE` bytes. A source with no usage flags is refused.
-2. `wh_HwKeystore_Load()` takes the front end lock and checks the target. The caller's own key can be replaced; a port key or another client's key can't (`WH_ERROR_ACCESS`); a new key needs a free record. With ID 0, it tries each number that has no record and that the port reports empty, in order.
-3. `wc_KeyStore_ImportPlain()` hands the key to the port, which writes it to the hardware or refuses it.
-4. On success, the front end fills in the record. Both locks are released and the local buffer is zeroized.
-
-Holding the NVM lock until the copy is recorded means that an erase or revoke of the source, which takes the same lock, either runs before the load (so the load fails) or after it (so it finds the copy). Erase and revoke call `wh_HwKeystore_ClearSource()` once the keystore change succeeds, which clears every hardware key whose `srcId` matches.
-
-**Concurrency.** With `WOLFHSM_CFG_THREADSAFE`, the front end's lock (`whHwKeystoreConfig.lockConfig`) serializes the record table and every call into the port's keystore requests. A load takes the NVM lock first, then the front end lock, the same order erase and revoke use. The crypto operations themselves run outside these locks, like any other crypto request. If several server threads share an accelerator, the port must serialize access to it (see [Crypto Under Concurrency](#crypto-under-concurrency)).
-
-#### Port and Core Library Responsibilities
-
-The core library (wolfHSM) is responsible for:
-
-- Translating client key IDs, and keeping the record table: owner, usage flags, source key and size of every hardware key.
-- Policy: checking owner and usage on every request that names a hardware key, allowing only port keys as trusted KEKs, refusing trusted source keys and source keys without usage flags, protecting port keys, and clearing copies when a source key is erased or revoked.
-- Key bytes: reading the source key, handing it to the port once, and zeroizing its own copy.
-- Setting up wolfCrypt objects by reference with the server's `devId`, and carrying streaming state between requests, such as AES-CBC and AES-CTR IVs and CMAC state.
-
-The port is responsible for:
-
-- Deciding what each hardware key number means and which numbers clients may load. In its crypto callback, it answers `WC_KEYSTORE_GET_INFO` for the numbers clients may see, with `WC_KEYSTORE_KEY_NONE` for an empty one; the server's ID 0 search only tries numbers reported empty. It refuses `WC_KEYSTORE_IMPORT_PLAIN` for numbers clients must not set, such as device keys, and for keys the hardware can't hold. It clears the key on `WC_KEYSTORE_DELETE`.
-- Keeping any key slot it uses for its own purposes, such as for keys sent in requests, out of the hardware key map: it doesn't register the slot, and it refuses `WC_KEYSTORE_IMPORT_PLAIN` for it. Otherwise a request's key would overwrite a client's hardware key.
-- Running every operation on a wolfCrypt key object that carries a key reference (a nonzero `idLen`, such as `aes->idLen`), using the hardware key the reference names. It reads and updates the running state the object carries, such as `aes->reg`, `aes->tmp` and `aes->left` for AES, and the buffer and digest fields of a `Cmac`. Software keys (no reference) reach the same callback; the port can run them in hardware or return `CRYPTOCB_UNAVAILABLE` to leave them to wolfCrypt.
-- Putting its own keys into the hardware, for example by deriving a device key at boot, or using keys fixed in it, and registering each one with `wh_HwKeystore_Register()` after every `wh_HwKeystore_Init()`. The port writes these keys into the hardware itself, not with `wh_HwKeystore_Load()`, whose keys are never trusted. The flags are the usage the key allows. Every port key is trusted, so the port registers only keys no client can set or read, never a copy of a client's keystore key, and a KEK gets `WH_NVM_FLAGS_USAGE_WRAP` alone. The server checks neither (see [Trusted KEKs](#trusted-keks) and [Server KEK Best Practices](#server-kek-best-practices)). USER 0 in the key ID shares the key with every client; a client ID limits it to that client.
-- Registering its crypto callback with `wc_CryptoCb_RegisterDevice()` and passing the same device ID in `whServerConfig.devId`.
-- Serializing the accelerator if several server threads share it.
-- Documenting its hardware keys and what its hardware runs (see [What Each Port Documents](#what-each-port-documents)).
-
-A server application wires the pieces together at startup:
+At startup, after `wh_HwKeystore_Init()`, the port registers each key it wrote into the hardware, or found there, with `wh_HwKeystore_Register()`. It passes the key's server key ID, the usage flags the key allows, and its size. `WH_KEYUSER_GLOBAL`/`0` in the key ID user field shares the key with every client, whereas a specific client ID limits it to that client. The server application then binds the front end to every server context through `whServerConfig.hwKeystore`, and sets `whServerConfig.devId` to the device ID of the port's crypto callback:
 
 ```c
-/* Port: algorithm and keystore requests for hardware keys */
-static int Port_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx);
-
 static whHwKeystoreContext hwKeystore;
-
-whHwKeystoreConfig hwCfg = {.cb = NULL}; /* no backend hooks */
+whHwKeystoreConfig         hwCfg = {.cb = NULL}; /* no backend hooks */
 
 wc_CryptoCb_RegisterDevice(PORT_DEVID, Port_CryptoCb, NULL);
 wh_HwKeystore_Init(&hwKeystore, &hwCfg);
 
-/* The port wrote a device key into hardware key 2 at boot. Register it so
- * clients can use it. USER 0 shares it with every client */
+/* The port wrote a key into slot 2 at boot. USER 0 shares it with every
+ * client */
 wh_HwKeystore_Register(&hwKeystore,
                        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 2),
                        WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
                        AES_128_KEY_SIZE);
 
-/* Hardware key 1 is a KEK fixed in OTP. Register it for key wrap only */
-wh_HwKeystore_Register(&hwKeystore,
-                       WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 1),
-                       WH_NVM_FLAGS_USAGE_WRAP, AES_256_KEY_SIZE);
-
 whServerConfig serverCfg = {
     /* ... comm_config, nvm, crypto ... */
-    .devId      = PORT_DEVID,  /* runs every hardware key operation */
-    .hwKeystore = &hwKeystore, /* shared by every server context */
+    .devId      = PORT_DEVID,
+    .hwKeystore = &hwKeystore,
 };
 ```
 
-The port's crypto callback dispatches on the request type, and each handler maps the key reference back to a hardware key:
+The server marks a port key so that no client can clear or replace it, and treats it as a [trusted KEK](#trusted-keks). A KEK, such as one in OTP, must be registered with `WH_NVM_FLAGS_USAGE_WRAP` alone, or a client could use it to decrypt the keys it wraps (see [Server KEK Best Practices](#server-kek-best-practices)).
+
+##### How The Port Runs the Operations
+
+The server never reads a hardware key. It sets up the wolfCrypt object by reference instead, using wolfCrypt's `WOLF_PRIVATE_KEY_ID` feature (which exposes ID setting helper functions like `wc_AesInit_Id()` or `wc_InitCmac_Id()`). In place of a key, the object then holds a **key reference** in `aes->id` or `cmac->id`: the server key ID as 2 big-endian bytes (`WH_HWKEYSTORE_REF_SIZE`), written by `wh_HwKeystore_KeyRef()`. For a cryptographic operation, wolfCrypt then passes every operation on the object to the port's crypto callback, which must:
+
+- Run the operation with the hardware key the key reference names, when the object has one. The port then finds the key from the ID field alone.
+- Keep running state in the cryptographic object, such as `aes->reg`, `aes->tmp` and `aes->left`, or the buffer and digest of a `Cmac`, and not in the port. The server rebuilds the object for each request from the state the client sends back, so that a stream such as AES-CTR or multi-step CMAC can span requests.
+- Treat an object without a key reference as an ordinary software key: run it in hardware, or return `CRYPTOCB_UNAVAILABLE` to leave it to wolfCrypt. A CMAC request with key bytes (`info->cmac.key`) is a software key whatever `cmac->idLen` holds, because wolfCrypt's one-shot `wc_AesCmacGenerate_ex()` passes the `Cmac` to the callback before initializing it.
+- Keep slots it uses for its own purposes, such as for running software keys in hardware, out of reach of clients: never register them, and refuse to load them. Otherwise a request's key could overwrite a client's hardware key.
 
 ```c
 /* Hardware key number named by a key reference, or -1 */
@@ -804,36 +564,76 @@ static int Port_RefToSlot(const byte* ref, word32 refSz)
 static int Port_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
 {
     switch (info->algo_type) {
-        case WC_ALGO_TYPE_KEYSTORE:
-            /* IMPORT_PLAIN, DELETE or GET_INFO on the slot named by
-             * info->keystore.op.<request>.keyRef */
-            return Port_Keystore(info);
         case WC_ALGO_TYPE_CIPHER:
             /* aes->idLen != 0: run with the slot named by aes->id. Key
              * wrap's AES-GCM arrives here too */
             return Port_Aes(info);
         case WC_ALGO_TYPE_CMAC:
-            /* cmac->idLen != 0: run with the slot named by cmac->id */
+            /* info->cmac.key != NULL: a software key. Otherwise
+             * cmac->idLen != 0: run with the slot named by cmac->id */
             return Port_Cmac(info);
+        case WC_ALGO_TYPE_KEYSTORE:
+            /* Load, clear or describe a slot for a client */
+            return Port_Keystore(info);
         default:
             return CRYPTOCB_UNAVAILABLE;
     }
 }
 ```
 
-For a complete example, see the mock port in `test-refactor/misc/wh_test_hwkeystore_crypto.c`. It implements the [example port](#hardware-only-keys) and every callback described here.
+With `WOLFHSM_CFG_THREADSAFE`, the front end's lock (`whHwKeystoreConfig.lockConfig`) serializes the registry and the keystore requests, but crypto operations run outside it. If several server threads share the accelerator, the port must serialize access to it (see [Crypto Under Concurrency](#crypto-under-concurrency)). The mock port implements every callback described here.
 
-#### What Each Port Documents
+##### The Server Checks Policy
 
-The core library leaves these questions to the port, and each port's documentation answers them for its hardware:
+For every request that names a hardware key, the wolfHSM server library checks the key'usage with `wh_HwKeystore_CheckUse()`:
 
-- **Hardware key map**: every hardware key ID the port defines, and whether it's a port key or loadable by clients.
-- **Each hardware key**: its key type and sizes, and which operations in [Supported Functionality](#supported-functionality) it supports. For a port key, also its owner (every client, or one) and its usage flags.
-- **Port key values**: whether each port key is fixed, derived per device and the same after every reset, or new at every boot. Data encrypted under a key that changes at boot can't be decrypted after a reset.
-- **Loading**: whether the server is built with `WOLFHSM_CFG_HWKEYSTORE_LOAD`, and which key sizes each loadable key accepts.
-- **Other keys**: which algorithms and key sizes run in hardware for keys sent in a request or read from the keystore, and what the port uses for them, such as reserved key slots (see [Choosing a Key Source](#choosing-a-key-source)).
+- A record must exist, so a hardware key that the port didn't register and no client loaded can't be used.
+- Its owner must be the calling client, or every client.
+- It must allow the operation's [usage flag](#key-usage-policies), as listed in [Where Hardware Keys Can Be Used](#where-hardware-keys-can-be-used).
+- For wrap-export and unwrap-and-cache, it must be a port key.
 
-The [example port](#hardware-only-keys) at the start of this section answers each of these.
+The server also stops clients from clearing or replacing port keys, and applies the loading rules below.
+
+##### Clients Can Load Keys
+
+Clients don't need pre-provisioned hardware keys to use the hardware. A port can run keys sent in requests or read from the keystore in hardware as well, for example by loading each one into a spare slot for the operation and clearing it afterwards, or it can leave them to software. Loading lets a client keep one of its keystore keys in a hardware key instead, for as many operations as it needs. Operations with the loaded key then skip the per-operation keystore read and key load, keep the key bytes out of server memory, and either run in hardware or fail. Only the client knows which keys it will reuse, so the port can't make this choice for it.
+
+Loading needs `WOLFHSM_CFG_HWKEYSTORE_LOAD`, and a port that lets clients load some of its hardware keys. A client can then copy a keystore key into a hardware key with `wh_Client_HwKeystoreLoadFromKeystore()`, then name the hardware key like a port key:
+
+```c
+#define HW_AES_KEY  WH_CLIENT_KEYID_MAKE_HW(3) /* loadable slot */
+#define APP_AES_KEY 5                          /* keystore key */
+
+/* Copy the keystore key into the hardware key */
+wh_Client_HwKeystoreLoadFromKeystore(client, HW_AES_KEY, APP_AES_KEY, NULL);
+
+wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(client));
+wh_Client_AesSetKeyId(&aes, HW_AES_KEY);
+wc_AesSetIV(&aes, iv);
+wc_AesCbcEncrypt(&aes, cipher, plain, sizeof(plain));
+wc_AesFree(&aes);
+
+/* Clear the slot when done, so other clients can load it */
+wh_Client_HwKeystoreClear(client, HW_AES_KEY);
+```
+
+The server reads the source key with the keystore's usual policy checks, and hands it to the port through wolfCrypt's keystore requests (`WC_ALGO_TYPE_KEYSTORE`), which reach the same crypto callback. The key bytes go straight from the keystore to the port.
+
+To facilitate client loading, the port must implement the following three wolfCrypt keystore callbacks:
+
+| Request | Port's job |
+|---|---|
+| `WC_KEYSTORE_IMPORT_PLAIN` | Write the key (key type `WC_KEYSTORE_KEY_AES`) into the hardware key, or refuse it: a number clients can't load, or a key the hardware can't hold |
+| `WC_KEYSTORE_DELETE` | Clear the hardware key |
+| `WC_KEYSTORE_GET_INFO` | Report the key type and size, with `WC_KEYSTORE_KEY_NONE` for an empty key, or fail for a number clients can't see |
+
+The server then records the requesting client as the key's owner, with the source key's usage flags. The rules:
+
+- **Ownership.** Until the owner clears the key, no other client can use, load or clear it, and the owner can load it again to replace its key. A key loaded with the global flag, `WH_CLIENT_KEYID_MAKE_GLOBAL(WH_CLIENT_KEYID_MAKE_HW(n))`, is shared: any client can use it, and clear it using the global flag. This needs [global keys](#global-keys).
+- **Picking a key.** With ID 0 (`WH_CLIENT_KEYID_MAKE_HW(0)`), the server picks the first empty hardware key that the port accepts the key into, and returns its ID in the last argument.
+- **Source key.** The source must be a keystore key the client can reach (its own, or a global key), with at least one usage flag, and at most `WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE` bytes (default 32). A `WH_NVM_FLAGS_NONEXPORTABLE` key can be loaded, since its bytes go to the hardware and not to a client. A `WH_NVM_FLAGS_TRUSTED` key can't, and a loaded key is never a trusted KEK. To keep a trusted KEK in hardware, the port should register it as a port key.
+- **Lifetime.** Erasing or revoking the source key clears every hardware key loaded from it, but evicting it doesn't, so a client can evict the source from the cache once it is loaded. If the port fails to clear a hardware key, the server drops its record anyway, so the key can't be used, and returns the port's error.
+- **Other calls.** `wh_Client_HwKeystoreClearAll()` clears every key the client loaded without the global flag; neither it nor `wh_Client_HwKeystoreClear()` touches a port key. `wh_Client_HwKeystoreGetInfo()` describes any hardware key the port has: the key type and size the port reports (`keyType` is 0 when empty), and the owner and usage flags in its record. All but `wh_Client_HwKeystoreClearAll()` also come as `Request`/`Response` pairs for [non-blocking use](#blocking-and-non-blocking-interfaces).
 
 ### Key Usage Policies
 
@@ -852,11 +652,11 @@ The usage flags constrain which cryptographic operations a given key may partici
 
 Multiple usage flags may be combined, and `WH_NVM_FLAGS_USAGE_ANY` is a convenience constant equal to the bitwise OR of all USAGE bits. A key whose metadata carries no USAGE bits at all is treated as not permitted for any cryptographic use — attempting to use it returns `WH_ERROR_USAGE`. This is intentional: a default-zero metadata does not silently grant access; the application must explicitly opt in to each operation a key may perform.
 
-Policy enforcement happens server-side on every relevant operation. Every wolfCrypt request that flows through the crypto callback routes through the keystore's usage check before the underlying primitive runs, and the operation is rejected with `WH_ERROR_USAGE` if the flag for that operation is not set. Because enforcement is server-side, and because the metadata is bound into the wrapped blob for wrapped keys, no client request can bypass it. Requests that use a [hardware key](#hardware-only-keys) are checked the same way, against the usage flags in the server's record of the key: those of the source key for a key a client loaded, or those the port registered for a port key.
+Policy enforcement happens server-side on every relevant operation. Every wolfCrypt request that flows through the crypto callback routes through the keystore's usage check before the underlying primitive runs, and the operation is rejected with `WH_ERROR_USAGE` if the flag for that operation is not set. Because enforcement is server-side, and because the metadata is bound into the wrapped blob for wrapped keys, no client request can bypass it. Requests that use a [hardware key](#hardware-keys) are checked the same way, against the usage flags in the server's record of the key: those of the source key for a key a client loaded, or those the port registered for a port key.
 
 Lifecycle and usage flags are bound to a key at the moment it is first cached or generated and travel with the key into NVM on commit. They cannot be edited in place through the standard client API — once a key has been created with `USAGE_SIGN` only, the only way to also grant `USAGE_VERIFY` is to erase the key and recreate it (or, for a public verification key, to extract the public half through the public-only export path and use it as an independent key). This non-editability is what makes the policy useful as a security control: an attacker who compromises a client cannot loosen the policy on an already-provisioned key.
 
-The keystore additionally provides a **revocation** operation (`wh_Client_KeyRevoke`) that clears all `USAGE_*` bits and sets `WH_NVM_FLAGS_NONMODIFIABLE` on a key without destroying the underlying storage. After revocation, every cryptographic use of the key returns `WH_ERROR_USAGE`, and the key cannot be re-enabled. Revocation is persisted to NVM for committed keys and survives reset; for cache-only keys, eviction has the same effect since the key cannot be reloaded. This makes revocation useful for emergency rotation (taking a compromised signing key out of circulation without immediately reclaiming its NVM slot) and for staged decommissioning, while still leaving the key bytes in place for audit or forensic recovery. With `WOLFHSM_CFG_HWKEYSTORE_LOAD`, revoking or erasing a key also clears every [hardware key](#hardware-only-keys) loaded from it.
+The keystore additionally provides a **revocation** operation (`wh_Client_KeyRevoke`) that clears all `USAGE_*` bits and sets `WH_NVM_FLAGS_NONMODIFIABLE` on a key without destroying the underlying storage. After revocation, every cryptographic use of the key returns `WH_ERROR_USAGE`, and the key cannot be re-enabled. Revocation is persisted to NVM for committed keys and survives reset; for cache-only keys, eviction has the same effect since the key cannot be reloaded. This makes revocation useful for emergency rotation (taking a compromised signing key out of circulation without immediately reclaiming its NVM slot) and for staged decommissioning, while still leaving the key bytes in place for audit or forensic recovery. With `WOLFHSM_CFG_HWKEYSTORE_LOAD`, revoking or erasing a key also clears every [hardware key](#hardware-keys) loaded from it.
 
 Concrete examples of policy-driven scenarios that this machinery supports:
 
