@@ -652,7 +652,12 @@ static int _whTest_CryptoEccCacheKeyAndExportPublic(whClientContext* ctx)
     return ret;
 }
 
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC) || defined(WOLF_CRYPTO_CB_FIND)
+#define WH_TEST_ECC_LOCAL_KEYGEN
+#endif
+
+#if defined(WH_TEST_ECC_LOCAL_KEYGEN) && \
+    (!defined(NO_ECC_MAKE_PUB) || defined(HAVE_ECC_CHECK_KEY))
 
 /* Build a private-key-only ECC key bound to devId, along with a locally
  * generated reference keypair holding the public point it must derive to. */
@@ -690,6 +695,9 @@ static int whTest_MakePrivOnlyEccKey(int devId, WC_RNG* rng, ecc_key* refKey,
     return ret;
 }
 
+#endif /* WH_TEST_ECC_LOCAL_KEYGEN && (!NO_ECC_MAKE_PUB || HAVE_ECC_CHECK_KEY) */
+
+#if !defined(NO_ECC_MAKE_PUB) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
 /* Compare an ecc_point against the public point of key */
 static int whTest_EccPointMatchesKey(ecc_point* point, ecc_key* key)
 {
@@ -999,8 +1007,9 @@ static int _whTest_CryptoEccMakePub(whClientContext* ctx)
     }
     return ret;
 }
+#endif /* !NO_ECC_MAKE_PUB && WH_TEST_ECC_LOCAL_KEYGEN */
 
-#ifdef HAVE_ECC_CHECK_KEY
+#if defined(HAVE_ECC_CHECK_KEY) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
 /* Exercise WC_PK_TYPE_EC_CHECK_PUB_KEY: a private-only key, a full keypair, and
  * a keypair whose public point does not belong to its private scalar. */
 static int _whTest_CryptoEccCheckPubKey(whClientContext* ctx)
@@ -1188,9 +1197,7 @@ static int _whTest_CryptoEccCheckPubKey(whClientContext* ctx)
     }
     return ret;
 }
-#endif /* HAVE_ECC_CHECK_KEY */
-
-#endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
+#endif /* HAVE_ECC_CHECK_KEY && WH_TEST_ECC_LOCAL_KEYGEN */
 
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 
@@ -2388,11 +2395,13 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheDuplicate(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheKeyAndExportPublic(ctx));
-#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+#if !defined(NO_ECC_MAKE_PUB) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccMakePub(ctx));
-#ifdef HAVE_ECC_CHECK_KEY
+#endif /* !NO_ECC_MAKE_PUB && WH_TEST_ECC_LOCAL_KEYGEN */
+#if defined(HAVE_ECC_CHECK_KEY) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCheckPubKey(ctx));
-#endif /* HAVE_ECC_CHECK_KEY */
+#endif /* HAVE_ECC_CHECK_KEY && WH_TEST_ECC_LOCAL_KEYGEN */
+#if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCrossVerify(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccAsync(ctx));
 #endif /* !WOLF_CRYPTO_CB_ONLY_ECC */
