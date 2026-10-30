@@ -1184,6 +1184,7 @@ int wh_Client_RsaSetKeyId(RsaKey* key, whNvmId keyId);
  */
 int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
 
+#ifdef WOLFSSL_KEY_TO_DER
 /**
  * @brief Imports wolfCrypt RSA key as a PCKS1 DER-formatted file into the
  * wolfHSM server key cache.
@@ -1203,6 +1204,7 @@ int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId);
 int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
         whKeyId *inout_keyId, whNvmFlags flags,
         uint32_t label_len, uint8_t* label);
+#endif /* WOLFSSL_KEY_TO_DER */
 
 /**
  * @brief Exports a PKCS1 DER-formated RSA key from the wolfHSM server keycache
@@ -1250,7 +1252,8 @@ int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId,
  *                      0 if label is not needed.
  * @param[out] label Optional buffer to receive the key's label. May be NULL.
  * @return int Returns 0 on success or a negative wolfHSM/wolfCrypt error
- *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS).
+ *             code on failure (e.g. WH_ERROR_NOTFOUND, WH_ERROR_BADARGS, or
+ *             WH_ERROR_NOTIMPL if the server lacks WOLFSSL_KEY_TO_DER).
  */
 int wh_Client_RsaExportPublicKey(whClientContext* ctx, whKeyId keyId,
         RsaKey* key, uint32_t label_len, uint8_t* label);

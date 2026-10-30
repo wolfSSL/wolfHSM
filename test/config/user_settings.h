@@ -37,7 +37,10 @@
 
 /** wolfHSM required settings for wolfCrypt */
 #define WOLF_CRYPTO_CB
+/* Allow test makefile to turn keygen on/off */
+#ifndef WOLFHSM_CFG_TEST_NO_KEY_GEN
 #define WOLFSSL_KEY_GEN
+#endif
 #define WOLFSSL_ASN_TEMPLATE
 #define WOLFSSL_BASE64_ENCODE
 #define HAVE_ANONYMOUS_INLINE_AGGREGATES 1

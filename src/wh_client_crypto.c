@@ -4597,6 +4597,7 @@ int wh_Client_RsaGetKeyId(RsaKey* key, whNvmId* outId)
 }
 
 
+#ifdef WOLFSSL_KEY_TO_DER
 int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
                            whKeyId* inout_keyId, whNvmFlags flags,
                            uint32_t label_len, uint8_t* label)
@@ -4626,6 +4627,7 @@ int wh_Client_RsaImportKey(whClientContext* ctx, const RsaKey* key,
     }
     return ret;
 }
+#endif /* WOLFSSL_KEY_TO_DER */
 
 int wh_Client_RsaExportKey(whClientContext* ctx, whKeyId keyId, RsaKey* key,
                            uint32_t label_len, uint8_t* label)
@@ -5049,6 +5051,7 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
+#ifdef WOLFSSL_KEY_TO_DER
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempRsaFunction";
         /* Set usage flags based on requested RSA operation */
@@ -5072,6 +5075,10 @@ int wh_Client_RsaFunction(whClientContext* ctx, RsaKey* key, int rsa_type,
         if (ret == WH_ERROR_OK) {
             evict = 1;
         }
+#else
+        /* Without RSA DER export only server keys can be used */
+        ret = WH_ERROR_NOTIMPL;
+#endif /* WOLFSSL_KEY_TO_DER */
     }
 
     if (ret == WH_ERROR_OK) {
@@ -5224,6 +5231,7 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
 
     /* Import key if necessary */
     if (WH_KEYID_ISERASED(key_id)) {
+#ifdef WOLFSSL_KEY_TO_DER
         /* Must import the key to the server and evict it afterwards */
         uint8_t    keyLabel[] = "TempRsaGetSize";
         whNvmFlags flags      = WH_NVM_FLAGS_NONE;
@@ -5234,6 +5242,10 @@ int wh_Client_RsaGetSize(whClientContext* ctx, const RsaKey* key, int* out_size)
         if (ret == WH_ERROR_OK) {
             evict = 1;
         }
+#else
+        /* Without RSA DER export only server keys can be used */
+        ret = WH_ERROR_NOTIMPL;
+#endif /* WOLFSSL_KEY_TO_DER */
     }
 
     if (ret == WH_ERROR_OK) {

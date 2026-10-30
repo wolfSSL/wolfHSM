@@ -99,7 +99,7 @@ static const uint8_t testAes128Key[AES_128_KEY_SIZE] = {
     0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
 #endif /* WOLFSSL_CMAC */
 
-#ifndef NO_RSA
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
 /* Hardcoded RSA2048 private key for testing (DER format) */
 /* This is a 2048-bit RSA private key generated for testing purposes */
 static const unsigned char testRsa2048PrivKey[] = {
@@ -203,7 +203,7 @@ static const unsigned char testRsa2048PrivKey[] = {
     0xF9, 0x9F, 0x5D, 0x28, 0x95, 0x38, 0xBE, 0x35, 0xAB, 0xCA, 0x5C, 0xE7,
     0x93, 0x53, 0x34, 0xA1, 0x45, 0x5D, 0x13, 0x39, 0x65, 0x42, 0x46, 0xA1,
     0x9F, 0xCD, 0xF5, 0xBF};
-#endif /* !NO_RSA */
+#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
 
 /* Stub verify callbacks for the return-semantics test. WOLFBOOT_CERT images
  * skip key/sig loading, so these run without any keystore or NVM setup. */
@@ -967,7 +967,8 @@ static int whTest_ServerImgMgrServerCfgAes128Cmac(whServerConfig* serverCfg)
 }
 #endif /* WOLFSSL_CMAC */
 
-#ifndef NO_RSA
+/* Needs wc_RsaKeyToPublicDer to store the public key */
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_TO_DER)
 static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
 {
     int                   ret             = 0;
@@ -1346,7 +1347,7 @@ static int whTest_ServerImgMgrServerCfgRsa2048(whServerConfig* serverCfg)
     WH_TEST_PRINT("IMG_MGR RSA2048 Test completed successfully!\n");
     return 0;
 }
-#endif /* !NO_RSA */
+#endif /* !NO_RSA && WOLFSSL_KEY_TO_DER */
 
 #if !defined(NO_RSA) || defined(HAVE_ECC)
 /* Find the signature TLV in a wolfBoot header. Returns the offset of its
@@ -2491,6 +2492,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
 #endif /* WOLFSSL_CMAC */
 
 #ifndef NO_RSA
+#ifdef WOLFSSL_KEY_TO_DER
     /* RSA2048 verify method */
     rc = whTest_ServerImgMgrServerCfgRsa2048(s_conf);
     if (rc != 0) {
@@ -2498,6 +2500,7 @@ int whTest_ServerImgMgr(whTestNvmBackendType nvmType)
         wh_Nvm_Cleanup(nvm);
         return rc;
     }
+#endif /* WOLFSSL_KEY_TO_DER */
 
     /* wolfBoot RSA4096 verify method */
     rc = whTest_ServerImgMgrServerCfgWolfBootRsa4096(s_conf);
