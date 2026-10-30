@@ -2991,6 +2991,60 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
 
 #endif /* WOLFSSL_SHA3 */
 
+#ifdef HAVE_FALCON
+/** Falcon
+ *
+ * Falcon has no signing context and no pre-hash form, so sign and verify take
+ * only the message. Levels are 1 and 5.
+ *
+ * WOLFHSM_CFG_COMM_DATA_LEN must fit a keypair of the largest enabled level,
+ * about 4.2KB with level 5 or 2.3KB with level 1 only. The build checks this.
+ */
+
+/* Associate a server key id with a local Falcon key */
+int wh_Client_FalconSetKeyId(falcon_key* key, whKeyId keyId);
+
+/* Read back the server key id associated with a Falcon key */
+int wh_Client_FalconGetKeyId(falcon_key* key, whKeyId* outId);
+
+/* Cache a local Falcon key on the server and return its id */
+int wh_Client_FalconImportKey(whClientContext* ctx, falcon_key* key,
+                              whKeyId* inout_keyId, whNvmFlags flags,
+                              uint16_t label_len, uint8_t* label);
+
+/* Export a cached Falcon key from the server into a local key */
+int wh_Client_FalconExportKey(whClientContext* ctx, whKeyId keyId,
+                              falcon_key* key, uint16_t label_len,
+                              uint8_t* label);
+
+/* Export only the public half of a cached Falcon key */
+int wh_Client_FalconExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                    falcon_key* key, uint16_t label_len,
+                                    uint8_t* label);
+
+/* Generate a cached Falcon key; WH_NVM_FLAGS_EPHEMERAL is rejected */
+int wh_Client_FalconMakeCacheKey(whClientContext* ctx, int level,
+                                 whKeyId* inout_key_id, whNvmFlags flags,
+                                 uint16_t label_len, const uint8_t* label);
+
+/* Generate an ephemeral Falcon key and return it to the caller */
+int wh_Client_FalconMakeExportKey(whClientContext* ctx, int level,
+                                  falcon_key* key);
+
+/* Sign a message with a Falcon key held by the server */
+int wh_Client_FalconSign(whClientContext* ctx, const byte* in, word32 in_len,
+                         byte* out, word32* inout_len, falcon_key* key);
+
+/* Verify a Falcon signature on the server. out_res is 1 when it verifies. */
+int wh_Client_FalconVerify(whClientContext* ctx, const byte* sig,
+                           word32 sig_len, const byte* msg, word32 msg_len,
+                           int* out_res, falcon_key* key);
+
+/* Confirm the server's private key matches the supplied public key */
+int wh_Client_FalconCheckPrivKey(whClientContext* ctx, falcon_key* key,
+                                 const byte* pubKey, word32 pubKeySz);
+#endif /* HAVE_FALCON */
+
 #ifdef WOLFSSL_HAVE_MLDSA
 
 /**

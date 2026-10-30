@@ -11350,6 +11350,571 @@ int wh_Client_MlDsaCheckPrivKeyDma(whClientContext* ctx, wc_MlDsaKey* key,
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* WOLFSSL_HAVE_MLDSA */
 
+#ifdef HAVE_FALCON
+
+int wh_Client_FalconSetKeyId(falcon_key* key, whKeyId keyId)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key->devCtx = WH_KEYID_TO_DEVCTX(keyId);
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_FalconGetKeyId(falcon_key* key, whKeyId* outId)
+{
+    if ((key == NULL) || (outId == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *outId = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    return WH_ERROR_OK;
+}
+
+int wh_Client_FalconImportKey(whClientContext* ctx, falcon_key* key,
+                              whKeyId* inout_keyId, whNvmFlags flags,
+                              uint16_t label_len, uint8_t* label)
+{
+    int      ret;
+    whKeyId  key_id = WH_KEYID_ERASED;
+    byte     buffer[WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE];
+    uint16_t buffer_len = 0;
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((label_len != 0) && (label == NULL))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    if (inout_keyId != NULL) {
+        key_id = *inout_keyId;
+    }
+
+    ret = wh_Crypto_FalconSerializeKeyDer(key, sizeof(buffer), buffer,
+                                          &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        /* Cache the key and get the keyID */
+        ret = wh_Client_KeyCache(ctx, flags, label, label_len, buffer,
+                                 buffer_len, &key_id);
+        if ((ret == WH_ERROR_OK) && (inout_keyId != NULL)) {
+            *inout_keyId = key_id;
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_FalconExportKey(whClientContext* ctx, whKeyId keyId,
+                              falcon_key* key, uint16_t label_len,
+                              uint8_t* label)
+{
+    int      ret;
+    byte     buffer[WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE];
+    uint16_t buffer_len = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret =
+        wh_Client_KeyExport(ctx, keyId, label, label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FalconDeserializeKeyDer(buffer, buffer_len, key);
+    }
+
+    return ret;
+}
+
+int wh_Client_FalconExportPublicKey(whClientContext* ctx, whKeyId keyId,
+                                    falcon_key* key, uint16_t label_len,
+                                    uint8_t* label)
+{
+    int      ret;
+    byte     buffer[WH_CRYPTO_FALCON_MAX_KEY_DER_SIZE] = {0};
+    uint16_t buffer_len                                = sizeof(buffer);
+
+    if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_KeyExportPublic(ctx, keyId, WH_KEY_ALGO_FALCON, label,
+                                    label_len, buffer, &buffer_len);
+    if (ret == WH_ERROR_OK) {
+        ret = wh_Crypto_FalconDeserializeKeyDer(buffer, buffer_len, key);
+    }
+    return ret;
+}
+
+/* Generate a key on the server, and return it as DER if key is not NULL */
+static int _FalconMakeKey(whClientContext* ctx, int level,
+                          whKeyId* inout_key_id, whNvmFlags flags,
+                          uint16_t label_len, const uint8_t* label,
+                          falcon_key* key)
+{
+    int                                   ret     = WH_ERROR_OK;
+    whKeyId                               key_id  = WH_KEYID_ERASED;
+    uint8_t*                              dataPtr = NULL;
+    whMessageCrypto_FalconKeyGenRequest*  req     = NULL;
+    whMessageCrypto_FalconKeyGenResponse* res     = NULL;
+
+    if (ctx == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_FalconKeyGenRequest*)_createCryptoRequestWithSubtype(
+        dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN, WC_PQC_SIG_TYPE_FALCON,
+        ctx->cryptoAffinity);
+
+    if (inout_key_id != NULL) {
+        key_id = *inout_key_id;
+    }
+
+    {
+        uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action = WC_ALGO_TYPE_PK;
+        uint16_t req_len =
+            sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+        if (req_len > WOLFHSM_CFG_COMM_DATA_LEN) {
+            return WH_ERROR_BADARGS;
+        }
+
+        memset(req, 0, sizeof(*req));
+        req->level = level;
+        req->sz    = (key != NULL) ? 1 : 0; /* non-zero asks for the key back */
+        req->flags = flags;
+        req->keyId = key_id;
+        if ((label != NULL) && (label_len > 0)) {
+            if (label_len > WH_NVM_LABEL_LEN) {
+                label_len = WH_NVM_LABEL_LEN;
+            }
+            memcpy(req->label, label, label_len);
+        }
+
+        ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                    (uint8_t*)dataPtr);
+        if (ret == WH_ERROR_OK) {
+            uint16_t     res_len = 0;
+            const size_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+
+            do {
+                ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                             WOLFHSM_CFG_COMM_DATA_LEN,
+                                             (uint8_t*)dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+
+            if (ret == WH_ERROR_OK) {
+                ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_KEYGEN,
+                                         (uint8_t**)&res);
+                if (ret >= 0) {
+                    /* Check the frame holds this response before reading it */
+                    if (res_len < hdr_sz) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        key_id = (whKeyId)(res->keyId);
+                        if (inout_key_id != NULL) {
+                            *inout_key_id = key_id;
+                        }
+                    }
+                }
+                if ((ret >= 0) && (key != NULL)) {
+                    if ((res->len == 0) || (res->len > (res_len - hdr_sz))) {
+                        ret = WH_ERROR_ABORTED;
+                    }
+                    else {
+                        ret = wh_Crypto_FalconDeserializeKeyDer(
+                            (uint8_t*)(res + 1), (uint16_t)res->len, key);
+                        if (ret == WH_ERROR_OK) {
+                            ret = wh_Client_FalconSetKeyId(key, key_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+int wh_Client_FalconMakeCacheKey(whClientContext* ctx, int level,
+                                 whKeyId* inout_key_id, whNvmFlags flags,
+                                 uint16_t label_len, const uint8_t* label)
+{
+    /* Without an id the cached key could never be used or evicted */
+    if (inout_key_id == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral keygen belongs to the export path, not the cache path. */
+    if ((flags & WH_NVM_FLAGS_EPHEMERAL) != 0) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* The key stays on the server; only the id comes back. */
+    return _FalconMakeKey(ctx, level, inout_key_id, flags, label_len, label,
+                          NULL);
+}
+
+int wh_Client_FalconMakeExportKey(whClientContext* ctx, int level,
+                                  falcon_key* key)
+{
+    if (key == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* Ephemeral: the server returns the key and keeps nothing. */
+    return _FalconMakeKey(ctx, level, NULL, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                          key);
+}
+
+int wh_Client_FalconSign(whClientContext* ctx, const byte* in, word32 in_len,
+                         byte* out, word32* inout_len, falcon_key* key)
+{
+    int                                 ret     = WH_ERROR_OK;
+    whMessageCrypto_FalconSignRequest*  req     = NULL;
+    whMessageCrypto_FalconSignResponse* res     = NULL;
+    uint8_t*                            dataPtr = NULL;
+    whKeyId                             key_id;
+    int                                 evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((in == NULL) && (in_len > 0)) ||
+        (out == NULL) || (inout_len == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    /* Import the key if the caller has it locally rather than on the server */
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFalconSign";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
+
+        ret = wh_Client_FalconImportKey(ctx, key, &key_id, flags,
+                                        sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+        /* 64-bit sum so a caller supplied in_len cannot wrap the check */
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)in_len;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req =
+            (whMessageCrypto_FalconSignRequest*)_createCryptoRequestWithSubtype(
+                dataPtr, WC_PK_TYPE_PQC_SIG_SIGN, WC_PQC_SIG_TYPE_FALCON,
+                ctx->cryptoAffinity);
+
+        if (total_len <= (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len  = (uint16_t)total_len;
+            uint8_t* req_data = (uint8_t*)(req + 1);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FALCON_SIGN_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->level   = key->level;
+            req->keyId   = key_id;
+            req->sz      = in_len;
+            if ((in != NULL) && (in_len > 0)) {
+                memcpy(req_data, in, in_len);
+            }
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+            if (ret == WH_ERROR_OK) {
+                uint16_t res_len = 0;
+
+                /* Server will evict at this point. Reset evict */
+                evict = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_SIGN,
+                                             (uint8_t**)&res);
+                    if (ret >= 0) {
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+
+                        if ((res_len < hdr_sz) ||
+                            (res->sz > (res_len - hdr_sz))) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else if (res->sz > *inout_len) {
+                            *inout_len = res->sz;
+                            ret        = WH_ERROR_BUFFER_SIZE;
+                        }
+                        else {
+                            memcpy(out, (uint8_t*)(res + 1), res->sz);
+                            *inout_len = res->sz;
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            /* Request length is too long */
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    /* Evict the key manually on error */
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    return ret;
+}
+
+int wh_Client_FalconVerify(whClientContext* ctx, const byte* sig,
+                           word32 sig_len, const byte* msg, word32 msg_len,
+                           int* out_res, falcon_key* key)
+{
+    int                                   ret     = WH_ERROR_OK;
+    whMessageCrypto_FalconVerifyRequest*  req     = NULL;
+    whMessageCrypto_FalconVerifyResponse* res     = NULL;
+    uint8_t*                              dataPtr = NULL;
+    whKeyId                               key_id;
+    int                                   evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) || ((sig == NULL) && (sig_len > 0)) ||
+        ((msg == NULL) && (msg_len > 0)) || (out_res == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    *out_res = 0;
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFalconVerify";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_VERIFY;
+
+        ret = wh_Client_FalconImportKey(ctx, key, &key_id, flags,
+                                        sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)sig_len + (uint64_t)msg_len;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FalconVerifyRequest*)
+            _createCryptoRequestWithSubtype(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
+                                            WC_PQC_SIG_TYPE_FALCON,
+                                            ctx->cryptoAffinity);
+
+        if (total_len <= (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len  = (uint16_t)total_len;
+            uint8_t* req_data = (uint8_t*)(req + 1);
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FALCON_VERIFY_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options = options;
+            req->level   = key->level;
+            req->keyId   = key_id;
+            req->sigSz   = sig_len;
+            req->msgSz   = msg_len;
+            if ((sig != NULL) && (sig_len > 0)) {
+                memcpy(req_data, sig, sig_len);
+            }
+            if ((msg != NULL) && (msg_len > 0)) {
+                memcpy(req_data + sig_len, msg, msg_len);
+            }
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+            if (ret == WH_ERROR_OK) {
+                uint16_t res_len = 0;
+
+                evict = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr, WC_PK_TYPE_PQC_SIG_VERIFY,
+                                             (uint8_t**)&res);
+                    if (ret >= 0) {
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+
+                        if (res_len < hdr_sz) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else {
+                            *out_res = (int)res->res;
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    return ret;
+}
+
+int wh_Client_FalconCheckPrivKey(whClientContext* ctx, falcon_key* key,
+                                 const byte* pubKey, word32 pubKeySz)
+{
+    int                                         ret     = WH_ERROR_OK;
+    whMessageCrypto_FalconCheckPrivKeyRequest*  req     = NULL;
+    whMessageCrypto_FalconCheckPrivKeyResponse* res     = NULL;
+    uint8_t*                                    dataPtr = NULL;
+    whKeyId                                     key_id;
+    int                                         evict = 0;
+
+    if ((ctx == NULL) || (key == NULL) ||
+        ((pubKey == NULL) && (pubKeySz > 0))) {
+        return WH_ERROR_BADARGS;
+    }
+
+    key_id = WH_DEVCTX_TO_KEYID(key->devCtx);
+
+    if (WH_KEYID_ISERASED(key_id)) {
+        uint8_t    keyLabel[] = "TempFalconCheck";
+        whNvmFlags flags      = WH_NVM_FLAGS_USAGE_SIGN;
+
+        ret = wh_Client_FalconImportKey(ctx, key, &key_id, flags,
+                                        sizeof(keyLabel), keyLabel);
+        if (ret == WH_ERROR_OK) {
+            evict = 1;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        uint16_t group   = WH_MESSAGE_GROUP_CRYPTO;
+        uint16_t action  = WC_ALGO_TYPE_PK;
+        uint32_t options = 0;
+        uint64_t total_len =
+            (uint64_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+            (uint64_t)sizeof(*req) + (uint64_t)pubKeySz;
+
+        dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+        if (dataPtr == NULL) {
+            return WH_ERROR_BADARGS;
+        }
+
+        req = (whMessageCrypto_FalconCheckPrivKeyRequest*)
+            _createCryptoRequestWithSubtype(
+                dataPtr, WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY,
+                WC_PQC_SIG_TYPE_FALCON, ctx->cryptoAffinity);
+
+        if (total_len <= (uint64_t)WOLFHSM_CFG_COMM_DATA_LEN) {
+            uint16_t req_len = (uint16_t)total_len;
+
+            if (evict != 0) {
+                options |= WH_MESSAGE_CRYPTO_FALCON_CHECKPRIVKEY_OPTIONS_EVICT;
+            }
+
+            memset(req, 0, sizeof(*req));
+            req->options  = options;
+            req->level    = key->level;
+            req->keyId    = key_id;
+            req->pubKeySz = pubKeySz;
+            if ((pubKey != NULL) && (pubKeySz > 0)) {
+                memcpy((uint8_t*)(req + 1), pubKey, pubKeySz);
+            }
+
+            ret = wh_Client_SendRequest(ctx, group, action, req_len,
+                                        (uint8_t*)dataPtr);
+            if (ret == WH_ERROR_OK) {
+                uint16_t res_len = 0;
+
+                evict = 0;
+
+                do {
+                    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                                 WOLFHSM_CFG_COMM_DATA_LEN,
+                                                 (uint8_t*)dataPtr);
+                } while (ret == WH_ERROR_NOTREADY);
+
+                if (ret == WH_ERROR_OK) {
+                    ret = _getCryptoResponse(dataPtr,
+                                             WC_PK_TYPE_PQC_SIG_CHECK_PRIV_KEY,
+                                             (uint8_t**)&res);
+                    if (ret >= 0) {
+                        const uint32_t hdr_sz =
+                            sizeof(whMessageCrypto_GenericResponseHeader) +
+                            sizeof(*res);
+
+                        if (res_len < hdr_sz) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                        else if (res->ok == 0) {
+                            ret = WH_ERROR_ABORTED;
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            ret = WH_ERROR_BADARGS;
+        }
+    }
+
+    if (evict != 0) {
+        (void)wh_Client_KeyEvict(ctx, key_id);
+    }
+
+    return ret;
+}
+
+#endif /* HAVE_FALCON */
+
+
 #ifdef WOLFSSL_HAVE_MLKEM
 
 int wh_Client_MlKemSetKeyId(MlKemKey* key, whKeyId keyId)
