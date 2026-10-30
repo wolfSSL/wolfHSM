@@ -467,22 +467,38 @@ static int _whTest_CryptoCurve25519CacheKeyAndExportPublic(whClientContext* ctx)
     return ret;
 }
 
-/* Cache keygen must reject WH_NVM_FLAGS_EPHEMERAL */
-static int _whTest_CryptoCurve25519MakeCacheKeyEphemeral(whClientContext* ctx)
+/* Cache keygen argument checks, including WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoCurve25519MakeCacheKeyArgs(whClientContext* ctx)
 {
-    whKeyId keyId = WH_KEYID_ERASED;
-    int     ret;
+    int            ret    = 0;
+    whKeyId        keyId  = WH_KEYID_ERASED;
+    curve25519_key pub[1] = {0};
 
-    ret = wh_Client_Curve25519MakeCacheKey(ctx, CURVE25519_KEYSIZE, &keyId,
-                                           WH_NVM_FLAGS_EPHEMERAL, NULL, 0);
-    if (ret != WH_ERROR_BADARGS) {
-        WH_ERROR_PRINT("Curve25519MakeCacheKey with EPHEMERAL returned %d "
-                       "(expected BADARGS)\n",
-                       ret);
-        return WH_TEST_FAIL;
+    if (wh_Client_Curve25519MakeCacheKey(ctx, CURVE25519_KEYSIZE, &keyId,
+                                         WH_NVM_FLAGS_EPHEMERAL, NULL,
+                                         0) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Curve25519 cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
     }
-    WH_TEST_PRINT("CURVE25519 CACHE-KEY EPHEMERAL REJECT SUCCESS\n");
-    return 0;
+    if ((wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+             ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_EPHEMERAL, NULL, 0,
+             pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+             ctx, CURVE25519_KEYSIZE, NULL, WH_NVM_FLAGS_NONE, NULL, 0, pub) !=
+         WH_ERROR_BADARGS) ||
+        (wh_Client_Curve25519MakeCacheKeyAndExportPublic(
+             ctx, CURVE25519_KEYSIZE, &keyId, WH_NVM_FLAGS_NONE, NULL, 0,
+             NULL) != WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("Curve25519 cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("CURVE25519 CACHE-KEY ARGS SUCCESS\n");
+    }
+    return ret;
 }
 
 int whTest_Crypto_Curve25519(whClientContext* ctx)
@@ -490,7 +506,7 @@ int whTest_Crypto_Curve25519(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCurve25519(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCurve25519ExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCurve25519CacheKeyAndExportPublic(ctx));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCurve25519MakeCacheKeyEphemeral(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoCurve25519MakeCacheKeyArgs(ctx));
     return 0;
 }
 #endif /* HAVE_CURVE25519 */

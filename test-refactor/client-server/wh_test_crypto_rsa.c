@@ -436,6 +436,37 @@ static int _whTest_CryptoRsaCacheKeyAndExportPublic(whClientContext* ctx)
     return ret;
 }
 
+/* Cache keygen argument checks, including WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoRsaMakeCacheKeyArgs(whClientContext* ctx)
+{
+    int     ret    = 0;
+    whKeyId keyId  = WH_KEYID_ERASED;
+    RsaKey  pub[1] = {0};
+
+    if ((wh_Client_RsaMakeCacheKeyAndExportPublic(
+             ctx, RSA_KEY_BITS, RSA_EXPONENT, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0,
+             NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_RsaMakeCacheKeyAndExportPublic(
+             NULL, RSA_KEY_BITS, RSA_EXPONENT, &keyId, WH_NVM_FLAGS_NONE, 0,
+             NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_RsaMakeCacheKeyAndExportPublic(
+             ctx, RSA_KEY_BITS, RSA_EXPONENT, NULL, WH_NVM_FLAGS_NONE, 0, NULL,
+             pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_RsaMakeCacheKeyAndExportPublic(
+             ctx, RSA_KEY_BITS, RSA_EXPONENT, &keyId, WH_NVM_FLAGS_NONE, 0,
+             NULL, NULL) != WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("RSA cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("RSA CACHE-KEY ARGS SUCCESS\n");
+    }
+    return ret;
+}
+
 /* Exercises wh_Client_RsaFunction with an undersized output buffer. */
 static int _whTest_CryptoRsaBufferTooSmall(whClientContext* ctx)
 {
@@ -637,6 +668,7 @@ int whTest_Crypto_Rsa(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsa(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaCacheKeyAndExportPublic(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaMakeCacheKeyArgs(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaBufferTooSmall(ctx));
 #endif
 #ifdef USE_CERT_BUFFERS_2048
