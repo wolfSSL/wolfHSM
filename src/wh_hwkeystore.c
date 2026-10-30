@@ -19,8 +19,8 @@
 /*
  * src/wh_hwkeystore.c
  *
- * Hardware keystore front end: the records of the hardware keys clients may
- * use, and the calls into the port's keystore callback. See
+ * Hardware keystore front end: the records of the hardware keys the port
+ * registered, and the calls into the port's keystore callback. See
  * wolfhsm/wh_hwkeystore.h for the module description.
  */
 
@@ -173,8 +173,9 @@ void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref)
     ref[1] = (uint8_t)keyId;
 }
 
-int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
-                           whNvmFlags flags, uint16_t len)
+/* Add a record for keyId, unless its ID is already registered */
+static int _Add(whHwKeystoreContext* context, whKeyId keyId, whNvmFlags flags,
+                uint16_t len)
 {
     whHwKeystoreKey* entry;
     int              ret;
@@ -196,17 +197,28 @@ int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
             else {
                 entry->id    = keyId;
                 entry->srcId = WH_KEYID_ERASED;
-                /* Clients can't clear or replace a port key, or set or
-                 * read it, so it is also a trusted KEK */
-                entry->flags = (flags & WH_NVM_FLAGS_USAGE_ANY) |
-                               WH_NVM_FLAGS_NONDESTROYABLE |
-                               WH_NVM_FLAGS_TRUSTED;
-                entry->len = len;
+                entry->flags = flags;
+                entry->len   = len;
             }
         }
         (void)_Unlock(context);
     } /* _Lock() */
     return ret;
+}
+
+int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
+                           whNvmFlags flags, uint16_t len)
+{
+    /* A record with len 0 is an empty loadable key */
+    if (len == 0) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Clients can't clear or replace a port key, or set or read it, so it is
+     * also a trusted KEK */
+    return _Add(context, keyId,
+                (flags & WH_NVM_FLAGS_USAGE_ANY) | WH_NVM_FLAGS_NONDESTROYABLE |
+                    WH_NVM_FLAGS_TRUSTED,
+                len);
 }
 
 int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
@@ -224,7 +236,7 @@ int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
         entry = _Find(context, keyId);
-        if (entry == NULL) {
+        if ((entry == NULL) || (entry->len == 0)) {
             ret = WH_ERROR_NOTFOUND;
         }
         else if ((WH_KEYID_USER(entry->id) != WH_KEYUSER_GLOBAL) &&
@@ -258,17 +270,17 @@ static int _PortImport(int devId, whKeyId keyId, const uint8_t* key,
                                    key, keySz, 0, NULL);
 }
 
-static int _PortInfo(int devId, whKeyId keyId, word32* keyType, word32* keyBits)
+/* Mark a loadable key empty, keeping its ID */
+static void _Empty(whHwKeystoreKey* entry)
 {
-    uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
-    word32  attrs = 0;
-
-    wh_HwKeystore_KeyRef(keyId, ref);
-    return wc_KeyStore_GetInfo(devId, ref, sizeof(ref), keyType, keyBits,
-                               &attrs, NULL);
+    entry->id =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_KEYID_ID(entry->id));
+    entry->srcId = WH_KEYID_ERASED;
+    entry->flags = 0;
+    entry->len   = 0;
 }
 
-/* Clear the key in hardware and free its entry. The entry is freed even if the
+/* Clear the key in hardware and mark it empty. It is marked empty even if the
  * port fails, so the key can't be used again */
 static int _Remove(int devId, whHwKeystoreKey* entry)
 {
@@ -277,8 +289,18 @@ static int _Remove(int devId, whHwKeystoreKey* entry)
 
     wh_HwKeystore_KeyRef(entry->id, ref);
     ret = wc_KeyStore_Delete(devId, ref, sizeof(ref), NULL);
-    memset(entry, 0, sizeof(*entry));
+    _Empty(entry);
     return ret;
+}
+
+int wh_HwKeystore_RegisterLoadable(whHwKeystoreContext* context,
+                                   whKeyId              keyId)
+{
+    /* No owner until a client loads it */
+    return _Add(context,
+                WH_MAKE_KEYID(WH_KEYID_TYPE(keyId), WH_KEYUSER_GLOBAL,
+                              WH_KEYID_ID(keyId)),
+                0, 0);
 }
 
 int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
@@ -287,10 +309,7 @@ int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
 {
     whHwKeystoreKey* entry = NULL;
     whKeyId          keyId;
-    whKeyId          cand;
-    word32           keyType;
-    word32           keyBits;
-    int              id;
+    int              i;
     int              ret;
 
     if ((context == NULL) || (context->initialized == 0) ||
@@ -303,39 +322,35 @@ int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
         if (WH_KEYID_ISERASED(keyId)) {
-            /* Try each hardware key the port reports empty, in ID order */
-            entry = _FindFree(context);
-            ret   = WH_ERROR_NOSPACE;
-            for (id = 1; (entry != NULL) && (id <= WH_KEYID_IDMAX); id++) {
-                cand = WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYID_USER(keyId), id);
-                if ((_Find(context, cand) != NULL) ||
-                    (_PortInfo(devId, cand, &keyType, &keyBits) != 0) ||
-                    (keyType != WC_KEYSTORE_KEY_NONE)) {
+            /* Try each empty loadable key in turn */
+            ret = WH_ERROR_NOSPACE;
+            for (i = 0; i < WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS; i++) {
+                if ((context->keys[i].id == WH_KEYID_ERASED) ||
+                    (context->keys[i].len != 0)) {
                     continue;
                 }
-                ret = _PortImport(devId, cand, key, keySz);
+                keyId = WH_MAKE_KEYID(WH_KEYTYPE_HW,
+                                      WH_KEYID_USER(*inout_keyId),
+                                      WH_KEYID_ID(context->keys[i].id));
+                ret   = _PortImport(devId, keyId, key, keySz);
                 if (ret == 0) {
-                    keyId = cand;
+                    entry = &context->keys[i];
                     break;
                 }
             }
         }
         else {
             entry = _Find(context, keyId);
-            if (entry != NULL) {
-                /* Only the owner may replace a key, and never a port key */
-                if (((entry->flags & WH_NVM_FLAGS_NONDESTROYABLE) != 0) ||
-                    (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId))) {
-                    ret = WH_ERROR_ACCESS;
-                }
+            if (entry == NULL) {
+                ret = WH_ERROR_NOTFOUND;
+            }
+            /* Only the owner may replace a key, and never a port key */
+            else if (((entry->flags & WH_NVM_FLAGS_NONDESTROYABLE) != 0) ||
+                     ((entry->len != 0) &&
+                      (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId)))) {
+                ret = WH_ERROR_ACCESS;
             }
             else {
-                entry = _FindFree(context);
-                if (entry == NULL) {
-                    ret = WH_ERROR_NOSPACE;
-                }
-            }
-            if (ret == WH_ERROR_OK) {
                 ret = _PortImport(devId, keyId, key, keySz);
             }
         }
@@ -364,7 +379,7 @@ int wh_HwKeystore_Clear(whHwKeystoreContext* context, int devId, whKeyId keyId)
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
         entry = _Find(context, keyId);
-        if (entry == NULL) {
+        if ((entry == NULL) || (entry->len == 0)) {
             ret = WH_ERROR_NOTFOUND;
         }
         else if (((entry->flags & WH_NVM_FLAGS_NONDESTROYABLE) != 0) ||
@@ -395,7 +410,7 @@ int wh_HwKeystore_ClearAll(whHwKeystoreContext* context, int devId,
     if (ret == WH_ERROR_OK) {
         for (i = 0; i < WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS; i++) {
             entry = &context->keys[i];
-            if ((entry->id != WH_KEYID_ERASED) &&
+            if ((entry->len != 0) &&
                 ((entry->flags & WH_NVM_FLAGS_NONDESTROYABLE) == 0) &&
                 (WH_KEYID_USER(entry->id) == user)) {
                 rc = _Remove(devId, entry);
@@ -426,7 +441,7 @@ int wh_HwKeystore_ClearSource(whHwKeystoreContext* context, int devId,
     if (ret == WH_ERROR_OK) {
         for (i = 0; i < WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS; i++) {
             entry = &context->keys[i];
-            if ((entry->id != WH_KEYID_ERASED) && (entry->srcId == srcId)) {
+            if ((entry->len != 0) && (entry->srcId == srcId)) {
                 rc = _Remove(devId, entry);
                 if (ret == WH_ERROR_OK) {
                     ret = rc;
@@ -438,12 +453,10 @@ int wh_HwKeystore_ClearSource(whHwKeystoreContext* context, int devId,
     return ret;
 }
 
-int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, int devId,
-                          whKeyId keyId, whHwKeystoreInfo* info)
+int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, whKeyId keyId,
+                          whHwKeystoreInfo* info)
 {
     whHwKeystoreKey* entry;
-    word32           keyType = 0;
-    word32           keyBits = 0;
     int              ret;
 
     if (!_Valid(context, keyId) || (info == NULL)) {
@@ -453,15 +466,16 @@ int wh_HwKeystore_GetInfo(whHwKeystoreContext* context, int devId,
 
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
-        ret = _PortInfo(devId, keyId, &keyType, &keyBits);
-        if (ret == 0) {
-            info->keyType = keyType;
-            info->keyBits = keyBits;
-            entry         = _Find(context, keyId);
-            if (entry != NULL) {
-                info->flags = entry->flags & WH_NVM_FLAGS_USAGE_ANY;
-                info->owner = WH_KEYID_USER(entry->id);
-            }
+        entry = _Find(context, keyId);
+        if (entry == NULL) {
+            ret = WH_ERROR_NOTFOUND;
+        }
+        else if (entry->len != 0) {
+            /* Hardware keys are only used as AES keys */
+            info->keyType = WC_KEYSTORE_KEY_AES;
+            info->keyBits = (uint32_t)entry->len * 8;
+            info->flags   = entry->flags & WH_NVM_FLAGS_USAGE_ANY;
+            info->owner   = WH_KEYID_USER(entry->id);
         }
         (void)_Unlock(context);
     } /* _Lock() */

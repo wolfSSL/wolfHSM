@@ -84,8 +84,8 @@
  *  must run every operation on it. Requires WOLF_PRIVATE_KEY_ID in wolfCrypt
  *      Default: Not defined
  *
- *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS - The number of hardware keys the server
- *  tracks
+ *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS - The number of hardware keys the port can
+ *  register: its own keys plus the keys clients may load
  *      Default: 8
  *
  *  WOLFHSM_CFG_HWKEYSTORE_LOAD - If defined, clients can also load keystore

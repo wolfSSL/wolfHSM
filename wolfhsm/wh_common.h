@@ -137,7 +137,7 @@ typedef struct {
 
 /* What a hardware key holds, as reported by the server */
 typedef struct {
-    uint32_t   keyType; /* enum wc_KeyStoreKeyType from the port, 0 if empty */
+    uint32_t   keyType; /* WC_KEYSTORE_KEY_AES, or 0 if empty */
     uint32_t   keyBits; /* Key size in bits */
     whNvmFlags flags;   /* WH_NVM_FLAGS_USAGE_* the server allows */
     uint16_t   owner;   /* Client that owns it, 0 if shared */
