@@ -36,6 +36,10 @@ jobs:
             flags: "AUTH=1"
           - name: nocrypto
             flags: "NOCRYPTO=1"
+          - name: certcache
+            flags: "CERT_VERIFY_CACHE_FULLCHAIN=1"
+          - name: nvmcrc
+            flags: "NVM_FLASH_CRC=1"
     steps:
       - uses: actions/checkout@v4
 
