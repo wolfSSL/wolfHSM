@@ -1970,6 +1970,247 @@ static int whTest_CryptoEccSharedSecretAsync_OneCurve(whClientContext* ctx,
     }
     return ret;
 }
+
+/* Cached ECDH secret must match ref and label, or be NONEXPORTABLE */
+static int _whTest_EccCheckCachedSecret(whClientContext* ctx, whKeyId keyId,
+                                        whNvmFlags flags, const uint8_t* ref,
+                                        uint16_t ref_len, const uint8_t* label,
+                                        uint16_t label_len, const char* name)
+{
+    uint8_t  secret[ECC_MAXSIZE]        = {0};
+    uint16_t secret_len                 = sizeof(secret);
+    uint8_t  labelOut[WH_NVM_LABEL_LEN] = {0};
+    int      ret;
+
+    ret = wh_Client_KeyExport(ctx, keyId, labelOut, sizeof(labelOut), secret,
+                              &secret_len);
+    if ((flags & WH_NVM_FLAGS_NONEXPORTABLE) != 0) {
+        if (ret != WH_ERROR_ACCESS) {
+            WH_ERROR_PRINT("%s: KeyExport on NONEXPORTABLE secret returned %d "
+                           "(expected WH_ERROR_ACCESS)\n",
+                           name, ret);
+            return WH_ERROR_ABORTED;
+        }
+        return WH_ERROR_OK;
+    }
+    if (ret != WH_ERROR_OK) {
+        WH_ERROR_PRINT("%s: failed to export cached ECDH secret "
+                       "(keyId=0x%x): %d\n",
+                       name, (unsigned)keyId, ret);
+    }
+    else if ((secret_len != ref_len) || (memcmp(secret, ref, ref_len) != 0)) {
+        WH_ERROR_PRINT("%s: cached ECDH secret does not match reference\n",
+                       name);
+        ret = WH_ERROR_ABORTED;
+    }
+    else if ((label != NULL) && (memcmp(labelOut, label, label_len) != 0)) {
+        WH_ERROR_PRINT("%s: cached ECDH secret label mismatch\n", name);
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+
+/* Cache-mode ECDH per curve must match the export-mode secret */
+static int whTest_CryptoEccSharedSecretCacheKey_OneCurve(whClientContext* ctx,
+                                                         WC_RNG*          rng,
+                                                         int         keySize,
+                                                         int         curveId,
+                                                         const char* name)
+{
+    typedef struct {
+        whKeyId    keyId;
+        whNvmFlags flags;
+    } CacheCase;
+
+    const CacheCase cases[] = {
+        {WH_KEYID_ERASED, WH_NVM_FLAGS_USAGE_DERIVE},
+        {0x42, WH_NVM_FLAGS_USAGE_DERIVE},
+        {WH_KEYID_ERASED,
+         WH_NVM_FLAGS_USAGE_DERIVE | WH_NVM_FLAGS_NONEXPORTABLE},
+    };
+    const uint8_t secretLabel[]          = "TestEcdhCachedSecret";
+    ecc_key       keyA[1]                = {0};
+    ecc_key       keyB[1]                = {0};
+    ecc_key       pubB[1]                = {0};
+    uint8_t       pubBx[ECC_MAXSIZE]     = {0};
+    uint8_t       pubBy[ECC_MAXSIZE]     = {0};
+    word32        pubBxLen               = (word32)keySize;
+    word32        pubByLen               = (word32)keySize;
+    uint8_t       refSecret[ECC_MAXSIZE] = {0};
+    uint16_t      refSecretLen           = sizeof(refSecret);
+    whKeyId       privAId                = WH_KEYID_ERASED;
+    whKeyId       pubBId                 = WH_KEYID_ERASED;
+    int           keyAInit               = 0;
+    int           keyBInit               = 0;
+    int           pubBInit               = 0;
+    size_t        i;
+    int           ret = WH_ERROR_OK;
+
+    WH_TEST_PRINT("  Testing cache-mode ECDH %s curve...\n", name);
+
+    ret = wc_ecc_init_ex(keyA, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret == 0) {
+        keyAInit = 1;
+        ret      = wc_ecc_make_key(rng, keySize, keyA);
+    }
+    if (ret == 0) {
+        uint8_t lbl[] = "TestEcdhCachePrivA";
+        ret           = wh_Client_EccImportKey(
+            ctx, keyA, &privAId, WH_NVM_FLAGS_USAGE_DERIVE, sizeof(lbl), lbl);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(keyB, NULL, WH_CLIENT_DEVID(ctx));
+    }
+    if (ret == 0) {
+        keyBInit = 1;
+        ret      = wc_ecc_make_key(rng, keySize, keyB);
+    }
+    if (ret == 0) {
+        ret =
+            wc_ecc_export_public_raw(keyB, pubBx, &pubBxLen, pubBy, &pubByLen);
+    }
+    if (ret == 0) {
+        ret = wc_ecc_init_ex(pubB, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            pubBInit = 1;
+            ret = wc_ecc_import_unsigned(pubB, pubBx, pubBy, NULL, curveId);
+        }
+    }
+    if (ret == 0) {
+        uint8_t lbl[] = "TestEcdhCachePubB";
+        ret           = wh_Client_EccImportKey(
+            ctx, pubB, &pubBId, WH_NVM_FLAGS_USAGE_DERIVE, sizeof(lbl), lbl);
+    }
+
+    /* Reference: export-mode secret for (privA, pubB) */
+    if (ret == 0) {
+        ret = wh_Client_EccSharedSecretRequest(ctx, privAId, pubBId);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_EccSharedSecretResponse(ctx, refSecret,
+                                                        &refSecretLen);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+    }
+
+    for (i = 0; (ret == 0) && (i < sizeof(cases) / sizeof(cases[0])); i++) {
+        whKeyId secretId = cases[i].keyId;
+
+        ret = wh_Client_EccSharedSecretCacheKeyRequest(
+            ctx, privAId, pubBId, secretId, cases[i].flags, secretLabel,
+            sizeof(secretLabel));
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret = wh_Client_EccSharedSecretCacheKeyResponse(ctx, &secretId);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        /* The server must assign a keyId, or keep the one supplied */
+        if ((ret == WH_ERROR_OK) && (WH_KEYID_ISERASED(secretId) ||
+                                     (!WH_KEYID_ISERASED(cases[i].keyId) &&
+                                      (secretId != cases[i].keyId)))) {
+            WH_ERROR_PRINT("%s: cache case %u returned keyId 0x%x "
+                           "(asked 0x%x)\n",
+                           name, (unsigned)i, (unsigned)secretId,
+                           (unsigned)cases[i].keyId);
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret == WH_ERROR_OK) {
+            ret = _whTest_EccCheckCachedSecret(
+                ctx, secretId, cases[i].flags, refSecret, refSecretLen,
+                secretLabel, sizeof(secretLabel), name);
+        }
+        if (!WH_KEYID_ISERASED(secretId)) {
+            (void)wh_Client_KeyEvict(ctx, secretId);
+        }
+    }
+
+    if (ret == 0) {
+        whKeyId tmp = WH_KEYID_ERASED;
+        int     rc  = wh_Client_EccSharedSecretCacheKey(
+            ctx, keyA, pubB, &tmp,
+            WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0);
+        if (rc != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT(
+                "%s: CacheKey with EPHEMERAL returned %d (expected BADARGS)\n",
+                name, rc);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        int rc = wh_Client_EccSharedSecretCacheKey(
+            ctx, keyA, pubB, NULL, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0);
+        if (rc != WH_ERROR_BADARGS) {
+            WH_ERROR_PRINT("%s: CacheKey NULL inout returned %d (expected "
+                           "BADARGS)\n",
+                           name, rc);
+            ret = -1;
+        }
+    }
+
+    /* Blocking wrapper with local keys, which it imports */
+    if (ret == 0) {
+        ecc_key  keyC[1]                     = {0};
+        ecc_key  keyD[1]                     = {0};
+        whKeyId  blockId                     = WH_KEYID_ERASED;
+        uint8_t  blockRefSecret[ECC_MAXSIZE] = {0};
+        uint16_t blockRefSecretLen           = sizeof(blockRefSecret);
+
+        ret = wc_ecc_init_ex(keyC, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_ecc_make_key(rng, keySize, keyC);
+        }
+        if (ret == 0) {
+            ret = wc_ecc_init_ex(keyD, NULL, INVALID_DEVID);
+        }
+        if (ret == 0) {
+            ret = wc_ecc_make_key(rng, keySize, keyD);
+        }
+        if (ret == 0) {
+            ret = wh_Client_EccSharedSecret(ctx, keyC, keyD, blockRefSecret,
+                                            &blockRefSecretLen);
+        }
+        if (ret == 0) {
+            ret = wh_Client_EccSharedSecretCacheKey(
+                ctx, keyC, keyD, &blockId, WH_NVM_FLAGS_USAGE_DERIVE, NULL, 0);
+        }
+        if ((ret == 0) && WH_KEYID_ISERASED(blockId)) {
+            WH_ERROR_PRINT("%s: blocking CacheKey returned erased keyId\n",
+                           name);
+            ret = WH_ERROR_ABORTED;
+        }
+        if (ret == 0) {
+            ret = _whTest_EccCheckCachedSecret(
+                ctx, blockId, WH_NVM_FLAGS_USAGE_DERIVE, blockRefSecret,
+                blockRefSecretLen, NULL, 0, name);
+        }
+        if (!WH_KEYID_ISERASED(blockId)) {
+            (void)wh_Client_KeyEvict(ctx, blockId);
+        }
+        wc_ecc_free(keyD);
+        wc_ecc_free(keyC);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("    cache ECDH %s: PASS\n", name);
+    }
+
+    if (!WH_KEYID_ISERASED(pubBId)) {
+        (void)wh_Client_KeyEvict(ctx, pubBId);
+    }
+    if (!WH_KEYID_ISERASED(privAId)) {
+        (void)wh_Client_KeyEvict(ctx, privAId);
+    }
+    if (pubBInit) {
+        wc_ecc_free(pubB);
+    }
+    if (keyBInit) {
+        wc_ecc_free(keyB);
+    }
+    if (keyAInit) {
+        wc_ecc_free(keyA);
+    }
+    return ret;
+}
 #endif /* HAVE_ECC_DHE */
 
 /* Async server-side keygen per curve: MakeCacheKey async (then sign/verify
@@ -2223,6 +2464,10 @@ static int _whTest_CryptoEccAsync(whClientContext* ctx)
         ret = whTest_CryptoEccSharedSecretAsync_OneCurve(
             ctx, rng, WH_TEST_ECC_P256_KEY_SIZE, ECC_SECP256R1, "P-256");
     }
+    if (ret == 0) {
+        ret = whTest_CryptoEccSharedSecretCacheKey_OneCurve(
+            ctx, rng, WH_TEST_ECC_P256_KEY_SIZE, ECC_SECP256R1, "P-256");
+    }
 #endif
     if (ret == 0) {
         ret = whTest_CryptoEccMakeKeyAsync_OneCurve(
@@ -2240,6 +2485,10 @@ static int _whTest_CryptoEccAsync(whClientContext* ctx)
         ret = whTest_CryptoEccSharedSecretAsync_OneCurve(
             ctx, rng, WH_TEST_ECC_P384_KEY_SIZE, ECC_SECP384R1, "P-384");
     }
+    if (ret == 0) {
+        ret = whTest_CryptoEccSharedSecretCacheKey_OneCurve(
+            ctx, rng, WH_TEST_ECC_P384_KEY_SIZE, ECC_SECP384R1, "P-384");
+    }
 #endif
     if (ret == 0) {
         ret = whTest_CryptoEccMakeKeyAsync_OneCurve(
@@ -2255,6 +2504,10 @@ static int _whTest_CryptoEccAsync(whClientContext* ctx)
 #ifdef HAVE_ECC_DHE
     if (ret == 0) {
         ret = whTest_CryptoEccSharedSecretAsync_OneCurve(
+            ctx, rng, WH_TEST_ECC_P521_KEY_SIZE, ECC_SECP521R1, "P-521");
+    }
+    if (ret == 0) {
+        ret = whTest_CryptoEccSharedSecretCacheKey_OneCurve(
             ctx, rng, WH_TEST_ECC_P521_KEY_SIZE, ECC_SECP521R1, "P-521");
     }
 #endif
