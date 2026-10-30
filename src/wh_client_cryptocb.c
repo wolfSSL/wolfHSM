@@ -61,14 +61,14 @@
 #include "wolfhsm/wh_message_crypto.h"
 
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma);
 static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
                             int useDma);
 static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
                             int useDma);
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 static int _handlePqcStatefulSigKeyGen(whClientContext* ctx,
                                        wc_CryptoInfo* info, int useDma);
@@ -532,7 +532,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
         } break;
 #endif /* HAVE_ED25519 */
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
         case WC_PK_TYPE_PQC_KEM_KEYGEN:
             ret = _handlePqcKemKeyGen(ctx, info, 0);
             break;
@@ -545,7 +545,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             ret = _handlePqcDecaps(ctx, info, 0);
             break;
 
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
         case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
             ret = _handlePqcStatefulSigKeyGen(ctx, info, 0);
@@ -791,7 +791,7 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     return ret;
 }
 
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma)
 {
@@ -812,6 +812,7 @@ static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
     (void)size;
 
     switch (type) {
+#ifdef WOLFSSL_HAVE_MLKEM
         case WC_PQC_KEM_TYPE_KYBER: {
             int level = ((MlKemKey*)key)->type;
 #ifdef WOLFHSM_CFG_DMA
@@ -824,6 +825,22 @@ static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                 ret = wh_Client_MlKemMakeExportKey(ctx, level, key);
             }
         } break;
+#endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+        case WC_PQC_KEM_TYPE_FRODOKEM: {
+            int frodoType = ((FrodoKemKey*)key)->type;
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_FrodoKemMakeExportKeyDma(ctx, frodoType, key);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_FrodoKemMakeExportKey(ctx, frodoType, key);
+            }
+        } break;
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -861,6 +878,7 @@ static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
 #endif
 
     switch (type) {
+#ifdef WOLFSSL_HAVE_MLKEM
         case WC_PQC_KEM_TYPE_KYBER:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
@@ -880,6 +898,29 @@ static int _handlePqcEncaps(whClientContext* ctx, wc_CryptoInfo* info,
                 info->pk.pqc_encaps.sharedSecretLen = sharedSecLen;
             }
             break;
+#endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+        case WC_PQC_KEM_TYPE_FRODOKEM:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_FrodoKemEncapsulateDma(
+                    ctx, key, ciphertext, &ciphertextLen, sharedSecret,
+                    &sharedSecLen);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_FrodoKemEncapsulate(
+                    ctx, key, ciphertext, &ciphertextLen, sharedSecret,
+                    &sharedSecLen);
+            }
+            if (ret == WH_ERROR_OK) {
+                info->pk.pqc_encaps.ciphertextLen   = ciphertextLen;
+                info->pk.pqc_encaps.sharedSecretLen = sharedSecLen;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -917,6 +958,7 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
 #endif
 
     switch (type) {
+#ifdef WOLFSSL_HAVE_MLKEM
         case WC_PQC_KEM_TYPE_KYBER:
 #ifdef WOLFHSM_CFG_DMA
             if (useDma) {
@@ -935,6 +977,28 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
                 info->pk.pqc_decaps.sharedSecretLen = sharedSecLen;
             }
             break;
+#endif /* WOLFSSL_HAVE_MLKEM */
+
+#ifdef WOLFSSL_HAVE_FRODOKEM
+        case WC_PQC_KEM_TYPE_FRODOKEM:
+#ifdef WOLFHSM_CFG_DMA
+            if (useDma) {
+                ret = wh_Client_FrodoKemDecapsulateDma(
+                    ctx, key, ciphertext, ciphertextLen, sharedSecret,
+                    &sharedSecLen);
+            }
+            else
+#endif /* WOLFHSM_CFG_DMA */
+            {
+                ret = wh_Client_FrodoKemDecapsulate(ctx, key, ciphertext,
+                                                    ciphertextLen, sharedSecret,
+                                                    &sharedSecLen);
+            }
+            if (ret == WH_ERROR_OK) {
+                info->pk.pqc_decaps.sharedSecretLen = sharedSecLen;
+            }
+            break;
+#endif /* WOLFSSL_HAVE_FRODOKEM */
 
         default:
             ret = CRYPTOCB_UNAVAILABLE;
@@ -950,7 +1014,7 @@ static int _handlePqcDecaps(whClientContext* ctx, wc_CryptoInfo* info,
 
     return ret;
 }
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 static int _handlePqcStatefulSigKeyGen(whClientContext* ctx,
@@ -1566,7 +1630,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 
     case WC_ALGO_TYPE_PK: {
         switch (info->pk.type) {
-#if defined(WOLFSSL_HAVE_MLKEM)
+#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_HAVE_FRODOKEM)
             case WC_PK_TYPE_PQC_KEM_KEYGEN:
                 ret = _handlePqcKemKeyGen(ctx, info, 1);
                 break;
@@ -1576,7 +1640,7 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_PK_TYPE_PQC_KEM_DECAPS:
                 ret = _handlePqcDecaps(ctx, info, 1);
                 break;
-#endif /* WOLFSSL_HAVE_MLKEM */
+#endif /* WOLFSSL_HAVE_MLKEM || WOLFSSL_HAVE_FRODOKEM */
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
             case WC_PK_TYPE_PQC_STATEFUL_SIG_KEYGEN:
                 ret = _handlePqcStatefulSigKeyGen(ctx, info, 1);

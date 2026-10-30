@@ -494,6 +494,119 @@ int wh_Crypto_MlKemDeserializeKey(const uint8_t* buffer, uint16_t size,
 }
 #endif /* WOLFSSL_HAVE_MLKEM */
 
+#ifdef WOLFSSL_HAVE_FRODOKEM
+/* Every key type must fit in the single type byte */
+WH_UTILS_STATIC_ASSERT((FRODOKEM_BASE_MASK | FRODOKEM_AES |
+                        FRODOKEM_EPHEMERAL) <= 0xFF,
+                       "FrodoKEM key type does not fit in one byte");
+
+int wh_Crypto_FrodoKemSerializeKey(FrodoKemKey* key, uint16_t max_size,
+                                   uint8_t* buffer, uint16_t* out_size)
+{
+    int      ret     = WH_ERROR_OK;
+    word32   keySize = 0;
+    uint8_t* encoded;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL) ||
+        (max_size < WH_CRYPTO_FRODOKEM_TYPE_SZ)) {
+        return WH_ERROR_BADARGS;
+    }
+    encoded = buffer + WH_CRYPTO_FRODOKEM_TYPE_SZ;
+
+    /* Try the private key first. The size query succeeds whether or not a
+     * private key is present, so the encode return is what distinguishes a
+     * public-only key. */
+    ret = wc_FrodoKemKey_PrivateKeySize(key, &keySize);
+    if (ret == WH_ERROR_OK) {
+        if (keySize > (word32)(max_size - WH_CRYPTO_FRODOKEM_TYPE_SZ)) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wc_FrodoKemKey_EncodePrivateKey(key, encoded, keySize);
+        if (ret != WH_ERROR_OK) {
+            /* Clear any partial private key material */
+            wc_ForceZero(encoded, keySize);
+        }
+    }
+    if (ret != WH_ERROR_OK) {
+        return wh_Crypto_FrodoKemSerializePublicKey(key, max_size, buffer,
+                                                    out_size);
+    }
+
+    buffer[0] = (uint8_t)key->type;
+    *out_size = (uint16_t)(WH_CRYPTO_FRODOKEM_TYPE_SZ + keySize);
+    return ret;
+}
+
+int wh_Crypto_FrodoKemSerializePublicKey(FrodoKemKey* key, uint16_t max_size,
+                                         uint8_t* buffer, uint16_t* out_size)
+{
+    int    ret     = WH_ERROR_OK;
+    word32 keySize = 0;
+
+    if ((key == NULL) || (buffer == NULL) || (out_size == NULL) ||
+        (max_size < WH_CRYPTO_FRODOKEM_TYPE_SZ)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wc_FrodoKemKey_PublicKeySize(key, &keySize);
+    if (ret == WH_ERROR_OK) {
+        if (keySize > (word32)(max_size - WH_CRYPTO_FRODOKEM_TYPE_SZ)) {
+            return WH_ERROR_BADARGS;
+        }
+        ret = wc_FrodoKemKey_EncodePublicKey(
+            key, buffer + WH_CRYPTO_FRODOKEM_TYPE_SZ, keySize);
+    }
+    if (ret == WH_ERROR_OK) {
+        buffer[0] = (uint8_t)key->type;
+        *out_size = (uint16_t)(WH_CRYPTO_FRODOKEM_TYPE_SZ + keySize);
+    }
+    return ret;
+}
+
+int wh_Crypto_FrodoKemDeserializeKey(const uint8_t* buffer, uint16_t size,
+                                     FrodoKemKey* key)
+{
+    int            ret = WH_ERROR_OK;
+    int            type;
+    int            origType;
+    int            origDevId;
+    void*          origHeap;
+    const uint8_t* encoded;
+    word32         encodedSz;
+
+    if ((buffer == NULL) || (key == NULL) ||
+        (size <= WH_CRYPTO_FRODOKEM_TYPE_SZ)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    type      = buffer[0];
+    encoded   = buffer + WH_CRYPTO_FRODOKEM_TYPE_SZ;
+    encodedSz = (word32)(size - WH_CRYPTO_FRODOKEM_TYPE_SZ);
+    origType  = key->type;
+    origDevId = key->devId;
+    origHeap  = key->heap;
+
+    if (type != origType) {
+        wc_FrodoKemKey_Free(key);
+        ret = wc_FrodoKemKey_Init(key, type, origHeap, origDevId);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = wc_FrodoKemKey_DecodePrivateKey(key, encoded, encodedSz);
+        if (ret != WH_ERROR_OK) {
+            ret = wc_FrodoKemKey_DecodePublicKey(key, encoded, encodedSz);
+        }
+    }
+
+    if ((ret != WH_ERROR_OK) && (type != origType)) {
+        /* Restore the type the caller configured; the error is reported in
+         * ret, so the Init return is not useful here. */
+        wc_FrodoKemKey_Free(key);
+        (void)wc_FrodoKemKey_Init(key, origType, origHeap, origDevId);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_FRODOKEM */
+
 #if defined(WOLFSSL_HAVE_LMS) || defined(WOLFSSL_HAVE_XMSS)
 /* Stateful hash-based signature key serialization helpers (LMS / XMSS).
  *

@@ -30,7 +30,9 @@
 #include "port/posix/posix_time.h"
 #define WOLFHSM_CFG_PORT_GETTIME posixGetTime
 
+#ifndef WOLFHSM_CFG_COMM_DATA_LEN
 #define WOLFHSM_CFG_COMM_DATA_LEN (1024 * 8)
+#endif
 
 /* Disable global keys if WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS is set */
 #ifndef WOLFHSM_CFG_TEST_NO_GLOBAL_KEYS
