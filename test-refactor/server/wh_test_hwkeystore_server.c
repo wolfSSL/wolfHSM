@@ -22,10 +22,11 @@
  * Server-side hardware keystore coverage that needs no client:
  *
  *   _whTest_HwKeystoreModule     - wh_HwKeystore_Init/Register/CheckUse/
- *                                  KeyRef/Cleanup: argument validation, the
- *                                  records, and the owner, usage and trust
- *                                  checks, using a local context (the shared
- *                                  server context is not touched)
+ *                                  KeyIdToRef/KeyRefToId/Cleanup: argument
+ *                                  validation, the records, and the owner,
+ *                                  usage and trust checks, using a local
+ *                                  context (the shared server context is not
+ *                                  touched)
  *   _whTest_HwKeystoreLoadable   - wh_HwKeystore_RegisterLoadable, and what
  *                                  the front end does with an empty key
  *                                  before it would call the port
@@ -150,9 +151,25 @@ static int _whTest_HwKeystoreModule(void)
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwks, conf));
 
     /* The key reference is the server keyId, big-endian */
-    wh_HwKeystore_KeyRef(shared, ref);
+    wh_HwKeystore_KeyIdToRef(shared, ref);
     WH_TEST_ASSERT_RETURN((ref[0] == (uint8_t)(shared >> 8)) &&
                           (ref[1] == (uint8_t)shared));
+
+    /* The port reads the hardware key number from it, whoever owns the key */
+    WH_TEST_ASSERT_RETURN(wh_HwKeystore_KeyRefToId(ref, sizeof(ref)) ==
+                          WH_TEST_HWKEK_ID);
+    wh_HwKeystore_KeyIdToRef(owned, ref);
+    WH_TEST_ASSERT_RETURN(wh_HwKeystore_KeyRefToId(ref, sizeof(ref)) ==
+                          WH_TEST_HWKEK_ID + 1);
+
+    /* Not a hardware key reference: the wrong size, no reference, or another
+     * key type */
+    WH_TEST_ASSERT_RETURN(wh_HwKeystore_KeyRefToId(ref, sizeof(ref) - 1) == 0);
+    WH_TEST_ASSERT_RETURN(wh_HwKeystore_KeyRefToId(NULL, sizeof(ref)) == 0);
+    wh_HwKeystore_KeyIdToRef(
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL, WH_TEST_HWKEK_ID),
+        ref);
+    WH_TEST_ASSERT_RETURN(wh_HwKeystore_KeyRefToId(ref, sizeof(ref)) == 0);
 
     /* Only hardware keyIds with a nonzero ID can be registered */
     WH_TEST_ASSERT_RETURN(

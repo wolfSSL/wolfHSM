@@ -167,10 +167,21 @@ static whHwKeystoreKey* _FindFree(whHwKeystoreContext* context)
     return NULL;
 }
 
-void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref)
+void wh_HwKeystore_KeyIdToRef(whKeyId keyId, uint8_t* ref)
 {
     ref[0] = (uint8_t)(keyId >> 8);
     ref[1] = (uint8_t)keyId;
+}
+
+int wh_HwKeystore_KeyRefToId(const uint8_t* ref, uint32_t refSz)
+{
+    whKeyId keyId;
+
+    if ((ref == NULL) || (refSz != WH_HWKEYSTORE_REF_SIZE)) {
+        return 0;
+    }
+    keyId = (whKeyId)(((whKeyId)ref[0] << 8) | ref[1]);
+    return WH_KEYID_ISHW(keyId) ? (int)WH_KEYID_ID(keyId) : 0;
 }
 
 /* Add a record for keyId, unless its ID is already registered */
@@ -265,7 +276,7 @@ static int _PortImport(int devId, whKeyId keyId, const uint8_t* key,
 {
     uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 
-    wh_HwKeystore_KeyRef(keyId, ref);
+    wh_HwKeystore_KeyIdToRef(keyId, ref);
     return wc_KeyStore_ImportPlain(devId, ref, sizeof(ref), WC_KEYSTORE_KEY_AES,
                                    key, keySz, 0, NULL);
 }
@@ -287,7 +298,7 @@ static int _Remove(int devId, whHwKeystoreKey* entry)
     uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
     int     ret;
 
-    wh_HwKeystore_KeyRef(entry->id, ref);
+    wh_HwKeystore_KeyIdToRef(entry->id, ref);
     ret = wc_KeyStore_Delete(devId, ref, sizeof(ref), NULL);
     _Empty(entry);
     return ret;
