@@ -1348,22 +1348,52 @@ done:
     return ret;
 }
 
-/* Cache keygen must reject WH_NVM_FLAGS_EPHEMERAL */
-static int _whTest_CryptoMlDsaMakeCacheKeyEphemeral(whClientContext* ctx)
+/* Cache keygen argument checks, including WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoMlDsaMakeCacheKeyArgs(whClientContext* ctx)
 {
-    whKeyId keyId = WH_KEYID_ERASED;
-    int     ret;
+    int      ret    = 0;
+    whKeyId  keyId  = WH_KEYID_ERASED;
+    MlDsaKey pub[1] = {0};
 
-    ret = wh_Client_MlDsaMakeCacheKey(ctx, 0, WC_ML_DSA_44, &keyId,
-                                      WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
-    if (ret != WH_ERROR_BADARGS) {
-        WH_ERROR_PRINT("MlDsaMakeCacheKey with EPHEMERAL returned %d "
-                       "(expected BADARGS)\n",
-                       ret);
-        return WH_TEST_FAIL;
+    if (wh_Client_MlDsaMakeCacheKey(ctx, 0, WC_ML_DSA_44, &keyId,
+                                    WH_NVM_FLAGS_EPHEMERAL, 0,
+                                    NULL) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("ML-DSA cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
     }
-    WH_TEST_PRINT("ML-DSA CACHE-KEY EPHEMERAL REJECT SUCCESS\n");
-    return 0;
+    if ((wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+             ctx, 0, WC_ML_DSA_44, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+             pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_MlDsaMakeCacheKeyAndExportPublic(ctx, 0, WC_ML_DSA_44, NULL,
+                                                    WH_NVM_FLAGS_NONE, 0, NULL,
+                                                    pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_MlDsaMakeCacheKeyAndExportPublic(
+             ctx, 0, WC_ML_DSA_44, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+         WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("ML-DSA cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if ((wh_Client_MlDsaMakeCacheKeyDma(ctx, WC_ML_DSA_44, &keyId,
+                                        WH_NVM_FLAGS_EPHEMERAL, 0, NULL,
+                                        pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_MlDsaMakeCacheKeyDma(ctx, WC_ML_DSA_44, NULL,
+                                        WH_NVM_FLAGS_NONE, 0, NULL,
+                                        pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_MlDsaMakeCacheKeyDma(ctx, WC_ML_DSA_44, &keyId,
+                                        WH_NVM_FLAGS_NONE, 0, NULL,
+                                        NULL) != WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("ML-DSA DMA cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+#endif /* WOLFHSM_CFG_DMA */
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("ML-DSA CACHE-KEY ARGS SUCCESS\n");
+    }
+    return ret;
 }
 #endif /* make/sign/verify && ML_DSA_44 */
 
@@ -1391,7 +1421,7 @@ int whTest_Crypto_MlDsa(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaCacheKeyAndExportPublic(ctx));
 #endif
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaBufferTooSmall(ctx));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaMakeCacheKeyEphemeral(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaMakeCacheKeyArgs(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaDmaClient(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoMlDsaExportPublicKeyDma(ctx));

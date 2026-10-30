@@ -727,22 +727,36 @@ done:
     return ret;
 }
 
-/* Cache keygen must reject WH_NVM_FLAGS_EPHEMERAL */
-static int _whTest_CryptoEd25519MakeCacheKeyEphemeral(whClientContext* ctx)
+/* Cache keygen argument checks, including WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoEd25519MakeCacheKeyArgs(whClientContext* ctx)
 {
-    whKeyId keyId = WH_KEYID_ERASED;
-    int     ret;
+    int         ret    = 0;
+    whKeyId     keyId  = WH_KEYID_ERASED;
+    ed25519_key pub[1] = {0};
 
-    ret = wh_Client_Ed25519MakeCacheKey(ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0,
-                                        NULL);
-    if (ret != WH_ERROR_BADARGS) {
-        WH_ERROR_PRINT("Ed25519MakeCacheKey with EPHEMERAL returned %d "
-                       "(expected BADARGS)\n",
-                       ret);
-        return WH_TEST_FAIL;
+    if (wh_Client_Ed25519MakeCacheKey(ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0,
+                                      NULL) != WH_ERROR_BADARGS) {
+        WH_ERROR_PRINT("Ed25519 cache keygen accepted EPHEMERAL\n");
+        ret = WH_TEST_FAIL;
     }
-    WH_TEST_PRINT("Ed25519 CACHE-KEY EPHEMERAL REJECT SUCCESS\n");
-    return 0;
+    if ((wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+             ctx, &keyId, WH_NVM_FLAGS_EPHEMERAL, 0, NULL, pub) !=
+         WH_ERROR_BADARGS) ||
+        (wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+             ctx, NULL, WH_NVM_FLAGS_NONE, 0, NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_Ed25519MakeCacheKeyAndExportPublic(
+             ctx, &keyId, WH_NVM_FLAGS_NONE, 0, NULL, NULL) !=
+         WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("Ed25519 cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 CACHE-KEY ARGS SUCCESS\n");
+    }
+    return ret;
 }
 
 /* A NULL key must be rejected before its devCtx is read */
@@ -784,7 +798,7 @@ int whTest_Crypto_Ed25519(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519CacheKeyAndExportPublic(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519BufferTooSmall(ctx));
-    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519MakeCacheKeyEphemeral(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519MakeCacheKeyArgs(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519NullKey(ctx));
     return 0;
 }

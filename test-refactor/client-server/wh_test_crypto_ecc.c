@@ -652,6 +652,37 @@ static int _whTest_CryptoEccCacheKeyAndExportPublic(whClientContext* ctx)
     return ret;
 }
 
+/* Cache keygen argument checks, including WH_NVM_FLAGS_EPHEMERAL */
+static int _whTest_CryptoEccMakeCacheKeyArgs(whClientContext* ctx)
+{
+    int     ret    = 0;
+    whKeyId keyId  = WH_KEYID_ERASED;
+    ecc_key pub[1] = {0};
+
+    if ((wh_Client_EccMakeCacheKeyAndExportPublic(
+             ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
+             WH_NVM_FLAGS_EPHEMERAL, 0, NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_EccMakeCacheKeyAndExportPublic(
+             NULL, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
+             WH_NVM_FLAGS_NONE, 0, NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_EccMakeCacheKeyAndExportPublic(
+             ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, NULL, WH_NVM_FLAGS_NONE,
+             0, NULL, pub) != WH_ERROR_BADARGS) ||
+        (wh_Client_EccMakeCacheKeyAndExportPublic(
+             ctx, TEST_ECC_KEYSIZE, TEST_ECC_CURVE_ID, &keyId,
+             WH_NVM_FLAGS_NONE, 0, NULL, NULL) != WH_ERROR_BADARGS)) {
+        WH_ERROR_PRINT("ECC cache keygen argument check failed\n");
+        ret = WH_TEST_FAIL;
+    }
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC CACHE-KEY ARGS SUCCESS\n");
+    }
+    return ret;
+}
+
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
 
 /* Build a private-key-only ECC key bound to devId, along with a locally
@@ -2388,6 +2419,7 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheDuplicate(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCacheKeyAndExportPublic(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccMakeCacheKeyArgs(ctx));
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccMakePub(ctx));
 #ifdef HAVE_ECC_CHECK_KEY
