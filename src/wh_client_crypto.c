@@ -11866,6 +11866,8 @@ int wh_Client_SlhDsaVerify(whClientContext* ctx, const byte* sig,
         return WH_ERROR_BADARGS;
     }
 
+    *out_res = 0;
+
     /* M' already contains any context, so drop it */
     if (isMPrime != 0) {
         contextLen = 0;
@@ -12137,9 +12139,10 @@ int wh_Client_SlhDsaExportKeyDma(whClientContext* ctx, whKeyId keyId,
                                  SlhDsaKey* key, uint16_t label_len,
                                  uint8_t* label)
 {
-    int      ret                                       = WH_ERROR_OK;
-    byte     buffer[WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE] = {0};
-    uint16_t buffer_len                                = sizeof(buffer);
+    int ret = WH_ERROR_OK;
+    WH_DMA_ALIGNED byte
+             buffer[WH_DMA_PAD_SIZE(WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE)] = {0};
+    uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
         return WH_ERROR_BADARGS;
@@ -12161,9 +12164,10 @@ int wh_Client_SlhDsaExportPublicKeyDma(whClientContext* ctx, whKeyId keyId,
                                        SlhDsaKey* key, uint16_t label_len,
                                        uint8_t* label)
 {
-    int      ret;
-    byte     buffer[WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE] = {0};
-    uint16_t buffer_len                                = sizeof(buffer);
+    int ret;
+    WH_DMA_ALIGNED byte
+             buffer[WH_DMA_PAD_SIZE(WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE)] = {0};
+    uint16_t buffer_len = sizeof(buffer);
 
     if ((ctx == NULL) || WH_KEYID_ISERASED(keyId) || (key == NULL)) {
         return WH_ERROR_BADARGS;
@@ -12184,9 +12188,10 @@ static int _SlhDsaMakeKeyDma(whClientContext* ctx, int param, const byte* seed,
                              const uint8_t* label, SlhDsaKey* key,
                              int* out_committed)
 {
-    int      ret    = WH_ERROR_OK;
-    whKeyId  key_id = WH_KEYID_ERASED;
-    byte     buffer[WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE];
+    int     ret    = WH_ERROR_OK;
+    whKeyId key_id = WH_KEYID_ERASED;
+    WH_DMA_ALIGNED byte
+             buffer[WH_DMA_PAD_SIZE(WH_CRYPTO_SLHDSA_MAX_KEY_DER_SIZE)];
     uint8_t* dataPtr                                   = NULL;
     whMessageCrypto_SlhDsaKeyGenDmaRequest*  req       = NULL;
     whMessageCrypto_SlhDsaKeyGenDmaResponse* res       = NULL;
@@ -12611,6 +12616,8 @@ int wh_Client_SlhDsaVerifyDma(whClientContext* ctx, const byte* sig,
         ((context == NULL) && (contextLen > 0))) {
         return WH_ERROR_BADARGS;
     }
+
+    *out_res = 0;
 
     /* M' already contains any context, so drop it */
     if (isMPrime != 0) {

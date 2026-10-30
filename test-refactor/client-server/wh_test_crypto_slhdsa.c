@@ -217,6 +217,20 @@ static int _whTest_CryptoSlhDsaClient(whClientContext* ctx)
             ret = WH_TEST_FAIL;
             goto done;
         }
+
+        verified = 1;
+        /* A failed request must still clear the result */
+        ret = wh_Client_SlhDsaVerify(ctx, sig, sigLen - 1, msg, sizeof(msg),
+                                     &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
+                                     0);
+        if ((ret == 0) || verified) {
+            WH_ERROR_PRINT("SLH-DSA non-DMA short signature: ret %d, "
+                           "verified %d\n",
+                           ret, verified);
+            ret = WH_TEST_FAIL;
+            goto done;
+        }
+        ret = 0;
     }
 
     /* FIPS 205 context string */
@@ -2635,13 +2649,13 @@ static int _whTest_CryptoSlhDsaNoSign(whClientContext* ctx)
  * comm buffer holds, so this is the DMA path end to end. */
 static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
 {
-    int       devId = WH_CLIENT_DEVID(ctx);
-    int       ret;
-    SlhDsaKey key[1];
-    byte      msg[] = "Test message for DMA SLH-DSA";
-    byte      sig[WH_TEST_SLHDSA_DMA_SIG_LEN];
-    word32    sigLen   = sizeof(sig);
-    int       verified = 0;
+    int                 devId = WH_CLIENT_DEVID(ctx);
+    int                 ret;
+    SlhDsaKey           key[1];
+    byte                msg[] = "Test message for DMA SLH-DSA";
+    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(WH_TEST_SLHDSA_DMA_SIG_LEN)];
+    word32              sigLen   = sizeof(sig);
+    int                 verified = 0;
 
     ret = wc_SlhDsaKey_Init(key, WH_TEST_SLHDSA_DMA_PARAM, NULL, devId);
     if (ret != 0) {
@@ -2694,6 +2708,18 @@ static int _whTest_CryptoSlhDsaDmaClient(whClientContext* ctx)
         goto done;
     }
 
+    verified = 1;
+    /* A failed request must still clear the result */
+    ret = wh_Client_SlhDsaVerifyDma(ctx, sig, sigLen - 1, msg, sizeof(msg),
+                                    &verified, key, NULL, 0, WC_HASH_TYPE_NONE,
+                                    0);
+    if ((ret == 0) || verified) {
+        WH_ERROR_PRINT("SLH-DSA DMA short signature: ret %d, verified %d\n",
+                       ret, verified);
+        ret = WH_TEST_FAIL;
+        goto done;
+    }
+
     WH_TEST_PRINT("SLH-DSA DMA DEVID=0x%X SUCCESS\n", devId);
     ret = 0;
 
@@ -2738,10 +2764,10 @@ static int _whTest_CryptoSlhDsaDmaCachedKey(whClientContext* ctx)
     (void)wh_Client_SlhDsaSetKeyId(handle, keyId);
 
     {
-        byte   msg[] = "DMA signed by a key that never left the HSM";
-        byte   sig[WH_TEST_SLHDSA_DMA_SIG_LEN];
-        word32 sigLen   = sizeof(sig);
-        int    verified = 0;
+        byte msg[] = "DMA signed by a key that never left the HSM";
+        WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(WH_TEST_SLHDSA_DMA_SIG_LEN)];
+        word32              sigLen   = sizeof(sig);
+        int                 verified = 0;
 
         ret =
             wh_Client_SlhDsaSignDma(ctx, msg, sizeof(msg), sig, &sigLen, handle,
