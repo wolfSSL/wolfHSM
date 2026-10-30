@@ -116,18 +116,6 @@ static const uint8_t _hwKekMaterial[WH_TEST_HWKEK_SIZE] = {
 /* AES-GCM operations the mock device ran with the KEK */
 static int _hwKekOps;
 
-/* Hardware key number named by a key reference, or -1 */
-static int _MockRefId(const unsigned char* ref, int refSz)
-{
-    whKeyId keyId;
-
-    if (refSz != WH_HWKEYSTORE_REF_SIZE) {
-        return -1;
-    }
-    keyId = (whKeyId)(((whKeyId)ref[0] << 8) | ref[1]);
-    return WH_KEYID_ISHW(keyId) ? (int)WH_KEYID_ID(keyId) : -1;
-}
-
 /* Runs AES-GCM with the KEK when the server passes it by reference. Software
  * keys are left to wolfCrypt */
 static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
@@ -149,7 +137,8 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
         return CRYPTOCB_UNAVAILABLE;
     }
     /* No other hardware key holds a KEK */
-    if (_MockRefId(aes->id, aes->idLen) != WH_TEST_HWKEK_ID) {
+    if (wh_HwKeystore_KeyRefToId(aes->id, (uint32_t)aes->idLen) !=
+        WH_TEST_HWKEK_ID) {
         return WC_HW_E;
     }
 

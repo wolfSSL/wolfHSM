@@ -475,7 +475,7 @@ Each layer names a hardware key in its own way:
 
 - **Client**: the hardware key number (1 to 255) with the hardware flag (`WH_KEYID_CLIENT_HW_FLAG`, bit 10) set, normally built with `WH_CLIENT_KEYID_MAKE_HW(n)`. Unlike keystore key IDs, hardware key numbers aren't per client: `WH_CLIENT_KEYID_MAKE_HW(3)` names slot 3 for every client, and the registry decides who may use it.
 - **Server**: the server translates the hardware flag to the dedicated key type `WH_KEYTYPE_HW` (see [Key Cache, Key IDs, and NVM Backing Store](#key-cache-key-ids-and-nvm-backing-store)). USER is the calling client, or 0 with the [global flag](#global-keys), and ID is the hardware key number. The keystore refuses this type, so a hardware key ID only reaches code that supports hardware keys.
-- **Port**: a key reference in the wolfCrypt key object (see [The Port Runs the Operations](#the-port-runs-the-operations)).
+- **Port**: a key reference in the wolfCrypt key object (see [How The Port Runs the Operations](#how-the-port-runs-the-operations)).
 
 #### Where Hardware Keys Can Be Used
 
@@ -547,24 +547,21 @@ The server marks a port key so that no client can clear or replace it, and treat
 
 ##### How The Port Runs the Operations
 
-The server never reads a hardware key. It sets up the wolfCrypt object by reference instead, using wolfCrypt's `WOLF_PRIVATE_KEY_ID` feature (which exposes ID setting helper functions like `wc_AesInit_Id()` or `wc_InitCmac_Id()`). In place of a key, the object then holds a **key reference** in `aes->id` or `cmac->id`: the server key ID as 2 big-endian bytes (`WH_HWKEYSTORE_REF_SIZE`), written by `wh_HwKeystore_KeyRef()`. For a cryptographic operation, wolfCrypt then passes every operation on the object to the port's crypto callback, which must:
+The server never reads a hardware key. It sets up the wolfCrypt object by reference instead, using wolfCrypt's `WOLF_PRIVATE_KEY_ID` feature (which exposes ID setting helper functions like `wc_AesInit_Id()` or `wc_InitCmac_Id()`). In place of a key, the object then holds a **key reference** in `aes->id` or `cmac->id`, written by `wh_HwKeystore_KeyIdToRef()`. The port gets the hardware key number back with `wh_HwKeystore_KeyRefToId()`. For a cryptographic operation, wolfCrypt then passes every operation on the object to the port's crypto callback, which must:
 
-- Run the operation with the hardware key the key reference names, when the object has one. The port then finds the key from the ID field alone.
+- Run the operation with the hardware key the key reference names, when the object has one. If the reference doesn't name a key the port has, return an error such as `WC_HW_E`, never `CRYPTOCB_UNAVAILABLE`, since software has no copy of the key.
 - Keep running state in the cryptographic object, such as `aes->reg`, `aes->tmp` and `aes->left`, or the buffer and digest of a `Cmac`, and not in the port. The server rebuilds the object for each request from the state the client sends back, so that a stream such as AES-CTR or multi-step CMAC can span requests.
 - Treat an object without a key reference as an ordinary software key: run it in hardware, or return `CRYPTOCB_UNAVAILABLE` to leave it to wolfCrypt. A CMAC request with key bytes (`info->cmac.key`) is a software key whatever `cmac->idLen` holds, because wolfCrypt's one-shot `wc_AesCmacGenerate_ex()` passes the `Cmac` to the callback before initializing it.
 - Keep slots it uses for its own purposes, such as for running software keys in hardware, out of reach of clients by never registering them. Otherwise a request's key could overwrite a client's hardware key.
 
 ```c
-/* Hardware key number named by a key reference, or -1 */
+/* Slot of the hardware key a key reference names, or -1. Hardware key n is
+ * slot n */
 static int Port_RefToSlot(const byte* ref, word32 refSz)
 {
-    whKeyId keyId;
+    int id = wh_HwKeystore_KeyRefToId(ref, refSz); /* 0 if not one */
 
-    if ((ref == NULL) || (refSz != WH_HWKEYSTORE_REF_SIZE)) {
-        return -1;
-    }
-    keyId = (whKeyId)((ref[0] << 8) | ref[1]); /* server keyId, big-endian */
-    return WH_KEYID_ISHW(keyId) ? (int)WH_KEYID_ID(keyId) : -1;
+    return ((id > 0) && (id < PORT_SLOTS)) ? id : -1;
 }
 
 static int Port_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx)

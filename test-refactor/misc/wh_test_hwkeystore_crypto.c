@@ -182,20 +182,16 @@ static uint8_t _msg[TEST_MSG_SZ];
 static uint8_t _iv[AES_BLOCK_SIZE];
 static uint8_t _aad[20];
 
-/* Slot named by a key reference (the server keyId, big-endian), or -1 */
+/* Slot named by a key reference, or -1 */
 static int _MockRefSlot(const byte* ref, word32 refSz)
 {
-    whKeyId keyId;
+    int id = wh_HwKeystore_KeyRefToId(ref, refSz);
 
-    if ((ref == NULL) || (refSz != WH_HWKEYSTORE_REF_SIZE)) {
+    /* Hardware key n is slot n */
+    if ((id == 0) || (id >= MOCK_SLOTS) || (_mockRole[id] == MOCK_NONE)) {
         return -1;
     }
-    keyId = (whKeyId)(((whKeyId)ref[0] << 8) | ref[1]);
-    if (!WH_KEYID_ISHW(keyId) || (WH_KEYID_ID(keyId) >= MOCK_SLOTS) ||
-        (_mockRole[WH_KEYID_ID(keyId)] == MOCK_NONE)) {
-        return -1;
-    }
-    return (int)WH_KEYID_ID(keyId);
+    return id;
 }
 
 /* Slot of a key set up by reference. A key wolfCrypt holds itself runs in
@@ -1138,8 +1134,9 @@ static int _whTest_HwKeyMap(TestCtx* t)
         }
         else {
             /* The port didn't register this ID */
-            WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                                  wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
+            WH_TEST_ASSERT_RETURN(
+                WH_ERROR_NOTFOUND ==
+                wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
         }
     }
 

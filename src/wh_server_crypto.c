@@ -3200,7 +3200,7 @@ static int _AesInitForKey(Aes* aes, int devId, whKeyId hwKey)
     if (hwKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 
-        wh_HwKeystore_KeyRef(hwKey, ref);
+        wh_HwKeystore_KeyIdToRef(hwKey, ref);
         return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, devId);
     }
 #else
@@ -4697,7 +4697,7 @@ static int _CmacInitForKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
     if (hwKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 
-        wh_HwKeystore_KeyRef(hwKey, ref);
+        wh_HwKeystore_KeyIdToRef(hwKey, ref);
         return wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, ref,
                               (int)sizeof(ref), NULL, devId);
     }

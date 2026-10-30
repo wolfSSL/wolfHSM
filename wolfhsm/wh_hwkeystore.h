@@ -77,7 +77,8 @@ typedef struct whHwKeystoreCb_t {
 } whHwKeystoreCb;
 
 /* Size of the key reference wolfCrypt passes to the port for a hardware key:
- * the server keyId, big-endian */
+ * the server keyId, big-endian. Ports read it with wh_HwKeystore_KeyRefToId()
+ */
 #define WH_HWKEYSTORE_REF_SIZE 2
 
 /* A hardware key the port registered */
@@ -154,7 +155,20 @@ int wh_HwKeystore_Cleanup(whHwKeystoreContext* context);
  * @param[in] keyId Server keyId of the hardware key
  * @param[out] ref Buffer of WH_HWKEYSTORE_REF_SIZE bytes
  */
-void wh_HwKeystore_KeyRef(whKeyId keyId, uint8_t* ref);
+void wh_HwKeystore_KeyIdToRef(whKeyId keyId, uint8_t* ref);
+
+/**
+ * @brief Read the hardware key's ID from a wolfCrypt key reference.
+ *
+ * Returns only the ID field of the keyId that wh_HwKeystore_KeyIdToRef()
+ * wrote, not its type or owner. The port's crypto callback uses it to find the
+ * hardware key an operation names, so it never decodes a key reference itself.
+ *
+ * @param[in] ref Key reference, such as aes->id or a keystore request's keyRef
+ * @param[in] refSz Size of ref in bytes
+ * @return int The ID (1 to 255), or 0 if ref is not a hardware key reference
+ */
+int wh_HwKeystore_KeyRefToId(const uint8_t* ref, uint32_t refSz);
 
 /**
  * @brief Register a key the port put into the hardware itself, for example at
@@ -180,7 +194,7 @@ int wh_HwKeystore_Register(whHwKeystoreContext* context, whKeyId keyId,
  * @param[in] keyId Hardware key, with the caller in the USER field
  * @param[in] flags WH_NVM_FLAGS_USAGE_* the operation needs (all of them),
  *            plus WH_NVM_FLAGS_TRUSTED to require a key no client can set
- * @param[out] outKeyId Recorded keyId, for wh_HwKeystore_KeyRef()
+ * @param[out] outKeyId Recorded keyId, for wh_HwKeystore_KeyIdToRef()
  * @return int WH_ERROR_OK on success, WH_ERROR_NOTFOUND if the key isn't
  *         registered or nothing is loaded in it, WH_ERROR_ACCESS if another
  *         client owns it or it is not trusted when that was required,

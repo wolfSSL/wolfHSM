@@ -1587,7 +1587,7 @@ static int _KeywrapAesInit(whServerContext* server, Aes* aes,
     if (kek->hwKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
 
-        wh_HwKeystore_KeyRef(kek->hwKey, ref);
+        wh_HwKeystore_KeyIdToRef(kek->hwKey, ref);
         return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, server->devId);
     }
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
