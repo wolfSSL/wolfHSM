@@ -3769,7 +3769,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                     magic, (whMessageKeystore_HwInfoRequest*)req_packet, &req);
 
                 ret = wh_HwKeystore_GetInfo(
-                    server->hwKeystore, server->devId,
+                    server->hwKeystore,
                     wh_KeyId_TranslateFromClient(
                         WH_KEYTYPE_HW, server->comm->client_id,
                         req.hwId | WH_KEYID_CLIENT_HW_FLAG),

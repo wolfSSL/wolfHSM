@@ -26,6 +26,9 @@
  *                                  records, and the owner, usage and trust
  *                                  checks, using a local context (the shared
  *                                  server context is not touched)
+ *   _whTest_HwKeystoreLoadable   - wh_HwKeystore_RegisterLoadable, and what
+ *                                  the front end does with an empty key
+ *                                  before it would call the port
  *   _whTest_HwKeystoreLifecycle  - optional backend Init/Cleanup hook dispatch
  *                                  and the Init-failure return path, using a
  *                                  backend that records its calls
@@ -54,6 +57,11 @@
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_server_keystore.h"
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
+#endif
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -160,6 +168,11 @@ static int _whTest_HwKeystoreModule(void)
             hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 0),
             WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
 
+    /* A port key needs a size */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_HwKeystore_Register(hwks, shared,
+                                                 WH_NVM_FLAGS_USAGE_WRAP, 0));
+
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
         hwks, shared, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
@@ -247,6 +260,105 @@ static int _whTest_HwKeystoreModule(void)
 
     return WH_ERROR_OK;
 }
+
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
+/* Registering loadable keys, and the requests on an empty one that the front
+ * end answers without calling the port. No device is registered for devId,
+ * so a call into the port would fail */
+static int _whTest_HwKeystoreLoadable(void)
+{
+    whHwKeystoreContext hwks[1] = {{0}};
+    whHwKeystoreConfig  conf[1] = {{0}};
+    whKeyId             portKey =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, WH_TEST_HWKEK_ID);
+    whKeyId loadable =
+        WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, WH_TEST_HWKEK_ID + 1);
+    whKeyId unregistered = WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, 9);
+    whKeyId keyId;
+    whKeyId out = WH_KEYID_ERASED;
+    whHwKeystoreInfo info;
+    uint8_t          key[16] = {0};
+    int              devId   = INVALID_DEVID;
+    int              i;
+
+    /* An uninitialized context is refused */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_HwKeystore_RegisterLoadable(hwks, loadable));
+
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwks, conf));
+
+    /* Only hardware keyIds with a nonzero ID can be registered */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_RegisterLoadable(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_HW_USER,
+                                WH_TEST_HWKEK_ID + 1)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_HwKeystore_RegisterLoadable(
+                              hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW,
+                                                  WH_TEST_HW_USER, 0)));
+
+    /* One record per hardware key number, whichever kind it is */
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
+        hwks, portKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_RegisterLoadable(hwks, loadable));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_HwKeystore_RegisterLoadable(hwks, portKey));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_HwKeystore_RegisterLoadable(hwks, loadable));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_HwKeystore_Register(hwks, loadable,
+                                                 WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                                 16));
+
+    /* An empty key can't be used or cleared, and describes as all zeros */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_HwKeystore_CheckUse(hwks, loadable,
+                                                 WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                                 &out));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_HwKeystore_Clear(hwks, devId, loadable));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_HwKeystore_ClearAll(hwks, devId, WH_TEST_HW_USER));
+    memset(&info, 0xFF, sizeof(info));
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_GetInfo(hwks, loadable, &info));
+    WH_TEST_ASSERT_RETURN((info.keyType == 0) && (info.keyBits == 0) &&
+                          (info.flags == 0) && (info.owner == 0));
+
+    /* A port key describes from its record */
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_GetInfo(hwks, portKey, &info));
+    WH_TEST_ASSERT_RETURN((info.keyType == WC_KEYSTORE_KEY_AES) &&
+                          (info.keyBits == 128) &&
+                          (info.flags == WH_NVM_FLAGS_USAGE_ENCRYPT) &&
+                          (info.owner == WH_KEYUSER_GLOBAL));
+
+    /* A key the port didn't register can't be described or loaded, and a
+     * port key can't be loaded */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_HwKeystore_GetInfo(hwks, unregistered, &info));
+    keyId = unregistered;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOTFOUND ==
+        wh_HwKeystore_Load(hwks, devId, &keyId, WH_KEYID_ERASED,
+                           WH_NVM_FLAGS_USAGE_ENCRYPT, key, sizeof(key)));
+    keyId = portKey;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        wh_HwKeystore_Load(hwks, devId, &keyId, WH_KEYID_ERASED,
+                           WH_NVM_FLAGS_USAGE_ENCRYPT, key, sizeof(key)));
+
+    /* Both kinds share the records */
+    for (i = 2; i < WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS; i++) {
+        WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_RegisterLoadable(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, 10 + i)));
+    }
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE ==
+                          wh_HwKeystore_RegisterLoadable(hwks, unregistered));
+
+    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Cleanup(hwks));
+    return WH_ERROR_OK;
+}
+#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
 
 /* Optional backend Init/Cleanup hook dispatch and the Init-failure return
  * path, using a backend that records its hook calls */
@@ -367,6 +479,9 @@ static int _whTest_KeystoreHwOnlyReject(whServerContext* server)
 int whTest_HwKeystoreServer(whServerContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_HwKeystoreModule());
+#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
+    WH_TEST_RETURN_ON_FAIL(_whTest_HwKeystoreLoadable());
+#endif
     WH_TEST_RETURN_ON_FAIL(_whTest_HwKeystoreLifecycle());
     WH_TEST_RETURN_ON_FAIL(_whTest_KeystoreHwOnlyReject(ctx));
 

@@ -286,7 +286,7 @@ typedef struct {
 /* Hardware key info response */
 typedef struct {
     uint32_t rc;
-    uint32_t keyType; /* enum wc_KeyStoreKeyType from the port, 0 if empty */
+    uint32_t keyType; /* WC_KEYSTORE_KEY_AES, or 0 if empty */
     uint32_t keyBits;
     uint16_t flags; /* WH_NVM_FLAGS_USAGE_* the server allows */
     uint16_t owner; /* Client that loaded it, 0 if shared */

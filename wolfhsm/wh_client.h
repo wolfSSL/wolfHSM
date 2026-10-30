@@ -1044,16 +1044,16 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
  *
  * The hardware key keeps the source key's usage flags and can then be used
  * like any key ID wherever hardware keys are supported, for example with
- * wh_Client_AesSetKeyId(). Which hardware keyIds exist and what they can hold
- * depends on the port. The key belongs to this client unless hwKeyId has the
- * global flag. Erasing or revoking a key clears every hardware key loaded from
+ * wh_Client_AesSetKeyId(). Only hardware keys the port registered as loadable
+ * can be loaded, and the port decides what they can hold. The key belongs to
+ * this client unless hwKeyId has the global flag. Erasing or revoking a key clears every hardware key loaded from
  * that key ID; evicting it does not. Hardware keys are lost when the HSM
  * resets.
  * Requires a server built with WOLFHSM_CFG_HWKEYSTORE_LOAD.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] hwKeyId Hardware key to load, from WH_CLIENT_KEYID_MAKE_HW(). An
- *            ID of 0 lets the server pick a free one.
+ *            ID of 0 lets the server pick an empty one.
  * @param[in] srcKeyId Key ID of the keystore key to copy.
  * @return int Returns 0 on success, or a negative error code on failure.
  */
@@ -1142,10 +1142,10 @@ int wh_Client_HwKeystoreGetInfoRequest(whClientContext* c, whKeyId hwKeyId);
  * @brief Receives the response to a hardware key info request.
  *
  * @param[in] c Pointer to the client context.
- * @param[out] info What the key holds. keyType is 0 if it is empty.
+ * @param[out] info What the key holds. Every field is 0 if it is empty.
  * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
- *         available yet, or a negative error code on failure (such as a
- *         hardware keyId the port does not have).
+ *         available yet, or a negative error code on failure (such as
+ *         WH_ERROR_NOTFOUND for a hardware key the port did not register).
  */
 int wh_Client_HwKeystoreGetInfoResponse(whClientContext*  c,
                                         whHwKeystoreInfo* info);

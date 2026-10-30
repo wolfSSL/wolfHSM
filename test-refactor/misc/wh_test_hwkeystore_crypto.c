@@ -32,8 +32,9 @@
  *   K3, K4  loadable by clients for generic use
  *   K5-K7   used as scratch keys for port-internal functionality
  * The mock runs each operation with wolfCrypt in software, using the key in
- * the slot, and implements the wolfCrypt keystore callback that loads, clears
- * and describes slots.
+ * the slot, and implements the wolfCrypt keystore callback that loads and
+ * clears slots. At boot it registers K2 as a port key and K3 and K4 as
+ * loadable keys.
  *
  * Each client talks to its server over the autopoll mem transport
  * (wh_test_transport_mem_autopoll.h), so the blocking client APIs work without
@@ -247,26 +248,6 @@ static int _MockKeystore(wc_CryptoInfo* info)
             _mock.loaded[slot] = 0;
             return 0;
 
-        case WC_KEYSTORE_GET_INFO:
-            slot = _MockRefSlot(info->keystore.op.getInfo.keyRef,
-                                info->keystore.op.getInfo.keyRefSz);
-            if (slot < 0) {
-                return BAD_FUNC_ARG;
-            }
-            if (info->keystore.op.getInfo.keyType != NULL) {
-                *info->keystore.op.getInfo.keyType = _mock.loaded[slot]
-                                                         ? WC_KEYSTORE_KEY_AES
-                                                         : WC_KEYSTORE_KEY_NONE;
-            }
-            if (info->keystore.op.getInfo.keyBits != NULL) {
-                *info->keystore.op.getInfo.keyBits =
-                    _mock.loaded[slot] ? 128 : 0;
-            }
-            if (info->keystore.op.getInfo.attrs != NULL) {
-                *info->keystore.op.getInfo.attrs = 0;
-            }
-            return 0;
-
         default:
             return CRYPTOCB_UNAVAILABLE;
     }
@@ -454,19 +435,31 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
     }
 }
 
-/* Boot the mock engine: empty every slot, load the port key into K2 and record
- * it with the hardware keystore. owner is the client that may use it, or 0
- * for every client, and flags the usage it allows */
+/* Boot the mock engine: empty every slot, load the port key into K2, and
+ * register it and the loadable keys with the hardware keystore. owner is the
+ * client that may use the port key, or 0 for every client, and flags the usage
+ * it allows */
 static int _MockBoot(whHwKeystoreContext* hwKeystore, uint16_t owner,
                      whNvmFlags flags)
 {
+    int ret;
+    int slot;
+
     memset(&_mock, 0, sizeof(_mock));
     memcpy(_mock.key[MOCK_PORT_SLOT], _portKey, sizeof(_portKey));
     _mock.loaded[MOCK_PORT_SLOT] = 1;
 
-    return wh_HwKeystore_Register(
+    ret = wh_HwKeystore_Register(
         hwKeystore, WH_MAKE_KEYID(WH_KEYTYPE_HW, owner, MOCK_PORT_SLOT), flags,
         AES_128_KEY_SIZE);
+    for (slot = 0; (ret == WH_ERROR_OK) && (slot < MOCK_SLOTS); slot++) {
+        if (_mockRole[slot] == MOCK_LOAD) {
+            ret = wh_HwKeystore_RegisterLoadable(
+                hwKeystore,
+                WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, slot));
+        }
+    }
+    return ret;
 }
 
 /* ------------------------------------------------------------------------
@@ -1144,9 +1137,9 @@ static int _whTest_HwKeyMap(TestCtx* t)
             WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, id, 0, 0, 0));
         }
         else {
-            /* The port has no hardware key with this ID */
-            WH_TEST_ASSERT_RETURN(
-                BAD_FUNC_ARG == wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
+            /* The port didn't register this ID */
+            WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                                  wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
         }
     }
 
@@ -1304,7 +1297,7 @@ static int _whTest_HwKeyAllocation(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(c1, src1));
     WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hw1, _keyC));
 
-    /* ID 0 names no key, and ID 9 isn't loaded */
+    /* ID 0 names no key, and the port didn't register ID 9 */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == _TryEcb(c1, HW(0), 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, HW(9), 1));
 
@@ -1463,8 +1456,8 @@ static int _whTest_HwKeySource(TestCtx* t)
 }
 
 /* If the port can't clear a copy, erase, revoke and Clear report the error,
- * and the copy can't be used anyway. The key stays in the slot until a load
- * replaces it */
+ * and the copy can't be used anyway. The server marks the key empty, and the
+ * key stays in the slot until a load replaces it */
 static int _whTest_HwKeyDeleteFails(TestCtx* t)
 {
     whClientContext* c    = t->pair[0].client;
@@ -1484,13 +1477,14 @@ static int _whTest_HwKeyDeleteFails(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
     WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
 
-    /* Erase. The key is still in the slot, with no owner */
+    /* Erase. The key is still in the slot, but the server reports it empty */
     _mock.failDelete = 1;
     WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_KeyErase(c, src1));
     _mock.failDelete = 0;
+    WH_TEST_ASSERT_RETURN(_mock.loaded[WH_KEYID_ID(hw1)] != 0);
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw1, 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw1));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 1, 0, 0));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 0, 0, 0));
 
     /* Revoke */
     _mock.failDelete = 1;
@@ -1499,10 +1493,10 @@ static int _whTest_HwKeyDeleteFails(TestCtx* t)
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw2, 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw2));
 
-    /* The ID 0 search skips both slots. Loading a key by ID replaces the old
-     * one */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE == _Load(c, HW(0), src3, &tmp));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, hw1, src3, &tmp));
+    /* The ID 0 search takes the first of them again, and the load replaces
+     * the old key */
+    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src3, &tmp));
+    WH_TEST_ASSERT_RETURN(tmp == hw1);
     WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hw1, _keyC));
 
     /* Clear */
@@ -1553,10 +1547,10 @@ static int _whTest_HwKeyRefused(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src256));
 
-    /* Targets: IDs that aren't loadable hardware keys, and the port key */
-    WH_TEST_ASSERT_RETURN(BAD_FUNC_ARG == _Load(c, HW(1), src, &hwId));
-    WH_TEST_ASSERT_RETURN(BAD_FUNC_ARG == _Load(c, HW(5), src, &hwId));
-    WH_TEST_ASSERT_RETURN(BAD_FUNC_ARG == _Load(c, HW(9), src, &hwId));
+    /* Targets: IDs the port didn't register, and the port key */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(1), src, &hwId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(5), src, &hwId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(9), src, &hwId));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           _Load(c, HW(MOCK_PORT_SLOT), src, &hwId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
