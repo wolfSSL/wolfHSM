@@ -52,6 +52,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
+#include "wh_test_cert_data_extern.h"
 
 #if !defined(NO_RSA) || defined(HAVE_ECC)
 #include "gen/wh_test_wolfboot_img_data.h"
@@ -737,9 +738,6 @@ static int _whTest_ServerImgMgrWolfBootCertChainRsa4096(whServerContext* server)
         "IMG_MGR wolfBoot Cert Chain RSA4096 Test completed successfully!\n");
     return WH_TEST_SUCCESS;
 }
-
-extern const unsigned char ROOT_A_CERT[];
-extern const size_t        ROOT_A_CERT_len;
 
 /* Store a root CA cert in NVM */
 static int _certChainAddRoot(whNvmContext* nvm, whNvmId id, const uint8_t* cert,
