@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 wolfSSL Inc.
+ * Copyright (C) 2026 wolfSSL Inc.
  *
  * This file is part of wolfHSM.
  *
@@ -140,6 +140,20 @@
 /* Enables wc_Sha3_SetFlags so the SHA3 Keccak-mode reject/fallback paths are
  * compiled and exercised by the test suite. */
 #define WOLFSSL_HASH_FLAGS
+
+/* SM2/SM3/SM4 Options, set by SM=1. Needs wolfsm installed into wolfSSL. */
+#ifdef WOLFHSM_CFG_TEST_SM
+#define WOLFSSL_SM2
+#define WOLFSSL_SM3
+/* sm2.c decodes the curve parameters from hex */
+#define WOLFSSL_BASE16
+#define WOLFSSL_SM4
+#define WOLFSSL_SM4_ECB
+#define WOLFSSL_SM4_CBC
+#define WOLFSSL_SM4_CTR
+#define WOLFSSL_SM4_GCM
+#define WOLFSSL_SM4_CCM
+#endif /* WOLFHSM_CFG_TEST_SM */
 
 /* ML-KEM Options */
 #define WOLFSSL_HAVE_MLKEM
