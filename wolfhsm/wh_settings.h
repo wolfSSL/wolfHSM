@@ -127,6 +127,12 @@
  *  WH_ALIGN8 - Compiler-specific 8-byte alignment attribute.
  *      Default: Detected from the compiler
  *
+ *  WOLFHSM_CFG_FLASH_UNIT_NO_ALIGN8_CHECK - If defined, skip the compile-time
+ *  check that whFlashUnit is 8-byte aligned. The size check is still enforced.
+ *  When this option is defined, whFlashUnit may be less than 8-byte aligned,
+ *  so the flash callbacks must not assume 8-byte aligned buffers.
+ *      Default: Not defined
+ *
  *  WOLFHSM_CFG_NVM_FLASH_CRC16 - If defined, the nvm_flash backend stores a
  *  CRC16 of each object's metadata and data in the on-flash object state and
  *  verifies them: metadata when the directory is loaded, data on full-object
