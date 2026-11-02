@@ -913,17 +913,14 @@ static int simulateFailureWithPrecedingObject(void)
     return 0;
 }
 
-/* Flash images for the live context tests below. Static to keep them off the
- * stack */
-static uint8_t liveMemory[FLASH_RAM_SIZE];
-static uint8_t liveBackup[FLASH_RAM_SIZE];
-
 /* Fail one add part way through, then keep using the same context without a
  * reboot. Later adds must land on clean flash, and the live directory must
  * match the one a reboot rebuilds from flash. failAfter picks the failing
  * program: 1 epoch, 2 metadata, 3 start, 4 data, 5 count. */
 static int simulateFailureWithoutReboot(int failAfter)
 {
+    uint8_t               liveMemory[FLASH_RAM_SIZE] = {0};
+    uint8_t               liveBackup[FLASH_RAM_SIZE] = {0};
     const whFlashCb       flashCb[1]         = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx      flashCtx[1]        = {0};
     whFlashRamsimCfg      flashCfg[1]        = {{
@@ -1028,6 +1025,8 @@ static int simulateFailureWithoutReboot(int failAfter)
  * after a data or count failure. */
 static int simulateReloadFailure(int failAfter, int failRead)
 {
+    uint8_t               liveMemory[FLASH_RAM_SIZE] = {0};
+    uint8_t               liveBackup[FLASH_RAM_SIZE] = {0};
     const whFlashCb       flashCb[1]         = {WH_FLASH_RAMSIM_CB};
     whFlashRamsimCtx      flashCtx[1]        = {0};
     whFlashRamsimCfg      flashCfg[1]        = {{
