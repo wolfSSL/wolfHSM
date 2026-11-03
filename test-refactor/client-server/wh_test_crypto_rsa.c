@@ -22,6 +22,7 @@
  * RSA encrypt/decrypt round-trips routed through the server via the
  * per-client devId (WH_CLIENT_DEVID):
  * ephemeral key, server-exported key, and server-cached key paths.
+ * Also the async request/response API on cached and exported keys.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -662,6 +663,237 @@ static int _whTest_CryptoRsaCachedKey(whClientContext* ctx)
 }
 #endif /* USE_CERT_BUFFERS_2048 */
 
+#ifdef WOLFSSL_KEY_GEN
+/* Bad async API arguments fail before anything is sent */
+static int _whTest_CryptoRsaAsyncArgs(whClientContext* ctx)
+{
+    /* Any non-erased id, so only the NULL context is wrong */
+    const whKeyId anyKeyId = 1;
+    uint8_t       buf[8]   = {0};
+    whKeyId       outId    = WH_KEYID_ERASED;
+    int           size     = 0;
+
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaMakeCacheKeyRequest(
+                              ctx, RSA_KEY_BITS, RSA_EXPONENT, WH_KEYID_ERASED,
+                              WH_NVM_FLAGS_EPHEMERAL, 0, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaGetSizeRequest(NULL, anyKeyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaGetSizeRequest(ctx, WH_KEYID_ERASED));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Client_RsaFunctionRequest(ctx, WH_KEYID_ERASED, RSA_PUBLIC_ENCRYPT,
+                                     buf, sizeof(buf), sizeof(buf)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaGetSizeResponse(NULL, &size));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaGetSizeResponse(ctx, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaFunctionResponse(ctx, buf, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaMakeCacheKeyResponse(NULL, &outId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaMakeCacheKeyResponse(ctx, NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_Client_RsaMakeExportKeyResponse(ctx, NULL));
+
+    WH_TEST_PRINT("RSA async args SUCCESS\n");
+    return 0;
+}
+
+static int _whTest_RsaFunctionAsync(whClientContext* ctx, whKeyId keyId,
+                                    int type, const uint8_t* in, uint16_t inLen,
+                                    uint16_t capacity, uint8_t* out,
+                                    uint16_t* outLen)
+{
+    int ret =
+        wh_Client_RsaFunctionRequest(ctx, keyId, type, in, inLen, capacity);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RsaFunctionResponse(ctx, out, outLen);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+/* Async API on a cached key: keygen, size, raw sign/verify, small output */
+static int _whTest_CryptoRsaAsyncCacheKey(whClientContext* ctx)
+{
+    const char plainText[] = WH_TEST_RSA_PLAINTEXT;
+    uint8_t    msg[RSA_KEY_BYTES];
+    uint8_t    sig[RSA_KEY_BYTES];
+    uint8_t    finalText[RSA_KEY_BYTES];
+    uint8_t    small[8];
+    uint8_t    sentinel[sizeof(small)];
+    uint16_t   sigLen   = sizeof(sig);
+    uint16_t   finalLen = sizeof(finalText);
+    uint16_t   smallLen = sizeof(small);
+    whKeyId    keyId    = WH_KEYID_ERASED;
+    int        size     = 0;
+    int        ret;
+
+    /* Leading zeros keep msg below the modulus so raw RSA round-trips */
+    memset(msg, 0, sizeof(msg));
+    memcpy(msg + sizeof(msg) - sizeof(plainText), plainText, sizeof(plainText));
+    memset(small, 0xAA, sizeof(small));
+    memcpy(sentinel, small, sizeof(sentinel));
+
+    ret = wh_Client_RsaMakeCacheKeyRequest(
+        ctx, RSA_KEY_BITS, RSA_EXPONENT, WH_KEYID_ERASED,
+        WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 0, NULL);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RsaMakeCacheKeyResponse(ctx, &keyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("RSA async cache keygen failed %d\n", ret);
+    }
+    else if (WH_KEYID_ISERASED(keyId)) {
+        WH_ERROR_PRINT("RSA async cache keygen returned an erased keyId\n");
+        ret = WH_TEST_FAIL;
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_RsaGetSizeRequest(ctx, keyId);
+        if (ret == 0) {
+            do {
+                ret = wh_Client_RsaGetSizeResponse(ctx, &size);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("RSA async get size failed %d\n", ret);
+        }
+        else if (size != RSA_KEY_BYTES) {
+            WH_ERROR_PRINT("RSA async size %d, expected %d\n", size,
+                           RSA_KEY_BYTES);
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    /* Unpadded private encrypt is a raw sign */
+    if (ret == 0) {
+        ret = _whTest_RsaFunctionAsync(ctx, keyId, RSA_PRIVATE_ENCRYPT, msg,
+                                       sizeof(msg), sizeof(sig), sig, &sigLen);
+        if (ret != 0) {
+            WH_ERROR_PRINT("RSA async sign failed %d\n", ret);
+        }
+        else if (sigLen != RSA_KEY_BYTES) {
+            WH_ERROR_PRINT("RSA async sign length %u, expected %d\n",
+                           (unsigned)sigLen, RSA_KEY_BYTES);
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    /* Undersized output reports the needed size and is not written */
+    if (ret == 0) {
+        ret = _whTest_RsaFunctionAsync(ctx, keyId, RSA_PRIVATE_ENCRYPT, msg,
+                                       sizeof(msg), sizeof(sig), small,
+                                       &smallLen);
+        if ((ret != WH_ERROR_BUFFER_SIZE) || (smallLen != RSA_KEY_BYTES) ||
+            (memcmp(small, sentinel, sizeof(small)) != 0)) {
+            WH_ERROR_PRINT("RSA async small output: ret %d, len %u, "
+                           "written %d\n",
+                           ret, (unsigned)smallLen,
+                           memcmp(small, sentinel, sizeof(small)) != 0);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* Unpadded public decrypt is a raw verify and recovers msg */
+    if (ret == 0) {
+        ret = _whTest_RsaFunctionAsync(ctx, keyId, RSA_PUBLIC_DECRYPT, sig,
+                                       sigLen, sizeof(finalText), finalText,
+                                       &finalLen);
+        if (ret != 0) {
+            WH_ERROR_PRINT("RSA async verify failed %d\n", ret);
+        }
+        else if ((finalLen != sizeof(msg)) ||
+                 (memcmp(msg, finalText, sizeof(msg)) != 0)) {
+            WH_ERROR_PRINT("RSA async sign/verify mismatch, length %u\n",
+                           (unsigned)finalLen);
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("RSA async cache key SUCCESS\n");
+    }
+    return ret;
+}
+
+/* Async keygen that returns the key to the client, used for a round trip */
+static int _whTest_CryptoRsaAsyncExportKey(whClientContext* ctx)
+{
+    int    devId = WH_CLIENT_DEVID(ctx);
+    int    ret;
+    int    len;
+    WC_RNG rng[1];
+    RsaKey rsa[1];
+    char   plainText[sizeof(WH_TEST_RSA_PLAINTEXT)] = WH_TEST_RSA_PLAINTEXT;
+    byte   cipherText[RSA_KEY_BYTES];
+    byte   finalText[RSA_KEY_BYTES];
+
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_InitRsaKey_ex(rsa, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRsaKey_ex %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wh_Client_RsaMakeExportKeyRequest(ctx, RSA_KEY_BITS, RSA_EXPONENT);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_RsaMakeExportKeyResponse(ctx, rsa);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("RSA async export keygen failed %d\n", ret);
+    }
+
+    if (ret == 0) {
+        len = wc_RsaPublicEncrypt((byte*)plainText, sizeof(plainText),
+                                  cipherText, sizeof(cipherText), rsa, rng);
+        if (len >= 0) {
+            len = wc_RsaPrivateDecrypt(cipherText, (word32)len, finalText,
+                                       sizeof(finalText), rsa);
+        }
+        if (len < 0) {
+            WH_ERROR_PRINT("RSA async exported key round trip failed %d\n",
+                           len);
+            ret = len;
+        }
+        else if (((size_t)len != sizeof(plainText)) ||
+                 (memcmp(plainText, finalText, sizeof(plainText)) != 0)) {
+            WH_ERROR_PRINT("RSA async exported key round trip mismatch\n");
+            ret = WH_TEST_FAIL;
+        }
+    }
+
+    (void)wc_FreeRsaKey(rsa);
+    (void)wc_FreeRng(rng);
+
+    if (ret == 0) {
+        WH_TEST_PRINT("RSA async export key DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_KEY_GEN */
+
 int whTest_Crypto_Rsa(whClientContext* ctx)
 {
 #ifdef WOLFSSL_KEY_GEN
@@ -670,6 +902,9 @@ int whTest_Crypto_Rsa(whClientContext* ctx)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaCacheKeyAndExportPublic(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaMakeCacheKeyArgs(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaBufferTooSmall(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaAsyncArgs(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaAsyncCacheKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaAsyncExportKey(ctx));
 #endif
 #ifdef USE_CERT_BUFFERS_2048
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoRsaCachedKey(ctx));
