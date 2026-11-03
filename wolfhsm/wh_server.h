@@ -140,6 +140,17 @@ typedef struct {
 } whServerDmaContext;
 #endif /* WOLFHSM_CFG_DMA */
 
+/** Server COMM INIT callback */
+
+/* Called on every COMM INIT after the server's own client ID checks, so the
+ * server application can add its own rules, such as matching the ID to the
+ * authenticated transport peer. If the channel has an assigned client ID, the
+ * callback only sees requests for that ID. arg is whServerConfig.commInitCbArg.
+ * Return WH_ERROR_OK to accept clientId. Any other value refuses the COMM INIT.
+ */
+typedef int (*whServerCommInitCb)(whServerContext* server, uint8_t clientId,
+                                  void* arg);
+
 /** Server config and context */
 
 typedef struct whServerConfig_t {
@@ -171,6 +182,8 @@ typedef struct whServerConfig_t {
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER) && !defined(WOLFHSM_CFG_NO_CRYPTO)
     whServerCertConfig* certConfig; /* optional; NULL = no verify callback */
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER && !WOLFHSM_CFG_NO_CRYPTO */
+    whServerCommInitCb commInitCb;    /* optional, NULL for no extra checks */
+    void*              commInitCbArg; /* passed to commInitCb */
 } whServerConfig;
 
 
@@ -184,6 +197,8 @@ struct whServerContext_t {
     whHwKeystoreContext* hwKeystore;
 #endif /* WOLFHSM_CFG_HWKEYSTORE */
     whCommServer  comm[1];
+    whServerCommInitCb commInitCb;
+    void*              commInitCbArg;
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
     int                    devId;

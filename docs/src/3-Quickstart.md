@@ -145,6 +145,7 @@ int main(void)
         .transport_context = (void*)transportCtx,
         .transport_config  = (void*)transportCfg,
         .server_id         = 1, /* server identifier */
+        .client_id         = 1, /* only client 1 may use this channel */
     }};
 
     /* 3. Build the NVM context on top of the NVM-flash layer and flash driver */
@@ -222,7 +223,7 @@ The transport is responsible for moving raw bytes between the client and the ser
 
 The communication layer sits directly above the transport and implements the request/response protocol: message framing, sequence numbers, and endianness handling. The server binds its transport into a `whCommServerConfig`, providing the callback table, the transport context, the transport config, and a `server_id`. The client's `whCommClientConfig` is analogous but carries a `client_id` instead.
 
-The `client_id` is significant: the server learns each client's identifier during the connection handshake, and uses it to keep per-client key caches and other resources isolated from one another. The request/response protocol these structures drive is the **split-transaction, non-blocking** model described in [Client/Server Communication](4-Architecture.md#clientserver-communication).
+The `client_id` is significant: the client sends it during the connection handshake, and the server uses it to keep per-client key caches and other resources isolated from one another. Setting `client_id` in the server's `whCommServerConfig` as well binds the channel to that client, and the server refuses a handshake that asks for any other ID. Leave it at 0 if you don't know in advance which client will use the channel. [Client Identity](5-Features.md#client-identity) explains how the server can still check the ID in that case. The request/response protocol these structures drive is the **split-transaction, non-blocking** model described in [Client/Server Communication](4-Architecture.md#clientserver-communication).
 
 ### NVM Configuration
 

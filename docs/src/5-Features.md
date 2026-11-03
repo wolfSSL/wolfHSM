@@ -34,6 +34,7 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Attribute Certificate (Acert) Support](#attribute-certificate-acert-support)
 - [Communication Layer and Transports](#communication-layer-and-transports)
     - [Communication Layer](#communication-layer)
+    - [Client Identity](#client-identity)
     - [Transport Backends](#transport-backends)
 - [DMA Support](#dma-support)
     - [DMA Dispatch Mode (`wh_Client_SetDmaMode`)](#dma-dispatch-mode-wh_client_setdmamode)
@@ -331,7 +332,7 @@ The server-side `whKeyId` packs three fields into its 16 bits:
 - **USER** (middle 4 bits): the owning client. Value `0` is reserved for the global-key namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is enabled.
 - **ID** (low 8 bits): the number the client chose.
 
-The USER field is what gives each client its own private key space. The server fills it with the connection's client id (assigned at init and checked against `WH_CLIENT_ID_MAX`), so when two clients both use "key 5" they map to different `whKeyId` values and cannot touch each other's key. Every client sees the same `[1, 255]` range, and the ranges never overlap.
+The USER field is what gives each client its own private key space. The server fills it with the connection's client id (bound at COMM INIT and checked against `WH_CLIENT_ID_MAX`), so when two clients both use "key 5" they map to different `whKeyId` values and cannot touch each other's key. Every client sees the same `[1, 255]` range, and the ranges never overlap. This only holds against a client that requests another client's ID when the server binds client IDs to connections, as described in [Client Identity](#client-identity).
 
 Turning to the cache itself: it is statically allocated inside the server context (wolfHSM uses no dynamic memory) and sized at build time by two pairs of macros:
 
@@ -606,6 +607,17 @@ Each request or response is a single packet composed of an 8-byte `whCommHeader`
 The comm layer itself is **stateless** in the protocol sense: each request/response transaction stands alone, no session state is required for the server to interpret it, and the only client-side state that persists between calls is the next sequence number and whether a request is currently outstanding. Higher-level features that do require session state (authentication, monotonic counters, etc.) layer it on top of the comm packets rather than embedding it in the protocol itself. The practical consequence is that a single server can serve multiple independent clients over multiple independent transport instances without those clients sharing any state at the comm layer.
 
 The comm layer is also **non-blocking and split-transaction** end-to-end: `wh_CommClient_SendRequest` and `wh_CommClient_RecvResponse` return `WH_ERROR_NOTREADY` rather than waiting on the transport, and the same convention is propagated up through every higher-level client API. Transport errors below this layer surface as either `WH_ERROR_NOTREADY` (retry) or `WH_ERROR_ABORTED` (fatal — clean up and reinitialize the connection), and the higher-level APIs distinguish between the two so applications can implement appropriate retry or recovery logic. See [Client/Server Communication](4-Architecture.md#clientserver-communication) for the broader request/response model that this layer implements.
+
+### Client Identity
+
+The client ID bound at COMM INIT selects the per-client namespace for keys, NVM objects, counters, certificates, and SHE slots, so the way the server binds that ID determines how well clients are kept apart. The client sends its `client_id` in COMM INIT. By default the server checks that it is in the range 1 to `WH_CLIENT_ID_MAX` and accepts it, which means any client that can reach a channel can ask for any client ID.
+
+Two server-side controls bind the client ID to the connection instead. They can be used on their own or together.
+
+- **Assigned client ID**: set `client_id` in the server's `whCommServerConfig` to the client that channel serves. The server then refuses a COMM INIT that requests any other ID, including a second COMM INIT later in the same session. This fits transports where each channel belongs to one client, such as a protected shared memory region per core. If you don't know in advance which client will use a channel, for example on a TLS listener that serves several clients, leave `client_id` at 0. The server then skips this check and leaves the decision to the callback below.
+- **COMM INIT callback**: set `commInitCb` in `whServerConfig`. The server calls it on every COMM INIT after its own checks, passing the requested client ID and `commInitCbArg`, and refuses the request if it returns anything other than `WH_ERROR_OK`. Use it when the transport knows who is connected, for example to accept only the client ID that belongs to an authenticated TLS peer. When the channel also has an assigned client ID, the callback only sees requests for that ID.
+
+A refused COMM INIT leaves the connection's current binding unchanged, and the client sees `WH_ERROR_ABORTED`. If `client_id` is 0 and no callback is set, the server accepts any client ID in range.
 
 ### Transport Backends
 
