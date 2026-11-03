@@ -289,7 +289,8 @@ typedef struct {
     const whTransportServerCb* transport_cb;
     const void* transport_config;
     uint8_t server_id;
-    uint8_t WH_PAD[7];
+    uint8_t client_id; /* Client ID this channel expects to serve */
+    uint8_t WH_PAD[6];
 } whCommServerConfig;
 
 /* Context structure for a server.  Note the client context will track the
@@ -304,8 +305,10 @@ typedef struct {
     uint8_t* data;
     int initialized;
     uint16_t reqid;
-    uint8_t client_id;
+    uint8_t client_id; /* ID bound by the last accepted COMM INIT */
     uint8_t server_id;
+    uint8_t assigned_client_id; /* expected clientID from config. 0 if unset */
+    uint8_t WH_PAD[7];
 } whCommServer;
 
 /* Reset the state of the server context and begin the connection to a client

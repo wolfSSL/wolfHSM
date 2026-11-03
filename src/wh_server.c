@@ -85,8 +85,16 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         return WH_ERROR_BADARGS;
     }
 
+    /* An assigned client ID must be one a client is allowed to bind */
+    if ((config->comm_config != NULL) &&
+        (config->comm_config->client_id > WH_CLIENT_ID_MAX)) {
+        return WH_ERROR_BADARGS;
+    }
+
     memset(server, 0, sizeof(*server));
-    server->nvm = config->nvm;
+    server->nvm           = config->nvm;
+    server->commInitCb    = config->commInitCb;
+    server->commInitCbArg = config->commInitCbArg;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     server->crypto = config->crypto;
@@ -296,6 +304,32 @@ static int _wh_Server_HandleCommRequest(whServerContext* server,
             (req.client_id > WH_CLIENT_ID_MAX)) {
             *out_resp_size = 0;
             return WH_ERROR_BADARGS;
+        }
+
+        /* A channel with an assigned client ID only accepts that ID. A
+         * refused request leaves the current binding unchanged. */
+        if ((server->comm->assigned_client_id != 0) &&
+            (req.client_id != server->comm->assigned_client_id)) {
+            WH_LOG_F(&server->log, WH_LOG_LEVEL_SECEVENT,
+                     "CommInit: refused client_id=0x%08X, channel is assigned "
+                     "client_id=0x%08X",
+                     req.client_id,
+                     (unsigned int)server->comm->assigned_client_id);
+            *out_resp_size = 0;
+            return WH_ERROR_ACCESS;
+        }
+
+        /* Let the server application apply its own rules */
+        if (server->commInitCb != NULL) {
+            rc = server->commInitCb(server, (uint8_t)req.client_id,
+                                    server->commInitCbArg);
+            if (rc != WH_ERROR_OK) {
+                WH_LOG_F(&server->log, WH_LOG_LEVEL_SECEVENT,
+                         "CommInit: callback refused client_id=0x%08X: %d",
+                         req.client_id, rc);
+                *out_resp_size = 0;
+                return rc;
+            }
         }
 
         /* Process the init action */

@@ -42,6 +42,7 @@
 /* Test declarations and weak skip implementations. */
 WH_TEST_DECL(whTest_CacheHelpers);
 WH_TEST_DECL(whTest_ClientDevId);
+WH_TEST_DECL(whTest_ClientIdBinding);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
@@ -119,6 +120,7 @@ WH_TEST_DECL(whTest_AuthRequestAuthorization);
 const whTestCase whTestsMisc[] = {
     {"whTest_CacheHelpers", whTest_CacheHelpers},
     {"whTest_ClientDevId", whTest_ClientDevId},
+    {"whTest_ClientIdBinding", whTest_ClientIdBinding},
     {"whTest_Comm", whTest_Comm},
     {"whTest_Dma", whTest_Dma},
     {"whTest_DmaNonCoherent", whTest_DmaNonCoherent},

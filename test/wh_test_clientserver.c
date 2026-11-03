@@ -1434,6 +1434,210 @@ int whTest_ClientServerSequential(whTestNvmBackendType nvmType)
 
     return ret;
 }
+
+/* COMM INIT callback state for the client ID binding test */
+typedef struct {
+    int     calls;
+    int     refuseRc;      /* returned for any ID other than allowClientId */
+    uint8_t allowClientId; /* only ID accepted, 0 accepts any */
+    uint8_t lastClientId;
+} whTestCommInitCbState;
+
+static int _testCommInitCb(whServerContext* server, uint8_t clientId, void* arg)
+{
+    whTestCommInitCbState* state = (whTestCommInitCbState*)arg;
+
+    if ((server == NULL) || (state == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    state->calls++;
+    state->lastClientId = clientId;
+    if ((state->allowClientId != 0) && (clientId != state->allowClientId)) {
+        return state->refuseRc;
+    }
+    return WH_ERROR_OK;
+}
+
+/* Start a connected client and server on the memory transport */
+static int _testClientIdPairInit(whClientContext* client,
+                                 whClientConfig*  c_conf,
+                                 whServerContext* server,
+                                 whServerConfig*  s_conf)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Init(server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Init(client, c_conf));
+    return WH_ERROR_OK;
+}
+
+static int _testClientIdPairCleanup(whClientContext* client,
+                                    whServerContext* server)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Server_Cleanup(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_Cleanup(client));
+    return WH_ERROR_OK;
+}
+
+/* End the session with COMM CLOSE, then start a new one on the same server
+ * context */
+static int _testClientIdReconnect(whClientContext* client,
+                                  whServerContext* server)
+{
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseRequest(client));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CommCloseResponse(client));
+    WH_TEST_ASSERT_RETURN(server->comm->client_id == 0);
+    WH_TEST_RETURN_ON_FAIL(wh_Server_SetConnected(server, WH_COMM_CONNECTED));
+    return WH_ERROR_OK;
+}
+
+/* Server-side client ID binding: a client ID assigned to the channel in the
+ * server comm config, and the server COMM INIT callback */
+static int _testClientServerClientIdBinding(void)
+{
+    const uint8_t assignedId = WH_TEST_DEFAULT_CLIENT_ID + 1;
+    const uint8_t otherId    = WH_TEST_DEFAULT_CLIENT_ID + 2;
+
+    /* Transport memory configuration */
+    uint8_t              req[BUFFER_SIZE];
+    uint8_t              resp[BUFFER_SIZE];
+    whTransportMemConfig tmcf[1] = {{
+        .req       = (whTransportMemCsr*)req,
+        .req_size  = sizeof(req),
+        .resp      = (whTransportMemCsr*)resp,
+        .resp_size = sizeof(resp),
+    }};
+
+    /* Client configuration/contexts */
+    whTransportClientCb         tccb[1]    = {WH_TRANSPORT_MEM_CLIENT_CB};
+    whTransportMemClientContext tmcc[1]    = {0};
+    whCommClientConfig          cc_conf[1] = {{
+                 .transport_cb      = tccb,
+                 .transport_context = (void*)tmcc,
+                 .transport_config  = (void*)tmcf,
+                 .client_id         = WH_TEST_DEFAULT_CLIENT_ID,
+    }};
+    whClientConfig              c_conf[1]  = {{
+                      .comm = cc_conf,
+    }};
+    whClientContext             client[1]  = {0};
+
+    /* Server configuration/contexts. COMM INIT needs no NVM or crypto. */
+    whTransportServerCb         tscb[1]    = {WH_TRANSPORT_MEM_SERVER_CB};
+    whTransportMemServerContext tmsc[1]    = {0};
+    whCommServerConfig          cs_conf[1] = {{
+                 .transport_cb      = tscb,
+                 .transport_context = (void*)tmsc,
+                 .transport_config  = (void*)tmcf,
+                 .server_id         = 124,
+    }};
+    whServerConfig              s_conf[1]  = {{
+                      .comm_config = cs_conf,
+    }};
+    whServerContext             server[1]  = {0};
+
+    whTestCommInitCbState cbState;
+
+    WH_TEST_PRINT("Testing client/server: server-assigned client ID...\n");
+
+    /* An assigned ID that no client can bind is a config error */
+    cs_conf->client_id = WH_CLIENT_ID_MAX + 1;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_Server_Init(server, s_conf));
+
+    /* The largest client ID is a valid assignment */
+    cs_conf->client_id = WH_CLIENT_ID_MAX;
+    WH_TEST_RETURN_ON_FAIL(
+        _testClientIdPairInit(client, c_conf, server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, WH_CLIENT_ID_MAX, 1));
+    WH_TEST_RETURN_ON_FAIL(_testClientIdPairCleanup(client, server));
+
+    /* Assigned ID: only that ID can bind, including later in the session */
+    cs_conf->client_id = assignedId;
+    WH_TEST_RETURN_ON_FAIL(
+        _testClientIdPairInit(client, c_conf, server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    /* Still unbound */
+    WH_TEST_ASSERT_RETURN(server->comm->client_id == 0);
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_ASSERT_RETURN(server->comm->client_id == assignedId);
+    /* The range check still applies */
+    WH_TEST_RETURN_ON_FAIL(_testInitClientIdBoundary(client, server, 0, 0));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    /* The assigned ID still applies after a reconnect */
+    WH_TEST_RETURN_ON_FAIL(_testClientIdReconnect(client, server));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    WH_TEST_RETURN_ON_FAIL(_testClientIdPairCleanup(client, server));
+
+    WH_TEST_PRINT("Testing client/server: COMM INIT callback...\n");
+
+    /* Callback only: the callback decides which ID can bind */
+    memset(&cbState, 0, sizeof(cbState));
+    cbState.allowClientId = assignedId;
+    cbState.refuseRc      = WH_ERROR_ACCESS;
+    cs_conf->client_id    = 0;
+    s_conf->commInitCb    = _testCommInitCb;
+    s_conf->commInitCbArg = &cbState;
+    WH_TEST_RETURN_ON_FAIL(
+        _testClientIdPairInit(client, c_conf, server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 1);
+    WH_TEST_ASSERT_RETURN(cbState.lastClientId == assignedId);
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 2);
+    WH_TEST_ASSERT_RETURN(cbState.lastClientId == otherId);
+    WH_TEST_ASSERT_RETURN(server->comm->client_id == assignedId);
+    /* Out of range IDs are refused before the callback runs */
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, WH_CLIENT_ID_MAX + 1, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 2);
+    /* The callback still runs after a reconnect */
+    WH_TEST_RETURN_ON_FAIL(_testClientIdReconnect(client, server));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 3);
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 4);
+    /* Any value other than WH_ERROR_OK refuses, including a positive one */
+    cbState.refuseRc = 1;
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 5);
+    WH_TEST_RETURN_ON_FAIL(_testClientIdPairCleanup(client, server));
+
+    /* Assigned ID and callback: the assigned ID is checked first, and the
+     * callback can still refuse the assigned ID */
+    memset(&cbState, 0, sizeof(cbState));
+    cbState.allowClientId = otherId;
+    cbState.refuseRc      = WH_ERROR_ACCESS;
+    cs_conf->client_id    = assignedId;
+    WH_TEST_RETURN_ON_FAIL(
+        _testClientIdPairInit(client, c_conf, server, s_conf));
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, otherId, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 0);
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 0));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 1);
+    cbState.allowClientId = assignedId;
+    WH_TEST_RETURN_ON_FAIL(
+        _testInitClientIdBoundary(client, server, assignedId, 1));
+    WH_TEST_ASSERT_RETURN(cbState.calls == 2);
+    WH_TEST_RETURN_ON_FAIL(_testClientIdPairCleanup(client, server));
+
+    return WH_ERROR_OK;
+}
 #endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER */
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
@@ -2144,6 +2348,8 @@ int whTest_ClientServer(void)
 {
     WH_TEST_PRINT("Testing client/server sequential: mem...\n");
     WH_TEST_ASSERT(0 == whTest_ClientServerSequential(WH_NVM_TEST_BACKEND_FLASH));
+
+    WH_TEST_ASSERT(0 == _testClientServerClientIdBinding());
 
 #if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
     WH_TEST_PRINT("Testing client/server sequential: mem + flash log...\n");
