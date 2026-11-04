@@ -186,9 +186,9 @@ static int _whTest_HwKeystoreModule(void)
             WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
 
     /* A port key needs a size */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_Register(hwks, shared,
-                                                 WH_NVM_FLAGS_USAGE_WRAP, 0));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_Register(hwks, shared, WH_NVM_FLAGS_USAGE_WRAP, 0));
 
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
         hwks, shared, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_HWKEK_SIZE));
@@ -310,23 +310,22 @@ static int _whTest_HwKeystoreLoadable(void)
         wh_HwKeystore_RegisterLoadable(
             hwks, WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_HW_USER,
                                 WH_TEST_HWKEK_ID + 1)));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_HwKeystore_RegisterLoadable(
-                              hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW,
-                                                  WH_TEST_HW_USER, 0)));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_HwKeystore_RegisterLoadable(
+            hwks, WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_TEST_HW_USER, 0)));
 
     /* One record per hardware key number, whichever kind it is */
-    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Register(
-        hwks, portKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_HwKeystore_Register(hwks, portKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
     WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_RegisterLoadable(hwks, loadable));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_HwKeystore_RegisterLoadable(hwks, portKey));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_HwKeystore_RegisterLoadable(hwks, loadable));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_HwKeystore_Register(hwks, loadable,
-                                                 WH_NVM_FLAGS_USAGE_ENCRYPT,
-                                                 16));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        wh_HwKeystore_Register(hwks, loadable, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
 
     /* An empty key can't be used or cleared, and describes as all zeros */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==

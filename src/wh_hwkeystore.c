@@ -304,8 +304,7 @@ static int _Remove(int devId, whHwKeystoreKey* entry)
     return ret;
 }
 
-int wh_HwKeystore_RegisterLoadable(whHwKeystoreContext* context,
-                                   whKeyId              keyId)
+int wh_HwKeystore_RegisterLoadable(whHwKeystoreContext* context, whKeyId keyId)
 {
     /* No owner until a client loads it */
     return _Add(context,
@@ -340,10 +339,10 @@ int wh_HwKeystore_Load(whHwKeystoreContext* context, int devId,
                     (context->keys[i].len != 0)) {
                     continue;
                 }
-                keyId = WH_MAKE_KEYID(WH_KEYTYPE_HW,
-                                      WH_KEYID_USER(*inout_keyId),
-                                      WH_KEYID_ID(context->keys[i].id));
-                ret   = _PortImport(devId, keyId, key, keySz);
+                keyId =
+                    WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYID_USER(*inout_keyId),
+                                  WH_KEYID_ID(context->keys[i].id));
+                ret = _PortImport(devId, keyId, key, keySz);
                 if (ret == 0) {
                     entry = &context->keys[i];
                     break;

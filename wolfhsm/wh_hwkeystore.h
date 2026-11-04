@@ -214,8 +214,7 @@ int wh_HwKeystore_CheckUse(whHwKeystoreContext* context, whKeyId keyId,
  * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if the key is already
  *         registered, WH_ERROR_NOSPACE if no record is free
  */
-int wh_HwKeystore_RegisterLoadable(whHwKeystoreContext* context,
-                                   whKeyId              keyId);
+int wh_HwKeystore_RegisterLoadable(whHwKeystoreContext* context, whKeyId keyId);
 
 /**
  * @brief Load key material into a loadable hardware key through the port.

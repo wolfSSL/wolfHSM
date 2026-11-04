@@ -1051,10 +1051,10 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
  * like any key ID wherever hardware keys are supported, for example with
  * wh_Client_AesSetKeyId(). Only hardware keys the port registered as loadable
  * can be loaded, and the port decides what they can hold. The key belongs to
- * this client unless hwKeyId has the global flag. Erasing or revoking a key clears every hardware key loaded from
- * that key ID; evicting it does not. Hardware keys are lost when the HSM
- * resets.
- * Requires a server built with WOLFHSM_CFG_HWKEYSTORE_LOAD.
+ * this client unless hwKeyId has the global flag. Erasing or revoking a key
+ * clears every hardware key loaded from that key ID; evicting it does not.
+ * Hardware keys are lost when the HSM resets. Requires a server built with
+ * WOLFHSM_CFG_HWKEYSTORE_LOAD.
  *
  * @param[in] c Pointer to the client context.
  * @param[in] hwKeyId Hardware key to load, from WH_CLIENT_KEYID_MAKE_HW(). An
