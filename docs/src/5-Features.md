@@ -481,23 +481,25 @@ Each layer names a hardware key in its own way:
 
 #### Where Hardware Keys Can Be Used
 
-A client uses a hardware key ID like any other key ID. It binds the ID to a wolfCrypt object with the algorithm's `SetKeyId` call, such as `wh_Client_AesSetKeyId()`, or passes it as the KEK of a [key wrap](#wrapped-keys) call. These operations accept hardware keys (AES and CMAC in both standard and DMA requests):
+A client uses a hardware key ID like any other key ID. It binds the ID to a wolfCrypt object with the algorithm's `SetKeyId` call, such as `wh_Client_AesSetKeyId()`, or passes it as the KEK of a [key wrap](#wrapped-keys) call. The following operations accept hardware keys:
 
-| Operation | Usage flag the hardware key needs |
+| Operation | Required Usage Flags |
 |---|---|
 | AES-ECB, AES-CBC, AES-CTR and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
 | AES-CMAC, one-shot or multi-step | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` |
 | Every key wrap and data wrap operation, as the KEK | `WH_NVM_FLAGS_USAGE_WRAP`. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks), so they take only port keys |
 
-This is the most a port can support. Each port documents which of these its hardware runs, and with which hardware keys. Every other operation refuses a hardware key ID with `WH_ERROR_ACCESS`, including RSA, ECC and the keystore operations (cache, export, commit, evict, erase and revoke). In key wrap only the KEK is in hardware: a key that unwrap-and-cache recovers is an ordinary cached key.
+Each port documents which of these its hardware runs, and with which hardware keys. Every other operation refuses a hardware key ID with `WH_ERROR_ACCESS`.
 
-An operation with a hardware key runs in the port or fails, since wolfCrypt has no copy of the key to fall back on in software. A request sent with [`WH_CRYPTO_AFFINITY_SW`](#hardware-acceleration-and-crypto-affinity), or to a server with no crypto device, fails with `WH_ERROR_NOTFOUND`.
+An operation using a hardware key runs in the port or fails, since wolfCrypt has no copy of the key to fall back on in software. A request sent with [`WH_CRYPTO_AFFINITY_SW`](#hardware-acceleration-and-crypto-affinity), or to a server with no crypto device, fails with `WH_ERROR_NOTFOUND`.
 
 Using the mock port backend as an example, any client can encrypt with the port key in slot 2 by simply referencing it in a crypto operation:
 
+Assuming the port has registered an arbitary HW key ID 2 with the appropriate usage, the client code to use it looks just like any other crypto request, except the keyId has the HW flag set:
+
 ```c
 wc_AesInit(&aes, NULL, WH_CLIENT_DEVID(client));
-wh_Client_AesSetKeyId(&aes, WH_CLIENT_KEYID_MAKE_HW(2)); /* port key */
+wh_Client_AesSetKeyId(&aes, WH_CLIENT_KEYID_MAKE_HW(2)); /* use HW key 2 */
 wc_AesSetIV(&aes, iv);
 wc_AesCbcEncrypt(&aes, cipher, plain, sizeof(plain));
 wc_AesFree(&aes);
@@ -505,18 +507,18 @@ wc_AesFree(&aes);
 
 #### Port and Server Responsibilities
 
-Since the core wolfHSM library is hardware agnostic and portable across supported platforms, the port layer is what ultimately knows which hardware keys exist and how to run operations with them. It registers them with the server, which simply applies the same policy on every port. Clients can also manage loading hardware keys directly when applicable (e.g. supported by the port) via the client HW key load API.
+Since the core wolfHSM library is hardware agnostic and portable across supported platforms, the port layer is what ultimately knows which hardware keys exist and how to run operations with them. The port registers available keys with the server, which can then enforce the usage policies when handling requests. Clients can also manually manage loading hardware keys directly when applicable (e.g. supported by the port) via the direct client HW key load API.
 
 Each port documents:
 
-- each hardware key number, and whether it is a port key or whether clients can load it (with `WOLFHSM_CFG_HWKEYSTORE_LOAD`)
+- Every hardware key number, and whether it is a port key or whether clients can load it (with `WOLFHSM_CFG_HWKEYSTORE_LOAD`)
 - the key types and sizes each hardware key holds, and the operations it supports
 - for each port key, its owner and usage flags, and whether its value is fixed, derived per device, or new at every boot
 - which algorithms run in hardware for keys sent in requests or read from the keystore
 
 ##### How The Port Registers Its Keys
 
-At startup, after `wh_HwKeystore_Init()`, the port registers each key it wrote into the hardware, or found there, with `wh_HwKeystore_Register()`. It passes the key's server key ID, the usage flags the key allows, and its size. `WH_KEYUSER_GLOBAL`/`0` in the key ID user field shares the key with every client, whereas a specific client ID limits it to that client. With `WOLFHSM_CFG_HWKEYSTORE_LOAD`, the port also registers each hardware key clients may load with `wh_HwKeystore_RegisterLoadable()`, passing only its key ID. A key number can be registered only once, and registration fails with `WH_ERROR_NOSPACE` once the registry is full. The server application then binds the front end to every server context through `whServerConfig.hwKeystore`, and sets `whServerConfig.devId` to the device ID of the port's crypto callback:
+At startup, after `wh_HwKeystore_Init()`, the port registers each available key with `wh_HwKeystore_Register()`. It passes the key's server key ID, the usage flags the key allows, and its size. `WH_KEYUSER_GLOBAL`/`0` in the key ID user field shares the key with every client, whereas a specific client ID limits it to that client. With `WOLFHSM_CFG_HWKEYSTORE_LOAD`, the port also registers each hardware key clients may load with `wh_HwKeystore_RegisterLoadable()`, passing only its key ID. A HW key ID can be registered only once, and registration fails with `WH_ERROR_NOSPACE` once the registry is full. The server application then binds the front end to every server context through `whServerConfig.hwKeystore`. The keys can now be used for crypto in the port's crypto callback.
 
 ```c
 static whHwKeystoreContext hwKeystore;
