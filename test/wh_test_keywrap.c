@@ -942,8 +942,8 @@ static int _AesGcm_TestPortKeyKeyWrap(whClientContext* client, WC_RNG* rng)
      * port key flag takes precedence) */
     wrappedKeySz = sizeof(wrappedKey);
     ret          = wh_Client_KeyWrap(
-                 client, WC_CIPHER_AES_GCM, portKekId | WH_KEYID_CLIENT_WRAPPED_FLAG,
-                 plainKey, sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz);
+        client, WC_CIPHER_AES_GCM, portKekId | WH_KEYID_CLIENT_WRAPPED_FLAG,
+        plainKey, sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with wrapped+port KEK %d\n",
                        ret);

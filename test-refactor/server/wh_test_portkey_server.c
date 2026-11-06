@@ -27,6 +27,11 @@
  *                                   usage and trust checks, using a local
  *                                   context (the shared server context is
  *                                   not touched)
+ *   _whTest_PortKeyByValue        - by-value fixed keys and wh_PortKey_Resolve/
+ *                                   Read: an unknown access mode is refused,
+ *                                   and the GetKey hook runs only after the
+ *                                   usual checks and leaves no key bytes
+ *                                   behind when it fails
  *   _whTest_PortKeyLoadable       - wh_PortKey_RegisterLoadable, and what
  *                                   the front end does with an empty key
  *                                   before it would call the port
@@ -74,6 +79,9 @@
 /* USER field value for constructing server-internal port keyIds */
 #define WH_TEST_PORT_USER 1
 
+/* A port's own error code, for the GetKey hook to fail with */
+#define WH_TEST_PORT_ERROR (-30001)
+
 /* Backend context recording optional Init/Cleanup hook dispatch. initRet and
  * cleanupRet let a test force the Init/Cleanup failure paths; initConfig
  * captures the config pointer forwarded to Init to prove it is plumbed
@@ -114,6 +122,46 @@ static const whPortKeyCb _portKeyLifecycleCb = {
 };
 /* clang-format on */
 
+/* GetKey state for _whTest_PortKeyByValue. ret makes the hook fail, and extra
+ * makes it report the wrong key size */
+typedef struct {
+    int     calls;
+    whKeyId lastKeyId;
+    int     ret;
+    int     extra;
+} PortKeyByValue;
+
+static const uint8_t _byValueKey[16] = {
+    0x3c, 0x81, 0x5e, 0x09, 0xd2, 0x47, 0xa8, 0x6b,
+    0x10, 0xf5, 0x92, 0x2d, 0xc4, 0x7e, 0x33, 0xb9,
+};
+
+static int _PortKeyGetKey(void* context, whKeyId keyId, uint8_t* out,
+                          uint16_t* inout_len)
+{
+    PortKeyByValue* rd = (PortKeyByValue*)context;
+
+    rd->calls++;
+    rd->lastKeyId = keyId;
+    if (rd->ret != WH_ERROR_OK) {
+        /* Write part of a key, which must not be left behind */
+        out[0] = 0xA5;
+        return rd->ret;
+    }
+    if (*inout_len < sizeof(_byValueKey)) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    memcpy(out, _byValueKey, sizeof(_byValueKey));
+    *inout_len = (uint16_t)(sizeof(_byValueKey) + rd->extra);
+    return WH_ERROR_OK;
+}
+
+/* clang-format off */
+static const whPortKeyCb _portKeyByValueCb = {
+    .GetKey = _PortKeyGetKey,
+};
+/* clang-format on */
+
 /* wh_PortKey front end in isolation: argument validation, the records, and
  * the checks the server makes on every use of a port key */
 static int _whTest_PortKeyModule(void)
@@ -140,9 +188,9 @@ static int _whTest_PortKeyModule(void)
 
     /* An uninitialized context is refused */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_PortKey_RegisterFixed(pks, shared,
-                                                   WH_NVM_FLAGS_USAGE_WRAP,
-                                                   WH_TEST_PORTKEK_SIZE));
+                          wh_PortKey_RegisterFixed(
+                              pks, shared, WH_NVM_FLAGS_USAGE_WRAP,
+                              WH_TEST_PORTKEK_SIZE, WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_BADARGS ==
         wh_PortKey_CheckUse(pks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP, &out));
@@ -173,33 +221,37 @@ static int _whTest_PortKeyModule(void)
     /* Only port keyIds with a nonzero ID can be registered */
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_BADARGS ==
-        wh_PortKey_RegisterFixed(
-            pks,
-            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL,
-                          WH_TEST_PORTKEK_ID),
-            WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+        wh_PortKey_RegisterFixed(pks,
+                                 WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO,
+                                               WH_KEYUSER_GLOBAL,
+                                               WH_TEST_PORTKEK_ID),
+                                 WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+                                 WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_BADARGS ==
         wh_PortKey_RegisterFixed(
             pks, WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, 0),
-            WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+            WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+            WH_PORTKEY_ACCESS_BY_REF));
 
     /* A fixed key needs a size */
-    WH_TEST_ASSERT_RETURN(
-        WH_ERROR_BADARGS ==
-        wh_PortKey_RegisterFixed(pks, shared, WH_NVM_FLAGS_USAGE_WRAP, 0));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_RegisterFixed(pks, shared,
+                                                   WH_NVM_FLAGS_USAGE_WRAP, 0,
+                                                   WH_PORTKEY_ACCESS_BY_REF));
 
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
-        pks, shared, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+        pks, shared, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+        WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
-        pks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
-        16));
+        pks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, 16,
+        WH_PORTKEY_ACCESS_BY_REF));
 
     /* One record per port key number, whoever owns it */
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_PortKey_RegisterFixed(pks, sharedByUser,
-                                                   WH_NVM_FLAGS_USAGE_WRAP,
-                                                   WH_TEST_PORTKEK_SIZE));
+                          wh_PortKey_RegisterFixed(
+                              pks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP,
+                              WH_TEST_PORTKEK_SIZE, WH_PORTKEY_ACCESS_BY_REF));
 
     /* A shared key: any client can use it, and the recorded keyId comes back
      * for the key reference */
@@ -257,13 +309,13 @@ static int _whTest_PortKeyModule(void)
     for (i = 2; i < WOLFHSM_CFG_PORTKEY_MAX_KEYS; i++) {
         WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
             pks, WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, 10 + i),
-            WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+            WH_NVM_FLAGS_USAGE_ENCRYPT, 16, WH_PORTKEY_ACCESS_BY_REF));
     }
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_NOSPACE ==
         wh_PortKey_RegisterFixed(
             pks, WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, 9),
-            WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+            WH_NVM_FLAGS_USAGE_ENCRYPT, 16, WH_PORTKEY_ACCESS_BY_REF));
 
     /* Cleanup zeroizes the context, after which it is refused */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_PortKey_Cleanup(NULL));
@@ -272,6 +324,242 @@ static int _whTest_PortKeyModule(void)
         WH_ERROR_BADARGS ==
         wh_PortKey_CheckUse(pks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP, &out));
 
+    return WH_ERROR_OK;
+}
+
+/* By-value keys: the front end gets their bytes from the GetKey hook, but only
+ * after the same checks as wh_PortKey_CheckUse() */
+static int _whTest_PortKeyByValue(void)
+{
+    PortKeyByValue   rd      = {0};
+    whPortKeyContext pks[1]  = {{0}};
+    whPortKeyConfig  conf[1] = {{0}};
+    /* A shared by-value key, one for one client, and a key used by reference */
+    whKeyId byValue =
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, WH_TEST_PORTKEK_ID);
+    whKeyId owned = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER,
+                                  WH_TEST_PORTKEK_ID + 1);
+    whKeyId byRef = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
+                                  WH_TEST_PORTKEK_ID + 2);
+    /* The same keys as the client and another client name them */
+    whKeyId byValueByUser =
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER, WH_TEST_PORTKEK_ID);
+    whKeyId ownedByOther = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER + 1,
+                                         WH_TEST_PORTKEK_ID + 1);
+    whKeyId byRefByUser  = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER,
+                                         WH_TEST_PORTKEK_ID + 2);
+    whKeyId out          = WH_KEYID_ERASED;
+    uint8_t key[32];
+    uint16_t keySz;
+    int      i;
+
+    /* Without a GetKey hook no key can be accessed by value */
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(pks, conf));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_PortKey_RegisterFixed(pks, byValue, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
+                                 WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Cleanup(pks));
+
+    conf->cb      = &_portKeyByValueCb;
+    conf->context = &rd;
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(pks, conf));
+
+    /* An unknown access mode is refused, also one that is 0 in a byte */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_PortKey_RegisterFixed(pks, byValue, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
+                                 WH_PORTKEY_ACCESS_BY_VALUE + 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_RegisterFixed(pks, byValue,
+                                                   WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                                   16, 0x100));
+
+    /* A by-value key needs a size, and shares the records with other keys */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_PortKey_RegisterFixed(pks, byValue, WH_NVM_FLAGS_USAGE_ENCRYPT, 0,
+                                 WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_PortKey_RegisterFixed(
+            pks,
+            WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL,
+                          WH_TEST_PORTKEK_ID),
+            WH_NVM_FLAGS_USAGE_ENCRYPT, 16, WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+        pks, byValue, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DERIVE,
+        16, WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_PortKey_RegisterFixed(pks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
+                                 WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+        pks, byRef, WH_NVM_FLAGS_USAGE_ENCRYPT, 16, WH_PORTKEY_ACCESS_BY_REF));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        wh_PortKey_RegisterFixed(pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                 16, WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        wh_PortKey_RegisterFixed(pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                 16, WH_PORTKEY_ACCESS_BY_REF));
+    WH_TEST_ASSERT_RETURN(rd.calls == 0);
+
+    /* The bytes come from the hook, which gets the registered keyId */
+    keySz = sizeof(key);
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Read(
+        pks, byValueByUser, WH_NVM_FLAGS_USAGE_DERIVE, key, &keySz));
+    WH_TEST_ASSERT_RETURN((keySz == sizeof(_byValueKey)) &&
+                          (memcmp(key, _byValueKey, keySz) == 0));
+    WH_TEST_ASSERT_RETURN((rd.calls == 1) && (rd.lastKeyId == byValue));
+
+    /* Resolve returns a by-value key's bytes, with no key reference */
+    memset(key, 0, sizeof(key));
+    keySz = sizeof(key);
+    out   = byRef;
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Resolve(
+        pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT, &out, key, &keySz));
+    WH_TEST_ASSERT_RETURN((out == WH_KEYID_ERASED) &&
+                          (keySz == sizeof(_byValueKey)) &&
+                          (memcmp(key, _byValueKey, keySz) == 0));
+    /* and the recorded keyId, with no bytes, for a key used by reference */
+    keySz = sizeof(key);
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Resolve(
+        pks, byRefByUser, WH_NVM_FLAGS_USAGE_ENCRYPT, &out, key, &keySz));
+    WH_TEST_ASSERT_RETURN((out == byRef) && (keySz == 0));
+    WH_TEST_ASSERT_RETURN(rd.calls == 2);
+
+    /* Read refuses a key used by reference */
+    keySz = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_PortKey_Read(pks, byRefByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+
+    /* CheckUse accepts a by-value key without reading it. It is trusted */
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_CheckUse(
+        pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_TRUSTED,
+        &out));
+    WH_TEST_ASSERT_RETURN(out == byValue);
+    WH_TEST_ASSERT_RETURN(rd.calls == 2);
+
+    /* Refused requests never reach the hook */
+    keySz = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_DECRYPT, key,
+                                          &keySz));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_PortKey_Read(pks, ownedByOther,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOTFOUND ==
+        wh_PortKey_Read(pks,
+                        WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER, 9),
+                        WH_NVM_FLAGS_USAGE_ENCRYPT, key, &keySz));
+    keySz = sizeof(_byValueKey) - 1;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BUFFER_SIZE ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    WH_TEST_ASSERT_RETURN(rd.calls == 2);
+
+    /* Only its client can read the key it owns */
+    keySz = sizeof(key);
+    WH_TEST_RETURN_ON_FAIL(
+        wh_PortKey_Read(pks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT, key, &keySz));
+    WH_TEST_ASSERT_RETURN((rd.calls == 3) && (rd.lastKeyId == owned));
+
+    /* A failed hook leaves no key bytes behind, and its error comes back */
+    rd.ret = WH_TEST_PORT_ERROR;
+    memset(key, 0x5A, sizeof(key));
+    keySz = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_TEST_PORT_ERROR ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    for (i = 0; i < (int)sizeof(key); i++) {
+        WH_TEST_ASSERT_RETURN(key[i] == 0);
+    }
+
+    /* except NOTREADY, which a blocking client would wait on forever */
+    rd.ret = WH_ERROR_NOTREADY;
+    keySz  = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    rd.ret = WH_ERROR_OK;
+
+    /* Nor does a key of the wrong size */
+    rd.extra = 1;
+    memset(key, 0x5A, sizeof(key));
+    keySz = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    for (i = 0; i < (int)sizeof(key); i++) {
+        WH_TEST_ASSERT_RETURN(key[i] == 0);
+    }
+    rd.extra = 0;
+
+    /* Bad arguments */
+    keySz = sizeof(key);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_Read(NULL, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          &keySz));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, NULL,
+                                          &keySz));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_Read(pks, byValueByUser,
+                                          WH_NVM_FLAGS_USAGE_ENCRYPT, key,
+                                          NULL));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_Resolve(pks, byValueByUser,
+                                             WH_NVM_FLAGS_USAGE_ENCRYPT, NULL,
+                                             key, &keySz));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_PortKey_Read(pks,
+                        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_TEST_PORT_USER,
+                                      WH_TEST_PORTKEK_ID),
+                        WH_NVM_FLAGS_USAGE_ENCRYPT, key, &keySz));
+    WH_TEST_ASSERT_RETURN(rd.calls == 6);
+
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+    /* Like any fixed key, clients can't clear or replace it, and it describes
+     * from its record */
+    {
+        whPortKeyInfo info;
+        whKeyId       keyId = byValueByUser;
+
+        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                              wh_PortKey_Clear(pks, INVALID_DEVID, byValue));
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_ACCESS ==
+            wh_PortKey_Load(pks, INVALID_DEVID, &keyId, WH_KEYID_ERASED,
+                            WH_NVM_FLAGS_USAGE_ENCRYPT, _byValueKey,
+                            sizeof(_byValueKey)));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_PortKey_ClearAll(pks, INVALID_DEVID, WH_TEST_PORT_USER));
+        WH_TEST_RETURN_ON_FAIL(wh_PortKey_GetInfo(pks, byValue, &info));
+        WH_TEST_ASSERT_RETURN((info.keyType == WC_KEYSTORE_KEY_AES) &&
+                              (info.keyBits == 128) &&
+                              (info.flags == (WH_NVM_FLAGS_USAGE_ENCRYPT |
+                                              WH_NVM_FLAGS_USAGE_DERIVE)) &&
+                              (info.owner == WH_KEYUSER_GLOBAL));
+        keySz = sizeof(key);
+        WH_TEST_RETURN_ON_FAIL(wh_PortKey_Read(
+            pks, owned, WH_NVM_FLAGS_USAGE_ENCRYPT, key, &keySz));
+    }
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
+
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Cleanup(pks));
     return WH_ERROR_OK;
 }
 
@@ -313,16 +601,18 @@ static int _whTest_PortKeyLoadable(void)
             pks, WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER, 0)));
 
     /* One record per port key number, whichever kind it is */
-    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
-        pks, fixedKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_PortKey_RegisterFixed(pks, fixedKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
+                                 WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterLoadable(pks, loadable));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_PortKey_RegisterLoadable(pks, fixedKey));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_PortKey_RegisterLoadable(pks, loadable));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_PortKey_RegisterFixed(
-                              pks, loadable, WH_NVM_FLAGS_USAGE_ENCRYPT, 16));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_ACCESS ==
+        wh_PortKey_RegisterFixed(pks, loadable, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
+                                 WH_PORTKEY_ACCESS_BY_REF));
 
     /* An empty key can't be used or cleared, and describes as all zeros */
     WH_TEST_ASSERT_RETURN(
@@ -397,9 +687,9 @@ static int _whTest_PortKeyLifecycle(void)
     WH_TEST_ASSERT_RETURN(lc.initConfig == &backendConfig);
     WH_TEST_ASSERT_RETURN(lc.cleanupCalls == 0);
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_PortKey_RegisterFixed(pks, keyId,
-                                                   WH_NVM_FLAGS_USAGE_WRAP,
-                                                   WH_TEST_PORTKEK_SIZE));
+                          wh_PortKey_RegisterFixed(
+                              pks, keyId, WH_NVM_FLAGS_USAGE_WRAP,
+                              WH_TEST_PORTKEK_SIZE, WH_PORTKEY_ACCESS_BY_REF));
 
     /* Init-success path: the backend Init is dispatched exactly once and the
      * context becomes usable */
@@ -408,7 +698,8 @@ static int _whTest_PortKeyLifecycle(void)
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(pks, conf));
     WH_TEST_ASSERT_RETURN(lc.initCalls == 1);
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
-        pks, keyId, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+        pks, keyId, WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+        WH_PORTKEY_ACCESS_BY_REF));
 
     /* Cleanup dispatches the backend Cleanup exactly once */
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_Cleanup(pks));
@@ -492,6 +783,7 @@ static int _whTest_KeystorePortKeyReject(whServerContext* server)
 int whTest_PortKeyServer(whServerContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_PortKeyModule());
+    WH_TEST_RETURN_ON_FAIL(_whTest_PortKeyByValue());
 #ifdef WOLFHSM_CFG_PORTKEY_LOAD
     WH_TEST_RETURN_ON_FAIL(_whTest_PortKeyLoadable());
 #endif

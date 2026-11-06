@@ -19592,10 +19592,10 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     static const whPortKeyCb pksCb      = WH_TEST_PORTKEY_CB;
     whPortKeyContext         portKey[1] = {{0}};
     whPortKeyConfig          pksConf[1] = {
-                 {
-                  .cb      = &pksCb,
-                  .context = NULL,
-                  }
+        {
+         .cb      = &pksCb,
+         .context = NULL,
+         }
     };
 #endif
 

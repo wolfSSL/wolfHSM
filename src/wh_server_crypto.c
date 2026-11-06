@@ -3173,16 +3173,33 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_ED25519 */
 
 #ifndef NO_AES
-/* Check that the client may use a port key for this request. On success
- * *outPortKey is the key to pass to wolfCrypt by reference */
-static int _PortKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
-                            whNvmFlags usage, whKeyId* outPortKey)
+/* Check that the client may use a port key for this request. A by-value key
+ * comes back as bytes in key and *inout_keyLen. Any other key comes back in
+ * *outPortKey, to pass to wolfCrypt by reference for the port to run */
+static int _PortKeyResolve(whServerContext* ctx, int devId, whKeyId keyId,
+                           whNvmFlags usage, whKeyId* outPortKey, uint8_t* key,
+                           uint32_t* inout_keyLen)
 {
 #ifdef WOLFHSM_CFG_PORTKEY
-    if ((ctx->portKey == NULL) || (devId == INVALID_DEVID)) {
+    uint16_t keyLen;
+    int      ret;
+
+    *outPortKey = WH_KEYID_ERASED;
+    if (ctx->portKey == NULL) {
         return WH_ERROR_NOTFOUND;
     }
-    return wh_PortKey_CheckUse(ctx->portKey, keyId, usage, outPortKey);
+    keyLen = (*inout_keyLen > 0xFFFFu) ? 0xFFFFu : (uint16_t)*inout_keyLen;
+    ret    = wh_PortKey_Resolve(ctx->portKey, keyId, usage, outPortKey, key,
+                                &keyLen);
+    if (ret == WH_ERROR_OK) {
+        *inout_keyLen = keyLen;
+        /* A key used by reference needs the port's crypto device */
+        if ((*outPortKey != WH_KEYID_ERASED) && (devId == INVALID_DEVID)) {
+            *outPortKey = WH_KEYID_ERASED;
+            ret         = WH_ERROR_NOTFOUND;
+        }
+    }
+    return ret;
 #else
     /* Port keys are not built in */
     (void)ctx;
@@ -3190,6 +3207,8 @@ static int _PortKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
     (void)keyId;
     (void)usage;
     (void)outPortKey;
+    (void)key;
+    (void)inout_keyLen;
     return WH_ERROR_ACCESS;
 #endif
 }
@@ -3264,11 +3283,17 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (WH_KEYID_ISPORT(key_id)) {
-        /* Port key: used by reference, never read */
-        ret = _PortKeyCheckUse(ctx, devId, key_id,
-                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
-                               &portKey);
+        /* Port key: by reference, or the bytes of a by-value key */
+        uint32_t cachedKeyLen = sizeof(cachedKey);
+
+        ret = _PortKeyResolve(ctx, devId, key_id,
+                              req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                              &portKey, cachedKey, &cachedKeyLen);
+        if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+            key     = cachedKey;
+            key_len = cachedKeyLen;
+        }
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -3434,11 +3459,17 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Freshen key and validate usage policy if key is not erased */
         if (WH_KEYID_ISPORT(keyId)) {
-            /* Port key: used by reference, never read */
-            ret = _PortKeyCheckUse(ctx, devId, keyId,
-                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                   &portKey);
+            /* Port key: by reference, or the bytes of a by-value key */
+            uint32_t cachedKeyLen = sizeof(cachedKey);
+
+            ret = _PortKeyResolve(ctx, devId, keyId,
+                                  req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                               : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                  &portKey, cachedKey, &cachedKeyLen);
+            if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+                key    = cachedKey;
+                keyLen = cachedKeyLen;
+            }
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -3630,11 +3661,17 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Freshen key and validate usage policy if key is not erased */
     if (WH_KEYID_ISPORT(key_id)) {
-        /* Port key: used by reference, never read */
-        ret = _PortKeyCheckUse(ctx, devId, key_id,
-                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
-                               &portKey);
+        /* Port key: by reference, or the bytes of a by-value key */
+        uint32_t cachedKeyLen = sizeof(cachedKey);
+
+        ret = _PortKeyResolve(ctx, devId, key_id,
+                              req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                              &portKey, cachedKey, &cachedKeyLen);
+        if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+            key     = cachedKey;
+            key_len = cachedKeyLen;
+        }
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -3767,11 +3804,17 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Freshen key and validate usage policy if key is not erased */
         if (WH_KEYID_ISPORT(keyId)) {
-            /* Port key: used by reference, never read */
-            ret = _PortKeyCheckUse(ctx, devId, keyId,
-                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                   &portKey);
+            /* Port key: by reference, or the bytes of a by-value key */
+            uint32_t cachedKeyLen = sizeof(cachedKey);
+
+            ret = _PortKeyResolve(ctx, devId, keyId,
+                                  req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                               : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                  &portKey, cachedKey, &cachedKeyLen);
+            if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+                key    = cachedKey;
+                keyLen = cachedKeyLen;
+            }
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -3945,11 +3988,17 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
     if (WH_KEYID_ISPORT(key_id)) {
-        /* Port key: used by reference, never read */
-        ret = _PortKeyCheckUse(ctx, devId, key_id,
-                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
-                               &portKey);
+        /* Port key: by reference, or the bytes of a by-value key */
+        uint32_t cachedKeyLen = sizeof(cachedKey);
+
+        ret = _PortKeyResolve(ctx, devId, key_id,
+                              req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                              &portKey, cachedKey, &cachedKeyLen);
+        if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+            key     = cachedKey;
+            key_len = cachedKeyLen;
+        }
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -4091,11 +4140,17 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Freshen key and validate usage policy if key is not erased */
         if (WH_KEYID_ISPORT(keyId)) {
-            /* Port key: used by reference, never read */
-            ret = _PortKeyCheckUse(ctx, devId, keyId,
-                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                   &portKey);
+            /* Port key: by reference, or the bytes of a by-value key */
+            uint32_t cachedKeyLen = sizeof(cachedKey);
+
+            ret = _PortKeyResolve(ctx, devId, keyId,
+                                  req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                               : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                  &portKey, cachedKey, &cachedKeyLen);
+            if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+                key    = cachedKey;
+                keyLen = cachedKeyLen;
+            }
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -4298,11 +4353,17 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Freshen key and validate usage policy if key is not erased */
     if (WH_KEYID_ISPORT(key_id)) {
-        /* Port key: used by reference, never read */
-        ret = _PortKeyCheckUse(ctx, devId, key_id,
-                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
-                               &portKey);
+        /* Port key: by reference, or the bytes of a by-value key */
+        uint32_t cachedKeyLen = sizeof(cachedKey);
+
+        ret = _PortKeyResolve(ctx, devId, key_id,
+                              req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                              &portKey, cachedKey, &cachedKeyLen);
+        if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+            key     = cachedKey;
+            key_len = cachedKeyLen;
+        }
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -4476,11 +4537,17 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Freshen key and validate usage policy if key is not erased */
         if (WH_KEYID_ISPORT(keyId)) {
-            /* Port key: used by reference, never read */
-            ret = _PortKeyCheckUse(ctx, devId, keyId,
-                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                   &portKey);
+            /* Port key: by reference, or the bytes of a by-value key */
+            uint32_t cachedKeyLen = sizeof(cachedKey);
+
+            ret = _PortKeyResolve(ctx, devId, keyId,
+                                  req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                               : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                  &portKey, cachedKey, &cachedKeyLen);
+            if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
+                key    = cachedKey;
+                keyLen = cachedKeyLen;
+            }
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -4650,15 +4717,24 @@ static int _CmacResolveKey(whServerContext* ctx, int devId,
             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
 
         if (WH_KEYID_ISPORT(keyId)) {
-            /* Port key: used by reference, never read. CMAC accepts sign
-             * or verify usage */
-            ret = _PortKeyCheckUse(ctx, devId, keyId, WH_NVM_FLAGS_USAGE_SIGN,
-                                   outPortKey);
+            /* Port key: by reference, or the bytes of a by-value key. CMAC
+             * accepts sign or verify usage */
+            ret = _PortKeyResolve(ctx, devId, keyId, WH_NVM_FLAGS_USAGE_SIGN,
+                                  outPortKey, outKey, outKeyLen);
             if (ret == WH_ERROR_USAGE) {
-                ret = _PortKeyCheckUse(ctx, devId, keyId,
-                                       WH_NVM_FLAGS_USAGE_VERIFY, outPortKey);
+                ret = _PortKeyResolve(ctx, devId, keyId,
+                                      WH_NVM_FLAGS_USAGE_VERIFY, outPortKey,
+                                      outKey, outKeyLen);
             }
-            *outKeyLen = 0;
+            if ((ret == WH_ERROR_OK) && (*outPortKey == WH_KEYID_ERASED) &&
+                (*outKeyLen != AES_128_KEY_SIZE) &&
+                (*outKeyLen != AES_192_KEY_SIZE) &&
+                (*outKeyLen != AES_256_KEY_SIZE)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            if (ret != WH_ERROR_OK) {
+                *outKeyLen = 0;
+            }
             return ret;
         }
         /* Copy the key into the caller's private buffer, enforcing the usage

@@ -20,20 +20,24 @@
  * wolfhsm/wh_portkey.h
  *
  * Port key front end. Lets clients use keys that the port manages, such as
- * key slots in a crypto accelerator or keys in OTP, without the server ever
- * reading them.
+ * key slots in a crypto accelerator or keys in OTP.
  *
  * At startup the port registers every port key clients may name, and the
  * server keeps a record of each: its owner, the usage flags it allows and,
  * for a key a client loaded, the keystore key it came from. Each request that
  * names a port key is checked against its record. The server then passes
  * the key to wolfCrypt by reference (WOLF_PRIVATE_KEY_ID) and the port's
- * crypto callback runs the operation.
+ * crypto callback runs the operation. For a key accessed by value, the server
+ * instead gets the key's bytes from the port and runs the operation as it does
+ * with a keystore key.
  *
  * The port puts its own keys in place and registers them as fixed keys with
- * wh_PortKey_RegisterFixed(). With WOLFHSM_CFG_PORTKEY_LOAD, it can also
- * register empty loadable keys with wh_PortKey_RegisterLoadable(). Clients load
- * keystore keys into those through the port's WC_ALGO_TYPE_KEYSTORE callback.
+ * wh_PortKey_RegisterFixed(), giving each an access mode: by reference, or by
+ * value if the port supplies its bytes through the GetKey hook. With
+ * WOLFHSM_CFG_PORTKEY_LOAD, the port can also register empty loadable keys with
+ * wh_PortKey_RegisterLoadable(). Clients load keystore keys into those through
+ * the port's WC_ALGO_TYPE_KEYSTORE callback, and they are accessed by
+ * reference.
  *
  * A whPortKeyContext is owned by the application, initialized once with
  * wh_PortKey_Init(), and bound to one or more server contexts through the
@@ -60,8 +64,8 @@
 #endif
 
 /**
- * Optional backend hooks. Both receive the backend's opaque context pointer
- * from whPortKeyConfig and return WH_ERROR_OK on success.
+ * Optional backend hooks. Each receives the backend's opaque context pointer
+ * from whPortKeyConfig and returns WH_ERROR_OK on success.
  */
 
 /** Set up the backend - called once from wh_PortKey_Init() */
@@ -70,10 +74,25 @@ typedef int (*whPortKeyInitCb)(void* context, const void* config);
 /** Tear down the backend - called once from wh_PortKey_Cleanup() */
 typedef int (*whPortKeyCleanupCb)(void* context);
 
-/** Backend hook table. Either hook may be NULL */
+/**
+ * Copy the bytes of a by-value key - called on each use of a fixed key
+ * registered with WH_PORTKEY_ACCESS_BY_VALUE. It runs with the lock held, so it
+ * must not call wh_PortKey_* functions. keyId is the key's registered keyId.
+ *
+ * On entry *inout_len is the size of out. On success, set it to the key size,
+ * which must match the registered size. If the key doesn't fit, return
+ * WH_ERROR_BUFFER_SIZE and write nothing. For a key that isn't available yet,
+ * return a port error code: WH_ERROR_NOTREADY becomes WH_ERROR_ABORTED, since
+ * a blocking client would read it as no response yet.
+ */
+typedef int (*whPortKeyGetKeyCb)(void* context, whKeyId keyId, uint8_t* out,
+                                 uint16_t* inout_len);
+
+/** Backend hook table. Any hook may be NULL */
 typedef struct whPortKeyCb_t {
     whPortKeyInitCb    Init;    /* Set up the backend (optional) */
     whPortKeyCleanupCb Cleanup; /* Tear down the backend (optional) */
+    whPortKeyGetKeyCb  GetKey;  /* Supply by-value keys (optional) */
 } whPortKeyCb;
 
 /* Size of the key reference wolfCrypt passes to the port for a port key:
@@ -81,13 +100,25 @@ typedef struct whPortKeyCb_t {
  */
 #define WH_PORTKEY_REF_SIZE 2
 
-/* A port key the port registered */
+/* Access mode of a fixed key: how the server reaches it */
+enum WH_PORTKEY_ACCESS_ENUM {
+    /* wolfCrypt gets a key reference, and the port's crypto callback runs the
+     * operation. The bytes stay in the port */
+    WH_PORTKEY_ACCESS_BY_REF = 0,
+    /* The port supplies the bytes through GetKey on each use, and the server
+     * runs the operation as it does with a keystore key */
+    WH_PORTKEY_ACCESS_BY_VALUE = 1,
+};
+
+/* A port key the port registered. Fixed keys are always NONDESTROYABLE and
+ * TRUSTED */
 typedef struct whPortKeyRecord_t {
     whKeyId    id;    /* TYPE=PORT, USER=owner (0 if shared), ERASED if free */
     whKeyId    srcId; /* Keystore key it was loaded from, or ERASED */
-    whNvmFlags flags; /* WH_NVM_FLAGS_USAGE_*. Fixed keys add NONDESTROYABLE and
-                       * TRUSTED */
-    uint16_t len;     /* Key size in bytes, 0 if nothing is loaded */
+    whNvmFlags flags; /* Usage and policy flags (WH_NVM_FLAGS_*) */
+    uint16_t   len;   /* Key size in bytes, 0 if nothing is loaded */
+    uint8_t    accessMode; /* WH_PORTKEY_ACCESS_*. Loaded keys are BY_REF */
+    uint8_t    WH_PAD[1];
 } whPortKeyRecord;
 
 /* Context structure associated with a port key front end */
@@ -174,18 +205,24 @@ int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz);
  * at boot.
  *
  * Clients cannot clear or replace the key, and it is a trusted KEK: no client
- * can set or read it.
+ * can set or read it. With WH_PORTKEY_ACCESS_BY_VALUE, the port supplies the
+ * key's bytes through the GetKey hook on each use, and no crypto device is
+ * needed.
  *
  * @param[in] context Pointer to an initialized port key context
  * @param[in] keyId Server keyId of the port key. USER is the client that
  *            may use it, or 0 to share it with all clients
  * @param[in] flags WH_NVM_FLAGS_USAGE_* the key allows
  * @param[in] len Key size in bytes, not 0
- * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if the key is already
- *         registered, WH_ERROR_NOSPACE if no record is free
+ * @param[in] accessMode WH_PORTKEY_ACCESS_BY_REF, or
+ *            WH_PORTKEY_ACCESS_BY_VALUE, which needs a GetKey hook
+ * @return int WH_ERROR_OK on success, WH_ERROR_BADARGS for an unknown access
+ *         mode or a by-value key without a GetKey hook, WH_ERROR_ACCESS if the
+ *         key is already registered, WH_ERROR_NOSPACE if no record is free
  */
 int wh_PortKey_RegisterFixed(whPortKeyContext* context, whKeyId keyId,
-                             whNvmFlags flags, uint16_t len);
+                             whNvmFlags flags, uint16_t len,
+                             uint32_t accessMode);
 
 /**
  * @brief Check that the caller may use a port key.
@@ -201,6 +238,45 @@ int wh_PortKey_RegisterFixed(whPortKeyContext* context, whKeyId keyId,
  */
 int wh_PortKey_CheckUse(whPortKeyContext* context, whKeyId keyId,
                         whNvmFlags flags, whKeyId* outKeyId);
+
+/**
+ * @brief Check that the caller may use a port key, and get the key in the
+ * form the server uses it.
+ *
+ * Checks the key as wh_PortKey_CheckUse() does. A by-value key's bytes are
+ * then copied from the port into key, and *outKeyId is set to
+ * WH_KEYID_ERASED. Any other key is accessed by reference: *outKeyId is set to
+ * the recorded keyId and *inout_keySz to 0.
+ *
+ * @param[in] keyId Port key, with the caller in the USER field
+ * @param[in] flags As for wh_PortKey_CheckUse()
+ * @param[out] outKeyId Recorded keyId, or WH_KEYID_ERASED for a by-value key
+ * @param[out] key Buffer for a by-value key's bytes
+ * @param[in,out] inout_keySz In: size of key. Out: key size, or 0
+ * @return int As for wh_PortKey_CheckUse(), or WH_ERROR_BUFFER_SIZE if the key
+ *         doesn't fit, WH_ERROR_ABORTED if the port returned a key of the wrong
+ *         size, or the error from the GetKey hook
+ */
+int wh_PortKey_Resolve(whPortKeyContext* context, whKeyId keyId,
+                       whNvmFlags flags, whKeyId* outKeyId, uint8_t* key,
+                       uint16_t* inout_keySz);
+
+/**
+ * @brief Copy the bytes of a by-value key, for server-side code such as a
+ * custom callback.
+ *
+ * Checks the key as wh_PortKey_CheckUse() does first. The bytes must never be
+ * sent to a client.
+ *
+ * @param[in] keyId Port key, with the caller in the USER field
+ * @param[in] flags As for wh_PortKey_CheckUse()
+ * @param[out] out Buffer for the key's bytes
+ * @param[in,out] inout_len In: size of out. Out: key size
+ * @return int As for wh_PortKey_Resolve(), or WH_ERROR_ACCESS for a key
+ *         accessed by reference, whose bytes stay in the port
+ */
+int wh_PortKey_Read(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
+                    uint8_t* out, uint16_t* inout_len);
 
 #ifdef WOLFHSM_CFG_PORTKEY_LOAD
 /**

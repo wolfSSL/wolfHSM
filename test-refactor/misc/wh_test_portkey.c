@@ -48,6 +48,9 @@
  *                                    another client's, is refused as a KEK
  *   _whTest_PortKeyUnbound         - a port KEK fails with NOTFOUND on a
  *                                    server with no port keys bound
+ *   _whTest_PortKeyByValueKek      - a by-value KEK, whose bytes the port
+ *                                    supplies, in every wrap operation and
+ *                                    without a crypto device
  *
  * AES and CMAC with port keys, and client-loaded keys as KEKs, are covered
  * in misc/wh_test_portkey_crypto.c.
@@ -114,8 +117,44 @@ static const uint8_t _portKekMaterial[WH_TEST_PORTKEK_SIZE] = {
 #define WH_TEST_PORT_NOWRAP_ID (WH_TEST_PORTKEK_ID + 2)
 #define WH_TEST_PORT_OTHER_ID (WH_TEST_PORTKEK_ID + 3)
 
+/* A by-value KEK, whose bytes the port supplies through GetKey, and the
+ * keystore key _whTest_PortKeyByValueKek wraps with it */
+#define WH_TEST_BYVALUE_KEK_ID (WH_TEST_PORTKEK_ID + 4)
+#define WH_TEST_BYVALUE_SRC_KEYID 23
+
+static const uint8_t _byValueKekMaterial[WH_TEST_PORTKEK_SIZE] = {
+    0x5d, 0x0e, 0xa3, 0x71, 0xc8, 0x2f, 0x94, 0x16, 0xeb, 0x38, 0x7a,
+    0xd1, 0x05, 0xb6, 0x4c, 0x99, 0x23, 0xf0, 0x6e, 0x8a, 0x17, 0xc2,
+    0x5b, 0x30, 0xad, 0x74, 0xe9, 0x02, 0x86, 0x3f, 0xd5, 0x61};
+
 /* AES-GCM operations the mock device ran with the KEK */
 static int _portKekOps;
+
+/* Times the port supplied the by-value KEK */
+static int _byValueKekReads;
+
+static int _ByValueGetKey(void* context, whKeyId keyId, uint8_t* out,
+                          uint16_t* inout_len)
+{
+    (void)context;
+
+    if (WH_KEYID_ID(keyId) != WH_TEST_BYVALUE_KEK_ID) {
+        return WH_ERROR_NOTFOUND;
+    }
+    if (*inout_len < sizeof(_byValueKekMaterial)) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    memcpy(out, _byValueKekMaterial, sizeof(_byValueKekMaterial));
+    *inout_len = sizeof(_byValueKekMaterial);
+    _byValueKekReads++;
+    return WH_ERROR_OK;
+}
+
+/* clang-format off */
+static const whPortKeyCb _byValueCb = {
+    .GetKey = _ByValueGetKey,
+};
+/* clang-format on */
 
 /* Runs AES-GCM with the KEK when the server passes it by reference. Software
  * keys are left to wolfCrypt */
@@ -259,9 +298,9 @@ static int _SetupClientServer(TestCtx* t)
         .config  = t->nf_conf,
     };
 
-    /* Port keys with no backend hooks */
+    /* Port keys, with a GetKey hook for the by-value KEK */
     t->pks_conf[0] = (whPortKeyConfig){
-        .cb = NULL,
+        .cb = &_byValueCb,
     };
 
     /* Server config */
@@ -281,7 +320,8 @@ static int _SetupClientServer(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
         t->portKey,
         WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, WH_TEST_PORTKEK_ID),
-        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+        WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
     WH_TEST_RETURN_ON_FAIL(
         wc_CryptoCb_RegisterDevice(WH_TEST_PORT_DEVID, _MockCryptoCb, NULL));
@@ -835,11 +875,12 @@ static int _whTest_PortKeyKekPolicy(TestCtx* t)
         WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
                       WH_TEST_PORT_NOWRAP_ID),
         WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
-        WH_TEST_PORTKEK_SIZE));
+        WH_TEST_PORTKEK_SIZE, WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
         t->portKey,
         WH_MAKE_KEYID(WH_KEYTYPE_PORT, otherUser, WH_TEST_PORT_OTHER_ID),
-        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE));
+        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+        WH_PORTKEY_ACCESS_BY_REF));
 
     /* No WRAP usage */
     WH_TEST_ASSERT_RETURN(
@@ -915,6 +956,114 @@ static int _whTest_PortKeyUnbound(TestCtx* t)
     return WH_ERROR_OK;
 }
 
+/* A by-value KEK: the server wraps with the bytes the port supplies, so the
+ * mock device never runs it. It is trusted, and it works without a crypto
+ * device, unlike a KEK used by reference */
+static int _whTest_PortKeyByValueKek(TestCtx* t)
+{
+    whKeyId       kekId    = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_BYVALUE_KEK_ID);
+    whKeyId       refKekId = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID);
+    uint8_t       srcKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      srcKeyId                = WH_TEST_BYVALUE_SRC_KEYID;
+    uint8_t       label[WH_NVM_LABEL_LEN] = "By-value KEK Src";
+    uint8_t       wrappedKey[WH_TEST_WRAPPED_KEYSIZE];
+    uint16_t      wrappedKeySz = sizeof(wrappedKey);
+    uint16_t      wrappedKeyId = WH_KEYID_ERASED;
+    uint8_t       tmpKey[WH_TEST_AES_KEYSIZE];
+    uint16_t      tmpKeySz = sizeof(tmpKey);
+    uint8_t       tmpLabel[WH_NVM_LABEL_LEN];
+    uint8_t       data[] = "Example data!";
+    uint8_t       wrappedData[sizeof(data) + WH_KEYWRAP_AES_GCM_HEADER_SIZE];
+    uint32_t      wrappedDataSz = sizeof(wrappedData);
+    uint8_t       dataOut[sizeof(data)];
+    uint32_t      dataOutSz = sizeof(dataOut);
+    whNvmMetadata metadata  = {0};
+    whNvmMetadata tmpMeta   = {0};
+    int           ops       = _portKekOps;
+    int           reads     = _byValueKekReads;
+    int           devId;
+    int           ret;
+    int           refRet;
+    size_t        i;
+
+    for (i = 0; i < sizeof(srcKey); i++) {
+        srcKey[i] = (uint8_t)(0x5C ^ i);
+    }
+    metadata.id  = WH_CLIENT_KEYID_MAKE_WRAPPED_META(t->client->comm->client_id,
+                                                     WH_TEST_WRAPPED_KEYID);
+    metadata.len = WH_TEST_AES_KEYSIZE;
+    metadata.flags = WH_NVM_FLAGS_USAGE_ANY;
+
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+        t->portKey,
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
+                      WH_TEST_BYVALUE_KEK_ID),
+        WH_NVM_FLAGS_USAGE_WRAP, WH_TEST_PORTKEK_SIZE,
+        WH_PORTKEY_ACCESS_BY_VALUE));
+
+    /* Wrap, then unwrap-and-export */
+    WH_TEST_RETURN_ON_FAIL(_KeyWrap(t, kekId, srcKey, sizeof(srcKey), &metadata,
+                                    wrappedKey, &wrappedKeySz));
+    WH_TEST_RETURN_ON_FAIL(_KeyUnwrapAndExport(
+        t, kekId, wrappedKey, wrappedKeySz, &tmpMeta, tmpKey, &tmpKeySz));
+    WH_TEST_ASSERT_RETURN((tmpKeySz == sizeof(srcKey)) &&
+                          (memcmp(tmpKey, srcKey, sizeof(srcKey)) == 0));
+
+    /* The KEK the device holds can't open the blob */
+    tmpKeySz = sizeof(tmpKey);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK !=
+                          _KeyUnwrapAndExport(t, refKekId, wrappedKey,
+                                              wrappedKeySz, &tmpMeta, tmpKey,
+                                              &tmpKeySz));
+
+    /* It is trusted: wrap-export a server-held key, then cache it back */
+    WH_TEST_RETURN_ON_FAIL(_KeyCache(t, WH_NVM_FLAGS_USAGE_ANY, label,
+                                     sizeof(label), srcKey, sizeof(srcKey),
+                                     &srcKeyId));
+    wrappedKeySz = sizeof(wrappedKey);
+    WH_TEST_RETURN_ON_FAIL(_KeyWrapExport(t, srcKeyId, WH_KEYTYPE_CRYPTO, kekId,
+                                          wrappedKey, &wrappedKeySz));
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyUnwrapAndCache(t, kekId, wrappedKey, wrappedKeySz, &wrappedKeyId));
+    tmpKeySz = sizeof(tmpKey);
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyExport(t, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId), tmpLabel,
+                   sizeof(tmpLabel), tmpKey, &tmpKeySz));
+    WH_TEST_ASSERT_RETURN((tmpKeySz == sizeof(srcKey)) &&
+                          (memcmp(tmpKey, srcKey, sizeof(srcKey)) == 0));
+    WH_TEST_RETURN_ON_FAIL(
+        _KeyEvict(t, WH_CLIENT_KEYID_MAKE_WRAPPED(wrappedKeyId)));
+    WH_TEST_RETURN_ON_FAIL(_KeyEvict(t, srcKeyId));
+
+    /* Data wrap round trip */
+    WH_TEST_RETURN_ON_FAIL(
+        _DataWrap(t, kekId, data, sizeof(data), wrappedData, &wrappedDataSz));
+    WH_TEST_RETURN_ON_FAIL(
+        _DataUnwrap(t, kekId, wrappedData, wrappedDataSz, dataOut, &dataOutSz));
+    WH_TEST_ASSERT_RETURN((dataOutSz == sizeof(data)) &&
+                          (memcmp(dataOut, data, sizeof(data)) == 0));
+
+    /* The port supplied the bytes for each of the 6 operations, and the device
+     * ran none of them */
+    WH_TEST_ASSERT_RETURN(_byValueKekReads == reads + 6);
+    WH_TEST_ASSERT_RETURN(_portKekOps == ops);
+
+    /* Without a crypto device only the by-value KEK works */
+    devId            = t->server->devId;
+    t->server->devId = INVALID_DEVID;
+    wrappedKeySz     = sizeof(wrappedKey);
+    ret = _KeyWrap(t, kekId, srcKey, sizeof(srcKey), &metadata, wrappedKey,
+                   &wrappedKeySz);
+    wrappedKeySz     = sizeof(wrappedKey);
+    refRet           = _KeyWrap(t, refKekId, srcKey, sizeof(srcKey), &metadata,
+                                wrappedKey, &wrappedKeySz);
+    t->server->devId = devId;
+    WH_TEST_RETURN_ON_FAIL(ret);
+    WH_TEST_ASSERT_RETURN(refRet == WH_ERROR_NOTFOUND);
+
+    return WH_ERROR_OK;
+}
+
 int whTest_PortKey(void* ctx)
 {
     int      ret;
@@ -942,6 +1091,9 @@ int whTest_PortKey(void* ctx)
     }
     if (ret == WH_ERROR_OK) {
         ret = _whTest_PortKeyUnbound(t);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_PortKeyByValueKek(t);
     }
 
     _CleanupClientServer(t);

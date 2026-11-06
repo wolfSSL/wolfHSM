@@ -64,6 +64,8 @@
  *   _whTest_PortKeyKek          - the fixed key and client-loaded keys as key
  *                                 wrap KEKs: only fixed keys are trusted
  *   _whTest_PortKeyFixedOwner   - a fixed key registered for one client
+ *   _whTest_PortKeyByValue      - by-value keys run in software in every mode
+ *                                 and as KEKs, after the usual checks
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -123,6 +125,12 @@
 #define MOCK_LOAD_FIRST 3
 #define MOCK_LOAD_LAST 4
 
+/* By-value keys, which the mock port supplies through GetKey. Their IDs are
+ * outside the engine's slots, so the engine fails any reference to them */
+#define MOCK_BYVALUE_ID 9        /* AES-128 for AES and CMAC, shared */
+#define MOCK_BYVALUE_OWNED_ID 10 /* AES-128 encrypt only, client 1's */
+#define MOCK_BYVALUE_KEK_ID 11   /* AES-256 key wrap KEK, shared */
+
 /* Client keyIds of the port keys */
 #define PORTKEY(id) ((whKeyId)WH_CLIENT_KEYID_MAKE_PORT(id))
 
@@ -180,6 +188,7 @@ static uint8_t _keyA[AES_128_KEY_SIZE];
 static uint8_t _keyB[AES_128_KEY_SIZE];
 static uint8_t _keyC[AES_128_KEY_SIZE];
 static uint8_t _key256[AES_256_KEY_SIZE];
+static uint8_t _byValueKey[AES_128_KEY_SIZE];
 static uint8_t _msg[TEST_MSG_SZ];
 static uint8_t _iv[AES_BLOCK_SIZE];
 static uint8_t _aad[20];
@@ -433,6 +442,44 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
     }
 }
 
+/* GetKey calls, and an error for GetKey to return instead, or 0 */
+static int _byValueCalls;
+static int _byValueFail;
+
+/* Supply the bytes of the by-value keys */
+static int _MockGetKey(void* context, whKeyId keyId, uint8_t* out,
+                       uint16_t* inout_len)
+{
+    const uint8_t* key   = _byValueKey;
+    uint16_t       keySz = sizeof(_byValueKey);
+
+    (void)context;
+    _byValueCalls++;
+    if (_byValueFail != 0) {
+        return _byValueFail;
+    }
+    if (WH_KEYID_ID(keyId) == MOCK_BYVALUE_KEK_ID) {
+        key   = _key256;
+        keySz = sizeof(_key256);
+    }
+    else if ((WH_KEYID_ID(keyId) != MOCK_BYVALUE_ID) &&
+             (WH_KEYID_ID(keyId) != MOCK_BYVALUE_OWNED_ID)) {
+        return WH_ERROR_NOTFOUND;
+    }
+    if (*inout_len < keySz) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    memcpy(out, key, keySz);
+    *inout_len = keySz;
+    return WH_ERROR_OK;
+}
+
+/* clang-format off */
+static const whPortKeyCb _mockPortKeyCb = {
+    .GetKey = _MockGetKey,
+};
+/* clang-format on */
+
 /* Boot the mock engine: empty every slot, load the fixed key into K2, and
  * register it and the loadable keys as port keys. owner is the client that may
  * use the fixed key, or 0 for every client, and flags the usage it allows */
@@ -448,7 +495,7 @@ static int _MockBoot(whPortKeyContext* portKey, uint16_t owner,
 
     ret = wh_PortKey_RegisterFixed(
         portKey, WH_MAKE_KEYID(WH_KEYTYPE_PORT, owner, MOCK_FIXED_SLOT), flags,
-        AES_128_KEY_SIZE);
+        AES_128_KEY_SIZE, WH_PORTKEY_ACCESS_BY_REF);
     for (slot = 0; (ret == WH_ERROR_OK) && (slot < MOCK_SLOTS); slot++) {
         if (_mockRole[slot] == MOCK_LOAD) {
             ret = wh_PortKey_RegisterLoadable(
@@ -568,6 +615,7 @@ static int _Setup(TestCtx* t)
     _Pattern(_keyB, sizeof(_keyB), 0x5A);
     _Pattern(_keyC, sizeof(_keyC), 0xC3);
     _Pattern(_key256, sizeof(_key256), 0x77);
+    _Pattern(_byValueKey, sizeof(_byValueKey), 0x3C);
     _Pattern(_msg, sizeof(_msg), 0x11);
     _Pattern(_iv, sizeof(_iv), 0xE0);
     _Pattern(_aad, sizeof(_aad), 0x42);
@@ -592,7 +640,7 @@ static int _Setup(TestCtx* t)
         .config  = t->nf_conf,
     };
     t->pks_conf[0] = (whPortKeyConfig){
-        .cb = NULL,
+        .cb = &_mockPortKeyCb,
     };
 
     WH_TEST_RETURN_ON_FAIL(wolfCrypt_Init());
@@ -1913,6 +1961,123 @@ static int _whTest_PortKeyFixedOwner(TestCtx* t)
     return _Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC);
 }
 
+/* By-value keys: the port supplies their bytes through GetKey, and the server
+ * runs every operation with them like a keystore key, so the engine never
+ * sees them. The usual checks still come first */
+static int _whTest_PortKeyByValue(TestCtx* t)
+{
+    whClientContext* c1  = t->pair[0].client;
+    whClientContext* c2  = t->pair[1].client;
+    whKeyId          src = WH_KEYID_ERASED;
+    whKeyId          portKeyId;
+    int              dma;
+    int              calls;
+
+    /* Shared by both clients, for AES and CMAC */
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+        t->portKey,
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, MOCK_BYVALUE_ID),
+        USAGE_AES_CMAC, AES_128_KEY_SIZE, WH_PORTKEY_ACCESS_BY_VALUE));
+    WH_TEST_RETURN_ON_FAIL(
+        _CheckInfo(c2, MOCK_BYVALUE_ID, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
+
+    /* Every mode matches software, and the engine runs none of them */
+    for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
+        WH_TEST_RETURN_ON_FAIL(
+            _CheckModes(c1, PORTKEY(MOCK_BYVALUE_ID), _byValueKey, dma, 0));
+        WH_TEST_RETURN_ON_FAIL(
+            _CheckModes(c2, PORTKEY(MOCK_BYVALUE_ID), _byValueKey, dma, 0));
+    }
+
+    /* Clients can't load a key into it or clear it */
+    WH_TEST_RETURN_ON_FAIL(
+        _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _Load(c1, PORTKEY(MOCK_BYVALUE_ID), src, &portKeyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          wh_Client_PortKeyClear(c1, PORTKEY(MOCK_BYVALUE_ID)));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
+    WH_TEST_RETURN_ON_FAIL(
+        _EcbMatches(c1, PORTKEY(MOCK_BYVALUE_ID), _byValueKey));
+
+    /* The port's error comes back to the client */
+    _byValueFail = WH_ERROR_ABORTED;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          _TryEcb(c1, PORTKEY(MOCK_BYVALUE_ID), 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ABORTED ==
+                          _TryCmac(c1, PORTKEY(MOCK_BYVALUE_ID)));
+    _byValueFail = 0;
+
+    /* A refused request never reaches GetKey */
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+        t->portKey,
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, CLIENT1_ID, MOCK_BYVALUE_OWNED_ID),
+        WH_NVM_FLAGS_USAGE_ENCRYPT, AES_128_KEY_SIZE,
+        WH_PORTKEY_ACCESS_BY_VALUE));
+    calls = _byValueCalls;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _TryEcb(c1, PORTKEY(MOCK_BYVALUE_OWNED_ID), 0));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _TryCmac(c1, PORTKEY(MOCK_BYVALUE_OWNED_ID)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _TryEcb(c2, PORTKEY(MOCK_BYVALUE_OWNED_ID), 1));
+    WH_TEST_ASSERT_RETURN(_byValueCalls == calls);
+    WH_TEST_RETURN_ON_FAIL(_TryEcb(c1, PORTKEY(MOCK_BYVALUE_OWNED_ID), 1));
+    WH_TEST_ASSERT_RETURN(_byValueCalls == calls + 1);
+
+#ifdef WOLFHSM_CFG_CRYPTO_AFFINITY
+    /* With software affinity a by-value key still runs, but a key used by
+     * reference can't */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_SetCryptoAffinity(c1, WH_CRYPTO_AFFINITY_SW));
+    WH_TEST_RETURN_ON_FAIL(
+        _EcbMatches(c1, PORTKEY(MOCK_BYVALUE_ID), _byValueKey));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          _TryEcb(c1, PORTKEY(MOCK_FIXED_SLOT), 1));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_SetCryptoAffinity(c1, WH_CRYPTO_AFFINITY_HW));
+#endif /* WOLFHSM_CFG_CRYPTO_AFFINITY */
+
+#ifdef WOLFHSM_CFG_KEYWRAP
+    {
+        whKeyId  plainSrc = WH_KEYID_ERASED;
+        whKeyId  cachedId = WH_KEYID_ERASED;
+        uint8_t  wrapped[TEST_WRAPPED_SZ];
+        uint16_t wrappedSz = sizeof(wrapped);
+        int      ops;
+
+        /* A by-value WRAP key is a trusted KEK, run in software too */
+        WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
+            t->portKey,
+            WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
+                          MOCK_BYVALUE_KEK_ID),
+            WH_NVM_FLAGS_USAGE_WRAP, AES_256_KEY_SIZE,
+            WH_PORTKEY_ACCESS_BY_VALUE));
+        WH_TEST_RETURN_ON_FAIL(
+            _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &plainSrc));
+        ops = _mock.ops;
+        WH_TEST_RETURN_ON_FAIL(
+            _WrapRoundTrip(c2, PORTKEY(MOCK_BYVALUE_KEK_ID)));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExport(
+            c1, WC_CIPHER_AES_GCM, plainSrc, WH_KEYTYPE_CRYPTO,
+            PORTKEY(MOCK_BYVALUE_KEK_ID), wrapped, &wrappedSz));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCache(
+            c1, WC_CIPHER_AES_GCM, PORTKEY(MOCK_BYVALUE_KEK_ID), wrapped,
+            wrappedSz, &cachedId));
+        WH_TEST_ASSERT_RETURN(_mock.ops == ops);
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, cachedId));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, plainSrc));
+
+        /* WRAP only, so not a cipher key */
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                              _TryEcb(c1, PORTKEY(MOCK_BYVALUE_KEK_ID), 1));
+    }
+#endif /* WOLFHSM_CFG_KEYWRAP */
+
+    /* Drop the by-value keys */
+    return _Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC);
+}
+
 int whTest_PortKeyCrypto(void* ctx)
 {
     TestCtx* t = &_testCtx;
@@ -1966,6 +2131,9 @@ int whTest_PortKeyCrypto(void* ctx)
 #endif
     if (ret == WH_ERROR_OK) {
         ret = _whTest_PortKeyFixedOwner(t);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_PortKeyByValue(t);
     }
 
     _Cleanup(t);

@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "wolfhsm/wh_error.h"
+#include "wolfhsm/wh_utils.h"
 #include "wolfhsm/wh_portkey.h"
 
 #ifdef WOLFHSM_CFG_PORTKEY_LOAD
@@ -185,7 +186,7 @@ int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz)
 
 /* Add a record for keyId, unless its ID is already registered */
 static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
-                uint16_t len)
+                uint16_t len, uint8_t accessMode)
 {
     whPortKeyRecord* entry;
     int              ret;
@@ -205,10 +206,11 @@ static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
                 ret = WH_ERROR_NOSPACE;
             }
             else {
-                entry->id    = keyId;
-                entry->srcId = WH_KEYID_ERASED;
-                entry->flags = flags;
-                entry->len   = len;
+                entry->id         = keyId;
+                entry->srcId      = WH_KEYID_ERASED;
+                entry->flags      = flags;
+                entry->len        = len;
+                entry->accessMode = accessMode;
             }
         }
         (void)_Unlock(context);
@@ -217,10 +219,18 @@ static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
 }
 
 int wh_PortKey_RegisterFixed(whPortKeyContext* context, whKeyId keyId,
-                             whNvmFlags flags, uint16_t len)
+                             whNvmFlags flags, uint16_t len,
+                             uint32_t accessMode)
 {
     /* A record with len 0 is an empty loadable key */
-    if (len == 0) {
+    if ((len == 0) || ((accessMode != WH_PORTKEY_ACCESS_BY_REF) &&
+                       (accessMode != WH_PORTKEY_ACCESS_BY_VALUE))) {
+        return WH_ERROR_BADARGS;
+    }
+    /* The port supplies a by-value key's bytes on each use */
+    if ((accessMode == WH_PORTKEY_ACCESS_BY_VALUE) &&
+        ((context == NULL) || (context->cb == NULL) ||
+         (context->cb->GetKey == NULL))) {
         return WH_ERROR_BADARGS;
     }
     /* Clients can't clear or replace a fixed key, or set or read it, so it is
@@ -228,43 +238,131 @@ int wh_PortKey_RegisterFixed(whPortKeyContext* context, whKeyId keyId,
     return _Add(context, keyId,
                 (flags & WH_NVM_FLAGS_USAGE_ANY) | WH_NVM_FLAGS_NONDESTROYABLE |
                     WH_NVM_FLAGS_TRUSTED,
-                len);
+                len, (uint8_t)accessMode);
+}
+
+/* Check a request against the key's record. Call with the lock held */
+static int _Check(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
+                  whPortKeyRecord** outEntry)
+{
+    whPortKeyRecord* entry = _Find(context, keyId);
+    whNvmFlags       usage = flags & WH_NVM_FLAGS_USAGE_ANY;
+    int              ret   = WH_ERROR_OK;
+
+    if ((entry == NULL) || (entry->len == 0)) {
+        ret = WH_ERROR_NOTFOUND;
+    }
+    else if ((WH_KEYID_USER(entry->id) != WH_KEYUSER_GLOBAL) &&
+             (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId))) {
+        ret = WH_ERROR_ACCESS;
+    }
+    else if (((flags & WH_NVM_FLAGS_TRUSTED) != 0) &&
+             ((entry->flags & WH_NVM_FLAGS_TRUSTED) == 0)) {
+        ret = WH_ERROR_ACCESS;
+    }
+    else if ((usage == 0) || ((entry->flags & usage) != usage)) {
+        ret = WH_ERROR_USAGE;
+    }
+    else {
+        *outEntry = entry;
+    }
+    return ret;
+}
+
+/* Copy a by-value key's bytes from the port. Call with the lock held */
+static int _GetKey(whPortKeyContext* context, const whPortKeyRecord* entry,
+                   uint8_t* out, uint16_t* inout_len)
+{
+    uint16_t len = *inout_len;
+    int      ret;
+
+    if (len < entry->len) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    if ((context->cb == NULL) || (context->cb->GetKey == NULL)) {
+        return WH_ERROR_ABORTED;
+    }
+
+    ret = context->cb->GetKey(context->context, entry->id, out, &len);
+    if (ret == WH_ERROR_NOTREADY) {
+        /* A blocking client would wait for a response forever */
+        ret = WH_ERROR_ABORTED;
+    }
+    else if ((ret == WH_ERROR_OK) && (len != entry->len)) {
+        /* Not the key the port registered */
+        ret = WH_ERROR_ABORTED;
+    }
+    if (ret == WH_ERROR_OK) {
+        *inout_len = len;
+    }
+    else {
+        /* The port may have written part of a key */
+        wh_Utils_ForceZero(out, *inout_len);
+    }
+    return ret;
 }
 
 int wh_PortKey_CheckUse(whPortKeyContext* context, whKeyId keyId,
                         whNvmFlags flags, whKeyId* outKeyId)
 {
-    whPortKeyRecord* entry;
-    whNvmFlags       usage;
+    whPortKeyRecord* entry = NULL;
     int              ret;
 
     if (!_Valid(context, keyId) || (outKeyId == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    usage = flags & WH_NVM_FLAGS_USAGE_ANY;
 
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
-        entry = _Find(context, keyId);
-        if ((entry == NULL) || (entry->len == 0)) {
-            ret = WH_ERROR_NOTFOUND;
-        }
-        else if ((WH_KEYID_USER(entry->id) != WH_KEYUSER_GLOBAL) &&
-                 (WH_KEYID_USER(entry->id) != WH_KEYID_USER(keyId))) {
-            ret = WH_ERROR_ACCESS;
-        }
-        else if (((flags & WH_NVM_FLAGS_TRUSTED) != 0) &&
-                 ((entry->flags & WH_NVM_FLAGS_TRUSTED) == 0)) {
-            ret = WH_ERROR_ACCESS;
-        }
-        else if ((usage == 0) || ((entry->flags & usage) != usage)) {
-            ret = WH_ERROR_USAGE;
-        }
-        else {
+        ret = _Check(context, keyId, flags, &entry);
+        if (ret == WH_ERROR_OK) {
             *outKeyId = entry->id;
         }
         (void)_Unlock(context);
     } /* _Lock() */
+    return ret;
+}
+
+int wh_PortKey_Resolve(whPortKeyContext* context, whKeyId keyId,
+                       whNvmFlags flags, whKeyId* outKeyId, uint8_t* key,
+                       uint16_t* inout_keySz)
+{
+    whPortKeyRecord* entry = NULL;
+    int              ret;
+
+    if (!_Valid(context, keyId) || (outKeyId == NULL) || (key == NULL) ||
+        (inout_keySz == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    *outKeyId = WH_KEYID_ERASED;
+
+    ret = _Lock(context);
+    if (ret == WH_ERROR_OK) {
+        ret = _Check(context, keyId, flags, &entry);
+        if ((ret == WH_ERROR_OK) &&
+            (entry->accessMode == WH_PORTKEY_ACCESS_BY_VALUE)) {
+            ret = _GetKey(context, entry, key, inout_keySz);
+        }
+        else if (ret == WH_ERROR_OK) {
+            /* Accessed by reference, so the bytes stay in the port */
+            *outKeyId    = entry->id;
+            *inout_keySz = 0;
+        }
+        (void)_Unlock(context);
+    } /* _Lock() */
+    return ret;
+}
+
+int wh_PortKey_Read(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
+                    uint8_t* out, uint16_t* inout_len)
+{
+    whKeyId refKeyId = WH_KEYID_ERASED;
+    int     ret;
+
+    ret = wh_PortKey_Resolve(context, keyId, flags, &refKeyId, out, inout_len);
+    if ((ret == WH_ERROR_OK) && (refKeyId != WH_KEYID_ERASED)) {
+        ret = WH_ERROR_ACCESS;
+    }
     return ret;
 }
 
@@ -305,11 +403,12 @@ static int _Remove(int devId, whPortKeyRecord* entry)
 
 int wh_PortKey_RegisterLoadable(whPortKeyContext* context, whKeyId keyId)
 {
-    /* No owner until a client loads it */
+    /* No owner until a client loads it. Loaded keys are accessed by
+     * reference */
     return _Add(context,
                 WH_MAKE_KEYID(WH_KEYID_TYPE(keyId), WH_KEYUSER_GLOBAL,
                               WH_KEYID_ID(keyId)),
-                0, 0);
+                0, 0, WH_PORTKEY_ACCESS_BY_REF);
 }
 
 int wh_PortKey_Load(whPortKeyContext* context, int devId, whKeyId* inout_keyId,

@@ -1518,18 +1518,22 @@ int wh_Server_KeystorePortLoad(whServerContext* server,
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
-/* The KEK of a keywrap operation: key bytes from the keystore, or a port key
- * the port uses by reference */
+/* The KEK of a keywrap operation: key bytes from the keystore or a by-value
+ * port key, or a port key accessed by reference */
 typedef struct {
     const uint8_t* key;
     uint32_t       keySz;
-    whKeyId        portKey; /* WH_KEYID_ERASED unless a port key */
+    whKeyId        portKey; /* WH_KEYID_ERASED unless used by reference */
+#ifdef WOLFHSM_CFG_PORTKEY
+    uint8_t buf[AES_256_KEY_SIZE]; /* A by-value port key's bytes */
+#endif
 } whKeywrapKek;
 
 /* Resolve the KEK for a keywrap operation. A port KEK (TYPE=PORT) needs a
- * record allowing WH_NVM_FLAGS_USAGE_WRAP and is used by reference, so its
- * bytes never leave the port. All other KEKs are freshened into the key
- * cache and must carry WH_NVM_FLAGS_USAGE_WRAP.
+ * record allowing WH_NVM_FLAGS_USAGE_WRAP. A port KEK accessed by reference
+ * never leaves the port, and a by-value one's bytes are copied into
+ * outKek->buf. All other KEKs are freshened into the key cache and must carry
+ * WH_NVM_FLAGS_USAGE_WRAP.
  *
  * When enforceTrustedKek is nonzero the KEK must be one the client cannot know
  * or set: a fixed key (its port key record is WH_NVM_FLAGS_TRUSTED) or a
@@ -1549,17 +1553,29 @@ static int _KeywrapResolveKek(whServerContext* server, whKeyId serverKeyId,
 
 #ifdef WOLFHSM_CFG_PORTKEY
     if (WH_KEYID_ISPORT(serverKeyId)) {
-        whNvmFlags need = WH_NVM_FLAGS_USAGE_WRAP;
+        whNvmFlags need   = WH_NVM_FLAGS_USAGE_WRAP;
+        uint16_t   keyLen = (uint16_t)sizeof(outKek->buf);
 
-        if ((server->portKey == NULL) || (server->devId == INVALID_DEVID)) {
-            /* No port keys, or no device to run the key */
+        if (server->portKey == NULL) {
+            /* No port keys */
             return WH_ERROR_NOTFOUND;
         }
         if (enforceTrustedKek) {
             need |= WH_NVM_FLAGS_TRUSTED;
         }
-        return wh_PortKey_CheckUse(server->portKey, serverKeyId, need,
-                                   &outKek->portKey);
+        ret = wh_PortKey_Resolve(server->portKey, serverKeyId, need,
+                                 &outKek->portKey, outKek->buf, &keyLen);
+        if ((ret == WH_ERROR_OK) && (outKek->portKey == WH_KEYID_ERASED)) {
+            /* A by-value key: use its bytes */
+            outKek->key   = outKek->buf;
+            outKek->keySz = keyLen;
+        }
+        else if ((ret == WH_ERROR_OK) && (server->devId == INVALID_DEVID)) {
+            /* No device to run the key by reference */
+            outKek->portKey = WH_KEYID_ERASED;
+            ret             = WH_ERROR_NOTFOUND;
+        }
+        return ret;
     }
 #endif /* WOLFHSM_CFG_PORTKEY */
 
@@ -1695,6 +1711,8 @@ static int _AesGcmKeyWrap(whServerContext* server, whKeyId serverKeyId,
                                     wrappedKeyOut, wrappedKeySz);
     }
 
+    /* A by-value port key's bytes may be in kek */
+    wh_Utils_ForceZero(&kek, sizeof(kek));
     return ret;
 }
 
@@ -1772,6 +1790,8 @@ static int _AesGcmKeyUnwrap(whServerContext* server, uint16_t serverKeyId,
                                       metadataOut, keyOut, keySz);
     }
 
+    /* A by-value port key's bytes may be in kek */
+    wh_Utils_ForceZero(&kek, sizeof(kek));
     return ret;
 }
 
@@ -1847,6 +1867,8 @@ static int _AesGcmDataWrap(whServerContext* server, whKeyId serverKeyId,
                                      wrappedDataOut, wrappedDataSz);
     }
 
+    /* A by-value port key's bytes may be in kek */
+    wh_Utils_ForceZero(&kek, sizeof(kek));
     return ret;
 }
 
@@ -1917,6 +1939,8 @@ static int _AesGcmDataUnwrap(whServerContext* server, uint16_t serverKeyId,
                                        wrappedDataSz, dataOut, dataSz);
     }
 
+    /* A by-value port key's bytes may be in kek */
+    wh_Utils_ForceZero(&kek, sizeof(kek));
     return ret;
 }
 
