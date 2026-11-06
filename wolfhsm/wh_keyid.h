@@ -80,6 +80,10 @@ typedef uint16_t whKeyId;
  * the key cache or NVM and is never returned to a client */
 #define WH_KEYID_CLIENT_PORT_FLAG ((whKeyId)0x0400)
 
+/* Old name of WH_KEYID_CLIENT_PORT_FLAG. New code should not use it; it is
+ * kept only for backwards compatibility. */
+#define WH_KEYID_CLIENT_HW_FLAG WH_KEYID_CLIENT_PORT_FLAG
+
 /* Combined mask of all client-facing flags */
 #define WH_CLIENT_KEYID_FLAGS_MASK                                \
     (WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG | \

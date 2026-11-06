@@ -4100,6 +4100,10 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
  */
 #define WH_CLIENT_KEYID_MAKE_PORT(_id) ((_id) | WH_KEYID_CLIENT_PORT_FLAG)
 
+/* Old name of WH_CLIENT_KEYID_MAKE_PORT(). New code should not use it; it is
+ * kept only for backwards compatibility. */
+#define WH_CLIENT_KEYID_MAKE_HW(_id) WH_CLIENT_KEYID_MAKE_PORT(_id)
+
 /**
  * @brief Construct wrapped key metadata ID with explicit ownership
  *
