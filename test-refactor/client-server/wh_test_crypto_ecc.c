@@ -2674,6 +2674,98 @@ static int _whTest_CryptoEccExportPublicKeyDma(whClientContext* ctx)
 }
 #endif /* WOLFHSM_CFG_DMA */
 
+#if !defined(NO_ECC_MAKE_PUB) && !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+/* Verify with a private-only key, which rebuilds the key from the public point
+ * the server returns, and check that the private scalar is unchanged. */
+static int _whTest_CryptoEccPrivOnlyVerify(whClientContext* ctx)
+{
+    /* secp224k1 has an order one byte longer than its prime */
+    static const int curves[] = {ECC_SECP256R1, ECC_SECP224K1};
+    int              devId    = WH_CLIENT_DEVID(ctx);
+    int              ret      = 0;
+    size_t           i;
+    WC_RNG           rng[1];
+    ecc_key          refKey[1];
+    ecc_key          privOnlyKey[1];
+    uint8_t          hash[TEST_ECC_KEYSIZE];
+    uint8_t          sig[ECC_MAX_SIG_SIZE];
+    uint8_t          refD[ECC_MAXSIZE];
+    uint8_t          d[ECC_MAXSIZE];
+
+    memset(hash, 0x5a, sizeof(hash));
+    ret = wc_InitRng_ex(rng, NULL, devId);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    for (i = 0; (ret == 0) && (i < sizeof(curves) / sizeof(curves[0])); i++) {
+        int    keySz   = wc_ecc_get_curve_size_from_id(curves[i]);
+        int    verify  = 0;
+        word32 sigLen  = sizeof(sig);
+        word32 refDLen = sizeof(refD);
+        word32 dLen    = sizeof(d);
+
+        if (wc_ecc_get_curve_idx(curves[i]) < 0) {
+            continue;
+        }
+
+        ret = wc_ecc_init_ex(refKey, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wc_ecc_make_key_ex(rng, keySz, refKey, curves[i]);
+            if (ret == 0) {
+                ret = wc_ecc_sign_hash(hash, sizeof(hash), sig, &sigLen, rng,
+                                       refKey);
+            }
+            if (ret == 0) {
+                ret = wc_ecc_export_private_raw(refKey, NULL, NULL, NULL, NULL,
+                                                refD, &refDLen);
+            }
+            wc_ecc_free(refKey);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Failed to make ECC reference key %d\n", ret);
+            break;
+        }
+
+        ret = wc_ecc_init_ex(privOnlyKey, NULL, devId);
+        if (ret == 0) {
+            ret = wc_ecc_import_private_key_ex(refD, refDLen, NULL, 0,
+                                               privOnlyKey, curves[i]);
+            if (ret == 0) {
+                ret = wc_ecc_verify_hash(sig, sigLen, hash, sizeof(hash),
+                                         &verify, privOnlyKey);
+            }
+            if ((ret == 0) &&
+                ((verify != 1) || (privOnlyKey->type != ECC_PRIVATEKEY))) {
+                WH_ERROR_PRINT("Private-only ECC verify did not update key\n");
+                ret = -1;
+            }
+            if (ret == 0) {
+                ret = wc_ecc_export_private_raw(privOnlyKey, NULL, NULL, NULL,
+                                                NULL, d, &dLen);
+            }
+            if ((ret == 0) &&
+                ((dLen != refDLen) || (memcmp(d, refD, dLen) != 0))) {
+                WH_ERROR_PRINT("Private-only ECC verify changed the scalar\n");
+                ret = -1;
+            }
+            wc_ecc_free(privOnlyKey);
+        }
+        if (ret != 0) {
+            WH_ERROR_PRINT("Private-only ECC verify failed on curve %d: %d\n",
+                           curves[i], ret);
+        }
+    }
+
+    (void)wc_FreeRng(rng);
+    if (ret == 0) {
+        WH_TEST_PRINT("ECC PRIVATE-ONLY VERIFY SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* !NO_ECC_MAKE_PUB && !WOLF_CRYPTO_CB_ONLY_ECC */
+
 int whTest_Crypto_Ecc(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEcc(ctx));
@@ -2687,6 +2779,9 @@ int whTest_Crypto_Ecc(whClientContext* ctx)
 #if defined(HAVE_ECC_CHECK_KEY) && defined(WH_TEST_ECC_LOCAL_KEYGEN)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCheckPubKey(ctx));
 #endif /* HAVE_ECC_CHECK_KEY && WH_TEST_ECC_LOCAL_KEYGEN */
+#if !defined(NO_ECC_MAKE_PUB) && !defined(WOLF_CRYPTO_CB_ONLY_ECC)
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccPrivOnlyVerify(ctx));
+#endif /* !NO_ECC_MAKE_PUB && !WOLF_CRYPTO_CB_ONLY_ECC */
 #if !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccCrossVerify(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEccAsync(ctx));

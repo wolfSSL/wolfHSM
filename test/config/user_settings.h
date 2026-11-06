@@ -108,6 +108,8 @@
 #define HAVE_ECC
 #define TFM_ECC256
 #define ECC_SHAMIR
+#define HAVE_ECC_KOBLITZ
+#define WOLFSSL_CUSTOM_CURVES
 
 /** Curve25519 Options */
 #define HAVE_CURVE25519

@@ -202,7 +202,8 @@ int wh_Crypto_EccUpdatePrivateOnlyKeyDer(ecc_key* key, uint16_t pub_size,
     }
     /* TODO: Find more efficient way to doing this */
     if (ret == 0) {
-        ret = wc_ecc_export_private_only(key, d, &d_len);
+        /* wc_ecc_import_unsigned() reads d at the size of the prime */
+        ret = wc_ecc_export_private_raw(key, NULL, NULL, NULL, NULL, d, &d_len);
     }
     if (ret == 0) {
         ret = wc_ecc_init(pub_only);
