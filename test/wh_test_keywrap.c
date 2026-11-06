@@ -35,45 +35,45 @@
 
 #include "wh_test_common.h"
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
+#ifdef WOLFHSM_CFG_PORTKEY
 #include "wolfhsm/wh_keyid.h"
 
-/* Hardware keystore test fixture: the id and material of the only KEK served
- * by whTest_HwKeystoreGetKeyCb, which emulates a hardware keystore backend
+/* Port key test fixture: the id and material of the only KEK served
+ * by whTest_PortKeyGetKeyCb, which emulates a port key backend
  * for the in-process test servers */
-#define WH_TEST_HWKEK_ID 3
-#define WH_TEST_HWKEK_SIZE 32
+#define WH_TEST_PORTKEK_ID 3
+#define WH_TEST_PORTKEK_SIZE 32
 
-static const uint8_t _hwKekMaterial[WH_TEST_HWKEK_SIZE] = {
+static const uint8_t _portKekMaterial[WH_TEST_PORTKEK_SIZE] = {
     0x9a, 0x4e, 0x21, 0xc7, 0x5d, 0x10, 0xfb, 0x33, 0x6f, 0x82, 0xd4,
     0x59, 0xee, 0x07, 0xb1, 0x2c, 0x48, 0x95, 0x3a, 0xc6, 0x71, 0x0d,
     0xb8, 0xe5, 0x12, 0x6a, 0xf9, 0x84, 0x2f, 0xd0, 0x5b, 0xa7};
 
-int whTest_HwKeystoreGetKeyCb(void* context, whKeyId keyId, uint8_t* out,
-                              uint16_t* inout_len)
+int whTest_PortKeyGetKeyCb(void* context, whKeyId keyId, uint8_t* out,
+                           uint16_t* inout_len)
 {
     (void)context;
 
-    /* Only hardware-only keyIds should ever reach a hardware keystore */
-    if (WH_KEYID_TYPE(keyId) != WH_KEYTYPE_HW) {
+    /* Only port keyIds should ever reach a port key backend */
+    if (WH_KEYID_TYPE(keyId) != WH_KEYTYPE_PORT) {
         return WH_ERROR_ACCESS;
     }
 
     /* Serve only the known test KEK id, refuse everything else */
-    if (WH_KEYID_ID(keyId) != WH_TEST_HWKEK_ID) {
+    if (WH_KEYID_ID(keyId) != WH_TEST_PORTKEK_ID) {
         return WH_ERROR_NOTFOUND;
     }
 
     if ((out == NULL) || (inout_len == NULL) ||
-        (*inout_len < sizeof(_hwKekMaterial))) {
+        (*inout_len < sizeof(_portKekMaterial))) {
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    memcpy(out, _hwKekMaterial, sizeof(_hwKekMaterial));
-    *inout_len = sizeof(_hwKekMaterial);
+    memcpy(out, _portKekMaterial, sizeof(_portKekMaterial));
+    *inout_len = sizeof(_portKekMaterial);
     return WH_ERROR_OK;
 }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
 #ifdef WOLFHSM_CFG_ENABLE_CLIENT
 #include "wolfhsm/wh_client.h"
@@ -129,14 +129,14 @@ static int _CleanupServerKek(whClientContext* client)
 #ifdef HAVE_AESGCM
 
 /* The wrap-export and unwrap-and-cache round trips below require a trusted KEK
- * (HW or WH_NVM_FLAGS_TRUSTED). They use the hardware KEK fixture, which is
+ * (port key or WH_NVM_FLAGS_TRUSTED). They use the port KEK fixture, which is
  * bound only by the in-process test server, so compile them only when the
  * server is in this binary. */
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 /* kekId names the KEK used for every wrap/unwrap step. The unwrap-and-cache
- * step requires a trusted KEK (HW or WH_NVM_FLAGS_TRUSTED), so callers pass
- * the hardware KEK fixture id here. */
+ * step requires a trusted KEK (port key or WH_NVM_FLAGS_TRUSTED), so callers
+ * pass the port KEK fixture id here. */
 static int _AesGcm_TestKeyWrap(whClientContext* client, WC_RNG* rng,
                                whKeyId kekId)
 {
@@ -485,13 +485,13 @@ static int _AesGcm_TestKeyWrapNoNvm(whClientContext* client, whKeyId kekId)
     return WH_ERROR_OK;
 }
 
-#endif /* WOLFHSM_CFG_HWKEYSTORE && WOLFHSM_CFG_ENABLE_SERVER */
+#endif /* WOLFHSM_CFG_PORTKEY && WOLFHSM_CFG_ENABLE_SERVER */
 
 /* Positive software-KEK round trip; needs no trusted KEK, so it runs in every
  * build. Wrap a plaintext key under the plain software KEK (WH_TEST_KEKID from
  * _InitServerKek), unwrap-and-export the blob, and confirm the key material and
  * metadata come back unchanged. Only the unwrap-and-cache path (covered by the
- * hardware-KEK tests) requires a trusted KEK. */
+ * port-KEK tests) requires a trusted KEK. */
 static int _AesGcm_TestSwKekRoundTrip(whClientContext* client, WC_RNG* rng)
 {
     int           ret;
@@ -551,7 +551,7 @@ static int _AesGcm_TestSwKekRoundTrip(whClientContext* client, WC_RNG* rng)
  * that (a) a plain client-cached USAGE_WRAP key (WH_TEST_KEKID, provisioned by
  * _InitServerKek) is refused as their KEK, and (b) a client cannot forge a
  * trusted KEK by setting WH_NVM_FLAGS_TRUSTED itself -- the server strips the
- * flag, so the key is still refused. Needs no hardware keystore, so it runs
+ * flag, so the key is still refused. Needs no port keys, so it runs
  * against any server. */
 static int _AesGcm_TestTrustedKekPolicy(whClientContext* client, WC_RNG* rng)
 {
@@ -869,12 +869,12 @@ static int _AesGcm_TestDataUnwrapUnderflow(whClientContext* client)
     return WH_ERROR_OK;
 }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
+#ifdef WOLFHSM_CFG_PORTKEY
 
-static int _AesGcm_TestHwKeystoreKeyWrap(whClientContext* client, WC_RNG* rng)
+static int _AesGcm_TestPortKeyKeyWrap(whClientContext* client, WC_RNG* rng)
 {
     int           ret;
-    whKeyId       hwKekId = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+    whKeyId       portKekId = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID);
     uint8_t       plainKey[WH_TEST_AES_KEYSIZE];
     uint8_t       tmpPlainKey[WH_TEST_AES_KEYSIZE];
     uint16_t      tmpPlainKeySz = sizeof(tmpPlainKey);
@@ -884,7 +884,7 @@ static int _AesGcm_TestHwKeystoreKeyWrap(whClientContext* client, WC_RNG* rng)
     whNvmMetadata metadata       = {
               .id    = WH_CLIENT_KEYID_MAKE_WRAPPED_META(client->comm->client_id,
                                                          WH_TEST_AESGCM_KEYID),
-              .label = "HW KEK wrapped key",
+              .label = "port KEK wrapped key",
               .len   = WH_TEST_AES_KEYSIZE,
               .flags = WH_NVM_FLAGS_USAGE_ANY,
     };
@@ -896,61 +896,61 @@ static int _AesGcm_TestHwKeystoreKeyWrap(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    /* Wrap a key using the hardware-only KEK */
-    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, hwKekId, plainKey,
+    /* Wrap a key using the port KEK */
+    ret = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, portKekId, plainKey,
                             sizeof(plainKey), &metadata, wrappedKey,
                             &wrappedKeySz);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with HW KEK %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with port KEK %d\n", ret);
         return ret;
     }
 
-    /* Unwrap and export with the hardware-only KEK, check the roundtrip */
-    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, hwKekId,
+    /* Unwrap and export with the port KEK, check the roundtrip */
+    ret = wh_Client_KeyUnwrapAndExport(client, WC_CIPHER_AES_GCM, portKekId,
                                        wrappedKey, wrappedKeySz, &tmpMetadata,
                                        tmpPlainKey, &tmpPlainKeySz);
     if (ret != WH_ERROR_OK) {
         WH_ERROR_PRINT(
-            "Failed to wh_Client_KeyUnwrapAndExport with HW KEK %d\n", ret);
+            "Failed to wh_Client_KeyUnwrapAndExport with port KEK %d\n", ret);
         return ret;
     }
 
     if (memcmp(plainKey, tmpPlainKey, sizeof(plainKey)) != 0) {
-        WH_ERROR_PRINT("HW KEK wrap/unwrap key failed to match\n");
+        WH_ERROR_PRINT("port KEK wrap/unwrap key failed to match\n");
         return WH_TEST_FAIL;
     }
 
     if (memcmp(&metadata, &tmpMetadata, sizeof(metadata)) != 0) {
-        WH_ERROR_PRINT("HW KEK wrap/unwrap metadata failed to match\n");
+        WH_ERROR_PRINT("port KEK wrap/unwrap metadata failed to match\n");
         return WH_TEST_FAIL;
     }
 
-    /* Unwrap-and-cache with the hardware-only KEK: the wrapped payload is an
+    /* Unwrap-and-cache with the port KEK: the wrapped payload is an
      * ordinary key and may enter the cache; only the KEK itself is
-     * hardware-resident */
+     * held by the port */
     ret =
-        wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, hwKekId,
+        wh_Client_KeyUnwrapAndCache(client, WC_CIPHER_AES_GCM, portKekId,
                                     wrappedKey, wrappedKeySz, &unwrappedKeyId);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyUnwrapAndCache with HW KEK %d\n",
-                       ret);
+        WH_ERROR_PRINT(
+            "Failed to wh_Client_KeyUnwrapAndCache with port KEK %d\n", ret);
         return ret;
     }
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(client, unwrappedKeyId));
 
-    /* A wrapped+hardware-only KEK id must behave as hardware-only (the
-     * hardware-only flag takes precedence) */
+    /* A wrapped+port KEK id must behave as a port key (the
+     * port key flag takes precedence) */
     wrappedKeySz = sizeof(wrappedKey);
     ret          = wh_Client_KeyWrap(
-        client, WC_CIPHER_AES_GCM, hwKekId | WH_KEYID_CLIENT_WRAPPED_FLAG,
+        client, WC_CIPHER_AES_GCM, portKekId | WH_KEYID_CLIENT_WRAPPED_FLAG,
         plainKey, sizeof(plainKey), &metadata, wrappedKey, &wrappedKeySz);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with wrapped+HW KEK %d\n",
+        WH_ERROR_PRINT("Failed to wh_Client_KeyWrap with wrapped+port KEK %d\n",
                        ret);
         return ret;
     }
 
-    /* Unwrapping a hardware-KEK-wrapped blob with a different, cached KEK
+    /* Unwrapping a port-KEK-wrapped blob with a different, cached KEK
      * must fail authentication, proving distinct key material was used */
     WH_TEST_RETURN_ON_FAIL(_InitServerKek(client));
     tmpPlainKeySz = sizeof(tmpPlainKey);
@@ -963,14 +963,14 @@ static int _AesGcm_TestHwKeystoreKeyWrap(whClientContext* client, WC_RNG* rng)
         return WH_TEST_FAIL;
     }
 
-    /* A hardware KEK id the backend does not serve must fail */
+    /* A port KEK id the backend does not serve must fail */
     wrappedKeySz = sizeof(wrappedKey);
     ret          = wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM,
-                                     WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID + 1),
+                                     WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID + 1),
                                      plainKey, sizeof(plainKey), &metadata, wrappedKey,
                                      &wrappedKeySz);
     if (ret != WH_ERROR_NOTFOUND) {
-        WH_ERROR_PRINT("KeyWrap with unserved HW KEK expected NOTFOUND, "
+        WH_ERROR_PRINT("KeyWrap with unserved port KEK expected NOTFOUND, "
                        "got %d\n",
                        ret);
         return WH_TEST_FAIL;
@@ -979,107 +979,111 @@ static int _AesGcm_TestHwKeystoreKeyWrap(whClientContext* client, WC_RNG* rng)
     return WH_ERROR_OK;
 }
 
-static int _AesGcm_TestHwKeystoreDataWrap(whClientContext* client)
+static int _AesGcm_TestPortKeyDataWrap(whClientContext* client)
 {
     int      ret;
-    whKeyId  hwKekId = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+    whKeyId  portKekId = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID);
     uint8_t  data[]  = "Example data spanning several AES blocks to catch overlap bugs!";
     uint8_t  unwrappedData[sizeof(data)] = {0};
     uint32_t unwrappedDataSz             = sizeof(unwrappedData);
     uint8_t  wrappedData[sizeof(data) + WH_KEYWRAP_AES_GCM_HEADER_SIZE] = {0};
     uint32_t wrappedDataSz = sizeof(wrappedData);
 
-    ret = wh_Client_DataWrap(client, WC_CIPHER_AES_GCM, hwKekId, data,
+    ret = wh_Client_DataWrap(client, WC_CIPHER_AES_GCM, portKekId, data,
                              sizeof(data), wrappedData, &wrappedDataSz);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wh_Client_DataWrap with HW KEK %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_DataWrap with port KEK %d\n", ret);
         return ret;
     }
 
-    ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, hwKekId, wrappedData,
-                               sizeof(wrappedData), unwrappedData,
+    ret = wh_Client_DataUnwrap(client, WC_CIPHER_AES_GCM, portKekId,
+                               wrappedData, sizeof(wrappedData), unwrappedData,
                                &unwrappedDataSz);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to wh_Client_DataUnwrap with HW KEK %d\n", ret);
+        WH_ERROR_PRINT("Failed to wh_Client_DataUnwrap with port KEK %d\n",
+                       ret);
         return ret;
     }
 
     if (memcmp(data, unwrappedData, sizeof(data)) != 0) {
-        WH_ERROR_PRINT("HW KEK unwrapped data failed to match input data\n");
+        WH_ERROR_PRINT("port KEK unwrapped data failed to match input data\n");
         return WH_TEST_FAIL;
     }
 
     return WH_ERROR_OK;
 }
 
-/* Hardware-only keys must be rejected by every keystore operation and by
+/* Port keys must be rejected by every keystore operation and by
  * crypto key use; only the keywrap KEK paths may resolve them */
-static int _TestHwKeystoreKeystoreRejections(whClientContext* client)
+static int _TestPortKeyKeystoreRejections(whClientContext* client)
 {
     int      ret;
-    whKeyId  hwKeyId = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
-    uint8_t  buf[WH_TEST_HWKEK_SIZE] = {0};
-    uint16_t bufSz                   = sizeof(buf);
-    uint8_t  label[WH_NVM_LABEL_LEN] = "hwonly reject";
-    whKeyId  cacheKeyId              = hwKeyId;
+    whKeyId  portKeyId = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID);
+    uint8_t  buf[WH_TEST_PORTKEK_SIZE] = {0};
+    uint16_t bufSz                     = sizeof(buf);
+    uint8_t  label[WH_NVM_LABEL_LEN]   = "portkey reject";
+    whKeyId  cacheKeyId                = portKeyId;
 
-    /* Caching key material under a hardware-only id must be rejected */
+    /* Caching key material under a port key id must be rejected */
     ret = wh_Client_KeyCache(client, WH_NVM_FLAGS_NONE, label, sizeof(label),
                              buf, sizeof(buf), &cacheKeyId);
     if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyCache of HW-only id expected ACCESS, got %d\n", ret);
+        WH_ERROR_PRINT("KeyCache of port key id expected ACCESS, got %d\n",
+                       ret);
         return WH_TEST_FAIL;
     }
 
 #ifdef WOLFHSM_CFG_DMA
-    /* The DMA cache path must reject hardware-only ids as well */
-    cacheKeyId = hwKeyId;
+    /* The DMA cache path must reject port key ids as well */
+    cacheKeyId = portKeyId;
     ret = wh_Client_KeyCacheDma(client, WH_NVM_FLAGS_NONE, label, sizeof(label),
                                 buf, sizeof(buf), &cacheKeyId);
     if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyCacheDma of HW-only id expected ACCESS, got %d\n",
+        WH_ERROR_PRINT("KeyCacheDma of port key id expected ACCESS, got %d\n",
                        ret);
         return WH_TEST_FAIL;
     }
 #endif
 
-    /* Exporting a hardware-only key must be rejected */
-    ret =
-        wh_Client_KeyExport(client, hwKeyId, label, sizeof(label), buf, &bufSz);
+    /* Exporting a port key must be rejected */
+    ret = wh_Client_KeyExport(client, portKeyId, label, sizeof(label), buf,
+                              &bufSz);
     if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyExport of HW-only id expected ACCESS, got %d\n",
+        WH_ERROR_PRINT("KeyExport of port key id expected ACCESS, got %d\n",
                        ret);
         return WH_TEST_FAIL;
     }
 
-    /* Commit/evict/erase/revoke of a hardware-only key must be rejected */
-    ret = wh_Client_KeyCommit(client, hwKeyId);
+    /* Commit/evict/erase/revoke of a port key must be rejected */
+    ret = wh_Client_KeyCommit(client, portKeyId);
     if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyCommit of HW-only id expected ACCESS, got %d\n",
+        WH_ERROR_PRINT("KeyCommit of port key id expected ACCESS, got %d\n",
                        ret);
         return WH_TEST_FAIL;
     }
 
-    ret = wh_Client_KeyEvict(client, hwKeyId);
+    ret = wh_Client_KeyEvict(client, portKeyId);
     if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyEvict of HW-only id expected ACCESS, got %d\n", ret);
-        return WH_TEST_FAIL;
-    }
-
-    ret = wh_Client_KeyErase(client, hwKeyId);
-    if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyErase of HW-only id expected ACCESS, got %d\n", ret);
-        return WH_TEST_FAIL;
-    }
-
-    ret = wh_Client_KeyRevoke(client, hwKeyId);
-    if (ret != WH_ERROR_ACCESS) {
-        WH_ERROR_PRINT("KeyRevoke of HW-only id expected ACCESS, got %d\n",
+        WH_ERROR_PRINT("KeyEvict of port key id expected ACCESS, got %d\n",
                        ret);
         return WH_TEST_FAIL;
     }
 
-    /* Crypto operations must not be able to use hardware-only keys */
+    ret = wh_Client_KeyErase(client, portKeyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("KeyErase of port key id expected ACCESS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    ret = wh_Client_KeyRevoke(client, portKeyId);
+    if (ret != WH_ERROR_ACCESS) {
+        WH_ERROR_PRINT("KeyRevoke of port key id expected ACCESS, got %d\n",
+                       ret);
+        return WH_TEST_FAIL;
+    }
+
+    /* Crypto operations must not be able to use port keys */
     {
         Aes           aes[1];
         const uint8_t plaintext[16] = {0};
@@ -1088,13 +1092,13 @@ static int _TestHwKeystoreKeystoreRejections(whClientContext* client)
         uint8_t       tag[WH_KEYWRAP_AES_GCM_TAG_SIZE] = {0};
 
         WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, WH_DEV_ID));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_AesSetKeyId(aes, hwKeyId));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_AesSetKeyId(aes, portKeyId));
 
         ret = wc_AesGcmEncrypt(aes, ciphertext, plaintext, sizeof(plaintext),
                                iv, sizeof(iv), tag, sizeof(tag), NULL, 0);
         wc_AesFree(aes);
         if (ret != WH_ERROR_ACCESS) {
-            WH_ERROR_PRINT("AES-GCM with HW-only key expected ACCESS, "
+            WH_ERROR_PRINT("AES-GCM with port key expected ACCESS, "
                            "got %d\n",
                            ret);
             return WH_TEST_FAIL;
@@ -1104,7 +1108,7 @@ static int _TestHwKeystoreKeystoreRejections(whClientContext* client)
     return WH_ERROR_OK;
 }
 
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
 #endif /* HAVE_AESGCM */
 
@@ -1126,11 +1130,11 @@ int whTest_Client_KeyWrap(whClientContext* client)
     }
 
 #ifdef HAVE_AESGCM
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
-    /* Wrap-export and unwrap-and-cache need a trusted KEK; use the hardware KEK
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+    /* Wrap-export and unwrap-and-cache need a trusted KEK; use the port KEK
      * fixture bound by the in-process test server. */
     {
-        whKeyId trustedKek = WH_CLIENT_KEYID_MAKE_HW(WH_TEST_HWKEK_ID);
+        whKeyId trustedKek = WH_CLIENT_KEYID_MAKE_PORT(WH_TEST_PORTKEK_ID);
 
         ret = _AesGcm_TestKeyWrap(client, rng, trustedKek);
         if (ret != WH_ERROR_OK) {
@@ -1151,7 +1155,7 @@ int whTest_Client_KeyWrap(whClientContext* client)
             }
         }
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE && WOLFHSM_CFG_ENABLE_SERVER */
+#endif /* WOLFHSM_CFG_PORTKEY && WOLFHSM_CFG_ENABLE_SERVER */
 
     /* Positive software-KEK round trip, runs in every build. */
     if (ret == WH_ERROR_OK) {
@@ -1213,10 +1217,10 @@ int whTest_Client_DataWrap(whClientContext* client)
     return ret;
 }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-/* Requires a server with a hardware keystore backed by
- * whTest_HwKeystoreGetKeyCb */
-int whTest_Client_HwKeystore(whClientContext* client)
+#ifdef WOLFHSM_CFG_PORTKEY
+/* Requires a server with port keys backed by
+ * whTest_PortKeyGetKeyCb */
+int whTest_Client_PortKey(whClientContext* client)
 {
     int    ret = 0;
     WC_RNG rng[1];
@@ -1228,36 +1232,35 @@ int whTest_Client_HwKeystore(whClientContext* client)
     }
 
 #ifdef HAVE_AESGCM
-    ret = _AesGcm_TestHwKeystoreKeyWrap(client, rng);
+    ret = _AesGcm_TestPortKeyKeyWrap(client, rng);
     if (ret != WH_ERROR_OK) {
-        WH_ERROR_PRINT("Failed to _AesGcm_TestHwKeystoreKeyWrap %d\n", ret);
+        WH_ERROR_PRINT("Failed to _AesGcm_TestPortKeyKeyWrap %d\n", ret);
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _AesGcm_TestHwKeystoreDataWrap(client);
+        ret = _AesGcm_TestPortKeyDataWrap(client);
         if (ret != WH_ERROR_OK) {
-            WH_ERROR_PRINT("Failed to _AesGcm_TestHwKeystoreDataWrap %d\n",
-                           ret);
+            WH_ERROR_PRINT("Failed to _AesGcm_TestPortKeyDataWrap %d\n", ret);
         }
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _TestHwKeystoreKeystoreRejections(client);
+        ret = _TestPortKeyKeystoreRejections(client);
         if (ret != WH_ERROR_OK) {
-            WH_ERROR_PRINT("Failed to _TestHwKeystoreKeystoreRejections %d\n",
+            WH_ERROR_PRINT("Failed to _TestPortKeyKeystoreRejections %d\n",
                            ret);
         }
     }
 #endif
 
     if (ret == WH_ERROR_OK) {
-        WH_TEST_PRINT("HW KEYSTORE KEYWRAP TESTS SUCCESS\n");
+        WH_TEST_PRINT("PORT KEY KEYWRAP TESTS SUCCESS\n");
     }
 
     (void)wc_FreeRng(rng);
     return ret;
 }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
 int whTest_KeyWrapClientConfig(whClientConfig* clientCfg)
 {

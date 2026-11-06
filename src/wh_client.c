@@ -1450,6 +1450,239 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId)
     return ret;
 }
 
+int wh_Client_PortKeyLoadFromKeystoreRequest(whClientContext* c,
+                                             whKeyId          portKeyId,
+                                             whKeyId          srcKeyId)
+{
+    whMessageKeystore_PortLoadRequest* req = NULL;
+
+    if ((c == NULL) || WH_KEYID_ISERASED(srcKeyId)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_PortLoadRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->portKeyId = portKeyId;
+    req->srcId     = srcKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_PORT_LOAD,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_PortKeyLoadFromKeystoreResponse(whClientContext* c,
+                                              whKeyId*         outPortKeyId)
+{
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            size;
+    int                                 ret;
+    whMessageKeystore_PortLoadResponse* resp = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp =
+        (whMessageKeystore_PortLoadResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else if (outPortKeyId != NULL) {
+            *outPortKeyId = resp->portKeyId;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_PortKeyLoadFromKeystore(whClientContext* c, whKeyId portKeyId,
+                                      whKeyId srcKeyId, whKeyId* outPortKeyId)
+{
+    int ret;
+    ret = wh_Client_PortKeyLoadFromKeystoreRequest(c, portKeyId, srcKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_PortKeyLoadFromKeystoreResponse(c, outPortKeyId);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+/* ID 0 clears every key the client loaded */
+static int _PortKeyClearRequest(whClientContext* c, whKeyId portKeyId)
+{
+    whMessageKeystore_PortClearRequest* req = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req =
+        (whMessageKeystore_PortClearRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->portKeyId = portKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_PORT_CLEAR,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_PortKeyClearRequest(whClientContext* c, whKeyId portKeyId)
+{
+    if (WH_KEYID_ISERASED(portKeyId)) {
+        return WH_ERROR_BADARGS;
+    }
+    return _PortKeyClearRequest(c, portKeyId);
+}
+
+int wh_Client_PortKeyClearResponse(whClientContext* c)
+{
+    uint16_t                             group;
+    uint16_t                             action;
+    uint16_t                             size;
+    int                                  ret;
+    whMessageKeystore_PortClearResponse* resp = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp =
+        (whMessageKeystore_PortClearResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_PortKeyClear(whClientContext* c, whKeyId portKeyId)
+{
+    int ret;
+    ret = wh_Client_PortKeyClearRequest(c, portKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_PortKeyClearResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_PortKeyClearAllRequest(whClientContext* c)
+{
+    return _PortKeyClearRequest(c, WH_KEYID_ERASED);
+}
+
+int wh_Client_PortKeyClearAllResponse(whClientContext* c)
+{
+    return wh_Client_PortKeyClearResponse(c);
+}
+
+int wh_Client_PortKeyClearAll(whClientContext* c)
+{
+    int ret;
+    ret = wh_Client_PortKeyClearAllRequest(c);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_PortKeyClearAllResponse(c);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+int wh_Client_PortKeyGetInfoRequest(whClientContext* c, whKeyId portKeyId)
+{
+    whMessageKeystore_PortInfoRequest* req = NULL;
+
+    if (c == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageKeystore_PortInfoRequest*)wh_CommClient_GetDataPtr(c->comm);
+    if (req == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    memset(req, 0, sizeof(*req));
+    req->portKeyId = portKeyId;
+
+    return wh_Client_SendRequest(c, WH_MESSAGE_GROUP_KEY, WH_KEY_PORT_INFO,
+                                 sizeof(*req), (uint8_t*)req);
+}
+
+int wh_Client_PortKeyGetInfoResponse(whClientContext* c, whPortKeyInfo* info)
+{
+    uint16_t                            group;
+    uint16_t                            action;
+    uint16_t                            size;
+    int                                 ret;
+    whMessageKeystore_PortInfoResponse* resp = NULL;
+
+    if ((c == NULL) || (info == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    resp =
+        (whMessageKeystore_PortInfoResponse*)wh_CommClient_GetDataPtr(c->comm);
+    if (resp == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(c, &group, &action, &size,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, (uint8_t*)resp);
+    if (ret == 0) {
+        if (size < sizeof(*resp)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else if (resp->rc != 0) {
+            ret = resp->rc;
+        }
+        else {
+            info->keyType = resp->keyType;
+            info->keyBits = resp->keyBits;
+            info->flags   = resp->flags;
+            info->owner   = resp->owner;
+        }
+    }
+    return ret;
+}
+
+int wh_Client_PortKeyGetInfo(whClientContext* c, whKeyId portKeyId,
+                             whPortKeyInfo* info)
+{
+    int ret;
+    ret = wh_Client_PortKeyGetInfoRequest(c, portKeyId);
+    if (ret == 0) {
+        do {
+            ret = wh_Client_PortKeyGetInfoResponse(c, info);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)
 {

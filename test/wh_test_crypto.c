@@ -18813,11 +18813,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
     if (ret == 0) {
         ret = whTest_Client_DataWrap(client);
     }
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_ENABLE_SERVER)
-    /* Hardware-only KEK tests need the in-process test server, which binds
-     * the test hardware keystore; external (client-only) servers may not */
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+    /* Port KEK tests need the in-process test server, which binds
+     * the test port keys; external (client-only) servers may not */
     if (ret == 0) {
-        ret = whTest_Client_HwKeystore(client);
+        ret = whTest_Client_PortKey(client);
     }
 #endif
 #endif
@@ -19585,34 +19585,38 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
         .cb = whTestDma_BounceServerCb,
     };
 #endif
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
-    /* Hardware keystore front-end backed by the test getKey callback. The
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_KEYWRAP)
+    /* Port key front end backed by the test getKey callback. The
      * callback is defined in wh_test_keywrap.c, so only bind it when the
      * keywrap suite (its sole consumer) is compiled in */
-    static const whHwKeystoreCb hwksCb        = WH_TEST_HWKEYSTORE_CB;
-    whHwKeystoreContext         hwKeystore[1] = {{0}};
-    whHwKeystoreConfig          hwksConf[1]   = {{
-                   .cb      = &hwksCb,
-                   .context = NULL,
-    }};
+    static const whPortKeyCb pksCb      = WH_TEST_PORTKEY_CB;
+    whPortKeyContext         portKey[1] = {{0}};
+    whPortKeyConfig          pksConf[1] = {
+        {
+         .cb      = &pksCb,
+         .context = NULL,
+         }
+    };
 #endif
 
-    whServerConfig s_conf[1] = {{
-        .comm_config = cs_conf,
-        .nvm         = nvm,
-        .crypto      = crypto,
-        .devId       = INVALID_DEVID,
+    whServerConfig s_conf[1] = {
+        {
+         .comm_config = cs_conf,
+         .nvm         = nvm,
+         .crypto      = crypto,
+         .devId       = INVALID_DEVID,
 #ifdef WOLFHSM_CFG_DMA
-        .dmaConfig   = &serverDmaConfig,
+         .dmaConfig = &serverDmaConfig,
 #endif
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
-        .hwKeystore = hwKeystore,
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_KEYWRAP)
+         .portKey = portKey,
 #endif
-    }};
+         }
+    };
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(nvm, n_conf));
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
-    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(hwKeystore, hwksConf));
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_KEYWRAP)
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(portKey, pksConf));
 #endif
 
 #ifdef WOLFHSM_CFG_DMA
@@ -19650,8 +19654,8 @@ static int wh_ClientServer_MemThreadTest(whTestNvmBackendType nvmType)
     }
 
     wh_Nvm_Cleanup(nvm);
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
-    (void)wh_HwKeystore_Cleanup(hwKeystore);
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_KEYWRAP)
+    (void)wh_PortKey_Cleanup(portKey);
 #endif
     wc_FreeRng(crypto->rng);
     wolfCrypt_Cleanup();
