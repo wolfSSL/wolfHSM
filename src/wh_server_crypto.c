@@ -3173,40 +3173,40 @@ static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
 #endif /* HAVE_ED25519 */
 
 #ifndef NO_AES
-/* Check that the client may use a hardware key for this request. On success
- * *outHwKey is the key to pass to wolfCrypt by reference */
-static int _HwKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
-                          whNvmFlags usage, whKeyId* outHwKey)
+/* Check that the client may use a port key for this request. On success
+ * *outPortKey is the key to pass to wolfCrypt by reference */
+static int _PortKeyCheckUse(whServerContext* ctx, int devId, whKeyId keyId,
+                            whNvmFlags usage, whKeyId* outPortKey)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    if ((ctx->hwKeystore == NULL) || (devId == INVALID_DEVID)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    if ((ctx->portKey == NULL) || (devId == INVALID_DEVID)) {
         return WH_ERROR_NOTFOUND;
     }
-    return wh_HwKeystore_CheckUse(ctx->hwKeystore, keyId, usage, outHwKey);
+    return wh_PortKey_CheckUse(ctx->portKey, keyId, usage, outPortKey);
 #else
-    /* No hardware keystore is built in */
+    /* Port keys are not built in */
     (void)ctx;
     (void)devId;
     (void)keyId;
     (void)usage;
-    (void)outHwKey;
+    (void)outPortKey;
     return WH_ERROR_ACCESS;
 #endif
 }
 
-/* Init aes for a request. A hardware key goes to wolfCrypt by reference: no
+/* Init aes for a request. A port key goes to wolfCrypt by reference: no
  * key is set, and the crypto callback runs every operation */
-static int _AesInitForKey(Aes* aes, int devId, whKeyId hwKey)
+static int _AesInitForKey(Aes* aes, int devId, whKeyId portKey)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    if (hwKey != WH_KEYID_ERASED) {
-        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+#ifdef WOLFHSM_CFG_PORTKEY
+    if (portKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_PORTKEY_REF_SIZE];
 
-        wh_HwKeystore_KeyIdToRef(hwKey, ref);
+        wh_PortKey_KeyIdToRef(portKey, ref);
         return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, devId);
     }
 #else
-    (void)hwKey;
+    (void)portKey;
 #endif
     return wc_AesInit(aes, NULL, devId);
 }
@@ -3218,7 +3218,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
 {
     int                            ret    = WH_ERROR_OK;
     Aes                            aes[1];
-    whKeyId                        hwKey = WH_KEYID_ERASED;
+    whKeyId                        portKey = WH_KEYID_ERASED;
     whMessageCrypto_AesCtrRequest  req;
     whMessageCrypto_AesCtrResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3263,12 +3263,12 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] IV ", iv, AES_BLOCK_SIZE);
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] tmp ", tmp, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
-    if (WH_KEYID_ISHW(key_id)) {
-        /* Hardware key: used by reference, never read */
-        ret = _HwKeyCheckUse(ctx, devId, key_id,
-                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
-                             &hwKey);
+    if (WH_KEYID_ISPORT(key_id)) {
+        /* Port key: used by reference, never read */
+        ret = _PortKeyCheckUse(ctx, devId, key_id,
+                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
+                               &portKey);
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -3290,7 +3290,7 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
         key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCtr] Invalid key size: %d", key_len);
@@ -3298,11 +3298,11 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = _AesInitForKey(aes, devId, hwKey);
+        ret = _AesInitForKey(aes, devId, portKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key. A hardware key only needs the counter */
-        if (hwKey != WH_KEYID_ERASED) {
+        /* load the key. A port key only needs the counter */
+        if (portKey != WH_KEYID_ERASED) {
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
@@ -3373,7 +3373,7 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_AesCtrDmaResponse res;
     Aes                               aes[1];
     int                               aesInit = 0;
-    whKeyId                           hwKey   = WH_KEYID_ERASED;
+    whKeyId                           portKey = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -3433,12 +3433,12 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (WH_KEYID_ISHW(keyId)) {
-            /* Hardware key: used by reference, never read */
-            ret = _HwKeyCheckUse(ctx, devId, keyId,
-                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                 &hwKey);
+        if (WH_KEYID_ISPORT(keyId)) {
+            /* Port key: used by reference, never read */
+            ret = _PortKeyCheckUse(ctx, devId, keyId,
+                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   &portKey);
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -3458,7 +3458,7 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
         keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCtr] Invalid key size: %d", keyLen);
@@ -3488,13 +3488,13 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret     = _AesInitForKey(aes, devId, hwKey);
+        ret     = _AesInitForKey(aes, devId, portKey);
         aesInit = (ret == WH_ERROR_OK);
     }
 
     if (ret == WH_ERROR_OK) {
-        /* load the key. A hardware key only needs the counter */
-        if (hwKey != WH_KEYID_ERASED) {
+        /* load the key. A port key only needs the counter */
+        if (portKey != WH_KEYID_ERASED) {
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
@@ -3588,7 +3588,7 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
 {
     int                            ret    = WH_ERROR_OK;
     Aes                            aes[1];
-    whKeyId                        hwKey = WH_KEYID_ERASED;
+    whKeyId                        portKey = WH_KEYID_ERASED;
     whMessageCrypto_AesEcbRequest  req;
     whMessageCrypto_AesEcbResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3629,12 +3629,12 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Input data", in, len);
 
     /* Freshen key and validate usage policy if key is not erased */
-    if (WH_KEYID_ISHW(key_id)) {
-        /* Hardware key: used by reference, never read */
-        ret = _HwKeyCheckUse(ctx, devId, key_id,
-                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
-                             &hwKey);
+    if (WH_KEYID_ISPORT(key_id)) {
+        /* Port key: used by reference, never read */
+        ret = _PortKeyCheckUse(ctx, devId, key_id,
+                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
+                               &portKey);
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -3656,7 +3656,7 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesEcb] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
         key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesEcb] Invalid key size: %d", key_len);
@@ -3664,12 +3664,12 @@ static int _HandleAesEcb(whServerContext* ctx, uint16_t magic, int devId,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = _AesInitForKey(aes, devId, hwKey);
+        ret = _AesInitForKey(aes, devId, portKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key. AES-ECB does not use IV. A hardware key needs no
+        /* load the key. AES-ECB does not use IV. A port key needs no
          * setup */
-        if (hwKey == WH_KEYID_ERASED) {
+        if (portKey == WH_KEYID_ERASED) {
             ret = wc_AesSetKey(aes, (byte*)key, (word32)key_len, NULL,
                                enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
         }
@@ -3717,7 +3717,7 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_AesEcbDmaResponse res;
     Aes                               aes[1];
     int                               aesInit = 0;
-    whKeyId                           hwKey   = WH_KEYID_ERASED;
+    whKeyId                           portKey = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -3766,12 +3766,12 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (WH_KEYID_ISHW(keyId)) {
-            /* Hardware key: used by reference, never read */
-            ret = _HwKeyCheckUse(ctx, devId, keyId,
-                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                 &hwKey);
+        if (WH_KEYID_ISPORT(keyId)) {
+            /* Port key: used by reference, never read */
+            ret = _PortKeyCheckUse(ctx, devId, keyId,
+                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   &portKey);
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -3791,7 +3791,7 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
         keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesEcb] Invalid key size: %d", keyLen);
@@ -3819,11 +3819,11 @@ static int _HandleAesEcbDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret     = _AesInitForKey(aes, devId, hwKey);
+        ret     = _AesInitForKey(aes, devId, portKey);
         aesInit = (ret == WH_ERROR_OK);
     }
 
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED) {
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED) {
         ret = wc_AesSetKey(aes, (byte*)key, (word32)keyLen, NULL,
                            req.enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
     }
@@ -3898,7 +3898,7 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
 {
     int                            ret    = WH_ERROR_OK;
     Aes                            aes[1];
-    whKeyId                        hwKey = WH_KEYID_ERASED;
+    whKeyId                        portKey = WH_KEYID_ERASED;
     whMessageCrypto_AesCbcRequest  req;
     whMessageCrypto_AesCbcResponse res;
     uint8_t                        cachedKey[AES_256_KEY_SIZE];
@@ -3944,12 +3944,12 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Input data", in, len);
     WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] IV", iv, AES_BLOCK_SIZE);
     /* Freshen key and validate usage policy if key is not erased */
-    if (WH_KEYID_ISHW(key_id)) {
-        /* Hardware key: used by reference, never read */
-        ret = _HwKeyCheckUse(ctx, devId, key_id,
-                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
-                             &hwKey);
+    if (WH_KEYID_ISPORT(key_id)) {
+        /* Port key: used by reference, never read */
+        ret = _PortKeyCheckUse(ctx, devId, key_id,
+                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
+                               &portKey);
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -3971,7 +3971,7 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
         WH_DEBUG_VERBOSE_HEXDUMP("[AesCbc] Key ", key, key_len);
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
         key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", key_len);
@@ -3979,11 +3979,11 @@ static int _HandleAesCbc(whServerContext* ctx, uint16_t magic, int devId,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = _AesInitForKey(aes, devId, hwKey);
+        ret = _AesInitForKey(aes, devId, portKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key. A hardware key only needs the IV */
-        if (hwKey != WH_KEYID_ERASED) {
+        /* load the key. A port key only needs the IV */
+        if (portKey != WH_KEYID_ERASED) {
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
@@ -4035,7 +4035,7 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_AesCbcDmaResponse res;
     Aes                               aes[1];
     int                               aesInit = 0;
-    whKeyId                           hwKey   = WH_KEYID_ERASED;
+    whKeyId                           portKey = WH_KEYID_ERASED;
 
     void*  inAddr  = NULL;
     void*  outAddr = NULL;
@@ -4090,12 +4090,12 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (WH_KEYID_ISHW(keyId)) {
-            /* Hardware key: used by reference, never read */
-            ret = _HwKeyCheckUse(ctx, devId, keyId,
-                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                 &hwKey);
+        if (WH_KEYID_ISPORT(keyId)) {
+            /* Port key: used by reference, never read */
+            ret = _PortKeyCheckUse(ctx, devId, keyId,
+                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   &portKey);
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -4115,7 +4115,7 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
         keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesCbc] Invalid key size: %d", keyLen);
@@ -4143,13 +4143,13 @@ static int _HandleAesCbcDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret     = _AesInitForKey(aes, devId, hwKey);
+        ret     = _AesInitForKey(aes, devId, portKey);
         aesInit = (ret == WH_ERROR_OK);
     }
 
     if (ret == WH_ERROR_OK) {
-        /* A hardware key only needs the IV */
-        if (hwKey != WH_KEYID_ERASED) {
+        /* A port key only needs the IV */
+        if (portKey != WH_KEYID_ERASED) {
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
@@ -4228,7 +4228,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
 {
     int            ret       = WH_ERROR_OK;
     Aes            aes[1];
-    whKeyId        hwKey = WH_KEYID_ERASED;
+    whKeyId        portKey = WH_KEYID_ERASED;
     uint8_t        cachedKey[AES_256_KEY_SIZE];
     whNvmMetadata  keyMeta[1];
 
@@ -4297,12 +4297,12 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
             (uint32_t)needed_size);
 
     /* Freshen key and validate usage policy if key is not erased */
-    if (WH_KEYID_ISHW(key_id)) {
-        /* Hardware key: used by reference, never read */
-        ret = _HwKeyCheckUse(ctx, devId, key_id,
-                             req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                          : WH_NVM_FLAGS_USAGE_DECRYPT,
-                             &hwKey);
+    if (WH_KEYID_ISPORT(key_id)) {
+        /* Port key: used by reference, never read */
+        ret = _PortKeyCheckUse(ctx, devId, key_id,
+                               req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                            : WH_NVM_FLAGS_USAGE_DECRYPT,
+                               &portKey);
     }
     else if (!WH_KEYID_ISERASED(key_id)) {
         /* Copy the key + metadata into private buffers, enforcing the usage
@@ -4322,7 +4322,7 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         key_len != AES_128_KEY_SIZE && key_len != AES_192_KEY_SIZE &&
         key_len != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", key_len);
@@ -4330,11 +4330,11 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     }
     if (ret == WH_ERROR_OK) {
         /* init key with possible hardware */
-        ret = _AesInitForKey(aes, devId, hwKey);
+        ret = _AesInitForKey(aes, devId, portKey);
     }
     if (ret == WH_ERROR_OK) {
-        /* load the key. A hardware key needs no setup */
-        if (hwKey == WH_KEYID_ERASED) {
+        /* load the key. A port key needs no setup */
+        if (portKey == WH_KEYID_ERASED) {
             ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)key_len);
         }
         WH_DEBUG_SERVER_VERBOSE("AesGcmSetKey key_id:%u key_len:%u ret:%d\n", key_id,
@@ -4401,7 +4401,7 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_AesGcmDmaResponse res;
     Aes                               aes[1];
     int                               aesInit = 0;
-    whKeyId                           hwKey   = WH_KEYID_ERASED;
+    whKeyId                           portKey = WH_KEYID_ERASED;
 
     void*          inAddr  = NULL;
     void*          outAddr = NULL;
@@ -4475,12 +4475,12 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
                                              ctx->comm->client_id, req.keyId);
 
         /* Freshen key and validate usage policy if key is not erased */
-        if (WH_KEYID_ISHW(keyId)) {
-            /* Hardware key: used by reference, never read */
-            ret = _HwKeyCheckUse(ctx, devId, keyId,
-                                 req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                              : WH_NVM_FLAGS_USAGE_DECRYPT,
-                                 &hwKey);
+        if (WH_KEYID_ISPORT(keyId)) {
+            /* Port key: used by reference, never read */
+            ret = _PortKeyCheckUse(ctx, devId, keyId,
+                                   req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
+                                                : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   &portKey);
         }
         else if (!WH_KEYID_ISERASED(keyId)) {
             /* Copy the key + metadata into private buffers, enforcing the
@@ -4500,7 +4500,7 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
         }
     }
     /* Verify key size is valid for AES */
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED &&
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED &&
         keyLen != AES_128_KEY_SIZE && keyLen != AES_192_KEY_SIZE &&
         keyLen != AES_256_KEY_SIZE) {
         WH_DEBUG_SERVER("[AesGcm] Invalid key size: %d", keyLen);
@@ -4548,11 +4548,11 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
     }
 
     if (ret == WH_ERROR_OK) {
-        ret     = _AesInitForKey(aes, devId, hwKey);
+        ret     = _AesInitForKey(aes, devId, portKey);
         aesInit = (ret == WH_ERROR_OK);
     }
 
-    if (ret == WH_ERROR_OK && hwKey == WH_KEYID_ERASED) {
+    if (ret == WH_ERROR_OK && portKey == WH_KEYID_ERASED) {
         ret = wc_AesGcmSetKey(aes, (byte*)key, (word32)keyLen);
     }
 
@@ -4628,16 +4628,16 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
 /* Resolve CMAC key from request (inline key or keystore ID).
- * outKey must be at least AES_256_KEY_SIZE bytes. A hardware key is returned
- * in *outHwKey instead, to use by reference */
+ * outKey must be at least AES_256_KEY_SIZE bytes. A port key is returned
+ * in *outPortKey instead, to use by reference */
 static int _CmacResolveKey(whServerContext* ctx, int devId,
                            const uint8_t* requestKey, uint32_t requestKeySz,
                            whKeyId clientKeyId, uint8_t* outKey,
-                           uint32_t* outKeyLen, whKeyId* outHwKey)
+                           uint32_t* outKeyLen, whKeyId* outPortKey)
 {
     int ret = WH_ERROR_OK;
 
-    *outHwKey = WH_KEYID_ERASED;
+    *outPortKey = WH_KEYID_ERASED;
 
     if (requestKeySz != 0) {
         /* Client provided the key directly in the request */
@@ -4649,14 +4649,14 @@ static int _CmacResolveKey(whServerContext* ctx, int devId,
         whKeyId keyId = wh_KeyId_TranslateFromClient(
             WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
 
-        if (WH_KEYID_ISHW(keyId)) {
-            /* Hardware key: used by reference, never read. CMAC accepts sign
+        if (WH_KEYID_ISPORT(keyId)) {
+            /* Port key: used by reference, never read. CMAC accepts sign
              * or verify usage */
-            ret = _HwKeyCheckUse(ctx, devId, keyId, WH_NVM_FLAGS_USAGE_SIGN,
-                                 outHwKey);
+            ret = _PortKeyCheckUse(ctx, devId, keyId, WH_NVM_FLAGS_USAGE_SIGN,
+                                   outPortKey);
             if (ret == WH_ERROR_USAGE) {
-                ret = _HwKeyCheckUse(ctx, devId, keyId,
-                                     WH_NVM_FLAGS_USAGE_VERIFY, outHwKey);
+                ret = _PortKeyCheckUse(ctx, devId, keyId,
+                                       WH_NVM_FLAGS_USAGE_VERIFY, outPortKey);
             }
             *outKeyLen = 0;
             return ret;
@@ -4691,20 +4691,20 @@ static int _CmacResolveKey(whServerContext* ctx, int devId,
     return ret;
 }
 
-/* Init cmac with key bytes, or with a hardware key by reference */
+/* Init cmac with key bytes, or with a port key by reference */
 static int _CmacInitForKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
-                           whKeyId hwKey, int devId)
+                           whKeyId portKey, int devId)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    if (hwKey != WH_KEYID_ERASED) {
-        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+#ifdef WOLFHSM_CFG_PORTKEY
+    if (portKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_PORTKEY_REF_SIZE];
 
-        wh_HwKeystore_KeyIdToRef(hwKey, ref);
+        wh_PortKey_KeyIdToRef(portKey, ref);
         return wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, ref,
                               (int)sizeof(ref), NULL, devId);
     }
 #else
-    (void)hwKey;
+    (void)portKey;
 #endif
     return wc_InitCmac_ex(cmac, key, (word32)keyLen, WC_CMAC_AES, NULL, NULL,
                           devId);
@@ -4757,11 +4757,11 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t tmpKey[AES_256_KEY_SIZE];
     uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
-    whKeyId  hwKey = WH_KEYID_ERASED;
+    whKeyId  portKey = WH_KEYID_ERASED;
 
     /* Resolve the key to use */
     ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
-                          &tmpKeyLen, &hwKey);
+                          &tmpKeyLen, &portKey);
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
@@ -4769,9 +4769,9 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
-        if (hwKey != WH_KEYID_ERASED) {
-            /* A hardware key is set up by reference first */
-            ret = _CmacInitForKey(cmac, NULL, 0, hwKey, devId);
+        if (portKey != WH_KEYID_ERASED) {
+            /* A port key is set up by reference first */
+            ret = _CmacInitForKey(cmac, NULL, 0, portKey, devId);
             if (ret == 0) {
                 ret = wc_AesCmacGenerate_ex(cmac, out, &len, in, req.inSz, NULL,
                                             0, NULL, devId);
@@ -4797,7 +4797,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
             req.inSz, req.outSz, req.keyId);
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
-        ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
+        ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, portKey, devId);
         WH_DEBUG_SERVER_VERBOSE("cmac init with keylen:%d ret:%d\n", tmpKeyLen,
                                 ret);
 
@@ -9222,7 +9222,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t tmpKey[AES_256_KEY_SIZE];
     uint32_t tmpKeyLen = sizeof(tmpKey);
     Cmac    cmac[1];
-    whKeyId  hwKey = WH_KEYID_ERASED;
+    whKeyId  portKey = WH_KEYID_ERASED;
 
     /* Oneshot fast path: DMA input only (no inline), output requested. The
      * streaming protocol never produces outSz>0 with DMA input (Final is
@@ -9241,7 +9241,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
         /* Resolve key */
         if (ret == WH_ERROR_OK) {
             ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
-                                  &tmpKeyLen, &hwKey);
+                                  &tmpKeyLen, &portKey);
         }
 
         if (ret == WH_ERROR_OK && req.keySz != 0) {
@@ -9259,7 +9259,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
             WH_DEBUG_SERVER_VERBOSE("dma cmac generate oneshot with keyId:%x\n",
                                     req.keyId);
 
-            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
+            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, portKey, devId);
 
             if (ret == WH_ERROR_OK) {
                 ret = wc_AesCmacGenerate_ex(cmac, out, &len, inAddr,
@@ -9284,11 +9284,11 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
 
         /* Resolve key */
         ret = _CmacResolveKey(ctx, devId, key, req.keySz, req.keyId, tmpKey,
-                              &tmpKeyLen, &hwKey);
+                              &tmpKeyLen, &portKey);
 
         /* Initialize CMAC context with key (re-derives k1/k2 subkeys) */
         if (ret == 0) {
-            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, hwKey, devId);
+            ret = _CmacInitForKey(cmac, tmpKey, tmpKeyLen, portKey, devId);
             WH_DEBUG_SERVER_VERBOSE("dma cmac init with keylen:%d ret:%d\n",
                                     tmpKeyLen, ret);
         }

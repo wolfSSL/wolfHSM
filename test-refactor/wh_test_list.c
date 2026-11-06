@@ -48,8 +48,8 @@ WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_DmaNonCoherent);
-WH_TEST_DECL(whTest_HwKeystore);
-WH_TEST_DECL(whTest_HwKeystoreCrypto);
+WH_TEST_DECL(whTest_PortKey);
+WH_TEST_DECL(whTest_PortKeyCrypto);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MessageNvmTranslate);
 WH_TEST_DECL(whTest_MultiClient);
@@ -62,7 +62,7 @@ WH_TEST_DECL(whTest_CertEraseCannotReachNonCert);
 WH_TEST_DECL(whTest_CertPerClientIsolation);
 WH_TEST_DECL(whTest_CertVerifyCacheFullChain);
 WH_TEST_DECL(whTest_CertReadTrusted);
-WH_TEST_DECL(whTest_HwKeystoreServer);
+WH_TEST_DECL(whTest_PortKeyServer);
 WH_TEST_DECL(whTest_ServerImgMgr);
 WH_TEST_DECL(whTest_NvmOptional);
 WH_TEST_DECL(whTest_NvmPolicyChecked);
@@ -130,8 +130,8 @@ const whTestCase whTestsMisc[] = {
     {"whTest_KeystoreReqSize",     whTest_KeystoreReqSize    },
     {"whTest_MessageNvmTranslate", whTest_MessageNvmTranslate},
     {"whTest_MultiClient",         whTest_MultiClient        },
-    {"whTest_HwKeystore",          whTest_HwKeystore         },
-    {"whTest_HwKeystoreCrypto",    whTest_HwKeystoreCrypto   },
+    {"whTest_PortKey",             whTest_PortKey            },
+    {"whTest_PortKeyCrypto",       whTest_PortKeyCrypto      },
     {"whTest_Lock",                whTest_Lock               },
     {"whTest_Log",                 whTest_Log                },
     {"whTest_SheKeywrapInterop",   whTest_SheKeywrapInterop  },
@@ -141,23 +141,23 @@ const whTestCase whTestsMisc[] = {
 const size_t whTestsMiscCount = ARRAY_SIZE(whTestsMisc);
 
 const whTestCase whTestsServer[] = {
-    {"whTest_CertVerify", whTest_CertVerify},
-    {"whTest_CertNvmPolicy", whTest_CertNvmPolicy},
-    {"whTest_CertReadRejectsServerOnly", whTest_CertReadRejectsServerOnly},
+    {"whTest_CertVerify",                  whTest_CertVerify                 },
+    {"whTest_CertNvmPolicy",               whTest_CertNvmPolicy              },
+    {"whTest_CertReadRejectsServerOnly",   whTest_CertReadRejectsServerOnly  },
     {"whTest_CertEraseCannotReachNonCert", whTest_CertEraseCannotReachNonCert},
-    {"whTest_CertPerClientIsolation", whTest_CertPerClientIsolation},
-    {"whTest_CertVerifyCacheFullChain", whTest_CertVerifyCacheFullChain},
-    {"whTest_ServerImgMgr", whTest_ServerImgMgr},
-    {"whTest_CertReadTrusted", whTest_CertReadTrusted},
-    {"whTest_NvmOptional", whTest_NvmOptional},
-    {"whTest_NvmPolicyChecked", whTest_NvmPolicyChecked},
-    {"whTest_SheMasterEcuKeyFallback", whTest_SheMasterEcuKeyFallback},
-    {"whTest_SheReqSizeChecking", whTest_SheReqSizeChecking},
-    {"whTest_SheLoadKeyOversizedSlot", whTest_SheLoadKeyOversizedSlot},
-    {"whTest_HwKeystoreServer", whTest_HwKeystoreServer},
-    {"whTest_SheStateGate", whTest_SheStateGate},
-    {"whTest_ShePrngSeedPersistence", whTest_ShePrngSeedPersistence},
-    {"whTest_SheSaveReclaim", whTest_SheSaveReclaim},
+    {"whTest_CertPerClientIsolation",      whTest_CertPerClientIsolation     },
+    {"whTest_CertVerifyCacheFullChain",    whTest_CertVerifyCacheFullChain   },
+    {"whTest_ServerImgMgr",                whTest_ServerImgMgr               },
+    {"whTest_CertReadTrusted",             whTest_CertReadTrusted            },
+    {"whTest_NvmOptional",                 whTest_NvmOptional                },
+    {"whTest_NvmPolicyChecked",            whTest_NvmPolicyChecked           },
+    {"whTest_SheMasterEcuKeyFallback",     whTest_SheMasterEcuKeyFallback    },
+    {"whTest_SheReqSizeChecking",          whTest_SheReqSizeChecking         },
+    {"whTest_SheLoadKeyOversizedSlot",     whTest_SheLoadKeyOversizedSlot    },
+    {"whTest_PortKeyServer",               whTest_PortKeyServer              },
+    {"whTest_SheStateGate",                whTest_SheStateGate               },
+    {"whTest_ShePrngSeedPersistence",      whTest_ShePrngSeedPersistence     },
+    {"whTest_SheSaveReclaim",              whTest_SheSaveReclaim             },
 };
 const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 

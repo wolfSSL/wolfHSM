@@ -249,44 +249,44 @@ int wh_MessageKeystore_TranslateRevokeResponse(
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwLoadRequest(
-    uint16_t magic, const whMessageKeystore_HwLoadRequest* src,
-    whMessageKeystore_HwLoadRequest* dest)
+int wh_MessageKeystore_TranslatePortLoadRequest(
+    uint16_t magic, const whMessageKeystore_PortLoadRequest* src,
+    whMessageKeystore_PortLoadRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, hwId);
+    WH_T16(magic, dest, src, portKeyId);
     WH_T16(magic, dest, src, srcId);
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwLoadResponse(
-    uint16_t magic, const whMessageKeystore_HwLoadResponse* src,
-    whMessageKeystore_HwLoadResponse* dest)
+int wh_MessageKeystore_TranslatePortLoadResponse(
+    uint16_t magic, const whMessageKeystore_PortLoadResponse* src,
+    whMessageKeystore_PortLoadResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
     WH_T32(magic, dest, src, rc);
-    WH_T16(magic, dest, src, hwId);
+    WH_T16(magic, dest, src, portKeyId);
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwClearRequest(
-    uint16_t magic, const whMessageKeystore_HwClearRequest* src,
-    whMessageKeystore_HwClearRequest* dest)
+int wh_MessageKeystore_TranslatePortClearRequest(
+    uint16_t magic, const whMessageKeystore_PortClearRequest* src,
+    whMessageKeystore_PortClearRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, hwId);
+    WH_T16(magic, dest, src, portKeyId);
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwClearResponse(
-    uint16_t magic, const whMessageKeystore_HwClearResponse* src,
-    whMessageKeystore_HwClearResponse* dest)
+int wh_MessageKeystore_TranslatePortClearResponse(
+    uint16_t magic, const whMessageKeystore_PortClearResponse* src,
+    whMessageKeystore_PortClearResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
@@ -295,20 +295,20 @@ int wh_MessageKeystore_TranslateHwClearResponse(
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwInfoRequest(
-    uint16_t magic, const whMessageKeystore_HwInfoRequest* src,
-    whMessageKeystore_HwInfoRequest* dest)
+int wh_MessageKeystore_TranslatePortInfoRequest(
+    uint16_t magic, const whMessageKeystore_PortInfoRequest* src,
+    whMessageKeystore_PortInfoRequest* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T16(magic, dest, src, hwId);
+    WH_T16(magic, dest, src, portKeyId);
     return 0;
 }
 
-int wh_MessageKeystore_TranslateHwInfoResponse(
-    uint16_t magic, const whMessageKeystore_HwInfoResponse* src,
-    whMessageKeystore_HwInfoResponse* dest)
+int wh_MessageKeystore_TranslatePortInfoResponse(
+    uint16_t magic, const whMessageKeystore_PortInfoResponse* src,
+    whMessageKeystore_PortInfoResponse* dest)
 {
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;

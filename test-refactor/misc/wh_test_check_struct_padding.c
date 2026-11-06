@@ -72,12 +72,12 @@ whMessageKeystore_ExportResponse keyExportRes;
 whMessageKeystore_EraseResponse  keyEraseRes;
 whMessageKeystore_ExportPublicRequest  keyExportPublicReq;
 whMessageKeystore_ExportPublicResponse keyExportPublicRes;
-whMessageKeystore_HwLoadRequest        keyHwLoadReq;
-whMessageKeystore_HwLoadResponse       keyHwLoadRes;
-whMessageKeystore_HwClearRequest       keyHwClearReq;
-whMessageKeystore_HwClearResponse      keyHwClearRes;
-whMessageKeystore_HwInfoRequest        keyHwInfoReq;
-whMessageKeystore_HwInfoResponse       keyHwInfoRes;
+whMessageKeystore_PortLoadRequest      keyPortLoadReq;
+whMessageKeystore_PortLoadResponse     keyPortLoadRes;
+whMessageKeystore_PortClearRequest     keyPortClearReq;
+whMessageKeystore_PortClearResponse    keyPortClearRes;
+whMessageKeystore_PortInfoRequest      keyPortInfoReq;
+whMessageKeystore_PortInfoResponse     keyPortInfoRes;
 
 /* Include counter message header for new counter message structures */
 #include "wolfhsm/wh_message_counter.h"

@@ -44,9 +44,9 @@ typedef struct whServerContext_t whServerContext;
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
 #include "wolfhsm/wh_auth.h"
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-#include "wolfhsm/wh_hwkeystore.h"
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#ifdef WOLFHSM_CFG_PORTKEY
+#include "wolfhsm/wh_portkey.h"
+#endif /* WOLFHSM_CFG_PORTKEY */
 #include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_log.h"
 #ifdef WOLFHSM_CFG_DMA
@@ -159,9 +159,9 @@ typedef struct whServerConfig_t {
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     whAuthContext* auth;
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    whHwKeystoreContext* hwKeystore; /* optional; NULL = no HW keystore */
-#endif                               /* WOLFHSM_CFG_HWKEYSTORE */
+#ifdef WOLFHSM_CFG_PORTKEY
+    whPortKeyContext* portKey; /* optional; NULL = no port keys */
+#endif                         /* WOLFHSM_CFG_PORTKEY */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
@@ -193,9 +193,9 @@ struct whServerContext_t {
 #ifdef WOLFHSM_CFG_ENABLE_AUTHENTICATION
     whAuthContext* auth;
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    whHwKeystoreContext* hwKeystore;
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#ifdef WOLFHSM_CFG_PORTKEY
+    whPortKeyContext* portKey;
+#endif /* WOLFHSM_CFG_PORTKEY */
     whCommServer  comm[1];
     whServerCommInitCb commInitCb;
     void*              commInitCbArg;

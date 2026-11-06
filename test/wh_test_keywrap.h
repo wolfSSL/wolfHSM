@@ -26,26 +26,26 @@ int whTest_Client_KeyWrap(whClientContext* ctx);
 int whTest_Client_DataWrap(whClientContext* ctx);
 int whTest_KeyWrapClientConfig(whClientConfig* cf);
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && defined(WOLFHSM_CFG_KEYWRAP)
-#include "wolfhsm/wh_hwkeystore.h"
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_KEYWRAP)
+#include "wolfhsm/wh_portkey.h"
 
-/* Test getKey callback emulating a hardware keystore backend; bind this to
- * the server's whHwKeystoreContext when running whTest_Client_HwKeystore.
+/* Test getKey callback emulating a port key backend; bind this to
+ * the server's whPortKeyContext when running whTest_Client_PortKey.
  * Defined in wh_test_keywrap.c, so only available when keywrap is enabled */
-int whTest_HwKeystoreGetKeyCb(void* context, whKeyId keyId, uint8_t* out,
-                              uint16_t* inout_len);
-int whTest_Client_HwKeystore(whClientContext* ctx);
+int whTest_PortKeyGetKeyCb(void* context, whKeyId keyId, uint8_t* out,
+                           uint16_t* inout_len);
+int whTest_Client_PortKey(whClientContext* ctx);
 
 /* Convenience callback-table initializer for the emulated test backend. The
  * backend needs no setup/teardown, so Init and Cleanup are NULL */
 /* clang-format off */
-#define WH_TEST_HWKEYSTORE_CB                 \
+#define WH_TEST_PORTKEY_CB                 \
     {                                         \
         .Init    = NULL,                      \
         .Cleanup = NULL,                      \
-        .GetKey  = whTest_HwKeystoreGetKeyCb, \
+        .GetKey  = whTest_PortKeyGetKeyCb, \
     }
 /* clang-format on */
-#endif /* WOLFHSM_CFG_HWKEYSTORE && WOLFHSM_CFG_KEYWRAP */
+#endif /* WOLFHSM_CFG_PORTKEY && WOLFHSM_CFG_KEYWRAP */
 
 #endif /* WH_TEST_KEYWRAP_H_ */

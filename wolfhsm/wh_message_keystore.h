@@ -235,70 +235,70 @@ int wh_MessageKeystore_TranslateRevokeResponse(
     uint16_t magic, const whMessageKeystore_RevokeResponse* src,
     whMessageKeystore_RevokeResponse* dest);
 
-/* Hardware key load request: copy a keystore key into a hardware key */
+/* Port key load request: copy a keystore key into a port key */
 typedef struct {
-    uint16_t hwId;  /* Client HW keyId. ID 0 lets the server pick one */
-    uint16_t srcId; /* Client keyId of the keystore key */
+    uint16_t portKeyId; /* Client port keyId. ID 0 lets the server pick one */
+    uint16_t srcId;     /* Client keyId of the keystore key */
     uint8_t  WH_PAD[4];
-} whMessageKeystore_HwLoadRequest;
+} whMessageKeystore_PortLoadRequest;
 
-/* Hardware key load response */
+/* Port key load response */
 typedef struct {
     uint32_t rc;
-    uint16_t hwId; /* Client HW keyId that was loaded */
+    uint16_t portKeyId; /* Client port keyId that was loaded */
     uint8_t  WH_PAD[2];
-} whMessageKeystore_HwLoadResponse;
+} whMessageKeystore_PortLoadResponse;
 
-int wh_MessageKeystore_TranslateHwLoadRequest(
-    uint16_t magic, const whMessageKeystore_HwLoadRequest* src,
-    whMessageKeystore_HwLoadRequest* dest);
+int wh_MessageKeystore_TranslatePortLoadRequest(
+    uint16_t magic, const whMessageKeystore_PortLoadRequest* src,
+    whMessageKeystore_PortLoadRequest* dest);
 
-int wh_MessageKeystore_TranslateHwLoadResponse(
-    uint16_t magic, const whMessageKeystore_HwLoadResponse* src,
-    whMessageKeystore_HwLoadResponse* dest);
+int wh_MessageKeystore_TranslatePortLoadResponse(
+    uint16_t magic, const whMessageKeystore_PortLoadResponse* src,
+    whMessageKeystore_PortLoadResponse* dest);
 
-/* Hardware key clear request */
+/* Port key clear request */
 typedef struct {
-    uint16_t hwId; /* Client HW keyId. ID 0 clears all of the client's keys */
+    uint16_t portKeyId; /* Client port keyId. ID 0 clears the client's keys */
     uint8_t  WH_PAD[6];
-} whMessageKeystore_HwClearRequest;
+} whMessageKeystore_PortClearRequest;
 
-/* Hardware key clear response */
+/* Port key clear response */
 typedef struct {
     uint32_t rc;
     uint8_t  WH_PAD[4];
-} whMessageKeystore_HwClearResponse;
+} whMessageKeystore_PortClearResponse;
 
-int wh_MessageKeystore_TranslateHwClearRequest(
-    uint16_t magic, const whMessageKeystore_HwClearRequest* src,
-    whMessageKeystore_HwClearRequest* dest);
+int wh_MessageKeystore_TranslatePortClearRequest(
+    uint16_t magic, const whMessageKeystore_PortClearRequest* src,
+    whMessageKeystore_PortClearRequest* dest);
 
-int wh_MessageKeystore_TranslateHwClearResponse(
-    uint16_t magic, const whMessageKeystore_HwClearResponse* src,
-    whMessageKeystore_HwClearResponse* dest);
+int wh_MessageKeystore_TranslatePortClearResponse(
+    uint16_t magic, const whMessageKeystore_PortClearResponse* src,
+    whMessageKeystore_PortClearResponse* dest);
 
-/* Hardware key info request */
+/* Port key info request */
 typedef struct {
-    uint16_t hwId; /* Client HW keyId */
+    uint16_t portKeyId; /* Client port keyId */
     uint8_t  WH_PAD[6];
-} whMessageKeystore_HwInfoRequest;
+} whMessageKeystore_PortInfoRequest;
 
-/* Hardware key info response */
+/* Port key info response */
 typedef struct {
     uint32_t rc;
     uint32_t keyType; /* WC_KEYSTORE_KEY_AES, or 0 if empty */
     uint32_t keyBits;
     uint16_t flags; /* WH_NVM_FLAGS_USAGE_* the server allows */
     uint16_t owner; /* Client that loaded it, 0 if shared */
-} whMessageKeystore_HwInfoResponse;
+} whMessageKeystore_PortInfoResponse;
 
-int wh_MessageKeystore_TranslateHwInfoRequest(
-    uint16_t magic, const whMessageKeystore_HwInfoRequest* src,
-    whMessageKeystore_HwInfoRequest* dest);
+int wh_MessageKeystore_TranslatePortInfoRequest(
+    uint16_t magic, const whMessageKeystore_PortInfoRequest* src,
+    whMessageKeystore_PortInfoRequest* dest);
 
-int wh_MessageKeystore_TranslateHwInfoResponse(
-    uint16_t magic, const whMessageKeystore_HwInfoResponse* src,
-    whMessageKeystore_HwInfoResponse* dest);
+int wh_MessageKeystore_TranslatePortInfoResponse(
+    uint16_t magic, const whMessageKeystore_PortInfoResponse* src,
+    whMessageKeystore_PortInfoResponse* dest);
 
 /*
  * DMA-based keystore operations

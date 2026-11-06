@@ -82,8 +82,8 @@ typedef uint16_t whNvmFlags;
 #define WH_NVM_FLAGS_NONDESTROYABLE ((whNvmFlags)1 << 11)
 /* Trusted key. Server-only: set exclusively by trusted provisioning
  * (whnvmtool image or server-internal code). A software KEK needs it for
- * wrap-export and unwrap-and-cache. The hardware keystore also sets it on
- * port keys */
+ * wrap-export and unwrap-and-cache. The port key front end also sets it on
+ * fixed keys */
 #define WH_NVM_FLAGS_TRUSTED ((whNvmFlags)1 << 12)
 
 /* Flags a client may never set; stripped from all client-supplied metadata. */
@@ -135,13 +135,13 @@ typedef struct {
     uint8_t label[WH_NVM_LABEL_LEN];
 } whNvmMetadata;
 
-/* What a hardware key holds, as reported by the server */
+/* What a port key holds, as reported by the server */
 typedef struct {
     uint32_t   keyType; /* WC_KEYSTORE_KEY_AES, or 0 if empty */
     uint32_t   keyBits; /* Key size in bits */
     whNvmFlags flags;   /* WH_NVM_FLAGS_USAGE_* the server allows */
     uint16_t   owner;   /* Client that owns it, 0 if shared */
-} whHwKeystoreInfo;
+} whPortKeyInfo;
 
 /* Certificate management flags */
 typedef uint16_t whCertFlags;

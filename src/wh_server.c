@@ -150,9 +150,9 @@ int wh_Server_Init(whServerContext* server, whServerConfig* config)
         }
     }
 #endif /* WOLFHSM_CFG_ENABLE_AUTHENTICATION */
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    server->hwKeystore = config->hwKeystore;
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#ifdef WOLFHSM_CFG_PORTKEY
+    server->portKey = config->portKey;
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     rc = wh_CommServer_Init(server->comm, config->comm_config,
             wh_Server_SetConnectedCb, (void*)server);
@@ -688,11 +688,11 @@ static uint16_t _FormatErrorResponse(uint16_t magic, uint16_t group,
                     size = sizeof(whMessageKeystore_DataUnwrapResponse);
                     break;
 #endif /* WOLFHSM_CFG_KEYWRAP */
-                case WH_KEY_HW_LOAD:
-                case WH_KEY_HW_CLEAR:
-                case WH_KEY_HW_INFO:
+                case WH_KEY_PORT_LOAD:
+                case WH_KEY_PORT_CLEAR:
+                case WH_KEY_PORT_INFO:
                     /* rc comes first in all three, so the largest fits all */
-                    size = sizeof(whMessageKeystore_HwInfoResponse);
+                    size = sizeof(whMessageKeystore_PortInfoResponse);
                     break;
                 default:
                     size = sizeof(int32_t);

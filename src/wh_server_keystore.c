@@ -125,9 +125,9 @@ typedef enum {
     /* Exporting only the public half of a public-key object is considered
      * non-sensitive and is intentionally not gated by NONEXPORTABLE. */
     WH_KS_OP_EXPORT_PUBLIC,
-    /* Copying a key into the hardware keystore. The key never goes back to a
-     * client, so NONEXPORTABLE does not apply */
-    WH_KS_OP_HW_LOAD,
+    /* Copying a key into a port key. The key never goes back to a client, so
+     * NONEXPORTABLE does not apply */
+    WH_KS_OP_PORT_LOAD,
 } whKsOp;
 
 static int _KeyIsCommitted(whServerContext* server, whKeyId keyId)
@@ -171,15 +171,15 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys are not keystore-managed: no keystore operation is
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys are not keystore-managed: no keystore operation is
      * permitted on them. Must be checked before the existence lookup below,
      * since these keys are never in cache or NVM and some callers (e.g.
      * GetCacheSlotChecked) deliberately tolerate WH_ERROR_NOTFOUND */
-    if (WH_KEYID_ISHW(keyId)) {
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* Check cache first */
     ret = _FindInCache(server, keyId, NULL, NULL, NULL, &cacheMeta);
@@ -211,10 +211,10 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
 
     /* A trusted KEK is frozen against all client keystore ops: it can only be
      * *used* as a KEK by the keywrap path, which freshens it via the unchecked
-     * cache-slot path and so bypasses this gate. Mirrors the WH_KEYID_ISHW gate
-     * above but flag-based, so the flag is self-protecting regardless of the
-     * key's other bits, and blocks a client re-caching over the KEK id to drop
-     * the flag. */
+     * cache-slot path and so bypasses this gate. Mirrors the WH_KEYID_ISPORT
+     * gate above but flag-based, so the flag is self-protecting regardless of
+     * the key's other bits, and blocks a client re-caching over the KEK id to
+     * drop the flag. */
     if (flags & WH_NVM_FLAGS_TRUSTED) {
         return WH_ERROR_ACCESS;
     }
@@ -250,7 +250,7 @@ static int _KeystoreCheckPolicy(whServerContext* server, whKsOp op,
 
         case WH_KS_OP_COMMIT:
         case WH_KS_OP_REVOKE:
-        case WH_KS_OP_HW_LOAD:
+        case WH_KS_OP_PORT_LOAD:
             /* Always allowed */
             break;
         default:
@@ -744,12 +744,12 @@ int wh_Server_KeystoreGetUniqueId(whServerContext* server, whNvmId* inout_id)
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* The port defines hardware key ids, so the keystore never assigns one */
-    if (type == WH_KEYTYPE_HW) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* The port defines port key ids, so the keystore never assigns one */
+    if (type == WH_KEYTYPE_PORT) {
         return WH_ERROR_BADARGS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* try every index until we find a unique one, don't worry about capacity */
     for (id = WH_KEYID_IDMAX; id > WH_KEYID_ERASED; id--) {
@@ -811,14 +811,14 @@ int wh_Server_KeystoreGetCacheSlot(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys must never occupy a cache slot. This core check is
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys must never occupy a cache slot. This core check is
      * the sole protection for the DMA cache path, which allocates its slot
      * here without going through _KeystoreCacheKey */
-    if (WH_KEYID_ISHW(keyId)) {
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     ret = _FindInCache(server, keyId, &idx, &isBig, &buf, &foundMeta);
     if (ret == WH_ERROR_OK) {
@@ -871,12 +871,12 @@ static int _KeystoreCacheKey(whServerContext* server, whNvmMetadata* meta,
         return WH_ERROR_ACCESS;
     }
 #endif
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys must never enter the key cache */
-    if (WH_KEYID_ISHW(meta->id)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys must never enter the key cache */
+    if (WH_KEYID_ISPORT(meta->id)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     if (checked) {
         ret = wh_Server_KeystoreGetCacheSlotChecked(server, meta->id, meta->len,
@@ -998,14 +998,14 @@ int wh_Server_KeystoreFreshenKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware keys are never cached and are not usable through the
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys are never cached and are not usable through the
      * keystore. Key wrap and the crypto handlers use them by reference
      * instead */
-    if (WH_KEYID_ISHW(keyId)) {
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* Use local buffers to allow for optional (NULL) output parameters */
     cacheBufOut  = (outBuf != NULL) ? outBuf : (uint8_t**)&cacheBufLocal;
@@ -1069,12 +1069,12 @@ int wh_Server_KeystoreReadKey(whServerContext* server, whKeyId keyId,
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only key material must never be read out of the server */
-    if (WH_KEYID_ISHW(keyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port key material must never be read out of the server */
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* Check the cache using unified function */
     ret = _FindInCache(server, keyId, NULL, NULL, &cacheBuffer, &cacheMeta);
@@ -1214,12 +1214,12 @@ int wh_Server_KeystoreEvictKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_BADARGS;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys are never cached, so there is nothing to evict */
-    if (WH_KEYID_ISHW(keyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys are never cached, so there is nothing to evict */
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
@@ -1262,12 +1262,12 @@ int wh_Server_KeystoreCommitKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_ABORTED;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys must never be persisted to NVM */
-    if (WH_KEYID_ISHW(keyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys must never be persisted to NVM */
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* Get the appropriate cache context for this key */
     ctx = _GetCacheContext(server, keyId);
@@ -1298,14 +1298,14 @@ int wh_Server_KeystoreCommitKeyChecked(whServerContext* server, whNvmId keyId)
     return wh_Server_KeystoreCommitKey(server, keyId);
 }
 
-/* An erased or revoked key must not stay usable through a hardware copy. On a
- * port error the copies are unusable anyway, but may still be in hardware */
-static int _ClearHwCopies(whServerContext* server, whKeyId keyId)
+/* An erased or revoked key must not stay usable through a copy in a port key.
+ * On a port error the copies are unusable anyway, but the port may still hold
+ * them */
+static int _ClearPortKeyCopies(whServerContext* server, whKeyId keyId)
 {
-#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
-    if (server->hwKeystore != NULL) {
-        return wh_HwKeystore_ClearSource(server->hwKeystore, server->devId,
-                                         keyId);
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+    if (server->portKey != NULL) {
+        return wh_PortKey_ClearSource(server->portKey, server->devId, keyId);
     }
 #else
     (void)server;
@@ -1326,12 +1326,12 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
         return WH_ERROR_ABORTED;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys are not keystore-managed and cannot be erased */
-    if (WH_KEYID_ISHW(keyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys are not keystore-managed and cannot be erased */
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* remove the key from the cache if present */
     (void)wh_Server_KeystoreEvictKey(server, keyId);
@@ -1339,13 +1339,13 @@ int wh_Server_KeystoreEraseKey(whServerContext* server, whNvmId keyId)
     /* No NVM means there is nothing to destroy, same as erasing a key that
      * was never there. */
     if (server->nvm == NULL) {
-        return _ClearHwCopies(server, keyId);
+        return _ClearPortKeyCopies(server, keyId);
     }
 
     /* destroy the object */
     ret = wh_Nvm_DestroyObjects(server->nvm, 1, &keyId);
     if (ret == WH_ERROR_OK) {
-        ret = _ClearHwCopies(server, keyId);
+        ret = _ClearPortKeyCopies(server, keyId);
     }
     return ret;
 }
@@ -1362,12 +1362,12 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
         return WH_ERROR_ABORTED;
     }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    /* Hardware-only keys are not keystore-managed and cannot be erased */
-    if (WH_KEYID_ISHW(keyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    /* Port keys are not keystore-managed and cannot be erased */
+    if (WH_KEYID_ISPORT(keyId)) {
         return WH_ERROR_ACCESS;
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     /* NOTFOUND means the key was not cached, whether it is absent entirely or
      * lives only in NVM; both are fine. Any other error must not be masked by
@@ -1380,12 +1380,12 @@ int wh_Server_KeystoreEraseKeyChecked(whServerContext* server, whNvmId keyId)
     /* Nothing left to destroy is a successful erase, matching
      * wh_Server_KeystoreEraseKey */
     if (server->nvm == NULL) {
-        return _ClearHwCopies(server, keyId);
+        return _ClearPortKeyCopies(server, keyId);
     }
 
     ret = wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &keyId);
     if (ret == WH_ERROR_OK) {
-        ret = _ClearHwCopies(server, keyId);
+        ret = _ClearPortKeyCopies(server, keyId);
     }
     return ret;
 }
@@ -1463,25 +1463,25 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
     }
 
     if (ret == WH_ERROR_OK) {
-        ret = _ClearHwCopies(server, keyId);
+        ret = _ClearPortKeyCopies(server, keyId);
     }
     return ret;
 }
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
-int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
-                             whKeyId srcId)
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+int wh_Server_KeystorePortLoad(whServerContext* server,
+                               whKeyId* inout_portKeyId, whKeyId srcId)
 {
-    uint8_t       key[WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE];
+    uint8_t       key[WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE];
     uint32_t      keySz = sizeof(key);
     whNvmMetadata meta[1];
     int           ret;
 
-    if ((server == NULL) || (inout_hwId == NULL) ||
+    if ((server == NULL) || (inout_portKeyId == NULL) ||
         (WH_KEYID_TYPE(srcId) != WH_KEYTYPE_CRYPTO)) {
         return WH_ERROR_BADARGS;
     }
-    if (server->hwKeystore == NULL) {
+    if (server->portKey == NULL) {
         return WH_ERROR_NOTFOUND;
     }
 
@@ -1490,49 +1490,49 @@ int wh_Server_KeystoreHwLoad(whServerContext* server, whKeyId* inout_hwId,
      * loaded, so erasing or revoking the source can't miss it */
     ret = WH_SERVER_NVM_LOCK(server);
     if (ret == WH_ERROR_OK) {
-        ret = _KeystoreCheckPolicy(server, WH_KS_OP_HW_LOAD, srcId);
+        ret = _KeystoreCheckPolicy(server, WH_KS_OP_PORT_LOAD, srcId);
         if (ret == WH_ERROR_OK) {
             ret = wh_Server_KeystoreReadKey(server, srcId, meta, key, &keySz);
         }
 
-        /* The hardware copy keeps the usage of the source. A key with none (a
+        /* The loaded copy keeps the usage of the source. A key with none (a
          * revoked key, for example) could not be used */
         if ((ret == WH_ERROR_OK) &&
             ((meta->flags & WH_NVM_FLAGS_USAGE_ANY) == 0)) {
             ret = WH_ERROR_USAGE;
         }
         if (ret == WH_ERROR_OK) {
-            ret = wh_HwKeystore_Load(server->hwKeystore, server->devId,
-                                     inout_hwId, srcId, meta->flags, key,
-                                     (uint16_t)keySz);
+            ret =
+                wh_PortKey_Load(server->portKey, server->devId, inout_portKeyId,
+                                srcId, meta->flags, key, (uint16_t)keySz);
         }
         (void)WH_SERVER_NVM_UNLOCK(server);
     } /* WH_SERVER_NVM_LOCK() */
     wh_Utils_ForceZero(key, sizeof(key));
     return ret;
 }
-#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
 #ifdef WOLFHSM_CFG_KEYWRAP
 
 #ifndef NO_AES
 #ifdef HAVE_AESGCM
 
-/* The KEK of a keywrap operation: key bytes from the keystore, or a hardware
- * key the port uses by reference */
+/* The KEK of a keywrap operation: key bytes from the keystore, or a port key
+ * the port uses by reference */
 typedef struct {
     const uint8_t* key;
     uint32_t       keySz;
-    whKeyId        hwKey; /* WH_KEYID_ERASED unless a hardware key */
+    whKeyId        portKey; /* WH_KEYID_ERASED unless a port key */
 } whKeywrapKek;
 
-/* Resolve the KEK for a keywrap operation. A hardware KEK (TYPE=HW) needs a
+/* Resolve the KEK for a keywrap operation. A port KEK (TYPE=PORT) needs a
  * record allowing WH_NVM_FLAGS_USAGE_WRAP and is used by reference, so its
- * bytes never leave the hardware. All other KEKs are freshened into the key
+ * bytes never leave the port. All other KEKs are freshened into the key
  * cache and must carry WH_NVM_FLAGS_USAGE_WRAP.
  *
  * When enforceTrustedKek is nonzero the KEK must be one the client cannot know
- * or set: a port key (its hardware record is WH_NVM_FLAGS_TRUSTED) or a
+ * or set: a fixed key (its port key record is WH_NVM_FLAGS_TRUSTED) or a
  * software key carrying WH_NVM_FLAGS_TRUSTED. The ops that move a server
  * secret across the client boundary (KeyWrapExport, KeyUnwrapAndCache)
  * require this. */
@@ -1543,25 +1543,25 @@ static int _KeywrapResolveKek(whServerContext* server, whKeyId serverKeyId,
     whNvmMetadata* kekMeta = NULL;
     uint8_t*       kek     = NULL;
 
-    outKek->key   = NULL;
-    outKek->keySz = 0;
-    outKek->hwKey = WH_KEYID_ERASED;
+    outKek->key     = NULL;
+    outKek->keySz   = 0;
+    outKek->portKey = WH_KEYID_ERASED;
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    if (WH_KEYID_ISHW(serverKeyId)) {
+#ifdef WOLFHSM_CFG_PORTKEY
+    if (WH_KEYID_ISPORT(serverKeyId)) {
         whNvmFlags need = WH_NVM_FLAGS_USAGE_WRAP;
 
-        if ((server->hwKeystore == NULL) || (server->devId == INVALID_DEVID)) {
-            /* No hardware keystore, or no device to run the key */
+        if ((server->portKey == NULL) || (server->devId == INVALID_DEVID)) {
+            /* No port keys, or no device to run the key */
             return WH_ERROR_NOTFOUND;
         }
         if (enforceTrustedKek) {
             need |= WH_NVM_FLAGS_TRUSTED;
         }
-        return wh_HwKeystore_CheckUse(server->hwKeystore, serverKeyId, need,
-                                      &outKek->hwKey);
+        return wh_PortKey_CheckUse(server->portKey, serverKeyId, need,
+                                   &outKek->portKey);
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     ret = wh_Server_KeystoreFreshenKey(server, serverKeyId, &kek, &kekMeta);
     if (ret != WH_ERROR_OK) {
@@ -1585,21 +1585,21 @@ static int _KeywrapResolveKek(whServerContext* server, whKeyId serverKeyId,
     return WH_ERROR_OK;
 }
 
-/* Set up aes with the KEK: by reference for a hardware key, else with its key
+/* Set up aes with the KEK: by reference for a port key, else with its key
  * bytes. Nothing needs freeing on failure */
 static int _KeywrapAesInit(whServerContext* server, Aes* aes,
                            const whKeywrapKek* kek)
 {
     int ret;
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE
-    if (kek->hwKey != WH_KEYID_ERASED) {
-        uint8_t ref[WH_HWKEYSTORE_REF_SIZE];
+#ifdef WOLFHSM_CFG_PORTKEY
+    if (kek->portKey != WH_KEYID_ERASED) {
+        uint8_t ref[WH_PORTKEY_REF_SIZE];
 
-        wh_HwKeystore_KeyIdToRef(kek->hwKey, ref);
+        wh_PortKey_KeyIdToRef(kek->portKey, ref);
         return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, server->devId);
     }
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
     ret = wc_AesInit(aes, NULL, server->devId);
     if (ret == 0) {
@@ -2119,7 +2119,7 @@ _HandleKeyWrapExportRequest(whServerContext*                        server,
             }
 
             /* Wrap the key with its real metadata. This extracts a server-held
-             * secret to the client, so the KEK must be a trusted key (a port
+             * secret to the client, so the KEK must be a trusted key (a fixed
              * key or WH_NVM_FLAGS_TRUSTED) the client cannot know. */
             ret = _AesGcmKeyWrap(server, serverKeyId, /*requireTrustedKek=*/1,
                                  key, (uint16_t)keySz, &metadata,
@@ -2365,7 +2365,7 @@ static int _HandleKeyUnwrapAndCacheRequest(
             }
 
             /* Unwrap-and-cache injects a key into the server keystore, so the
-             * KEK must be a trusted key (a port key or WH_NVM_FLAGS_TRUSTED),
+             * KEK must be a trusted key (a fixed key or WH_NVM_FLAGS_TRUSTED),
              * else a client could forge a blob under a KEK it knows. */
             ret = _AesGcmKeyUnwrap(server, serverKeyId,
                                    /*requireTrustedKek=*/1, wrappedKey,
@@ -3689,98 +3689,101 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
 
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-#ifdef WOLFHSM_CFG_HWKEYSTORE_LOAD
-        case WH_KEY_HW_LOAD: {
-            whMessageKeystore_HwLoadRequest  req  = {0};
-            whMessageKeystore_HwLoadResponse resp = {0};
-            whKeyId                          hwId;
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+        case WH_KEY_PORT_LOAD: {
+            whMessageKeystore_PortLoadRequest  req  = {0};
+            whMessageKeystore_PortLoadResponse resp = {0};
+            whKeyId                            portKeyId;
 
             if (req_size < sizeof(req)) {
                 ret = WH_ERROR_BADARGS;
             }
 
             if (ret == WH_ERROR_OK) {
-                (void)wh_MessageKeystore_TranslateHwLoadRequest(
-                    magic, (whMessageKeystore_HwLoadRequest*)req_packet, &req);
+                (void)wh_MessageKeystore_TranslatePortLoadRequest(
+                    magic, (whMessageKeystore_PortLoadRequest*)req_packet,
+                    &req);
 
-                hwId = wh_KeyId_TranslateFromClient(
-                    WH_KEYTYPE_HW, server->comm->client_id,
-                    req.hwId | WH_KEYID_CLIENT_HW_FLAG);
-                ret = wh_Server_KeystoreHwLoad(
-                    server, &hwId,
+                portKeyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_PORT, server->comm->client_id,
+                    req.portKeyId | WH_KEYID_CLIENT_PORT_FLAG);
+                ret = wh_Server_KeystorePortLoad(
+                    server, &portKeyId,
                     wh_KeyId_TranslateFromClient(
                         WH_KEYTYPE_CRYPTO, server->comm->client_id, req.srcId));
                 if (ret == WH_ERROR_OK) {
-                    resp.hwId = wh_KeyId_TranslateToClient(hwId);
+                    resp.portKeyId = wh_KeyId_TranslateToClient(portKeyId);
                 }
             }
             resp.rc = ret;
 
-            (void)wh_MessageKeystore_TranslateHwLoadResponse(
-                magic, &resp, (whMessageKeystore_HwLoadResponse*)resp_packet);
+            (void)wh_MessageKeystore_TranslatePortLoadResponse(
+                magic, &resp, (whMessageKeystore_PortLoadResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
         } break;
 
-        case WH_KEY_HW_CLEAR: {
-            whMessageKeystore_HwClearRequest  req  = {0};
-            whMessageKeystore_HwClearResponse resp = {0};
-            whKeyId                           hwId;
+        case WH_KEY_PORT_CLEAR: {
+            whMessageKeystore_PortClearRequest  req  = {0};
+            whMessageKeystore_PortClearResponse resp = {0};
+            whKeyId                             portKeyId;
 
             if (req_size < sizeof(req)) {
                 ret = WH_ERROR_BADARGS;
             }
-            else if (server->hwKeystore == NULL) {
+            else if (server->portKey == NULL) {
                 ret = WH_ERROR_NOTFOUND;
             }
 
             if (ret == WH_ERROR_OK) {
-                (void)wh_MessageKeystore_TranslateHwClearRequest(
-                    magic, (whMessageKeystore_HwClearRequest*)req_packet, &req);
+                (void)wh_MessageKeystore_TranslatePortClearRequest(
+                    magic, (whMessageKeystore_PortClearRequest*)req_packet,
+                    &req);
 
-                hwId = wh_KeyId_TranslateFromClient(
-                    WH_KEYTYPE_HW, server->comm->client_id,
-                    req.hwId | WH_KEYID_CLIENT_HW_FLAG);
-                if (WH_KEYID_ISERASED(hwId)) {
+                portKeyId = wh_KeyId_TranslateFromClient(
+                    WH_KEYTYPE_PORT, server->comm->client_id,
+                    req.portKeyId | WH_KEYID_CLIENT_PORT_FLAG);
+                if (WH_KEYID_ISERASED(portKeyId)) {
                     /* ID 0 clears every key the client loaded */
-                    ret = wh_HwKeystore_ClearAll(server->hwKeystore,
-                                                 server->devId,
-                                                 server->comm->client_id);
+                    ret = wh_PortKey_ClearAll(server->portKey, server->devId,
+                                              server->comm->client_id);
                 }
                 else {
-                    ret = wh_HwKeystore_Clear(server->hwKeystore, server->devId,
-                                              hwId);
+                    ret = wh_PortKey_Clear(server->portKey, server->devId,
+                                           portKeyId);
                 }
             }
             resp.rc = ret;
 
-            (void)wh_MessageKeystore_TranslateHwClearResponse(
-                magic, &resp, (whMessageKeystore_HwClearResponse*)resp_packet);
+            (void)wh_MessageKeystore_TranslatePortClearResponse(
+                magic, &resp,
+                (whMessageKeystore_PortClearResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
         } break;
 
-        case WH_KEY_HW_INFO: {
-            whMessageKeystore_HwInfoRequest  req  = {0};
-            whMessageKeystore_HwInfoResponse resp = {0};
-            whHwKeystoreInfo                 info = {0};
+        case WH_KEY_PORT_INFO: {
+            whMessageKeystore_PortInfoRequest  req  = {0};
+            whMessageKeystore_PortInfoResponse resp = {0};
+            whPortKeyInfo                      info = {0};
 
             if (req_size < sizeof(req)) {
                 ret = WH_ERROR_BADARGS;
             }
-            else if (server->hwKeystore == NULL) {
+            else if (server->portKey == NULL) {
                 ret = WH_ERROR_NOTFOUND;
             }
 
             if (ret == WH_ERROR_OK) {
-                (void)wh_MessageKeystore_TranslateHwInfoRequest(
-                    magic, (whMessageKeystore_HwInfoRequest*)req_packet, &req);
+                (void)wh_MessageKeystore_TranslatePortInfoRequest(
+                    magic, (whMessageKeystore_PortInfoRequest*)req_packet,
+                    &req);
 
-                ret = wh_HwKeystore_GetInfo(
-                    server->hwKeystore,
+                ret = wh_PortKey_GetInfo(
+                    server->portKey,
                     wh_KeyId_TranslateFromClient(
-                        WH_KEYTYPE_HW, server->comm->client_id,
-                        req.hwId | WH_KEYID_CLIENT_HW_FLAG),
+                        WH_KEYTYPE_PORT, server->comm->client_id,
+                        req.portKeyId | WH_KEYID_CLIENT_PORT_FLAG),
                     &info);
                 if (ret == WH_ERROR_OK) {
                     resp.keyType = info.keyType;
@@ -3791,26 +3794,26 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
             }
             resp.rc = ret;
 
-            (void)wh_MessageKeystore_TranslateHwInfoResponse(
-                magic, &resp, (whMessageKeystore_HwInfoResponse*)resp_packet);
+            (void)wh_MessageKeystore_TranslatePortInfoResponse(
+                magic, &resp, (whMessageKeystore_PortInfoResponse*)resp_packet);
 
             *out_resp_size = sizeof(resp);
         } break;
 #else
-        case WH_KEY_HW_LOAD:
-        case WH_KEY_HW_CLEAR:
-        case WH_KEY_HW_INFO: {
+        case WH_KEY_PORT_LOAD:
+        case WH_KEY_PORT_CLEAR:
+        case WH_KEY_PORT_INFO: {
             /* Not built in. rc comes first in all three responses, so the
              * largest fits all */
-            whMessageKeystore_HwInfoResponse resp = {0};
+            whMessageKeystore_PortInfoResponse resp = {0};
 
             ret     = WH_ERROR_NOTIMPL;
             resp.rc = ret;
-            (void)wh_MessageKeystore_TranslateHwInfoResponse(
-                magic, &resp, (whMessageKeystore_HwInfoResponse*)resp_packet);
+            (void)wh_MessageKeystore_TranslatePortInfoResponse(
+                magic, &resp, (whMessageKeystore_PortInfoResponse*)resp_packet);
             *out_resp_size = sizeof(resp);
         } break;
-#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
         default:
             ret = WH_ERROR_NOHANDLER;

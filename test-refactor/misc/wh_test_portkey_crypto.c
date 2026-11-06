@@ -17,12 +17,12 @@
  * along with wolfHSM.  If not, see <http://www.gnu.org/licenses/>.
  */
 /*
- * test-refactor/misc/wh_test_hwkeystore_crypto.c
+ * test-refactor/misc/wh_test_portkey_crypto.c
  *
- * End-to-end test of hardware keys in AES and CMAC requests and as key wrap
- * KEKs, with clients loading keys (WOLFHSM_CFG_HWKEYSTORE_LOAD). Two clients
- * talk to two servers that share
- * one NVM and one hardware keystore, like one HSM serving two cores.
+ * End-to-end test of port keys in AES and CMAC requests and as key wrap
+ * KEKs, with clients loading keys (WOLFHSM_CFG_PORTKEY_LOAD). Two clients
+ * talk to two servers that share one NVM and one port key context, like one
+ * HSM serving two cores.
  *
  * The servers' crypto callback is a mock AES engine with eight write-only
  * AES-128 key slots with some arbitrary restrictions:
@@ -33,44 +33,46 @@
  *   K5-K7   used as scratch keys for port-internal functionality
  * The mock runs each operation with wolfCrypt in software, using the key in
  * the slot, and implements the wolfCrypt keystore callback that loads and
- * clears slots. At boot it registers K2 as a port key and K3 and K4 as
+ * clears slots. At boot it registers K2 as a fixed key and K3 and K4 as
  * loadable keys.
  *
  * Each client talks to its server over the autopoll mem transport
  * (wh_test_transport_mem_autopoll.h), so the blocking client APIs work without
  * threads.
  *
- *   _whTest_HwKeyMap          - GetInfo for every hardware key ID
- *   _whTest_HwKeyPortKey      - both clients use K2 but can't set or clear it
- *   _whTest_HwKeyLoadAndUse   - load a keystore key into a hardware key and use
- *                               it in every AES mode and CMAC, standard and DMA
- *   _whTest_HwKeyAllocation   - picking a free key, explicit IDs, running out,
- *                               reloading, and another client's keys
- *   _whTest_HwKeyUsage        - the copy keeps the source key's usage flags,
- *                               and every AES and CMAC request checks them
- *   _whTest_HwKeySource       - evict keeps the copy, erase and revoke clear it
- *   _whTest_HwKeyDeleteFails  - a copy the port can't clear can't be used, and
- *                               erase, revoke and Clear report the error
- *   _whTest_HwKeyRefused      - sources and targets the server or port refuses
- *   _whTest_HwKeyClear        - Clear and ClearAll
- *   _whTest_HwKeyShared       - keys loaded with the global flag
- *   _whTest_HwKeyNoFallback   - a key the hardware lost fails instead of
- *                               running in software
- *   _whTest_HwKeyCmacAfterHw  - a software key CMAC right after a hardware key
- *                               one reaches the port with no key reference
- *   _whTest_HwKeyKek          - the port key and client-loaded keys as key wrap
- *                               KEKs: only port keys are trusted
- *   _whTest_HwKeyPortKeyOwner - a port key registered for one client
+ *   _whTest_PortKeyMap          - GetInfo for every port key ID
+ *   _whTest_PortKeyFixed        - both clients use K2 but can't set or clear it
+ *   _whTest_PortKeyLoadAndUse   - load a keystore key into a port key and use
+ *                                 it in every AES mode and CMAC, standard and
+ *                                 DMA
+ *   _whTest_PortKeyAllocation   - picking a free key, explicit IDs, running
+ *                                 out, reloading, and another client's keys
+ *   _whTest_PortKeyUsage        - the copy keeps the source key's usage flags,
+ *                                 and every AES and CMAC request checks them
+ *   _whTest_PortKeySource       - evict keeps the copy, erase and revoke clear
+ *                                 it
+ *   _whTest_PortKeyDeleteFails  - a copy the port can't clear can't be used,
+ *                                 and erase, revoke and Clear report the error
+ *   _whTest_PortKeyRefused      - sources and targets the server or port
+ *                                 refuses
+ *   _whTest_PortKeyClear        - Clear and ClearAll
+ *   _whTest_PortKeyShared       - keys loaded with the global flag
+ *   _whTest_PortKeyNoFallback   - a key the port lost fails instead of running
+ *                                 in software
+ *   _whTest_PortKeyCmacAfterPort - a software key CMAC right after a port key
+ *                                 one reaches the port with no key reference
+ *   _whTest_PortKeyKek          - the fixed key and client-loaded keys as key
+ *                                 wrap KEKs: only fixed keys are trusted
+ *   _whTest_PortKeyFixedOwner   - a fixed key registered for one client
  */
 
 #include "wolfhsm/wh_settings.h"
 
-#if defined(WOLFHSM_CFG_ENABLE_CLIENT) &&                            \
-    defined(WOLFHSM_CFG_ENABLE_SERVER) &&                            \
-    defined(WOLFHSM_CFG_HWKEYSTORE_LOAD) && defined(HAVE_AES_ECB) && \
-    defined(HAVE_AES_CBC) && defined(WOLFSSL_AES_COUNTER) &&         \
-    defined(HAVE_AESGCM) && defined(WOLFSSL_CMAC) &&                 \
-    defined(WOLFSSL_AES_DIRECT)
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) &&                                      \
+    defined(WOLFHSM_CFG_ENABLE_SERVER) && defined(WOLFHSM_CFG_PORTKEY_LOAD) && \
+    defined(HAVE_AES_ECB) && defined(HAVE_AES_CBC) &&                          \
+    defined(WOLFSSL_AES_COUNTER) && defined(HAVE_AESGCM) &&                    \
+    defined(WOLFSSL_CMAC) && defined(WOLFSSL_AES_DIRECT)
 
 #include <stdint.h>
 #include <string.h>
@@ -88,7 +90,7 @@
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_keyid.h"
 #include "wolfhsm/wh_utils.h"
-#include "wolfhsm/wh_hwkeystore.h"
+#include "wolfhsm/wh_portkey.h"
 #include "wolfhsm/wh_nvm.h"
 #include "wolfhsm/wh_nvm_flash.h"
 #include "wolfhsm/wh_flash_ramsim.h"
@@ -117,12 +119,12 @@
 
 /* Mock engine slots */
 #define MOCK_SLOTS 8
-#define MOCK_PORT_SLOT 2
+#define MOCK_FIXED_SLOT 2
 #define MOCK_LOAD_FIRST 3
 #define MOCK_LOAD_LAST 4
 
-/* Client keyIds of the hardware keys */
-#define HW(id) ((whKeyId)WH_CLIENT_KEYID_MAKE_HW(id))
+/* Client keyIds of the port keys */
+#define PORTKEY(id) ((whKeyId)WH_CLIENT_KEYID_MAKE_PORT(id))
 
 #define USAGE_AES_CMAC                                         \
     (WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT | \
@@ -147,7 +149,7 @@
 
 /* What each slot may hold */
 enum {
-    MOCK_NONE = 0, /* Not a hardware key */
+    MOCK_NONE = 0, /* Not a port key */
     MOCK_LOAD,     /* Loaded and cleared by clients */
     MOCK_PORT,     /* Loaded by the port at boot */
 };
@@ -173,7 +175,7 @@ typedef struct {
 static MockEngine _mock;
 
 /* Test data */
-static uint8_t _portKey[AES_128_KEY_SIZE];
+static uint8_t _fixedKey[AES_128_KEY_SIZE];
 static uint8_t _keyA[AES_128_KEY_SIZE];
 static uint8_t _keyB[AES_128_KEY_SIZE];
 static uint8_t _keyC[AES_128_KEY_SIZE];
@@ -185,9 +187,9 @@ static uint8_t _aad[20];
 /* Slot named by a key reference, or -1 */
 static int _MockRefSlot(const byte* ref, word32 refSz)
 {
-    int id = wh_HwKeystore_KeyRefToId(ref, refSz);
+    int id = wh_PortKey_KeyRefToId(ref, refSz);
 
-    /* Hardware key n is slot n */
+    /* Port key n is slot n */
     if ((id == 0) || (id >= MOCK_SLOTS) || (_mockRole[id] == MOCK_NONE)) {
         return -1;
     }
@@ -431,28 +433,27 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
     }
 }
 
-/* Boot the mock engine: empty every slot, load the port key into K2, and
- * register it and the loadable keys with the hardware keystore. owner is the
- * client that may use the port key, or 0 for every client, and flags the usage
- * it allows */
-static int _MockBoot(whHwKeystoreContext* hwKeystore, uint16_t owner,
+/* Boot the mock engine: empty every slot, load the fixed key into K2, and
+ * register it and the loadable keys as port keys. owner is the client that may
+ * use the fixed key, or 0 for every client, and flags the usage it allows */
+static int _MockBoot(whPortKeyContext* portKey, uint16_t owner,
                      whNvmFlags flags)
 {
     int ret;
     int slot;
 
     memset(&_mock, 0, sizeof(_mock));
-    memcpy(_mock.key[MOCK_PORT_SLOT], _portKey, sizeof(_portKey));
-    _mock.loaded[MOCK_PORT_SLOT] = 1;
+    memcpy(_mock.key[MOCK_FIXED_SLOT], _fixedKey, sizeof(_fixedKey));
+    _mock.loaded[MOCK_FIXED_SLOT] = 1;
 
-    ret = wh_HwKeystore_Register(
-        hwKeystore, WH_MAKE_KEYID(WH_KEYTYPE_HW, owner, MOCK_PORT_SLOT), flags,
+    ret = wh_PortKey_RegisterFixed(
+        portKey, WH_MAKE_KEYID(WH_KEYTYPE_PORT, owner, MOCK_FIXED_SLOT), flags,
         AES_128_KEY_SIZE);
     for (slot = 0; (ret == WH_ERROR_OK) && (slot < MOCK_SLOTS); slot++) {
         if (_mockRole[slot] == MOCK_LOAD) {
-            ret = wh_HwKeystore_RegisterLoadable(
-                hwKeystore,
-                WH_MAKE_KEYID(WH_KEYTYPE_HW, WH_KEYUSER_GLOBAL, slot));
+            ret = wh_PortKey_RegisterLoadable(
+                portKey,
+                WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, slot));
         }
     }
     return ret;
@@ -483,16 +484,16 @@ typedef struct {
 typedef struct {
     TestPair pair[2];
     /* Shared by both servers */
-    whNvmContext        nvm[1];
-    whHwKeystoreContext hwKeystore[1];
-    whHwKeystoreConfig  hwks_conf[1];
-    whFlashRamsimCtx    fc[1];
-    whFlashRamsimCfg    fc_conf[1];
-    whFlashCb           fcb[1];
-    whNvmFlashConfig    nf_conf[1];
-    whNvmFlashContext   nfc[1];
-    whNvmCb             nfcb[1];
-    whNvmConfig         n_conf[1];
+    whNvmContext      nvm[1];
+    whPortKeyContext  portKey[1];
+    whPortKeyConfig   pks_conf[1];
+    whFlashRamsimCtx  fc[1];
+    whFlashRamsimCfg  fc_conf[1];
+    whFlashCb         fcb[1];
+    whNvmFlashConfig  nf_conf[1];
+    whNvmFlashContext nfc[1];
+    whNvmCb           nfcb[1];
+    whNvmConfig       n_conf[1];
 } TestCtx;
 
 static TestCtx _testCtx;
@@ -543,7 +544,7 @@ static int _SetupPair(TestCtx* t, TestPair* p, uint16_t clientId,
         .nvm         = t->nvm,
         .crypto      = p->crypto,
         .devId       = MOCK_DEVID,
-        .hwKeystore  = t->hwKeystore,
+        .portKey     = t->portKey,
     };
 
     WH_TEST_RETURN_ON_FAIL(wc_InitRng_ex(p->crypto->rng, NULL, INVALID_DEVID));
@@ -562,7 +563,7 @@ static int _Setup(TestCtx* t)
     memset(t, 0, sizeof(*t));
     memset(_flashMemory, 0, sizeof(_flashMemory));
 
-    _Pattern(_portKey, sizeof(_portKey), 0x2B);
+    _Pattern(_fixedKey, sizeof(_fixedKey), 0x2B);
     _Pattern(_keyA, sizeof(_keyA), 0xA5);
     _Pattern(_keyB, sizeof(_keyB), 0x5A);
     _Pattern(_keyC, sizeof(_keyC), 0xC3);
@@ -590,7 +591,7 @@ static int _Setup(TestCtx* t)
         .context = t->nfc,
         .config  = t->nf_conf,
     };
-    t->hwks_conf[0] = (whHwKeystoreConfig){
+    t->pks_conf[0] = (whPortKeyConfig){
         .cb = NULL,
     };
 
@@ -598,9 +599,9 @@ static int _Setup(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(
         wc_CryptoCb_RegisterDevice(MOCK_DEVID, _MockCryptoCb, NULL));
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(t->nvm, t->n_conf));
-    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(t->hwKeystore, t->hwks_conf));
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(t->portKey, t->pks_conf));
     WH_TEST_RETURN_ON_FAIL(
-        _MockBoot(t->hwKeystore, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC));
+        _MockBoot(t->portKey, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC));
     WH_TEST_RETURN_ON_FAIL(
         _SetupPair(t, &t->pair[0], CLIENT1_ID, CLIENT1_DEVID, 201));
     WH_TEST_RETURN_ON_FAIL(
@@ -617,20 +618,20 @@ static void _Cleanup(TestCtx* t)
         (void)wh_Server_Cleanup(t->pair[i].server);
         (void)wc_FreeRng(t->pair[i].crypto->rng);
     }
-    (void)wh_HwKeystore_Cleanup(t->hwKeystore);
+    (void)wh_PortKey_Cleanup(t->portKey);
     (void)wh_Nvm_Cleanup(t->nvm);
     wc_CryptoCb_UnRegisterDevice(MOCK_DEVID);
     (void)wolfCrypt_Cleanup();
     wh_Utils_ForceZero(&_mock, sizeof(_mock));
 }
 
-/* Simulate an HSM reset: the slots and the hardware keystore start empty and
- * the port registers its key again, this time for owner with flags */
+/* Simulate an HSM reset: the slots and the port key records start empty and
+ * the port registers its fixed key again, this time for owner with flags */
 static int _Reboot(TestCtx* t, uint16_t owner, whNvmFlags flags)
 {
-    (void)wh_HwKeystore_Cleanup(t->hwKeystore);
-    WH_TEST_RETURN_ON_FAIL(wh_HwKeystore_Init(t->hwKeystore, t->hwks_conf));
-    return _MockBoot(t->hwKeystore, owner, flags);
+    (void)wh_PortKey_Cleanup(t->portKey);
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(t->portKey, t->pks_conf));
+    return _MockBoot(t->portKey, owner, flags);
 }
 
 /* ------------------------------------------------------------------------
@@ -641,7 +642,7 @@ static int _Reboot(TestCtx* t, uint16_t owner, whNvmFlags flags)
 static int _Cache(whClientContext* c, whNvmFlags flags, const uint8_t* key,
                   uint16_t keySz, whKeyId* inout_id)
 {
-    uint8_t  label[WH_NVM_LABEL_LEN] = "hwkey source";
+    uint8_t  label[WH_NVM_LABEL_LEN] = "portkey source";
     uint16_t id                      = *inout_id;
     int      ret;
 
@@ -653,20 +654,20 @@ static int _Cache(whClientContext* c, whNvmFlags flags, const uint8_t* key,
     return ret;
 }
 
-static int _Load(whClientContext* c, whKeyId hwId, whKeyId srcId,
-                 whKeyId* outHwId)
+static int _Load(whClientContext* c, whKeyId portKeyId, whKeyId srcId,
+                 whKeyId* outPortKeyId)
 {
-    return wh_Client_HwKeystoreLoadFromKeystore(c, hwId, srcId, outHwId);
+    return wh_Client_PortKeyLoadFromKeystore(c, portKeyId, srcId, outPortKeyId);
 }
 
-/* Check what GetInfo reports for a hardware key */
+/* Check what GetInfo reports for a port key */
 static int _CheckInfo(whClientContext* c, int id, int loaded, whNvmFlags flags,
                       uint16_t owner)
 {
-    whHwKeystoreInfo info;
+    whPortKeyInfo info;
 
     memset(&info, 0xFF, sizeof(info));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyGetInfo(c, PORTKEY(id), &info));
     if (loaded) {
         WH_TEST_ASSERT_RETURN(info.keyType == WC_KEYSTORE_KEY_AES);
         WH_TEST_ASSERT_RETURN(info.keyBits == 128);
@@ -688,8 +689,8 @@ static int _ClearAll(TestCtx* t)
 {
     int id;
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(t->pair[0].client));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(t->pair[1].client));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(t->pair[0].client));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(t->pair[1].client));
     for (id = MOCK_LOAD_FIRST; id <= MOCK_LOAD_LAST; id++) {
         WH_TEST_RETURN_ON_FAIL(_CheckInfo(t->pair[0].client, id, 0, 0, 0));
     }
@@ -1020,7 +1021,7 @@ static int _EcbMatches(whClientContext* c, whKeyId keyId, const uint8_t* key)
     return WH_ERROR_OK;
 }
 
-/* The mock ran an operation since before (hardware key), or didn't (key held
+/* The mock ran an operation since before (port key), or didn't (key held
  * in software) */
 #define CHECK_RAN(before, hw)                           \
     WH_TEST_ASSERT_RETURN((hw) ? (_mock.ops > (before)) \
@@ -1117,15 +1118,15 @@ static int _CheckModes(whClientContext* c, whKeyId keyId, const uint8_t* key,
  * Tests
  * ------------------------------------------------------------------------ */
 
-/* GetInfo for every hardware key ID */
-static int _whTest_HwKeyMap(TestCtx* t)
+/* GetInfo for every port key ID */
+static int _whTest_PortKeyMap(TestCtx* t)
 {
     whClientContext* c = t->pair[0].client;
-    whHwKeystoreInfo info;
+    whPortKeyInfo    info;
     int              id;
 
     for (id = 1; id <= MOCK_SLOTS; id++) {
-        if (id == MOCK_PORT_SLOT) {
+        if (id == MOCK_FIXED_SLOT) {
             WH_TEST_RETURN_ON_FAIL(
                 _CheckInfo(c, id, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
         }
@@ -1136,31 +1137,31 @@ static int _whTest_HwKeyMap(TestCtx* t)
             /* The port didn't register this ID */
             WH_TEST_ASSERT_RETURN(
                 WH_ERROR_NOTFOUND ==
-                wh_Client_HwKeystoreGetInfo(c, HW(id), &info));
+                wh_Client_PortKeyGetInfo(c, PORTKEY(id), &info));
         }
     }
 
     /* ID 0 names no key */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_Client_HwKeystoreGetInfo(c, HW(0), &info));
+                          wh_Client_PortKeyGetInfo(c, PORTKEY(0), &info));
 
     /* The split request and response */
     memset(&info, 0, sizeof(info));
     WH_TEST_RETURN_ON_FAIL(
-        wh_Client_HwKeystoreGetInfoRequest(c, HW(MOCK_PORT_SLOT)));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreGetInfoResponse(c, &info));
+        wh_Client_PortKeyGetInfoRequest(c, PORTKEY(MOCK_FIXED_SLOT)));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyGetInfoResponse(c, &info));
     WH_TEST_ASSERT_RETURN(info.keyType == WC_KEYSTORE_KEY_AES);
     WH_TEST_ASSERT_RETURN(info.flags == USAGE_AES_CMAC);
 
     return WH_ERROR_OK;
 }
 
-/* Both clients can use the port key in K2, but neither can set or clear it */
-static int _whTest_HwKeyPortKey(TestCtx* t)
+/* Both clients can use the fixed key in K2, but neither can set or clear it */
+static int _whTest_PortKeyFixed(TestCtx* t)
 {
     whClientContext* c;
     whKeyId          src;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     int              i;
     int              dma;
 
@@ -1169,18 +1170,20 @@ static int _whTest_HwKeyPortKey(TestCtx* t)
 
         for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
             WH_TEST_RETURN_ON_FAIL(
-                _CheckModes(c, HW(MOCK_PORT_SLOT), _portKey, dma, 1));
+                _CheckModes(c, PORTKEY(MOCK_FIXED_SLOT), _fixedKey, dma, 1));
         }
 
         src = WH_KEYID_ERASED;
         WH_TEST_RETURN_ON_FAIL(
             _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
-        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                              _Load(c, HW(MOCK_PORT_SLOT), src, &hwId));
-        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                              wh_Client_HwKeystoreClear(c, HW(MOCK_PORT_SLOT)));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(c));
-        WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_PORT_SLOT, 1, USAGE_AES_CMAC,
+        WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _Load(c,
+                                                       PORTKEY(MOCK_FIXED_SLOT),
+                                                       src, &portKeyId));
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_ACCESS ==
+            wh_Client_PortKeyClear(c, PORTKEY(MOCK_FIXED_SLOT)));
+        WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(c));
+        WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_FIXED_SLOT, 1, USAGE_AES_CMAC,
                                           WH_KEYUSER_GLOBAL));
         WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
     }
@@ -1188,12 +1191,12 @@ static int _whTest_HwKeyPortKey(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* Load a keystore key into a hardware key and use it in every mode */
-static int _whTest_HwKeyLoadAndUse(TestCtx* t)
+/* Load a keystore key into a port key and use it in every mode */
+static int _whTest_PortKeyLoadAndUse(TestCtx* t)
 {
     whClientContext* c   = t->pair[0].client;
     whKeyId          src = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     Expected         e;
     Aes              aes[1];
     uint8_t          out[TEST_GCM_SZ];
@@ -1208,27 +1211,27 @@ static int _whTest_HwKeyLoadAndUse(TestCtx* t)
         WH_TEST_RETURN_ON_FAIL(_CheckModes(c, src, _keyA, dma, 0));
     }
 
-    /* ID 0 takes the first free hardware key */
-    hwId = WH_KEYID_ERASED;
+    /* ID 0 takes the first free port key */
+    portKeyId = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
-        wh_Client_HwKeystoreLoadFromKeystoreRequest(c, HW(0), src));
+        wh_Client_PortKeyLoadFromKeystoreRequest(c, PORTKEY(0), src));
     WH_TEST_RETURN_ON_FAIL(
-        wh_Client_HwKeystoreLoadFromKeystoreResponse(c, &hwId));
-    WH_TEST_ASSERT_RETURN(hwId == HW(MOCK_LOAD_FIRST));
+        wh_Client_PortKeyLoadFromKeystoreResponse(c, &portKeyId));
+    WH_TEST_ASSERT_RETURN(portKeyId == PORTKEY(MOCK_LOAD_FIRST));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c, MOCK_LOAD_FIRST, 1, USAGE_AES_CMAC, CLIENT1_ID));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(t->pair[1].client, MOCK_LOAD_FIRST, 1,
                                       USAGE_AES_CMAC, CLIENT1_ID));
 
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
-        WH_TEST_RETURN_ON_FAIL(_CheckModes(c, hwId, _keyA, dma, 1));
+        WH_TEST_RETURN_ON_FAIL(_CheckModes(c, portKeyId, _keyA, dma, 1));
     }
 
     /* The wolfCrypt API works too: the client's crypto callback sends the
-     * hardware keyId */
+     * port keyId */
     WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
     WH_TEST_RETURN_ON_FAIL(wc_AesInit(aes, NULL, c->devId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_AesSetKeyId(aes, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_AesSetKeyId(aes, portKeyId));
     WH_TEST_RETURN_ON_FAIL(wc_AesGcmEncrypt(aes, out, _msg, TEST_GCM_SZ, _iv,
                                             TEST_GCM_IV_SZ, tag, sizeof(tag),
                                             _aad, sizeof(_aad)));
@@ -1236,7 +1239,7 @@ static int _whTest_HwKeyLoadAndUse(TestCtx* t)
     WH_TEST_ASSERT_RETURN(memcmp(out, e.gcm, TEST_GCM_SZ) == 0);
     WH_TEST_ASSERT_RETURN(memcmp(tag, e.gcmTag, AES_BLOCK_SIZE) == 0);
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c, portKeyId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
     return WH_ERROR_OK;
@@ -1244,15 +1247,15 @@ static int _whTest_HwKeyLoadAndUse(TestCtx* t)
 
 /* Picking a free key, explicit IDs, running out, reloading, and keys that
  * belong to the other client */
-static int _whTest_HwKeyAllocation(TestCtx* t)
+static int _whTest_PortKeyAllocation(TestCtx* t)
 {
     whClientContext* c1   = t->pair[0].client;
     whClientContext* c2   = t->pair[1].client;
     whKeyId          src1 = WH_KEYID_ERASED;
     whKeyId          src2 = WH_KEYID_ERASED;
     whKeyId          src3 = WH_KEYID_ERASED;
-    whKeyId          hw1;
-    whKeyId          hw2;
+    whKeyId          port1;
+    whKeyId          port2;
     whKeyId          tmp;
 
     WH_TEST_RETURN_ON_FAIL(
@@ -1261,24 +1264,25 @@ static int _whTest_HwKeyAllocation(TestCtx* t)
         _Cache(c2, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &src2));
 
     /* Each client gets the next free key */
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src1, &hw1));
-    WH_TEST_ASSERT_RETURN(hw1 == HW(MOCK_LOAD_FIRST));
-    WH_TEST_RETURN_ON_FAIL(_Load(c2, HW(0), src2, &hw2));
-    WH_TEST_ASSERT_RETURN(hw2 == HW(MOCK_LOAD_LAST));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hw1, _keyA));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, hw2, _keyB));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src1, &port1));
+    WH_TEST_ASSERT_RETURN(port1 == PORTKEY(MOCK_LOAD_FIRST));
+    WH_TEST_RETURN_ON_FAIL(_Load(c2, PORTKEY(0), src2, &port2));
+    WH_TEST_ASSERT_RETURN(port2 == PORTKEY(MOCK_LOAD_LAST));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, port1, _keyA));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, port2, _keyB));
 
     /* No loadable key is left */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE == _Load(c1, HW(0), src1, &tmp));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE == _Load(c2, HW(0), src2, &tmp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE ==
+                          _Load(c1, PORTKEY(0), src1, &tmp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOSPACE ==
+                          _Load(c2, PORTKEY(0), src2, &tmp));
 
     /* A client can't use, replace or clear the other client's key */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryEcb(c2, hw1, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryCmac(c2, hw1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryEcb(c1, hw2, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _Load(c2, hw1, src2, &tmp));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_Client_HwKeystoreClear(c2, hw1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryEcb(c2, port1, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryCmac(c2, port1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryEcb(c1, port2, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _Load(c2, port1, src2, &tmp));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == wh_Client_PortKeyClear(c2, port1));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c2, MOCK_LOAD_FIRST, 1, USAGE_AES_CMAC, CLIENT1_ID));
 
@@ -1286,17 +1290,17 @@ static int _whTest_HwKeyAllocation(TestCtx* t)
      * source, so erasing the old one leaves it alone */
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, WH_NVM_FLAGS_USAGE_ENCRYPT, _keyC, sizeof(_keyC), &src3));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, hw1, src3, &tmp));
-    WH_TEST_ASSERT_RETURN(tmp == hw1);
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hw1, _keyC));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, port1, src3, &tmp));
+    WH_TEST_ASSERT_RETURN(tmp == port1);
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, port1, _keyC));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, MOCK_LOAD_FIRST, 1,
                                       WH_NVM_FLAGS_USAGE_ENCRYPT, CLIENT1_ID));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(c1, src1));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hw1, _keyC));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, port1, _keyC));
 
     /* ID 0 names no key, and the port didn't register ID 9 */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == _TryEcb(c1, HW(0), 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, HW(9), 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == _TryEcb(c1, PORTKEY(0), 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, PORTKEY(9), 1));
 
     WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src3));
@@ -1306,17 +1310,17 @@ static int _whTest_HwKeyAllocation(TestCtx* t)
 
 /* The copy keeps the source key's usage flags. Each AES request needs the
  * usage for its direction and CMAC needs sign or verify, standard and DMA */
-static int _whTest_HwKeyUsage(TestCtx* t)
+static int _whTest_PortKeyUsage(TestCtx* t)
 {
     whClientContext* c = t->pair[0].client;
     Expected         e;
     uint8_t          tag[AES_BLOCK_SIZE];
     whKeyId          src1;
     whKeyId          src2;
-    whKeyId          hw1;
-    whKeyId          hw2;
+    whKeyId          port1;
+    whKeyId          port2;
     whKeyId          src;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     int              mode;
     int              dma;
 
@@ -1330,25 +1334,25 @@ static int _whTest_HwKeyUsage(TestCtx* t)
         _Cache(c, WH_NVM_FLAGS_USAGE_ENCRYPT, _keyA, sizeof(_keyA), &src1));
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, WH_NVM_FLAGS_USAGE_DECRYPT, _keyA, sizeof(_keyA), &src2));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 1,
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src1, &port1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src2, &port2));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(port1), 1,
                                       WH_NVM_FLAGS_USAGE_ENCRYPT, CLIENT1_ID));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw2), 1,
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(port2), 1,
                                       WH_NVM_FLAGS_USAGE_DECRYPT, CLIENT1_ID));
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
         for (mode = 0; mode < MODE_COUNT; mode++) {
-            WH_TEST_RETURN_ON_FAIL(_TryAes(c, hw1, mode, dma, 1, &e));
+            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
             WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, hw1, mode, dma, 0, &e));
-            WH_TEST_RETURN_ON_FAIL(_TryAes(c, hw2, mode, dma, 0, &e));
+                                  _TryAes(c, port1, mode, dma, 0, &e));
+            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
             WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, hw2, mode, dma, 1, &e));
+                                  _TryAes(c, port2, mode, dma, 1, &e));
         }
-        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, hw1, dma, tag));
-        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, hw1, dma, tag));
-        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, hw2, dma, tag));
-        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, hw2, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, port1, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, port1, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, port2, dma, tag));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, port2, dma, tag));
     }
     WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src1));
@@ -1361,17 +1365,17 @@ static int _whTest_HwKeyUsage(TestCtx* t)
         _Cache(c, WH_NVM_FLAGS_USAGE_SIGN, _keyA, sizeof(_keyA), &src1));
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, WH_NVM_FLAGS_USAGE_VERIFY, _keyA, sizeof(_keyA), &src2));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src1, &port1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src2, &port2));
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
-        WH_TEST_RETURN_ON_FAIL(_Cmac(c, hw1, dma, tag));
-        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, hw1, dma, tag));
-        WH_TEST_RETURN_ON_FAIL(_Cmac(c, hw2, dma, tag));
-        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, hw2, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_Cmac(c, port1, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, port1, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_Cmac(c, port2, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacSteps(c, port2, dma, tag));
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                              _TryAes(c, hw1, MODE_ECB, dma, 1, &e));
+                              _TryAes(c, port1, MODE_ECB, dma, 1, &e));
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                              _TryAes(c, hw2, MODE_ECB, dma, 0, &e));
+                              _TryAes(c, port2, MODE_ECB, dma, 0, &e));
     }
     WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src1));
@@ -1381,7 +1385,8 @@ static int _whTest_HwKeyUsage(TestCtx* t)
     src = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, WH_NVM_FLAGS_NONE, _keyA, sizeof(_keyA), &src));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Load(c, HW(0), src, &hwId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _Load(c, PORTKEY(0), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
 
@@ -1390,9 +1395,9 @@ static int _whTest_HwKeyUsage(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(_Cache(c,
                                   USAGE_AES_CMAC | WH_NVM_FLAGS_NONEXPORTABLE,
                                   _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src, &hwId));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hwId, _keyA));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src, &portKeyId));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, portKeyId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c, portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
 
     return WH_ERROR_OK;
@@ -1400,41 +1405,42 @@ static int _whTest_HwKeyUsage(TestCtx* t)
 
 /* Evicting the source keeps the copy. Erasing or revoking it clears every
  * copy, but only copies of that client's key */
-static int _whTest_HwKeySource(TestCtx* t)
+static int _whTest_PortKeySource(TestCtx* t)
 {
     whClientContext* c1 = t->pair[0].client;
     whClientContext* c2 = t->pair[1].client;
     whKeyId          src;
     whKeyId          other;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
 
     /* Evict */
     src = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hwId, _keyA));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c1, hwId));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, portKeyId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c1, portKeyId));
 
     /* Erase */
     src = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(c1, src));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hwId), 0, 0, 0));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, hwId, 1));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(portKeyId), 0, 0, 0));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, portKeyId, 1));
 
     /* Revoke. A revoked key has no usage, so it can't be loaded again */
     src = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyRevoke(c1, src));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hwId), 0, 0, 0));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, hwId, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(portKeyId), 0, 0, 0));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, portKeyId, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _Load(c1, PORTKEY(0), src, &portKeyId));
 
     /* The other client's key with the same ID is a different key */
     src   = SRC_SHARED_ID;
@@ -1443,10 +1449,10 @@ static int _whTest_HwKeySource(TestCtx* t)
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c2, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &other));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyErase(c2, other));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hwId, _keyA));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c1, hwId));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, portKeyId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c1, portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
 
     return WH_ERROR_OK;
@@ -1455,14 +1461,14 @@ static int _whTest_HwKeySource(TestCtx* t)
 /* If the port can't clear a copy, erase, revoke and Clear report the error,
  * and the copy can't be used anyway. The server marks the key empty, and the
  * key stays in the slot until a load replaces it */
-static int _whTest_HwKeyDeleteFails(TestCtx* t)
+static int _whTest_PortKeyDeleteFails(TestCtx* t)
 {
     whClientContext* c    = t->pair[0].client;
     whKeyId          src1 = WH_KEYID_ERASED;
     whKeyId          src2 = WH_KEYID_ERASED;
     whKeyId          src3 = WH_KEYID_ERASED;
-    whKeyId          hw1;
-    whKeyId          hw2;
+    whKeyId          port1;
+    whKeyId          port2;
     whKeyId          tmp;
 
     WH_TEST_RETURN_ON_FAIL(
@@ -1471,85 +1477,90 @@ static int _whTest_HwKeyDeleteFails(TestCtx* t)
         _Cache(c, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &src2));
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, USAGE_AES_CMAC, _keyC, sizeof(_keyC), &src3));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src2, &hw2));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src1, &port1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src2, &port2));
 
     /* Erase. The key is still in the slot, but the server reports it empty */
     _mock.failDelete = 1;
     WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_KeyErase(c, src1));
     _mock.failDelete = 0;
-    WH_TEST_ASSERT_RETURN(_mock.loaded[WH_KEYID_ID(hw1)] != 0);
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw1, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw1));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(hw1), 0, 0, 0));
+    WH_TEST_ASSERT_RETURN(_mock.loaded[WH_KEYID_ID(port1)] != 0);
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, port1, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, port1));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, WH_KEYID_ID(port1), 0, 0, 0));
 
     /* Revoke */
     _mock.failDelete = 1;
     WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_KeyRevoke(c, src2));
     _mock.failDelete = 0;
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw2, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, hw2));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, port2, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryCmac(c, port2));
 
     /* The ID 0 search takes the first of them again, and the load replaces
      * the old key */
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src3, &tmp));
-    WH_TEST_ASSERT_RETURN(tmp == hw1);
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hw1, _keyC));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src3, &tmp));
+    WH_TEST_ASSERT_RETURN(tmp == port1);
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, port1, _keyC));
 
     /* Clear */
     _mock.failDelete = 1;
-    WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_HwKeystoreClear(c, hw1));
+    WH_TEST_ASSERT_RETURN(WC_HW_E == wh_Client_PortKeyClear(c, port1));
     _mock.failDelete = 0;
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, hw1, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c, port1, 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          wh_Client_HwKeystoreClear(c, hw1));
+                          wh_Client_PortKeyClear(c, port1));
 
     /* Load over both slots so they can be cleared. The revoked key can't be
      * evicted */
-    WH_TEST_RETURN_ON_FAIL(_Load(c, hw1, src3, &tmp));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, hw2, src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, port1, src3, &tmp));
+    WH_TEST_RETURN_ON_FAIL(_Load(c, port2, src3, &tmp));
     WH_TEST_RETURN_ON_FAIL(_ClearAll(t));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src3));
     return WH_ERROR_OK;
 }
 
 /* Sources and targets the server or the port refuses */
-static int _whTest_HwKeyRefused(TestCtx* t)
+static int _whTest_PortKeyRefused(TestCtx* t)
 {
     whClientContext* c      = t->pair[0].client;
     whServerContext* server = t->pair[0].server;
     whKeyId          src    = WH_KEYID_ERASED;
     whKeyId          src256 = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     whNvmMetadata    meta[1];
     int              ret;
 
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
 
-    /* Sources: a hardware key, a missing key, and no key at all */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          _Load(c, HW(0), HW(MOCK_PORT_SLOT), &hwId));
+    /* Sources: a port key, a missing key, and no key at all */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == _Load(c, PORTKEY(0),
+                                                    PORTKEY(MOCK_FIXED_SLOT),
+                                                    &portKeyId));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          _Load(c, HW(0), SRC_MISSING_ID, &hwId));
+                          _Load(c, PORTKEY(0), SRC_MISSING_ID, &portKeyId));
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          _Load(c, HW(0), WH_KEYID_ERASED, &hwId));
+                          _Load(c, PORTKEY(0), WH_KEYID_ERASED, &portKeyId));
 
     /* The port takes only AES-128 keys */
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, USAGE_AES_CMAC, _key256, sizeof(_key256), &src256));
+    WH_TEST_ASSERT_RETURN(
+        BAD_FUNC_ARG == _Load(c, PORTKEY(MOCK_LOAD_FIRST), src256, &portKeyId));
     WH_TEST_ASSERT_RETURN(BAD_FUNC_ARG ==
-                          _Load(c, HW(MOCK_LOAD_FIRST), src256, &hwId));
-    WH_TEST_ASSERT_RETURN(BAD_FUNC_ARG == _Load(c, HW(0), src256, &hwId));
+                          _Load(c, PORTKEY(0), src256, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src256));
 
-    /* Targets: IDs the port didn't register, and the port key */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(1), src, &hwId));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(5), src, &hwId));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _Load(c, HW(9), src, &hwId));
+    /* Targets: IDs the port didn't register, and the fixed key */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          _Load(c, PORTKEY(1), src, &portKeyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          _Load(c, PORTKEY(5), src, &portKeyId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          _Load(c, PORTKEY(9), src, &portKeyId));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          _Load(c, HW(MOCK_PORT_SLOT), src, &hwId));
+                          _Load(c, PORTKEY(MOCK_FIXED_SLOT), src, &portKeyId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_FIRST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c, MOCK_LOAD_LAST, 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
@@ -1567,7 +1578,7 @@ static int _whTest_HwKeyRefused(TestCtx* t)
     } /* WH_SERVER_NVM_LOCK() */
     WH_TEST_RETURN_ON_FAIL(ret);
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          _Load(c, HW(0), SRC_TRUSTED_ID, &hwId));
+                          _Load(c, PORTKEY(0), SRC_TRUSTED_ID, &portKeyId));
     ret = WH_SERVER_NVM_LOCK(server);
     if (ret == WH_ERROR_OK) {
         ret = wh_Server_KeystoreEvictKey(server, meta->id);
@@ -1579,54 +1590,53 @@ static int _whTest_HwKeyRefused(TestCtx* t)
 }
 
 /* Clear and ClearAll */
-static int _whTest_HwKeyClear(TestCtx* t)
+static int _whTest_PortKeyClear(TestCtx* t)
 {
     whClientContext* c1   = t->pair[0].client;
     whClientContext* c2   = t->pair[1].client;
     whKeyId          src1 = WH_KEYID_ERASED;
     whKeyId          src2 = WH_KEYID_ERASED;
-    whKeyId          hw1;
-    whKeyId          hw2;
+    whKeyId          port1;
+    whKeyId          port2;
 
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src1));
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c2, USAGE_AES_CMAC, _keyB, sizeof(_keyB), &src2));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(_Load(c2, HW(0), src2, &hw2));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src1, &port1));
+    WH_TEST_RETURN_ON_FAIL(_Load(c2, PORTKEY(0), src2, &port2));
 
-    /* Only the owner can clear a key, nobody can clear the port key, and ID 0
+    /* Only the owner can clear a key, nobody can clear the fixed key, and ID 0
      * isn't a key to clear */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == wh_Client_PortKeyClear(c1, port2));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_Client_HwKeystoreClear(c1, hw2));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_Client_HwKeystoreClear(c1, HW(MOCK_PORT_SLOT)));
+                          wh_Client_PortKeyClear(c1, PORTKEY(MOCK_FIXED_SLOT)));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          wh_Client_HwKeystoreClear(c1, HW(9)));
+                          wh_Client_PortKeyClear(c1, PORTKEY(9)));
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
-                          wh_Client_HwKeystoreClearRequest(c1, HW(0)));
+                          wh_Client_PortKeyClearRequest(c1, PORTKEY(0)));
 
     /* The split request and response. The key is then gone */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearRequest(c1, hw1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearResponse(c1));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hw1), 0, 0, 0));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, hw1, 1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearRequest(c1, port1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearResponse(c1));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(port1), 0, 0, 0));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == _TryEcb(c1, port1, 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
-                          wh_Client_HwKeystoreClear(c1, hw1));
+                          wh_Client_PortKeyClear(c1, port1));
 
     /* ClearAll, here as a split request and response, clears only the
      * caller's keys */
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src1, &hw1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAllRequest(c1));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAllResponse(c1));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hw1), 0, 0, 0));
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src1, &port1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAllRequest(c1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAllResponse(c1));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(port1), 0, 0, 0));
     WH_TEST_RETURN_ON_FAIL(
-        _CheckInfo(c1, WH_KEYID_ID(hw2), 1, USAGE_AES_CMAC, CLIENT2_ID));
+        _CheckInfo(c1, WH_KEYID_ID(port2), 1, USAGE_AES_CMAC, CLIENT2_ID));
     WH_TEST_RETURN_ON_FAIL(
-        _CheckInfo(c1, MOCK_PORT_SLOT, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, hw2, _keyB));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(c2));
-    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(hw2), 0, 0, 0));
+        _CheckInfo(c1, MOCK_FIXED_SLOT, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, port2, _keyB));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(c2));
+    WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, WH_KEYID_ID(port2), 0, 0, 0));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src1));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c2, src2));
@@ -1636,37 +1646,37 @@ static int _whTest_HwKeyClear(TestCtx* t)
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
 /* A key loaded with the global flag is shared: every client can use it, and
  * clearing it takes the global flag too */
-static int _whTest_HwKeyShared(TestCtx* t)
+static int _whTest_PortKeyShared(TestCtx* t)
 {
     whClientContext* c1  = t->pair[0].client;
     whClientContext* c2  = t->pair[1].client;
     whKeyId          src = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
 
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
     WH_TEST_RETURN_ON_FAIL(
-        _Load(c1, WH_CLIENT_KEYID_MAKE_GLOBAL(HW(0)), src, &hwId));
-    WH_TEST_ASSERT_RETURN(hwId ==
-                          WH_CLIENT_KEYID_MAKE_GLOBAL(HW(MOCK_LOAD_FIRST)));
+        _Load(c1, WH_CLIENT_KEYID_MAKE_GLOBAL(PORTKEY(0)), src, &portKeyId));
+    WH_TEST_ASSERT_RETURN(
+        portKeyId == WH_CLIENT_KEYID_MAKE_GLOBAL(PORTKEY(MOCK_LOAD_FIRST)));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c2, MOCK_LOAD_FIRST, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
 
     /* Both clients can use it, by either form of the ID */
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, hwId, _keyA));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, hwId, _keyA));
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, HW(MOCK_LOAD_FIRST), _keyA));
-    WH_TEST_RETURN_ON_FAIL(_TryCmac(c2, hwId));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c1, portKeyId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, portKeyId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c2, PORTKEY(MOCK_LOAD_FIRST), _keyA));
+    WH_TEST_RETURN_ON_FAIL(_TryCmac(c2, portKeyId));
 
     /* ClearAll and a clear without the global flag leave it */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(c1));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(c1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_Client_HwKeystoreClear(c2, HW(MOCK_LOAD_FIRST)));
+                          wh_Client_PortKeyClear(c2, PORTKEY(MOCK_LOAD_FIRST)));
     WH_TEST_RETURN_ON_FAIL(
         _CheckInfo(c1, MOCK_LOAD_FIRST, 1, USAGE_AES_CMAC, WH_KEYUSER_GLOBAL));
 
     /* Any client can clear it with the global flag */
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c2, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c2, portKeyId));
     WH_TEST_RETURN_ON_FAIL(_CheckInfo(c1, MOCK_LOAD_FIRST, 0, 0, 0));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
@@ -1674,41 +1684,41 @@ static int _whTest_HwKeyShared(TestCtx* t)
 }
 #endif /* WOLFHSM_CFG_GLOBAL_KEYS */
 
-/* If the hardware loses a key the server still records, requests fail rather
- * than run in software without the key */
-static int _whTest_HwKeyNoFallback(TestCtx* t)
+/* If the port loses a key the server still records, requests fail rather than
+ * run in software without the key */
+static int _whTest_PortKeyNoFallback(TestCtx* t)
 {
     whClientContext* c   = t->pair[0].client;
     whKeyId          src = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     int              slot;
 
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c, HW(0), src, &hwId));
-    slot = (int)WH_KEYID_ID(hwId);
+    WH_TEST_RETURN_ON_FAIL(_Load(c, PORTKEY(0), src, &portKeyId));
+    slot = (int)WH_KEYID_ID(portKeyId);
 
     _mock.loaded[slot] = 0;
-    WH_TEST_ASSERT_RETURN(WC_HW_E == _TryEcb(c, hwId, 1));
-    WH_TEST_ASSERT_RETURN(WC_HW_E == _TryCmac(c, hwId));
+    WH_TEST_ASSERT_RETURN(WC_HW_E == _TryEcb(c, portKeyId, 1));
+    WH_TEST_ASSERT_RETURN(WC_HW_E == _TryCmac(c, portKeyId));
     _mock.loaded[slot] = 1;
-    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, hwId, _keyA));
+    WH_TEST_RETURN_ON_FAIL(_EcbMatches(c, portKeyId, _keyA));
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c, portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
     return WH_ERROR_OK;
 }
 
 /* A one-shot CMAC with a software key, in the request or in the keystore, right
- * after one with a hardware key. Both requests take the same path with nothing
+ * after one with a port key. Both requests take the same path with nothing
  * in between, so the server's Cmac for the second starts out holding the
  * first's key reference. The mock fails if it gets through */
-static int _whTest_HwKeyCmacAfterHw(TestCtx* t)
+static int _whTest_PortKeyCmacAfterPort(TestCtx* t)
 {
     whClientContext* c   = t->pair[0].client;
     whKeyId          src = WH_KEYID_ERASED;
     Expected         e;
-    Cmac             hw[1];
+    Cmac             port[1];
     Cmac             sw[1];
     uint8_t          tag[AES_BLOCK_SIZE];
     int              dma;
@@ -1718,21 +1728,21 @@ static int _whTest_HwKeyCmacAfterHw(TestCtx* t)
         _Cache(c, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
         /* Key in the request */
-        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, hw, HW(MOCK_PORT_SLOT)));
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, port, PORTKEY(MOCK_FIXED_SLOT)));
         WH_TEST_RETURN_ON_FAIL(_CmacStart(c, sw, WH_KEYID_ERASED));
-        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, hw, NULL, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, port, NULL, dma, tag));
         WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, sw, _keyA, dma, tag));
         WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
-        (void)wc_CmacFree(hw);
+        (void)wc_CmacFree(port);
         (void)wc_CmacFree(sw);
 
         /* Key in the keystore */
-        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, hw, HW(MOCK_PORT_SLOT)));
+        WH_TEST_RETURN_ON_FAIL(_CmacStart(c, port, PORTKEY(MOCK_FIXED_SLOT)));
         WH_TEST_RETURN_ON_FAIL(_CmacStart(c, sw, src));
-        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, hw, NULL, dma, tag));
+        WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, port, NULL, dma, tag));
         WH_TEST_RETURN_ON_FAIL(_CmacGenerate(c, sw, NULL, dma, tag));
         WH_TEST_ASSERT_RETURN(memcmp(tag, e.cmac, AES_BLOCK_SIZE) == 0);
-        (void)wc_CmacFree(hw);
+        (void)wc_CmacFree(port);
         (void)wc_CmacFree(sw);
     }
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c, src));
@@ -1773,22 +1783,22 @@ static int _WrapRoundTrip(whClientContext* c, whKeyId kekId)
     return ret;
 }
 
-/* Hardware keys as key wrap KEKs. The port key is trusted, since no client can
+/* Port keys as key wrap KEKs. The fixed key is trusted, since no client can
  * set or read it, so it also works for wrap-export and unwrap-and-cache. A
  * client-loaded key is an ordinary KEK, since the client may know its bytes.
  * Either needs WRAP usage, and a WRAP-only key is not a cipher key */
-static int _whTest_HwKeyKek(TestCtx* t)
+static int _whTest_PortKeyKek(TestCtx* t)
 {
     whClientContext* c1       = t->pair[0].client;
     whClientContext* c2       = t->pair[1].client;
     whKeyId          src      = WH_KEYID_ERASED;
     whKeyId          plainSrc = WH_KEYID_ERASED;
     whKeyId          cachedId = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
     whNvmMetadata    meta;
     uint8_t          wrapped[TEST_WRAPPED_SZ];
     uint16_t         wrappedSz = sizeof(wrapped);
-    uint8_t          data[]    = "hardware KEK data";
+    uint8_t          data[]    = "port KEK data";
     uint8_t          wrappedData[WH_KEYWRAP_AES_GCM_HEADER_SIZE + sizeof(data)];
     uint32_t         wrappedDataSz = sizeof(wrappedData);
     uint8_t          dataOut[sizeof(data)];
@@ -1798,42 +1808,43 @@ static int _whTest_HwKeyKek(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &plainSrc));
 
-    /* The port key as a WRAP-only KEK. The engine runs every wrap step with
+    /* The fixed key as a WRAP-only KEK. The engine runs every wrap step with
      * the key in its slot */
     WH_TEST_RETURN_ON_FAIL(
         _Reboot(t, WH_KEYUSER_GLOBAL, WH_NVM_FLAGS_USAGE_WRAP));
     ops = _mock.ops;
-    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c2, HW(MOCK_PORT_SLOT)));
+    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c2, PORTKEY(MOCK_FIXED_SLOT)));
     WH_TEST_ASSERT_RETURN(_mock.ops == ops + 2);
 
     /* It is trusted: wrap-export a server-held key, then cache it back */
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrapExport(
-        c1, WC_CIPHER_AES_GCM, plainSrc, WH_KEYTYPE_CRYPTO, HW(MOCK_PORT_SLOT),
-        wrapped, &wrappedSz));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_KeyUnwrapAndCache(c1, WC_CIPHER_AES_GCM, HW(MOCK_PORT_SLOT),
-                                    wrapped, wrappedSz, &cachedId));
+        c1, WC_CIPHER_AES_GCM, plainSrc, WH_KEYTYPE_CRYPTO,
+        PORTKEY(MOCK_FIXED_SLOT), wrapped, &wrappedSz));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyUnwrapAndCache(
+        c1, WC_CIPHER_AES_GCM, PORTKEY(MOCK_FIXED_SLOT), wrapped, wrappedSz,
+        &cachedId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, cachedId));
 
     /* WRAP-only, so not a cipher key */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c1, HW(MOCK_PORT_SLOT), 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                          _TryEcb(c1, PORTKEY(MOCK_FIXED_SLOT), 1));
 
-    /* The usual port key has no WRAP usage */
+    /* The usual fixed key has no WRAP usage */
     WH_TEST_RETURN_ON_FAIL(_Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC));
     WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                          _WrapRoundTrip(c1, HW(MOCK_PORT_SLOT)));
+                          _WrapRoundTrip(c1, PORTKEY(MOCK_FIXED_SLOT)));
 
     /* A client-loaded WRAP key is an ordinary KEK */
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, WH_NVM_FLAGS_USAGE_WRAP, _keyC, sizeof(_keyC), &src));
-    WH_TEST_RETURN_ON_FAIL(_Load(c1, HW(0), src, &hwId));
-    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c1, hwId));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_DataWrap(c1, WC_CIPHER_AES_GCM, hwId, data,
-                                              sizeof(data), wrappedData,
+    WH_TEST_RETURN_ON_FAIL(_Load(c1, PORTKEY(0), src, &portKeyId));
+    WH_TEST_RETURN_ON_FAIL(_WrapRoundTrip(c1, portKeyId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_DataWrap(c1, WC_CIPHER_AES_GCM, portKeyId,
+                                              data, sizeof(data), wrappedData,
                                               &wrappedDataSz));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_DataUnwrap(c1, WC_CIPHER_AES_GCM, hwId,
-                                                wrappedData, wrappedDataSz,
-                                                dataOut, &dataOutSz));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_DataUnwrap(c1, WC_CIPHER_AES_GCM, portKeyId, wrappedData,
+                             wrappedDataSz, dataOut, &dataOutSz));
     WH_TEST_ASSERT_RETURN((dataOutSz == sizeof(data)) &&
                           (memcmp(dataOut, data, sizeof(data)) == 0));
 
@@ -1842,64 +1853,67 @@ static int _whTest_HwKeyKek(TestCtx* t)
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_Client_KeyWrapExport(c1, WC_CIPHER_AES_GCM,
                                                   plainSrc, WH_KEYTYPE_CRYPTO,
-                                                  hwId, wrapped, &wrappedSz));
+                                                  portKeyId, wrapped,
+                                                  &wrappedSz));
     memset(&meta, 0, sizeof(meta));
     meta.id   = WH_CLIENT_KEYID_MAKE_WRAPPED_META(c1->comm->client_id, 0x30);
     meta.len  = AES_128_KEY_SIZE;
     wrappedSz = sizeof(wrapped);
-    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(c1, WC_CIPHER_AES_GCM, hwId, _keyB,
-                                             sizeof(_keyB), &meta, wrapped,
-                                             &wrappedSz));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_KeyWrap(c1, WC_CIPHER_AES_GCM, portKeyId,
+                                             _keyB, sizeof(_keyB), &meta,
+                                             wrapped, &wrappedSz));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
                           wh_Client_KeyUnwrapAndCache(c1, WC_CIPHER_AES_GCM,
-                                                      hwId, wrapped, wrappedSz,
-                                                      &cachedId));
+                                                      portKeyId, wrapped,
+                                                      wrappedSz, &cachedId));
 
     /* WRAP-only, and only for its owner */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c1, hwId, 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _WrapRoundTrip(c2, hwId));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _TryEcb(c1, portKeyId, 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _WrapRoundTrip(c2, portKeyId));
 
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClear(c1, hwId));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClear(c1, portKeyId));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, plainSrc));
     return WH_ERROR_OK;
 }
 #endif /* WOLFHSM_CFG_KEYWRAP */
 
-/* A port key registered for one client: only that client can use it, and no
+/* A fixed key registered for one client: only that client can use it, and no
  * client can set or clear it */
-static int _whTest_HwKeyPortKeyOwner(TestCtx* t)
+static int _whTest_PortKeyFixedOwner(TestCtx* t)
 {
     whClientContext* c1  = t->pair[0].client;
     whClientContext* c2  = t->pair[1].client;
     whKeyId          src = WH_KEYID_ERASED;
-    whKeyId          hwId;
+    whKeyId          portKeyId;
 
     WH_TEST_RETURN_ON_FAIL(_Reboot(t, CLIENT1_ID, USAGE_AES_CMAC));
     WH_TEST_RETURN_ON_FAIL(
-        _CheckInfo(c2, MOCK_PORT_SLOT, 1, USAGE_AES_CMAC, CLIENT1_ID));
+        _CheckInfo(c2, MOCK_FIXED_SLOT, 1, USAGE_AES_CMAC, CLIENT1_ID));
 
-    WH_TEST_RETURN_ON_FAIL(_CheckModes(c1, HW(MOCK_PORT_SLOT), _portKey, 0, 1));
+    WH_TEST_RETURN_ON_FAIL(
+        _CheckModes(c1, PORTKEY(MOCK_FIXED_SLOT), _fixedKey, 0, 1));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          _TryEcb(c2, HW(MOCK_PORT_SLOT), 1));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS == _TryCmac(c2, HW(MOCK_PORT_SLOT)));
+                          _TryEcb(c2, PORTKEY(MOCK_FIXED_SLOT), 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+                          _TryCmac(c2, PORTKEY(MOCK_FIXED_SLOT)));
 
     WH_TEST_RETURN_ON_FAIL(
         _Cache(c1, USAGE_AES_CMAC, _keyA, sizeof(_keyA), &src));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          _Load(c1, HW(MOCK_PORT_SLOT), src, &hwId));
+                          _Load(c1, PORTKEY(MOCK_FIXED_SLOT), src, &portKeyId));
     WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
-                          wh_Client_HwKeystoreClear(c1, HW(MOCK_PORT_SLOT)));
-    WH_TEST_RETURN_ON_FAIL(wh_Client_HwKeystoreClearAll(c1));
+                          wh_Client_PortKeyClear(c1, PORTKEY(MOCK_FIXED_SLOT)));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_PortKeyClearAll(c1));
     WH_TEST_RETURN_ON_FAIL(
-        _CheckInfo(c1, MOCK_PORT_SLOT, 1, USAGE_AES_CMAC, CLIENT1_ID));
+        _CheckInfo(c1, MOCK_FIXED_SLOT, 1, USAGE_AES_CMAC, CLIENT1_ID));
     WH_TEST_RETURN_ON_FAIL(wh_Client_KeyEvict(c1, src));
 
-    /* Back to a shared port key */
+    /* Back to a shared fixed key */
     return _Reboot(t, WH_KEYUSER_GLOBAL, USAGE_AES_CMAC);
 }
 
-int whTest_HwKeystoreCrypto(void* ctx)
+int whTest_PortKeyCrypto(void* ctx)
 {
     TestCtx* t = &_testCtx;
     int      ret;
@@ -1908,50 +1922,50 @@ int whTest_HwKeystoreCrypto(void* ctx)
 
     ret = _Setup(t);
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyMap(t);
+        ret = _whTest_PortKeyMap(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyPortKey(t);
+        ret = _whTest_PortKeyFixed(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyLoadAndUse(t);
+        ret = _whTest_PortKeyLoadAndUse(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyAllocation(t);
+        ret = _whTest_PortKeyAllocation(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyUsage(t);
+        ret = _whTest_PortKeyUsage(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeySource(t);
+        ret = _whTest_PortKeySource(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyDeleteFails(t);
+        ret = _whTest_PortKeyDeleteFails(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyRefused(t);
+        ret = _whTest_PortKeyRefused(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyClear(t);
+        ret = _whTest_PortKeyClear(t);
     }
 #ifdef WOLFHSM_CFG_GLOBAL_KEYS
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyShared(t);
+        ret = _whTest_PortKeyShared(t);
     }
 #endif
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyNoFallback(t);
+        ret = _whTest_PortKeyNoFallback(t);
     }
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyCmacAfterHw(t);
+        ret = _whTest_PortKeyCmacAfterPort(t);
     }
 #ifdef WOLFHSM_CFG_KEYWRAP
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyKek(t);
+        ret = _whTest_PortKeyKek(t);
     }
 #endif
     if (ret == WH_ERROR_OK) {
-        ret = _whTest_HwKeyPortKeyOwner(t);
+        ret = _whTest_PortKeyFixedOwner(t);
     }
 
     _Cleanup(t);
@@ -1959,7 +1973,7 @@ int whTest_HwKeystoreCrypto(void* ctx)
     return ret;
 }
 
-#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER &&      \
-          WOLFHSM_CFG_HWKEYSTORE_LOAD && HAVE_AES_ECB && HAVE_AES_CBC && \
-          WOLFSSL_AES_COUNTER && HAVE_AESGCM && WOLFSSL_CMAC &&          \
+#endif /* WOLFHSM_CFG_ENABLE_CLIENT && WOLFHSM_CFG_ENABLE_SERVER &&   \
+          WOLFHSM_CFG_PORTKEY_LOAD && HAVE_AES_ECB && HAVE_AES_CBC && \
+          WOLFSSL_AES_COUNTER && HAVE_AESGCM && WOLFSSL_CMAC &&       \
           WOLFSSL_AES_DIRECT */

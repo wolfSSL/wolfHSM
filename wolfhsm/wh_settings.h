@@ -78,23 +78,23 @@
  *  way as WOLFHSM_CFG_KEYWRAP_MAX_KEY_SIZE
  *      Default: 2000, or what WOLFHSM_CFG_COMM_DATA_LEN leaves when smaller
  *
- *  WOLFHSM_CFG_HWKEYSTORE - If defined, clients can use hardware keys
- *  (WH_KEYTYPE_HW) in AES and CMAC requests and as key wrap KEKs. The server
- *  passes a hardware key to wolfCrypt by reference, so the crypto callback
+ *  WOLFHSM_CFG_PORTKEY - If defined, clients can use port keys
+ *  (WH_KEYTYPE_PORT) in AES and CMAC requests and as key wrap KEKs. The server
+ *  passes a port key to wolfCrypt by reference, so the crypto callback
  *  must run every operation on it. Requires WOLF_PRIVATE_KEY_ID in wolfCrypt
  *      Default: Not defined
  *
- *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS - The number of hardware keys the port can
- *  register: its own keys plus the keys clients may load
+ *  WOLFHSM_CFG_PORTKEY_MAX_KEYS - The number of port keys the port can
+ *  register: its fixed keys plus the keys clients may load
  *      Default: 8
  *
- *  WOLFHSM_CFG_HWKEYSTORE_LOAD - If defined, clients can also load keystore
- *  keys into hardware keys, clear them, and describe hardware keys. Requires
- *  WOLFHSM_CFG_HWKEYSTORE, and WOLF_CRYPTO_CB_KEYSTORE in wolfCrypt
+ *  WOLFHSM_CFG_PORTKEY_LOAD - If defined, clients can also load keystore
+ *  keys into port keys, clear them, and describe port keys. Requires
+ *  WOLFHSM_CFG_PORTKEY, and WOLF_CRYPTO_CB_KEYSTORE in wolfCrypt
  *      Default: Not defined
  *
- *  WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE - The largest keystore key (in bytes)
- *  a client can load into a hardware key
+ *  WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE - The largest keystore key (in bytes)
+ *  a client can load into a port key
  *      Default: 32
  *
  *  WOLFHSM_CFG_HEXDUMP - If defined, include wh_Utils_HexDump functionality
@@ -626,12 +626,12 @@
 #error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
 #endif
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE) && !defined(WOLF_PRIVATE_KEY_ID)
-#error "WOLFHSM_CFG_HWKEYSTORE requires WOLF_PRIVATE_KEY_ID"
+#if defined(WOLFHSM_CFG_PORTKEY) && !defined(WOLF_PRIVATE_KEY_ID)
+#error "WOLFHSM_CFG_PORTKEY requires WOLF_PRIVATE_KEY_ID"
 #endif
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE_LOAD) && !defined(WOLF_CRYPTO_CB_KEYSTORE)
-#error "WOLFHSM_CFG_HWKEYSTORE_LOAD requires WOLF_CRYPTO_CB_KEYSTORE"
+#if defined(WOLFHSM_CFG_PORTKEY_LOAD) && !defined(WOLF_CRYPTO_CB_KEYSTORE)
+#error "WOLFHSM_CFG_PORTKEY_LOAD requires WOLF_CRYPTO_CB_KEYSTORE"
 #endif
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
@@ -680,23 +680,23 @@
 #error "WOLFHSM_CFG_CRYPTO_AFFINITY is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE)
-#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS
-#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEYS 8
+#if defined(WOLFHSM_CFG_PORTKEY)
+#ifndef WOLFHSM_CFG_PORTKEY_MAX_KEYS
+#define WOLFHSM_CFG_PORTKEY_MAX_KEYS 8
 #endif
-#ifndef WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE
-#define WOLFHSM_CFG_HWKEYSTORE_MAX_KEY_SIZE 32
+#ifndef WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE
+#define WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE 32
 #endif
-#endif /* WOLFHSM_CFG_HWKEYSTORE */
+#endif /* WOLFHSM_CFG_PORTKEY */
 
-#if defined(WOLFHSM_CFG_HWKEYSTORE_LOAD)
-#if !defined(WOLFHSM_CFG_HWKEYSTORE)
-#error "WOLFHSM_CFG_HWKEYSTORE_LOAD requires WOLFHSM_CFG_HWKEYSTORE"
+#if defined(WOLFHSM_CFG_PORTKEY_LOAD)
+#if !defined(WOLFHSM_CFG_PORTKEY)
+#error "WOLFHSM_CFG_PORTKEY_LOAD requires WOLFHSM_CFG_PORTKEY"
 #endif
 #if defined(WOLFHSM_CFG_NO_CRYPTO)
-#error "WOLFHSM_CFG_HWKEYSTORE_LOAD is incompatible with WOLFHSM_CFG_NO_CRYPTO"
+#error "WOLFHSM_CFG_PORTKEY_LOAD is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
-#endif /* WOLFHSM_CFG_HWKEYSTORE_LOAD */
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
 /* Trusted cert verify cache requires the certificate manager and crypto.
  * Enforce here so downstream code can gate on

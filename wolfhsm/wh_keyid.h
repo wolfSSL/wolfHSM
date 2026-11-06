@@ -64,7 +64,7 @@ typedef uint16_t whKeyId;
  * - Regular keys: Simple numeric ID (e.g., 5)
  * - Global keys: ID with WH_KEYID_CLIENT_GLOBAL_FLAG set
  * - Wrapped keys: ID with WH_KEYID_CLIENT_WRAPPED_FLAG set
- * - Hardware-only keys: ID with WH_KEYID_CLIENT_HW_FLAG set
+ * - Port keys: ID with WH_KEYID_CLIENT_PORT_FLAG set
  * - Wrapped metadata: Must use full WH_MAKE_KEYID() construction including type
  *    and metadata when populating the ID field in metadata to be wrapped
  *
@@ -75,15 +75,15 @@ typedef uint16_t whKeyId;
 /* Bit 9: Client-to-server signal for wrapped key */
 #define WH_KEYID_CLIENT_WRAPPED_FLAG ((whKeyId)0x0200)
 
-/* Bit 10: Client-to-server signal for a hardware key (see
- * wolfhsm/wh_hwkeystore.h). The server uses it by reference: it never enters
+/* Bit 10: Client-to-server signal for a port key (see
+ * wolfhsm/wh_portkey.h). The server uses it by reference: it never enters
  * the key cache or NVM and is never returned to a client */
-#define WH_KEYID_CLIENT_HW_FLAG ((whKeyId)0x0400)
+#define WH_KEYID_CLIENT_PORT_FLAG ((whKeyId)0x0400)
 
 /* Combined mask of all client-facing flags */
 #define WH_CLIENT_KEYID_FLAGS_MASK                                \
     (WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG | \
-     WH_KEYID_CLIENT_HW_FLAG)
+     WH_KEYID_CLIENT_PORT_FLAG)
 
 /* Macro to construct a server-unique keyid */
 #define WH_MAKE_KEYID(_type, _user, _id)                           \
@@ -96,7 +96,7 @@ typedef uint16_t whKeyId;
 
 #define WH_KEYID_ISERASED(_kid) (WH_KEYID_ID(_kid) == WH_KEYID_ERASED)
 #define WH_KEYID_ISWRAPPED(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_WRAPPED)
-#define WH_KEYID_ISHW(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_HW)
+#define WH_KEYID_ISPORT(_kid) (WH_KEYID_TYPE(_kid) == WH_KEYTYPE_PORT)
 
 /* Reserve USER=0 for global keys in the internal keyId encoding.
  * This is server-internal; clients use WH_KEYID_CLIENT_GLOBAL_FLAG from
@@ -109,8 +109,8 @@ typedef uint16_t whKeyId;
 #define WH_KEYTYPE_SHE 0x2     /* SKE keys are AES or CMAC binary arrays */
 #define WH_KEYTYPE_COUNTER 0x3 /* Monotonic counter */
 #define WH_KEYTYPE_WRAPPED 0x4 /* Wrapped key metadata */
-#define WH_KEYTYPE_HW 0x5 /* HW-only key. Port-specific */
-#define WH_KEYTYPE_CERT 0x6 /* Trusted certificate object */
+#define WH_KEYTYPE_PORT 0x5    /* Port key, defined by the port */
+#define WH_KEYTYPE_CERT 0x6    /* Trusted certificate object */
 
 /* True when a key id carries no explicit identifier (ID field == 0) and so must
  * not be accepted as one - it would collide with the "assign me one" sentinel
@@ -131,12 +131,12 @@ typedef uint16_t whKeyId;
  * (TYPE + USER + ID). Client flags are:
  * - 0x0100 (bit 8): WH_KEYID_CLIENT_GLOBAL_FLAG  → USER = 0
  * - 0x0200 (bit 9): WH_KEYID_CLIENT_WRAPPED_FLAG → TYPE = WH_KEYTYPE_WRAPPED
- * - 0x0400 (bit 10): WH_KEYID_CLIENT_HW_FLAG → TYPE = WH_KEYTYPE_HW
+ * - 0x0400 (bit 10): WH_KEYID_CLIENT_PORT_FLAG → TYPE = WH_KEYTYPE_PORT
  *
  * @param type Key type to use as the TYPE field. Input value is ignored and
- *  WH_KEYTYPE_WRAPPED or WH_KEYTYPE_HW is used if the input clientId has
- *  the corresponding flag set. If both flags are set, HW takes
- *  precedence.
+ *  WH_KEYTYPE_WRAPPED or WH_KEYTYPE_PORT is used if the input clientId has
+ *  the corresponding flag set. If both flags are set, the port key flag
+ *  takes precedence.
  * @param clientId Client identifier to use as USER field. Must be in
  *  [1, WH_CLIENT_ID_MAX] (0 is reserved for WH_KEYUSER_GLOBAL);
  *  wh_Client_Init() and the server's INIT handling enforce this so callers
@@ -151,7 +151,7 @@ whKeyId wh_KeyId_TranslateFromClient(uint16_t type, uint16_t clientId,
  * @brief Translate a client keyId for a fixed-type NVM-backed object.
  *
  * Translates reqId into server encoding using the provided TYPE. The wrapped
- * and hardware flags are stripped, ensuring the object stays in the supplied
+ * and port key flags are stripped, ensuring the object stays in the supplied
  * TYPE namespace. The global flag sets the USER field to WH_KEYUSER_GLOBAL
  * when WOLFHSM_CFG_GLOBAL_KEYS is enabled, or to clientId otherwise. Used
  * by NVM objects, counters, and certificates.
@@ -168,7 +168,7 @@ whKeyId wh_KeyId_TranslateObjectIdFromClient(uint16_t type, uint16_t clientId,
  * @brief Check a client-supplied fixed-type object ID before translating it.
  *
  * Validates object IDs for NVM objects, counters, and certificates. Rejects
- * bits above valid ID and flag ranges, wrapped and hardware flags, and the
+ * bits above valid ID and flag ranges, wrapped and port key flags, and the
  * global flag when WOLFHSM_CFG_GLOBAL_KEYS is disabled. ID 0 is permitted.
  *
  * @param reqId Requested ID from the client.
@@ -194,7 +194,7 @@ int wh_KeyId_CheckClientObjectIdForCreate(whKeyId reqId);
  * client-facing format (ID + flags). Server encoding is converted to flags:
  * - USER = 0 (WH_KEYUSER_GLOBAL)  → 0x0100 (WH_KEYID_CLIENT_GLOBAL_FLAG)
  * - TYPE = WH_KEYTYPE_WRAPPED     → 0x0200 (WH_KEYID_CLIENT_WRAPPED_FLAG)
- * - TYPE = WH_KEYTYPE_HW          → 0x0400 (WH_KEYID_CLIENT_HW_FLAG)
+ * - TYPE = WH_KEYTYPE_PORT        → 0x0400 (WH_KEYID_CLIENT_PORT_FLAG)
  *
  * This ensures clients can identify global and wrapped keys after they are
  * returned from server operations (cache, key generation, etc.).

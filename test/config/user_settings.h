@@ -38,7 +38,7 @@
 /** wolfHSM required settings for wolfCrypt */
 #define WOLF_CRYPTO_CB
 
-/* Hardware keys are used by reference (WOLFHSM_CFG_HWKEYSTORE) */
+/* Port keys are used by reference (WOLFHSM_CFG_PORTKEY) */
 #ifndef WOLF_PRIVATE_KEY_ID
 #define WOLF_PRIVATE_KEY_ID
 #endif

@@ -55,7 +55,7 @@
 /* Enable Image Manager feature */
 #define WOLFHSM_CFG_SERVER_IMG_MGR
 
-/* Hardware keys (WOLFHSM_CFG_HWKEYSTORE) are tested in test-refactor */
+/* Port keys (WOLFHSM_CFG_PORTKEY) are tested in test-refactor */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #define WOLFHSM_CFG_KEYWRAP
 #endif
