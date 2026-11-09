@@ -526,6 +526,60 @@ static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
     }
     return ret;
 }
+
+/* SP 800-38A F.5.2: decrypting through the direct API with enc=0 */
+static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
+{
+    int                    ret = 0;
+    Aes                    aes[1];
+    WH_DMA_ALIGNED uint8_t plainOut[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)] = {0};
+    WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(AES_BLOCK_SIZE)]   = {
+        0x87, 0x4d, 0x61, 0x91, 0xb6, 0x20, 0xe3, 0x26,
+        0x1b, 0xef, 0x68, 0x64, 0x99, 0x0d, 0xb6, 0xce};
+    const uint8_t key[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+                           0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+    const uint8_t iv[AES_BLOCK_SIZE]    = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5,
+                                           0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb,
+                                           0xfc, 0xfd, 0xfe, 0xff};
+    const uint8_t plain[AES_BLOCK_SIZE] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40,
+                                           0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11,
+                                           0x73, 0x93, 0x17, 0x2a};
+
+    ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+    if (ret == 0) {
+        ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        if (ret == 0) {
+            ret =
+                wh_Client_AesCtr(ctx, aes, 0, cipher, AES_BLOCK_SIZE, plainOut);
+        }
+        if (ret == 0 && memcmp(plainOut, plain, sizeof(plain)) != 0) {
+            WH_ERROR_PRINT("AES-CTR enc=0 output mismatch\n");
+            ret = -1;
+        }
+#ifdef WOLFHSM_CFG_DMA
+        if (ret == 0) {
+            memset(plainOut, 0, sizeof(plainOut));
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesCtrDma(ctx, aes, 0, cipher, AES_BLOCK_SIZE,
+                                      plainOut);
+        }
+        if (ret == 0 && memcmp(plainOut, plain, sizeof(plain)) != 0) {
+            WH_ERROR_PRINT("AES-CTR DMA enc=0 output mismatch\n");
+            ret = -1;
+        }
+#endif /* WOLFHSM_CFG_DMA */
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES CTR decrypt SUCCESS\n");
+    }
+    else {
+        WH_ERROR_PRINT("AES CTR decrypt failed %d\n", ret);
+    }
+    return ret;
+}
 #endif /* WOLFSSL_AES_COUNTER */
 
 int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
@@ -615,6 +669,82 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                     else {
                         WH_ERROR_PRINT(
                             "AES-CTR dec without DECRYPT flag: expected "
+                            "WH_ERROR_USAGE, got %d\n",
+                            ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+    if (ret != 0) {
+        goto done;
+    }
+
+    /* AES-CTR: decrypt without ENCRYPT flag */
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE]     = {0};
+        uint8_t ctrOut[AES_BLOCK_SIZE] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   (uint8_t*)"ctr-no-enc2", strlen("ctr-no-enc2"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0)
+                    ret = wc_AesSetIV(aes, iv);
+                if (ret == 0) {
+                    ret = wh_Client_AesCtr(ctx, aes, 0, plaintext,
+                                           sizeof(plaintext), ctrOut);
+                    if (ret == WH_ERROR_USAGE)
+                        ret = 0;
+                    else {
+                        WH_ERROR_PRINT(
+                            "AES-CTR dec without ENCRYPT flag: expected "
+                            "WH_ERROR_USAGE, got %d\n",
+                            ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+    if (ret != 0) {
+        goto done;
+    }
+
+    /* AES-CTR: encrypt without DECRYPT flag */
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE]     = {0};
+        uint8_t ctrOut[AES_BLOCK_SIZE] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"ctr-no-dec2", strlen("ctr-no-dec2"),
+                                   key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0)
+                    ret = wc_AesSetIV(aes, iv);
+                if (ret == 0) {
+                    ret = wh_Client_AesCtr(ctx, aes, 1, ciphertext,
+                                           sizeof(ciphertext), ctrOut);
+                    if (ret == WH_ERROR_USAGE)
+                        ret = 0;
+                    else {
+                        WH_ERROR_PRINT(
+                            "AES-CTR enc without DECRYPT flag: expected "
                             "WH_ERROR_USAGE, got %d\n",
                             ret);
                         ret = WH_ERROR_ABORTED;
@@ -849,6 +979,82 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                     else {
                         WH_ERROR_PRINT(
                             "AES-CTR DMA dec without DECRYPT flag: expected "
+                            "WH_ERROR_USAGE, got %d\n",
+                            ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+    if (ret != 0) {
+        goto done;
+    }
+
+    /* AES-CTR DMA: decrypt without ENCRYPT flag */
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE]     = {0};
+        uint8_t ctrOut[AES_BLOCK_SIZE] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   (uint8_t*)"dctr-no-enc2",
+                                   strlen("dctr-no-enc2"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0)
+                    ret = wc_AesSetIV(aes, iv);
+                if (ret == 0) {
+                    ret = wh_Client_AesCtrDma(ctx, aes, 0, plaintext,
+                                              sizeof(plaintext), ctrOut);
+                    if (ret == WH_ERROR_USAGE)
+                        ret = 0;
+                    else {
+                        WH_ERROR_PRINT(
+                            "AES-CTR DMA dec without ENCRYPT flag: expected "
+                            "WH_ERROR_USAGE, got %d\n",
+                            ret);
+                        ret = WH_ERROR_ABORTED;
+                    }
+                }
+                wc_AesFree(aes);
+            }
+            wh_Client_KeyEvict(ctx, keyId);
+        }
+    }
+    if (ret != 0) {
+        goto done;
+    }
+
+    /* AES-CTR DMA: encrypt without DECRYPT flag */
+    {
+        Aes     aes[1];
+        uint8_t iv[AES_BLOCK_SIZE]     = {0};
+        uint8_t ctrOut[AES_BLOCK_SIZE] = {0};
+
+        keyId = WH_KEYID_ERASED;
+        ret   = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_ENCRYPT,
+                                   (uint8_t*)"dctr-no-dec2",
+                                   strlen("dctr-no-dec2"), key, keyLen, &keyId);
+        if (ret == 0) {
+            ret = wc_AesInit(aes, NULL, WH_DEV_ID_DMA);
+            if (ret == 0) {
+                ret = wh_Client_AesSetKeyId(aes, keyId);
+                if (ret == 0)
+                    ret = wc_AesSetIV(aes, iv);
+                if (ret == 0) {
+                    ret = wh_Client_AesCtrDma(ctx, aes, 1, ciphertext,
+                                              sizeof(ciphertext), ctrOut);
+                    if (ret == WH_ERROR_USAGE)
+                        ret = 0;
+                    else {
+                        WH_ERROR_PRINT(
+                            "AES-CTR DMA enc without DECRYPT flag: expected "
                             "WH_ERROR_USAGE, got %d\n",
                             ret);
                         ret = WH_ERROR_ABORTED;
@@ -1126,6 +1332,7 @@ int whTest_Crypto_Aes(whClientContext* ctx)
 #endif
 #ifdef WOLFSSL_AES_COUNTER
     WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCtrLeftOob(ctx));
+    WH_TEST_RETURN_ON_FAIL(whTest_CryptoAesCtrDecrypt(ctx));
 #endif
     /* TODO: port legacy AES async + DMA-async coverage (comm-buffer & DMA, round-trip & KAT) -- the only remaining legacy crypto parity gap; deferred to follow-up PR. */
     return 0;
