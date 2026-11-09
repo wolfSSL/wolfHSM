@@ -480,8 +480,12 @@ int posixTransportTcp_SendRequest(void* context,
         return WH_ERROR_BADARGS;
     }
 
+    /* Discard a response the client abandoned before sending again */
     if (c->request_sent == 1) {
-        return WH_ERROR_NOTREADY;
+        rc = posixTransportTcp_RecvResponse(c, NULL, NULL);
+        if (rc != WH_ERROR_OK) {
+            return rc;
+        }
     }
 
     /* Handle late/slow connect */
