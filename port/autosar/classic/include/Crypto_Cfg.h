@@ -41,6 +41,11 @@ extern "C" {
 #define CRYPTO_MAX_ASYNC_JOBS 4u
 #endif
 
+/* Keys that can be written and not yet set valid at the same time. */
+#ifndef CRYPTO_MAX_INVALID_KEYS
+#define CRYPTO_MAX_INVALID_KEYS 16u
+#endif
+
 /* Enable / disable DET reporting at compile time. */
 #ifndef CRYPTO_DEV_ERROR_DETECT
 #define CRYPTO_DEV_ERROR_DETECT STD_ON

@@ -47,6 +47,7 @@
 #define WOLFSSL_AES_DIRECT
 #define WOLFSSL_CMAC
 #define HAVE_HKDF
+#define HAVE_CMAC_KDF
 /* RSA is on by default (NO_RSA undefined); WOLFSSL_KEY_GEN above
  * enables wc_MakeRsaKey for csm_smoke's RSA-2048 keygen + sign +
  * verify KAT in port/autosar/classic/examples/csm_smoke/test_kat.c.

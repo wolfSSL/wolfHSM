@@ -187,6 +187,7 @@ typedef struct {
     boolean           initialised;
     uint32            nextSeq;
     uint32            tickCount;
+    boolean           wireBusy;
     wh_AutosarJobSlot asyncSlots[CRYPTO_MAX_ASYNC_JOBS];
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     wh_AutosarHashState hashStates[WH_AUTOSAR_HASH_SLOTS_PER_OBJ];
@@ -198,12 +199,41 @@ wh_AutosarDriverObject* wh_Autosar_GetDriverObject(uint32 objectId);
 int wh_Autosar_DriverObjectInit(wh_AutosarDriverObject* obj);
 int wh_Autosar_DriverObjectCleanup(wh_AutosarDriverObject* obj);
 
-/* -------------------------------------------------------------------
- * Job dispatch
- * ------------------------------------------------------------------- */
-
 Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
                                          Crypto_JobType*         job);
+
+/* Claims the object's client for a blocking exchange; CRYPTO_E_BUSY while an
+ * async request is in flight. */
+Std_ReturnType wh_Autosar_WireAcquire(wh_AutosarDriverObject* obj);
+void           wh_Autosar_WireRelease(wh_AutosarDriverObject* obj);
+
+/* Keystore client plus wire ownership for the direct key APIs. */
+Std_ReturnType wh_Autosar_KeystoreBegin(whClientContext** outCtx);
+void           wh_Autosar_KeystoreEnd(whClientContext* ctx);
+
+Std_ReturnType wh_Autosar_KeyMarkInvalid(uint32 cryptoKeyId);
+void           wh_Autosar_KeyMarkValid(uint32 cryptoKeyId);
+boolean        wh_Autosar_KeyIsValid(uint32 cryptoKeyId);
+
+Std_ReturnType wh_Autosar_KeyElementSetImpl(whClientContext* ctx,
+                                            uint32           cryptoKeyId,
+                                            uint32           keyElementId,
+                                            const uint8* key, uint32 keyLength);
+Std_ReturnType wh_Autosar_KeySetValidImpl(whClientContext* ctx,
+                                          uint32           cryptoKeyId);
+Std_ReturnType wh_Autosar_KeyGenerateImpl(whClientContext* ctx,
+                                          uint32           cryptoKeyId);
+Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
+                                        uint32           cryptoKeyId,
+                                        uint32           targetCryptoKeyId);
+Std_ReturnType
+wh_Autosar_KeyExchangeCalcPubValImpl(whClientContext* ctx, uint32 cryptoKeyId,
+                                     uint8*  publicValuePtr,
+                                     uint32* publicValueLengthPtr);
+Std_ReturnType
+wh_Autosar_KeyExchangeCalcSecretImpl(whClientContext* ctx, uint32 cryptoKeyId,
+                                     const uint8* partnerPublicValuePtr,
+                                     uint32       partnerPublicValueLength);
 Std_ReturnType wh_Autosar_ProcessJobAsync(wh_AutosarDriverObject* obj,
                                           Crypto_JobType*         job);
 

@@ -24,6 +24,8 @@
 
 #include "test_helpers.h"
 
+#include "wolfhsm/wh_client.h"
+
 #include <stdio.h>
 #include <time.h>
 
@@ -321,7 +323,21 @@ void wh_Autosar_UnlockKeys(void)
 Std_ReturnType testCryIfProcessJob(uint32 objectId, Crypto_JobType* job)
 {
     if (job != NULL && job->jobPrimitiveInfo != NULL) {
-        job->cryptoKeyId = job->jobPrimitiveInfo->cryIfKeyId;
+        job->cryptoKeyId       = job->jobPrimitiveInfo->cryIfKeyId;
+        job->targetCryptoKeyId = job->jobPrimitiveInputOutput.targetCryIfKeyId;
     }
     return Crypto_ProcessJob(objectId, job);
+}
+
+void testEraseKey(uint32 cryptoKeyId)
+{
+    whClientContext* ctx = NULL;
+    whKeyId          id  = wh_Autosar_ComposeKeyId(cryptoKeyId, 1u);
+
+    if (id != 0u && wh_Autosar_KeystoreBegin(&ctx) == E_OK) {
+        (void)wh_Client_KeyErase(ctx, id);
+        (void)wh_Client_KeyEvict(ctx, id);
+        wh_Autosar_KeystoreEnd(ctx);
+    }
+    wh_Autosar_KeyMarkValid(cryptoKeyId);
 }

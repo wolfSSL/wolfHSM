@@ -184,7 +184,8 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
 
     /* Install the key into the wolfHSM cache. */
     if (Crypto_KeyElementSet(kAesCbcKatKeyId[idx], 1u, key, (uint32)keyLen) !=
-        E_OK) {
+            E_OK ||
+        Crypto_KeySetValid(kAesCbcKatKeyId[idx]) != E_OK) {
         fprintf(stderr, "  kat aes-cbc[%d]: KeyElementSet\n", idx);
         return 1;
     }
@@ -263,7 +264,8 @@ static int testEcdsaSelfConsistency(void)
         digest[i] = (uint8)(i + 1);
 
     /* Provision the key under cryptoKeyId 101 (descriptor: ECCNIST/P-256). */
-    if (Crypto_KeyExchangeCalcPubVal(101u, pub, &pubLen) != E_OK) {
+    if (Crypto_KeyExchangeCalcPubVal(101u, pub, &pubLen) != E_OK ||
+        pubLen != 64u || Crypto_KeySetValid(101u) != E_OK) {
         fprintf(stderr, "  kat ecdsa: KeyExchangeCalcPubVal failed\n");
         return 1;
     }
@@ -407,7 +409,7 @@ static int testEd25519SelfConsistency(void)
         msg[i] = (uint8)(i * 11 + 3);
 
     /* Provision an Ed25519 key under id 102. */
-    if (Crypto_KeyGenerate(102u) != E_OK) {
+    if (Crypto_KeyGenerate(102u) != E_OK || Crypto_KeySetValid(102u) != E_OK) {
         fprintf(stderr, "  kat ed25519: KeyGenerate failed\n");
         return 1;
     }
@@ -506,7 +508,7 @@ static int testRsaPkcs1v15SelfConsistency(void)
         hash[i] = (uint8)(i * 13 + 7);
 
     /* RSA-2048 keygen is expensive; this can take a few seconds. */
-    if (Crypto_KeyGenerate(103u) != E_OK) {
+    if (Crypto_KeyGenerate(103u) != E_OK || Crypto_KeySetValid(103u) != E_OK) {
         fprintf(stderr, "  kat rsa: KeyGenerate(RSA-2048) failed\n");
         return 1;
     }
@@ -592,7 +594,9 @@ static int installCmacKey(uint32 cryptoKeyId)
     /* NIST CMAC AES-128 SP 800-38B example key K. */
     static const uint8 k[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
                                 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
-    return (Crypto_KeyElementSet(cryptoKeyId, 1u, k, (uint32)sizeof(k)) == E_OK)
+    return (Crypto_KeyElementSet(cryptoKeyId, 1u, k, (uint32)sizeof(k)) ==
+                E_OK &&
+            Crypto_KeySetValid(cryptoKeyId) == E_OK)
                ? 0
                : 1;
 }

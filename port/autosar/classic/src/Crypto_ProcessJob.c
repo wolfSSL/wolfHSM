@@ -731,23 +731,19 @@ static Std_ReturnType doRngSync(whClientContext* ctx, Crypto_JobType* job)
     return (rc == WH_ERROR_OK) ? E_OK : E_NOT_OK;
 }
 
-/* -------------------------------------------------------------------
- * Sync entry
- * ------------------------------------------------------------------- */
+/* Sync entry */
 
-Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
-                                         Crypto_JobType*         job)
+/* Runs a job to completion on obj->client; the caller owns the wire. */
+static Std_ReturnType dispatchJob(wh_AutosarDriverObject* obj,
+                                  wh_AutosarOpKind op, Crypto_JobType* job)
 {
     const Crypto_PrimitiveInfoType* pi = job->jobPrimitiveInfo->primitiveInfo;
-    wh_AutosarOpKind                op = resolveOpKind(job);
+    Crypto_JobPrimitiveInputOutputType* io = jobIo(job);
     whKeyId        keyId = wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
     Std_ReturnType ret   = E_NOT_OK;
 
-    if (op == WH_AUTOSAR_OP_INVALID) {
-        return E_NOT_OK;
-    }
-    job->jobState = CRYPTO_JOBSTATE_ACTIVE;
-
+    (void)pi;
+    (void)keyId;
     switch (op) {
         case WH_AUTOSAR_OP_RNG_GENERATE:
             ret = doRngSync(&obj->client, job);
@@ -787,12 +783,77 @@ Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
             /* PSS mode left as E_NOT_OK pending a separate wiring pass. */
 #endif
 #endif
+        case WH_AUTOSAR_OP_KEY_GENERATE:
+            ret = wh_Autosar_KeyGenerateImpl(&obj->client, job->cryptoKeyId);
+            break;
+        case WH_AUTOSAR_OP_KEY_DERIVE:
+            ret = wh_Autosar_KeyDeriveImpl(&obj->client, job->cryptoKeyId,
+                                           job->targetCryptoKeyId);
+            break;
+        case WH_AUTOSAR_OP_KEY_EXCHANGE_PUB:
+            ret = wh_Autosar_KeyExchangeCalcPubValImpl(
+                &obj->client, job->cryptoKeyId, io->outputPtr,
+                io->outputLengthPtr);
+            break;
+        case WH_AUTOSAR_OP_KEY_EXCHANGE_SEC:
+            ret = wh_Autosar_KeyExchangeCalcSecretImpl(
+                &obj->client, job->cryptoKeyId, io->inputPtr, io->inputLength);
+            break;
+        case WH_AUTOSAR_OP_KEY_SET_VALID:
+            ret = wh_Autosar_KeySetValidImpl(&obj->client, job->cryptoKeyId);
+            break;
+        case WH_AUTOSAR_OP_KEY_SET_INVALID:
+            ret = wh_Autosar_KeyMarkInvalid(job->cryptoKeyId);
+            break;
+        case WH_AUTOSAR_OP_RANDOM_SEED:
+            ret = Crypto_RandomSeed(job->cryptoKeyId, io->inputPtr,
+                                    io->inputLength);
+            break;
         default:
             ret = E_NOT_OK;
             break;
     }
+    return ret;
+}
 
+static boolean opUsesJobKey(wh_AutosarOpKind op)
+{
+    switch (op) {
+        case WH_AUTOSAR_OP_MAC_CMAC_AES:
+        case WH_AUTOSAR_OP_CIPHER_AES_ECB:
+        case WH_AUTOSAR_OP_CIPHER_AES_CBC:
+        case WH_AUTOSAR_OP_CIPHER_AES_CTR:
+        case WH_AUTOSAR_OP_AEAD_AES_GCM:
+        case WH_AUTOSAR_OP_SIG_RSA_PKCS1_V1_5:
+        case WH_AUTOSAR_OP_SIG_RSA_PSS:
+        case WH_AUTOSAR_OP_SIG_ECDSA:
+        case WH_AUTOSAR_OP_SIG_ED25519:
+        case WH_AUTOSAR_OP_SIG_MLDSA:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
+                                         Crypto_JobType*         job)
+{
+    wh_AutosarOpKind op = resolveOpKind(job);
+    Std_ReturnType   ret;
+
+    if (op == WH_AUTOSAR_OP_INVALID) {
+        return E_NOT_OK;
+    }
+    if (opUsesJobKey(op) && !wh_Autosar_KeyIsValid(job->cryptoKeyId)) {
+        return CRYPTO_E_KEY_NOT_VALID;
+    }
+    if (wh_Autosar_WireAcquire(obj) != E_OK) {
+        return CRYPTO_E_BUSY;
+    }
+    job->jobState = CRYPTO_JOBSTATE_ACTIVE;
+    ret           = dispatchJob(obj, op, job);
     job->jobState = CRYPTO_JOBSTATE_IDLE;
+    wh_Autosar_WireRelease(obj);
     return ret;
 }
 
@@ -816,6 +877,53 @@ static boolean anySlotInFlight(wh_AutosarDriverObject* obj)
             findSlotInState(obj, WH_AUTOSAR_ASYNC_CANCELLING) != NULL)
                ? TRUE
                : FALSE;
+}
+
+Std_ReturnType wh_Autosar_WireAcquire(wh_AutosarDriverObject* obj)
+{
+    Std_ReturnType ret = CRYPTO_E_BUSY;
+
+    wh_Autosar_LockSlots(obj);
+    if (!obj->wireBusy && !anySlotInFlight(obj)) {
+        obj->wireBusy = TRUE;
+        ret           = E_OK;
+    }
+    wh_Autosar_UnlockSlots(obj);
+    return ret;
+}
+
+void wh_Autosar_WireRelease(wh_AutosarDriverObject* obj)
+{
+    wh_Autosar_LockSlots(obj);
+    obj->wireBusy = FALSE;
+    wh_Autosar_UnlockSlots(obj);
+}
+
+/* Ops with a wolfHSM Request/Response pair; the rest run blocking from
+ * Crypto_MainFunction once nothing else is in flight. */
+static boolean opHasAsyncPair(wh_AutosarOpKind op)
+{
+    switch (op) {
+        case WH_AUTOSAR_OP_RNG_GENERATE:
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+        case WH_AUTOSAR_OP_HASH_SHA256:
+#ifdef WOLFSSL_SHA384
+        case WH_AUTOSAR_OP_HASH_SHA384:
+#endif
+#ifdef WOLFSSL_SHA512
+        case WH_AUTOSAR_OP_HASH_SHA512:
+#endif
+        case WH_AUTOSAR_OP_CIPHER_AES_ECB:
+        case WH_AUTOSAR_OP_CIPHER_AES_CBC:
+        case WH_AUTOSAR_OP_CIPHER_AES_CTR:
+        case WH_AUTOSAR_OP_AEAD_AES_GCM:
+        case WH_AUTOSAR_OP_SIG_ECDSA:
+        case WH_AUTOSAR_OP_MAC_CMAC_AES:
+#endif
+            return TRUE;
+        default:
+            return FALSE;
+    }
 }
 
 static wh_AutosarJobSlot* allocSlot(wh_AutosarDriverObject* obj)
@@ -1398,6 +1506,9 @@ Std_ReturnType wh_Autosar_ProcessJobAsync(wh_AutosarDriverObject* obj,
     if (op == WH_AUTOSAR_OP_INVALID) {
         return E_NOT_OK;
     }
+    if (opUsesJobKey(op) && !wh_Autosar_KeyIsValid(job->cryptoKeyId)) {
+        return CRYPTO_E_KEY_NOT_VALID;
+    }
 
     wh_Autosar_LockSlots(obj);
     slot = allocSlot(obj);
@@ -1422,11 +1533,13 @@ Std_ReturnType wh_Autosar_ProcessJobAsync(wh_AutosarDriverObject* obj,
  * pick it up on the next iteration. */
 static void promoteOneQueued(wh_AutosarDriverObject* obj)
 {
-    wh_AutosarJobSlot* slot;
+    wh_AutosarJobSlot* slot = NULL;
     int                rc;
 
     wh_Autosar_LockSlots(obj);
-    slot = oldestQueuedSlot(obj);
+    if (!obj->wireBusy && !anySlotInFlight(obj)) {
+        slot = oldestQueuedSlot(obj);
+    }
     if (slot == NULL) {
         wh_Autosar_UnlockSlots(obj);
         return;
@@ -1437,10 +1550,16 @@ static void promoteOneQueued(wh_AutosarDriverObject* obj)
     slot->ticksAtIssue = obj->tickCount;
     wh_Autosar_UnlockSlots(obj);
 
+    if (!opHasAsyncPair(slot->opKind)) {
+        Std_ReturnType ret = dispatchJob(obj, slot->opKind, slot->job);
+        wh_Autosar_LockSlots(obj);
+        slot->result = ret;
+        slot->state  = WH_AUTOSAR_ASYNC_COMPLETE;
+        wh_Autosar_UnlockSlots(obj);
+        return;
+    }
     rc = issueAsyncRequest(obj, slot);
     if (rc != WH_ERROR_OK) {
-        /* Request never went on the wire — free wolfCrypt resources
-         * and surface the failure as a completion. */
         slotFreeWcResources(slot);
         wh_Autosar_LockSlots(obj);
         slot->result = E_NOT_OK;
@@ -1525,10 +1644,7 @@ void wh_Autosar_MainFunctionObject(wh_AutosarDriverObject* obj)
         CryIf_CallbackNotification(completeJob, completeResult);
     }
 
-    /* 3. Promote the oldest QUEUED slot if no slot is in flight. */
-    if (!anySlotInFlight(obj)) {
-        promoteOneQueued(obj);
-    }
+    promoteOneQueued(obj);
 }
 
 /* -------------------------------------------------------------------

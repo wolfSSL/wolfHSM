@@ -99,7 +99,7 @@ Std_ReturnType Crypto_CancelJob(uint32 objectId, Crypto_JobType* job);
 Std_ReturnType Crypto_KeyElementSet(uint32 cryptoKeyId, uint32 keyElementId,
                                     const uint8* key, uint32 keyLength);
 
-/** Crypto_KeyElementGet — read a key element value. */
+/** Reads a key element value. */
 Std_ReturnType Crypto_KeyElementGet(uint32 cryptoKeyId, uint32 keyElementId,
                                     uint8* result, uint32* resultLength);
 
@@ -108,14 +108,31 @@ Std_ReturnType Crypto_KeyElementCopy(uint32 cryptoKeyId, uint32 keyElementId,
                                      uint32 targetCryptoKeyId,
                                      uint32 targetKeyElementId);
 
-/** Crypto_KeyCopy — copy all elements between Crypto Keys. */
+/** Copies all elements between Crypto Keys. */
 Std_ReturnType Crypto_KeyCopy(uint32 cryptoKeyId, uint32 targetCryptoKeyId);
 
-/** Crypto_KeySetValid — mark the key valid for use (commits to NVM if
- *  the key element is so configured). */
+/** Crypto_KeyElementCopyPartial — copy part of a key element into another. */
+Std_ReturnType Crypto_KeyElementCopyPartial(
+    uint32 cryptoKeyId, uint32 keyElementId, uint32 keyElementSourceOffset,
+    uint32 keyElementTargetOffset, uint32 keyElementCopyLength,
+    uint32 targetCryptoKeyId, uint32 targetKeyElementId);
+
+/** Crypto_KeyElementIdsGet — list the element ids a Crypto Key holds. */
+Std_ReturnType Crypto_KeyElementIdsGet(uint32  cryptoKeyId,
+                                       uint32* keyElementIdsPtr,
+                                       uint32* keyElementIdsLengthPtr);
+
+/** Commits the key to NVM and marks it valid. */
 Std_ReturnType Crypto_KeySetValid(uint32 cryptoKeyId);
 
-/** Crypto_KeyGenerate — generate a new key into the given Crypto Key. */
+/** Marks the key invalid; jobs using it fail with CRYPTO_E_KEY_NOT_VALID. */
+Std_ReturnType Crypto_KeySetInvalid(uint32 cryptoKeyId);
+
+/** Reports whether the key is valid. */
+Std_ReturnType Crypto_KeyGetStatus(uint32                cryptoKeyId,
+                                   Crypto_KeyStatusType* keyStatusPtr);
+
+/** Generates a new key into the given Crypto Key. */
 Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId);
 
 /** Derives a new key into a target Crypto Key. */

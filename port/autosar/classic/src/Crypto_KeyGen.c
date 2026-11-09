@@ -30,6 +30,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_utils.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/ecc.h"
@@ -50,22 +51,24 @@ wh_Autosar_LookupKeyDescriptor(uint32 cryptoKeyId)
     return NULL;
 }
 
-Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
+Std_ReturnType wh_Autosar_KeyGenerateImpl(whClientContext* ctx,
+                                          uint32           cryptoKeyId)
 {
-    whClientContext*                ctx = wh_Autosar_KeystoreClient();
     const Crypto_KeyDescriptorType* desc =
         wh_Autosar_LookupKeyDescriptor(cryptoKeyId);
-    /* Material element id is 1 per AUTOSAR. */
     whKeyId outId                   = wh_Autosar_ComposeKeyId(cryptoKeyId, 1u);
     uint8   label[WH_NVM_LABEL_LEN] = {0};
     int     rc                      = WH_ERROR_NOTIMPL;
 
-    if (ctx == NULL || desc == NULL) {
+    if (desc == NULL || outId == 0u) {
+        return E_NOT_OK;
+    }
+    if (wh_Autosar_KeyMarkInvalid(cryptoKeyId) != E_OK) {
         return E_NOT_OK;
     }
 
 #ifdef WOLFHSM_CFG_NO_CRYPTO
-    (void)outId;
+    (void)ctx;
     (void)label;
 #else
     switch (desc->family) {
@@ -93,7 +96,7 @@ Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
                 (uint16)sizeof(label));
             break;
 #endif
-#ifndef NO_RSA
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
         case CRYPTO_ALGOFAM_RSA:
             rc = wh_Client_RsaMakeCacheKey(ctx, desc->keyLength, 65537u, &outId,
                                            (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
@@ -112,6 +115,7 @@ Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
                                         label, (uint16)sizeof(label), mat,
                                         (uint16)keyBytes, &outId);
             }
+            wh_Utils_ForceZero(mat, sizeof(mat));
             break;
         }
         default:
@@ -120,4 +124,17 @@ Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
     }
 #endif
     return (rc == WH_ERROR_OK) ? E_OK : E_NOT_OK;
+}
+
+Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
+{
+    whClientContext* ctx = NULL;
+    Std_ReturnType   ret = wh_Autosar_KeystoreBegin(&ctx);
+
+    if (ret != E_OK) {
+        return ret;
+    }
+    ret = wh_Autosar_KeyGenerateImpl(ctx, cryptoKeyId);
+    wh_Autosar_KeystoreEnd(ctx);
+    return ret;
 }

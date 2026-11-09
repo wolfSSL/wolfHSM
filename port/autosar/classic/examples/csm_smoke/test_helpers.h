@@ -91,9 +91,12 @@ void testStopMainFunctionThread(void);
 void testPauseMainFunctionThread(void);
 void testResumeMainFunctionThread(void);
 
-/* Stands in for CryIf: copies cryIfKeyId into cryptoKeyId (identity key
- * mapping), then calls Crypto_ProcessJob. */
+/* Stands in for CryIf: copies the CryIf key ids into the driver key ids
+ * (identity mapping), then calls Crypto_ProcessJob. */
 Std_ReturnType testCryIfProcessJob(uint32 objectId, Crypto_JobType* job);
+
+/* Removes a test key from the server cache and NVM and clears its state. */
+void testEraseKey(uint32 cryptoKeyId);
 
 /* --- Test runner ---------------------------------------------------- */
 
@@ -117,6 +120,7 @@ int testAccountingAll(void);  /* category 3 — resource accounting */
 int testConcurrencyAll(void); /* category 4 — concurrency stress */
 int testTimeoutAll(void);     /* category 5 — timeout */
 int testCancelAll(void);      /* category 6 — cancel-during-pending */
+int testKeyMgmtAll(void);     /* key state and key management jobs */
 
 #ifdef __cplusplus
 }

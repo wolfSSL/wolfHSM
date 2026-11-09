@@ -27,18 +27,28 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_utils.h"
 
-Std_ReturnType Crypto_KeyDerive(uint32 cryptoKeyId, uint32 targetCryptoKeyId)
+Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
+                                        uint32           cryptoKeyId,
+                                        uint32           targetCryptoKeyId)
 {
-    whClientContext*                ctx = wh_Autosar_KeystoreClient();
     const Crypto_KeyDescriptorType* tgt =
         wh_Autosar_LookupKeyDescriptor(targetCryptoKeyId);
     whKeyId srcId = wh_Autosar_ComposeKeyId(cryptoKeyId, 1u);
     whKeyId dstId = wh_Autosar_ComposeKeyId(targetCryptoKeyId, 1u);
     uint8   label[WH_NVM_LABEL_LEN] = {0};
+    uint8   salt[64]                = {0};
+    uint32  saltLen                 = (uint32)sizeof(salt);
     int     rc                      = WH_ERROR_NOTIMPL;
 
-    if (ctx == NULL || tgt == NULL) {
+    if (tgt == NULL || srcId == 0u || dstId == 0u) {
+        return E_NOT_OK;
+    }
+    if (!wh_Autosar_KeyIsValid(cryptoKeyId)) {
+        return CRYPTO_E_KEY_NOT_VALID;
+    }
+    if (wh_Autosar_KeyMarkInvalid(targetCryptoKeyId) != E_OK) {
         return E_NOT_OK;
     }
 
@@ -53,6 +63,10 @@ Std_ReturnType Crypto_KeyDerive(uint32 cryptoKeyId, uint32 targetCryptoKeyId)
 #endif
 #ifdef HAVE_CMAC_KDF
         case WH_AUTOSAR_ALGOFAM_CMAC_KDF:
+            /* SP 800-56C: absent salt is a zero block of the CMAC key size */
+            if (saltLen == 0u) {
+                saltLen = AES_128_KEY_SIZE;
+            }
             rc = wh_Client_CmacKdfMakeCacheKey(
                 ctx, srcId, NULL, 0u, srcId, NULL, 0u, NULL, 0u, &dstId, 0u,
                 label, (uint32)sizeof(label), tgt->keyLength / 8u);
@@ -63,9 +77,22 @@ Std_ReturnType Crypto_KeyDerive(uint32 cryptoKeyId, uint32 targetCryptoKeyId)
             break;
     }
 #else
-    (void)srcId;
-    (void)dstId;
+    (void)ctx;
     (void)label;
+    (void)salt;
 #endif
     return (rc == WH_ERROR_OK) ? E_OK : E_NOT_OK;
+}
+
+Std_ReturnType Crypto_KeyDerive(uint32 cryptoKeyId, uint32 targetCryptoKeyId)
+{
+    whClientContext* ctx = NULL;
+    Std_ReturnType   ret = wh_Autosar_KeystoreBegin(&ctx);
+
+    if (ret != E_OK) {
+        return ret;
+    }
+    ret = wh_Autosar_KeyDeriveImpl(ctx, cryptoKeyId, targetCryptoKeyId);
+    wh_Autosar_KeystoreEnd(ctx);
+    return ret;
 }

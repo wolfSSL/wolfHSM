@@ -54,7 +54,52 @@ WH_AUTOSAR_WEAK whClientContext* wh_Autosar_KeystoreClient(void)
     return &obj->client;
 }
 
-/* --- Key id composition --------------------------------------------- */
+static wh_AutosarDriverObject* clientOwner(const whClientContext* ctx)
+{
+    uint32 i;
+    for (i = 0u; i < CRYPTO_DRIVER_OBJECT_COUNT; ++i) {
+        wh_AutosarDriverObject* obj = wh_Autosar_GetDriverObject(i);
+        if (obj != NULL && &obj->client == ctx) {
+            return obj;
+        }
+    }
+    return NULL;
+}
+
+Std_ReturnType wh_Autosar_KeystoreBegin(whClientContext** outCtx)
+{
+    whClientContext*        ctx = wh_Autosar_KeystoreClient();
+    wh_AutosarDriverObject* obj;
+
+    if (ctx == NULL) {
+        return E_NOT_OK;
+    }
+    obj = clientOwner(ctx);
+    if (obj != NULL && wh_Autosar_WireAcquire(obj) != E_OK) {
+        return CRYPTO_E_BUSY;
+    }
+    *outCtx = ctx;
+    return E_OK;
+}
+
+void wh_Autosar_KeystoreEnd(whClientContext* ctx)
+{
+    wh_AutosarDriverObject* obj = clientOwner(ctx);
+    if (obj != NULL) {
+        wh_Autosar_WireRelease(obj);
+    }
+}
+
+/* Several driver objects use different clients, so their keys must live in
+ * the server's global namespace to be shared. */
+#if CRYPTO_DRIVER_OBJECT_COUNT > 1
+#ifndef WOLFHSM_CFG_GLOBAL_KEYS
+#error "CRYPTO_DRIVER_OBJECT_COUNT > 1 needs WOLFHSM_CFG_GLOBAL_KEYS"
+#endif
+#define WH_AUTOSAR_KEYID_FLAGS WH_KEYID_CLIENT_GLOBAL_FLAG
+#else
+#define WH_AUTOSAR_KEYID_FLAGS 0u
+#endif
 
 /* (cryptoKeyId, keyElementId) → 16-bit whKeyId.
  *
