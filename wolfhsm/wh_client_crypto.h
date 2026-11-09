@@ -1633,10 +1633,12 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
  *
  * This function performs an AES-CTR encrypt or decrypt operation on the input
  * data and stores the result in the output buffer.
+ * A key referenced by key ID needs both WH_NVM_FLAGS_USAGE_ENCRYPT and
+ * WH_NVM_FLAGS_USAGE_DECRYPT, since both directions run the same keystream.
  *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] aes Pointer to the AES structure.
- * @param[in] enc 1 for encrypt, 0 for decrypt.
+ * @param[in] enc Ignored by CTR, present for API symmetry with the other modes.
  * @param[in] in Pointer to the input data.
  * @param[in] len Length of the input and output data in bytes.
  * @param[out] out Pointer to the output data.
@@ -1651,10 +1653,12 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
  * This function performs an AES-CTR encrypt or decrypt operation on the input
  * data and stores the result in the output buffer using direct memory access
  * when communicating with the wolfHSM server.
+ * A key referenced by key ID needs both WH_NVM_FLAGS_USAGE_ENCRYPT and
+ * WH_NVM_FLAGS_USAGE_DECRYPT, since both directions run the same keystream.
  *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] aes Pointer to the AES structure.
- * @param[in] enc 1 for encrypt, 0 for decrypt.
+ * @param[in] enc Ignored by CTR, present for API symmetry with the other modes.
  * @param[in] in Pointer to the input data.
  * @param[in] len Length of the input and output data in bytes.
  * @param[out] out Pointer to the output data.
@@ -1672,6 +1676,8 @@ int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
  * struct across the Request/Response boundary; callers must not mutate the
  * Aes struct between the two halves. Use wh_Client_AesCtrResponse to
  * retrieve the result.
+ * A key referenced by key ID needs both WH_NVM_FLAGS_USAGE_ENCRYPT and
+ * WH_NVM_FLAGS_USAGE_DECRYPT, since both directions run the same keystream.
  *
  * Contract: at most one outstanding async request may be in flight per
  * whClientContext. The caller MUST call wh_Client_AesCtrResponse before
@@ -1717,6 +1723,8 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
  * sends the DMA request to the server. Does NOT wait for a reply. Caller
  * must keep in and out valid until the matching wh_Client_AesCtrDmaResponse
  * completes.
+ * A key referenced by key ID needs both WH_NVM_FLAGS_USAGE_ENCRYPT and
+ * WH_NVM_FLAGS_USAGE_DECRYPT, since both directions run the same keystream.
  *
  * Contract: at most one outstanding async request may be in flight per
  * whClientContext. The caller MUST call wh_Client_AesCtrDmaResponse before
@@ -1724,7 +1732,8 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
  *
  * @param[in]  ctx Pointer to the client context
  * @param[in]  aes Pointer to the AES structure with key and counter state
- * @param[in]  enc 1 for encrypt, 0 for decrypt
+ * @param[in]  enc Ignored by CTR, present for API symmetry with the other
+ *                 modes
  * @param[in]  in  Pointer to the input data (may be NULL only if len == 0)
  * @param[in]  len Length of the input data in bytes
  * @param[out] out Pointer to the output buffer
