@@ -35,14 +35,15 @@ static Std_ReturnType aesCbcEncrypt(uint32 keyId, uint8 out[16])
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
 
+    if (Crypto_KeyElementSet(keyId, 5u, iv, sizeof(iv)) != E_OK) {
+        return E_NOT_OK;
+    }
     testBuildJob(&job, &jpi, &pi, CRYPTO_ENCRYPT, CRYPTO_ALGOFAM_AES,
                  CRYPTO_ALGOMODE_CBC, keyId, CRYPTO_PROCESSING_SYNC, 7100u);
-    job.jobPrimitiveInputOutput.inputPtr             = pt;
-    job.jobPrimitiveInputOutput.inputLength          = 16u;
-    job.jobPrimitiveInputOutput.secondaryInputPtr    = iv;
-    job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
-    job.jobPrimitiveInputOutput.outputPtr            = out;
-    job.jobPrimitiveInputOutput.outputLengthPtr      = &outLen;
+    job.jobPrimitiveInputOutput.inputPtr        = pt;
+    job.jobPrimitiveInputOutput.inputLength     = 16u;
+    job.jobPrimitiveInputOutput.outputPtr       = out;
+    job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     return testCryIfProcessJob(0u, &job);
 }
 

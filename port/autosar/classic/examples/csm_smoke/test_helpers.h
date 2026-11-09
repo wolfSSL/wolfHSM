@@ -125,14 +125,19 @@ int testHexDecode(const char* hex, uint8* out, int outCap);
 /* Makes wh_Autosar_PlatformClientConfig fail while non-zero. */
 extern int gTestFailClientConfig;
 
-int testKatAll(void);         /* category 1 — KAT vectors */
-int testDetAll(void);         /* category 2 — DET coverage */
-int testAccountingAll(void);  /* category 3 — resource accounting */
-int testConcurrencyAll(void); /* category 4 — concurrency stress */
-int testTimeoutAll(void);     /* category 5 — timeout */
-int testCancelAll(void);      /* category 6 — cancel-during-pending */
+int testKatAll(void);         /* KAT vectors */
+int testDetAll(void);         /* DET coverage */
+int testDetBeforeInit(void);  /* UNINIT and INIT_FAILED, before Crypto_Init */
+int testAccountingAll(void);  /* resource accounting */
+int testConcurrencyAll(void); /* concurrency stress */
+int testTimeoutAll(void);     /* async timeout */
+int testCancelAll(void);      /* cancel during pending */
 int testKeyMgmtAll(void);     /* key state and key management jobs */
 int testSigAll(void);         /* signatures, interop with software verify */
+int testCipherAll(void);      /* AES modes, key copy, multi-call hash */
+int testEdgeAll(void);        /* parameter checks and edge cases */
+int testPolicyAll(void);      /* key policy, cancel, verify results */
+int testLimitsAll(void);      /* full tables and failed hash streams */
 
 #ifdef __cplusplus
 }

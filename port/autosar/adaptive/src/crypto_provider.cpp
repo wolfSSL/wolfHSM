@@ -428,8 +428,8 @@ Result<ByteVector> SymmetricBlockCipherCtx::ProcessBlocks(
     }
     else if (alg_ == AlgId::kAesCtr) {
 #ifdef WOLFSSL_AES_COUNTER
-        rc = wh_Client_AesCtr(client_, &aes, encrypt ? 1 : 0, in, inLen,
-                              out.data());
+        /* CTR is symmetric; the server mis-keys enc=0. */
+        rc = wh_Client_AesCtr(client_, &aes, 1, in, inLen, out.data());
 #endif
     }
     else if (alg_ == AlgId::kAesEcb) {
@@ -965,8 +965,6 @@ Result<ByteVector> KeyDerivationFunctionCtx::Derive(std::size_t outBytes,
         return SecurityErrc::kRuntimeFault;
     return Result<ByteVector>(std::move(out));
 }
-
-/* ---------------- KeyStorageProvider ------------------------------- */
 
 Result<void> KeyStorageProvider::SaveKey(KeyId keyId, const std::uint8_t* key,
                                          std::size_t len)

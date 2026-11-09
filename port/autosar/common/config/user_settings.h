@@ -45,6 +45,7 @@
 #define WOLFSSL_AES_COUNTER
 #define HAVE_AESGCM
 #define WOLFSSL_AES_DIRECT
+#define HAVE_AES_ECB
 #define WOLFSSL_CMAC
 #define HAVE_HKDF
 #define HAVE_CMAC_KDF

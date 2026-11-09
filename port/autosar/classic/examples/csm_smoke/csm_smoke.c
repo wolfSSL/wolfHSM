@@ -356,6 +356,9 @@ int main(void)
     TEST_RUN(failures, testKeystoreRoundtrip);
     TEST_RUN(failures, testKeystoreNoCollision);
     TEST_RUN(failures, testAsyncQueuedJobs);
+    testEraseKey(0xCAu);
+    testEraseKey(0x10u);
+    testEraseKey(0x11u);
 #endif
 
     /* --- Category-1 KAT vectors --- */
@@ -369,6 +372,9 @@ int main(void)
     /* --- Category-3 Resource accounting --- */
     printf("[accounting]\n");
     failures += testAccountingAll();
+
+    printf("[cipher]\n");
+    failures += testCipherAll();
 
     printf("[sig]\n");
     failures += testSigAll();

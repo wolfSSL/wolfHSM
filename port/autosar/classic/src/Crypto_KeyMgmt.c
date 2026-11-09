@@ -45,6 +45,80 @@
 /* This port stores only the MATERIAL element in the wolfHSM keystore
  * (see wh_Autosar_ComposeKeyId in Crypto_Keystore.c). */
 #define CRYPTO_KE_MATERIAL 1u
+#define CRYPTO_KE_CIPHER_IV 5u
+#define CRYPTO_KE_KEYDERIVATION_SALT 13u
+
+#ifndef CRYPTO_MAX_IV_KEYS
+#define CRYPTO_MAX_IV_KEYS 8u
+#endif
+#define CRYPTO_IV_MAX_LEN 16u
+#define CRYPTO_SALT_MAX_LEN 64u
+
+/* CRYPTO_KE_CIPHER_IV lives in driver RAM: it is public, and writing it
+ * does not invalidate the key. */
+typedef struct {
+    uint32 cryptoKeyId;
+    uint32 len;
+    uint8  iv[CRYPTO_IV_MAX_LEN];
+} wh_AutosarKeyIv;
+static wh_AutosarKeyIv s_keyIvs[CRYPTO_MAX_IV_KEYS];
+
+static wh_AutosarKeyIv* ivFind(uint32 cryptoKeyId, boolean alloc)
+{
+    uint32 i;
+    for (i = 0u; i < CRYPTO_MAX_IV_KEYS; ++i) {
+        if (s_keyIvs[i].cryptoKeyId == cryptoKeyId) {
+            return &s_keyIvs[i];
+        }
+    }
+    if (alloc) {
+        for (i = 0u; i < CRYPTO_MAX_IV_KEYS; ++i) {
+            if (s_keyIvs[i].cryptoKeyId == 0u) {
+                s_keyIvs[i].cryptoKeyId = cryptoKeyId;
+                return &s_keyIvs[i];
+            }
+        }
+    }
+    return NULL;
+}
+
+Std_ReturnType wh_Autosar_KeyIvGet(uint32 cryptoKeyId, const uint8** iv,
+                                   uint32* ivLen)
+{
+    wh_AutosarKeyIv* e = ivFind(cryptoKeyId, FALSE);
+    if (e == NULL || e->len == 0u) {
+        return E_NOT_OK;
+    }
+    *iv    = e->iv;
+    *ivLen = e->len;
+    return E_OK;
+}
+
+static Std_ReturnType ivSet(uint32 cryptoKeyId, const uint8* iv, uint32 len)
+{
+    wh_AutosarKeyIv* e;
+    if (cryptoKeyId == 0u || len == 0u || len > CRYPTO_IV_MAX_LEN) {
+        return E_NOT_OK;
+    }
+    e = ivFind(cryptoKeyId, TRUE);
+    if (e == NULL) {
+        return E_NOT_OK;
+    }
+    (void)memcpy(e->iv, iv, len);
+    e->len = len;
+    return E_OK;
+}
+
+static Std_ReturnType ivGet(uint32 cryptoKeyId, uint8* out, uint32* len)
+{
+    wh_AutosarKeyIv* e = ivFind(cryptoKeyId, FALSE);
+    if (e == NULL || e->len == 0u || *len < e->len) {
+        return E_NOT_OK;
+    }
+    (void)memcpy(out, e->iv, e->len);
+    *len = e->len;
+    return E_OK;
+}
 
 #ifndef CRYPTO_KEY_COPY_BUF_SIZE
 #define CRYPTO_KEY_COPY_BUF_SIZE 512u
@@ -190,6 +264,9 @@ Std_ReturnType Crypto_KeyElementSet(uint32 cryptoKeyId, uint32 keyElementId,
         CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_VALUE);
         return E_NOT_OK;
     }
+    if (keyElementId == CRYPTO_KE_CIPHER_IV) {
+        return ivSet(cryptoKeyId, key, keyLength);
+    }
     if (wh_Autosar_ComposeKeyId(cryptoKeyId, keyElementId) == 0u) {
         CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_HANDLE);
         return E_NOT_OK;
@@ -217,6 +294,9 @@ Std_ReturnType Crypto_KeyElementGet(uint32 cryptoKeyId, uint32 keyElementId,
     if (*resultLength == 0u) {
         CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTGET_SID, CRYPTO_E_PARAM_VALUE);
         return E_NOT_OK;
+    }
+    if (keyElementId == CRYPTO_KE_CIPHER_IV) {
+        return ivGet(cryptoKeyId, result, resultLength);
     }
     if (wh_Autosar_ComposeKeyId(cryptoKeyId, keyElementId) == 0u) {
         CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTGET_SID, CRYPTO_E_PARAM_HANDLE);
@@ -336,12 +416,22 @@ Std_ReturnType Crypto_KeyElementIdsGet(uint32  cryptoKeyId,
         CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTIDSGET_SID, CRYPTO_E_PARAM_HANDLE);
         return E_NOT_OK;
     }
-    if (*keyElementIdsLengthPtr < 1u) {
-        CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTIDSGET_SID, CRYPTO_E_SMALL_BUFFER);
-        return E_NOT_OK;
+    {
+        const uint8* iv;
+        uint32       ivLen;
+        uint32       n =
+            (wh_Autosar_KeyIvGet(cryptoKeyId, &iv, &ivLen) == E_OK) ? 2u : 1u;
+        if (*keyElementIdsLengthPtr < n) {
+            CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTIDSGET_SID,
+                              CRYPTO_E_SMALL_BUFFER);
+            return E_NOT_OK;
+        }
+        keyElementIdsPtr[0] = CRYPTO_KE_MATERIAL;
+        if (n == 2u) {
+            keyElementIdsPtr[1] = CRYPTO_KE_CIPHER_IV;
+        }
+        *keyElementIdsLengthPtr = n;
     }
-    keyElementIdsPtr[0]     = CRYPTO_KE_MATERIAL;
-    *keyElementIdsLengthPtr = 1u;
     return E_OK;
 }
 

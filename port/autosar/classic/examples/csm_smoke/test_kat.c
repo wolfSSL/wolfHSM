@@ -185,7 +185,9 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
     /* Install the key into the wolfHSM cache. */
     if (Crypto_KeyElementSet(kAesCbcKatKeyId[idx], 1u, key, (uint32)keyLen) !=
             E_OK ||
-        Crypto_KeySetValid(kAesCbcKatKeyId[idx]) != E_OK) {
+        Crypto_KeySetValid(kAesCbcKatKeyId[idx]) != E_OK ||
+        Crypto_KeyElementSet(kAesCbcKatKeyId[idx], 5u, iv, (uint32)ivLen) !=
+            E_OK) {
         fprintf(stderr, "  kat aes-cbc[%d]: KeyElementSet\n", idx);
         return 1;
     }
@@ -200,14 +202,12 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
     jpi.primitiveInfo  = &pi;
     jpi.cryIfKeyId     = kAesCbcKatKeyId[idx];
     memset(&job, 0, sizeof(job));
-    job.jobId                                        = (uint32)(2000 + idx);
-    job.jobPrimitiveInfo                             = &jpi;
-    job.jobPrimitiveInputOutput.inputPtr             = pt;
-    job.jobPrimitiveInputOutput.inputLength          = 16u;
-    job.jobPrimitiveInputOutput.secondaryInputPtr    = iv;
-    job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
-    job.jobPrimitiveInputOutput.outputPtr            = out;
-    job.jobPrimitiveInputOutput.outputLengthPtr      = &outLen;
+    job.jobId                                   = (uint32)(2000 + idx);
+    job.jobPrimitiveInfo                        = &jpi;
+    job.jobPrimitiveInputOutput.inputPtr        = pt;
+    job.jobPrimitiveInputOutput.inputLength     = 16u;
+    job.jobPrimitiveInputOutput.outputPtr       = out;
+    job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
     if (testCryIfProcessJob(0u, &job) != E_OK) {
@@ -752,5 +752,11 @@ int testKatAll(void)
     TEST_RUN(failures, testEd25519SelfConsistency);
     TEST_RUN(failures, testRsaPkcs1v15SelfConsistency);
     TEST_RUN(failures, testCmacSyncAndAsync);
+    {
+        static const uint32 keys[] = {0x80u, 0x81u, 101u, 102u, 103u, 110u};
+        size_t              i;
+        for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i)
+            testEraseKey(keys[i]);
+    }
     return failures;
 }

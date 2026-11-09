@@ -190,6 +190,7 @@ static void hashStateRelease(wh_AutosarHashState* s)
         return;
     hashStateFreeWc(s);
     s->inUse = FALSE;
+    s->busy  = FALSE;
 }
 
 static int hashInit(wh_AutosarHashState* s, wh_AutosarOpKind op)
@@ -399,30 +400,47 @@ static Std_ReturnType hashSyncDispatch(wh_AutosarDriverObject* obj,
 }
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-/* -------------------------------------------------------------------
- * Sync AES / CMAC / ECDSA / RNG
- * ------------------------------------------------------------------- */
+/* Sync primitives */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
+/* Binds the job key to aes and loads the IV from CRYPTO_KE_CIPHER_IV, which
+ * every mode but ECB needs. */
+static int aesPrepare(Aes* aes, Crypto_JobType* job, whKeyId keyId,
+                      wh_AutosarOpKind op, const uint8** iv, uint32* ivLen)
+{
+    const Crypto_PrimitiveInfoType* pi = job->jobPrimitiveInfo->primitiveInfo;
+    int                             rc = wc_AesInit(aes, NULL, WH_DEV_ID);
+
+    *iv    = NULL;
+    *ivLen = 0u;
+    if (rc != 0) {
+        return rc;
+    }
+    /* The AES request builders read aes->keylen. */
+    aes->keylen = (int)(pi->algorithm.keyLength / 8u);
+    rc          = wh_Client_AesSetKeyId(aes, keyId);
+    if (rc == 0 && op != WH_AUTOSAR_OP_CIPHER_AES_ECB) {
+        if (wh_Autosar_KeyIvGet(job->cryptoKeyId, iv, ivLen) != E_OK) {
+            rc = WH_ERROR_BADARGS;
+        }
+        else if (op != WH_AUTOSAR_OP_AEAD_AES_GCM) {
+            rc = (*ivLen == AES_BLOCK_SIZE) ? wc_AesSetIV(aes, *iv)
+                                            : WH_ERROR_BADARGS;
+        }
+    }
+    return rc;
+}
+
 static Std_ReturnType doAesSync(whClientContext* ctx, wh_AutosarOpKind op,
                                 int enc, Crypto_JobType* job, whKeyId keyId)
 {
     Aes                                 aes;
     int                                 rc;
     Crypto_JobPrimitiveInputOutputType* io = jobIo(job);
-    const Crypto_PrimitiveInfoType* pi = job->jobPrimitiveInfo->primitiveInfo;
+    const uint8*                        iv;
+    uint32                              ivLen;
 
-    rc = wc_AesInit(&aes, NULL, WH_DEV_ID);
-    if (rc != 0)
-        return E_NOT_OK;
-    /* wh_Client_AesCbcRequest et al. read aes->keylen to build the
-     * request envelope; only setting the key id is not enough. */
-    aes.keylen = (int)(pi->algorithm.keyLength / 8u);
-    rc         = wh_Client_AesSetKeyId(&aes, keyId);
-    if (rc == 0 && io->secondaryInputPtr != NULL &&
-        op != WH_AUTOSAR_OP_CIPHER_AES_ECB) {
-        rc = wc_AesSetIV(&aes, io->secondaryInputPtr);
-    }
+    rc = aesPrepare(&aes, job, keyId, op, &iv, &ivLen);
     if (rc == 0) {
         switch (op) {
 #ifdef HAVE_AES_ECB
@@ -439,22 +457,25 @@ static Std_ReturnType doAesSync(whClientContext* ctx, wh_AutosarOpKind op,
 #endif
 #ifdef WOLFSSL_AES_COUNTER
             case WH_AUTOSAR_OP_CIPHER_AES_CTR:
-                rc = wh_Client_AesCtr(ctx, &aes, enc, io->inputPtr,
+                /* CTR is symmetric; the server mis-keys enc=0. */
+                rc = wh_Client_AesCtr(ctx, &aes, 1, io->inputPtr,
                                       io->inputLength, io->outputPtr);
                 break;
 #endif
 #ifdef HAVE_AESGCM
             case WH_AUTOSAR_OP_AEAD_AES_GCM: {
-                uint8* tagOut = io->secondaryOutputPtr;
-                uint32 tagLen = (io->secondaryOutputLengthPtr != NULL)
-                                    ? *io->secondaryOutputLengthPtr
-                                    : 16u;
+                uint32 tagLen = enc ? ((io->secondaryOutputLengthPtr != NULL)
+                                           ? *io->secondaryOutputLengthPtr
+                                           : 0u)
+                                    : io->tertiaryInputLength;
                 rc            = wh_Client_AesGcm(
-                    ctx, &aes, enc, io->inputPtr, io->inputLength,
+                    ctx, &aes, enc, io->inputPtr, io->inputLength, iv, ivLen,
                     io->secondaryInputPtr, io->secondaryInputLength,
-                    io->tertiaryInputPtr, io->tertiaryInputLength,
-                    enc ? NULL : tagOut, enc ? tagOut : NULL, tagLen,
-                    io->outputPtr);
+                    enc ? NULL : io->tertiaryInputPtr,
+                    enc ? io->secondaryOutputPtr : NULL, tagLen, io->outputPtr);
+                if (enc && rc == 0) {
+                    *io->secondaryOutputLengthPtr = tagLen;
+                }
                 if (!enc) {
                     if (rc == 0) {
                         writeVerifyResult(job, TRUE);
@@ -1258,24 +1279,20 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
         case WH_AUTOSAR_OP_AEAD_AES_GCM: {
             const Crypto_PrimitiveInfoType* pi =
                 job->jobPrimitiveInfo->primitiveInfo;
-            int enc = isEncryptService(pi->service);
-            rc      = wc_AesInit(&slot->op.wc.aes, NULL, WH_DEV_ID);
-            if (rc != 0)
-                break;
-            slot->op.wc.aes.keylen = (int)(pi->algorithm.keyLength / 8u);
-            rc = wh_Client_AesSetKeyId(&slot->op.wc.aes, keyId);
-            if (rc == 0 && io->secondaryInputPtr != NULL &&
-                slot->opKind != WH_AUTOSAR_OP_CIPHER_AES_ECB) {
-                rc = wc_AesSetIV(&slot->op.wc.aes, io->secondaryInputPtr);
-            }
+            int          enc = isEncryptService(pi->service);
+            const uint8* iv;
+            uint32       ivLen;
+            rc = aesPrepare(&slot->op.wc.aes, job, keyId, slot->opKind, &iv,
+                            &ivLen);
             if (rc != 0)
                 break;
             slot->op.cipherOut = io->outputPtr;
             slot->op.cipherLen = io->inputLength;
             slot->op.tagOut    = io->secondaryOutputPtr;
-            slot->op.tagLen    = (io->secondaryOutputLengthPtr != NULL)
-                                     ? *io->secondaryOutputLengthPtr
-                                     : 16u;
+            slot->op.tagLen    = enc ? ((io->secondaryOutputLengthPtr != NULL)
+                                            ? *io->secondaryOutputLengthPtr
+                                            : 0u)
+                                     : io->tertiaryInputLength;
             switch (slot->opKind) {
 #ifdef HAVE_AES_ECB
                 case WH_AUTOSAR_OP_CIPHER_AES_ECB:
@@ -1291,7 +1308,7 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
 #endif
 #ifdef WOLFSSL_AES_COUNTER
                 case WH_AUTOSAR_OP_CIPHER_AES_CTR:
-                    rc = wh_Client_AesCtrRequest(ctx, &slot->op.wc.aes, enc,
+                    rc = wh_Client_AesCtrRequest(ctx, &slot->op.wc.aes, 1,
                                                  io->inputPtr, io->inputLength);
                     break;
 #endif
@@ -1299,10 +1316,9 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
                 case WH_AUTOSAR_OP_AEAD_AES_GCM:
                     rc = wh_Client_AesGcmRequest(
                         ctx, &slot->op.wc.aes, enc, io->inputPtr,
-                        io->inputLength, io->secondaryInputPtr,
-                        io->secondaryInputLength, io->tertiaryInputPtr,
-                        io->tertiaryInputLength,
-                        enc ? NULL : io->secondaryOutputPtr, slot->op.tagLen);
+                        io->inputLength, iv, ivLen, io->secondaryInputPtr,
+                        io->secondaryInputLength,
+                        enc ? NULL : io->tertiaryInputPtr, slot->op.tagLen);
                     break;
 #endif
                 default:
@@ -1527,6 +1543,10 @@ static int pollAsyncResponse(wh_AutosarDriverObject* obj,
                 &outSz, enc ? slot->op.tagOut : NULL, slot->op.tagLen);
             if (rc == WH_ERROR_OK && io->outputLengthPtr != NULL) {
                 *io->outputLengthPtr = outSz;
+            }
+            if (enc && rc == WH_ERROR_OK &&
+                io->secondaryOutputLengthPtr != NULL) {
+                *io->secondaryOutputLengthPtr = slot->op.tagLen;
             }
             if (!enc && rc != WH_ERROR_NOTREADY) {
                 if (rc == WH_ERROR_OK) {

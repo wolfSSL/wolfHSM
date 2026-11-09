@@ -216,6 +216,8 @@ void           wh_Autosar_KeystoreEnd(whClientContext* ctx);
 Std_ReturnType wh_Autosar_KeyMarkInvalid(uint32 cryptoKeyId);
 void           wh_Autosar_KeyMarkValid(uint32 cryptoKeyId);
 boolean        wh_Autosar_KeyIsValid(uint32 cryptoKeyId);
+Std_ReturnType wh_Autosar_KeyIvGet(uint32 cryptoKeyId, const uint8** iv,
+                                   uint32* ivLen);
 
 Std_ReturnType wh_Autosar_KeyElementSetImpl(whClientContext* ctx,
                                             uint32           cryptoKeyId,
