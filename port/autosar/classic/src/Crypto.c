@@ -96,6 +96,8 @@ WH_AUTOSAR_WEAK void wh_Autosar_UnlockSlots(wh_AutosarDriverObject* obj)
 {
     (void)obj;
 }
+WH_AUTOSAR_WEAK void wh_Autosar_LockKeys(void) {}
+WH_AUTOSAR_WEAK void wh_Autosar_UnlockKeys(void) {}
 
 wh_AutosarDriverObject* wh_Autosar_GetDriverObject(uint32 objectId)
 {
@@ -198,8 +200,12 @@ Std_ReturnType Crypto_CancelJob(uint32 objectId, Crypto_JobType* job)
         return E_NOT_OK;
     }
     obj = wh_Autosar_GetDriverObject(objectId);
-    if (obj == NULL || !obj->initialised || job == NULL) {
+    if (obj == NULL || !obj->initialised) {
         CRYPTO_DET_REPORT(CRYPTO_CANCELJOB_SID, CRYPTO_E_PARAM_HANDLE);
+        return E_NOT_OK;
+    }
+    if (job == NULL) {
+        CRYPTO_DET_REPORT(CRYPTO_CANCELJOB_SID, CRYPTO_E_PARAM_POINTER);
         return E_NOT_OK;
     }
 
@@ -211,11 +217,11 @@ Std_ReturnType Crypto_CancelJob(uint32 objectId, Crypto_JobType* job)
         }
         switch (slot->state) {
             case WH_AUTOSAR_ASYNC_PENDING:
-                /* wolfHSM has no in-flight cancel primitive — flip the
-                 * state so MainFunction drains and discards the Response
-                 * without notifying CryIf. */
-                slot->state = WH_AUTOSAR_ASYNC_CANCELLING;
-                ret         = E_OK;
+                /* A blocking dispatch is already using the job buffers. */
+                if (!slot->blocking) {
+                    slot->state = WH_AUTOSAR_ASYNC_CANCELLING;
+                    ret         = E_OK;
+                }
                 break;
             case WH_AUTOSAR_ASYNC_QUEUED:
             case WH_AUTOSAR_ASYNC_COMPLETE:
@@ -229,10 +235,14 @@ Std_ReturnType Crypto_CancelJob(uint32 objectId, Crypto_JobType* job)
             default:
                 break;
         }
-        if (ret == E_OK) {
-            job->jobState = CRYPTO_JOBSTATE_IDLE;
-            break;
-        }
+        break;
+    }
+    if (i == CRYPTO_MAX_ASYNC_JOBS &&
+        wh_Autosar_HashStateCancel(obj, job->jobId)) {
+        ret = E_OK;
+    }
+    if (ret == E_OK) {
+        job->jobState = CRYPTO_JOBSTATE_IDLE;
     }
     wh_Autosar_UnlockSlots(obj);
     return ret;

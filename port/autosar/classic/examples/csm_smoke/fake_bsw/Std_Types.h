@@ -19,9 +19,7 @@
 /*
  * port/autosar/classic/examples/csm_smoke/fake_bsw/Std_Types.h
  *
- * Minimal AUTOSAR Std_Types.h sufficient to build the Crypto Driver
- * standalone in the csm_smoke harness. A real BSW project replaces this
- * with the vendor-supplied header. NOT part of the public port API.
+ * Minimal AUTOSAR Std_Types.h stub for csm_smoke.
  */
 
 #ifndef STD_TYPES_H_

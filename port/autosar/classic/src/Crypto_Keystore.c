@@ -19,16 +19,8 @@
 /*
  * port/autosar/classic/src/Crypto_Keystore.c
  *
- * Keystore client lookup and (cryptoKeyId, keyElementId) → whKeyId
- * mapping.
- *
- * AUTOSAR Crypto Keys are global to the driver (per SWS — keys live in
- * the driver, not in a Crypto Driver Object), so callers reach them
- * through a dedicated entry point rather than driver-object 0
- * directly. The default implementation aliases driver object 0's
- * client, which suits single-transport deployments. Integrators with
- * multi-client transports override wh_Autosar_KeystoreInit / Cleanup /
- * Client with strong definitions.
+ * Keystore client and Crypto Key to wolfHSM key id mapping. The defaults
+ * use driver object 0's client and are weak so integrators can replace them.
  */
 
 #include "wh_autosar_classic_internal.h"
@@ -66,16 +58,33 @@ static wh_AutosarDriverObject* clientOwner(const whClientContext* ctx)
     return NULL;
 }
 
+/* Serialises the keystore client when it belongs to no driver object. */
+static boolean s_keystoreBusy = FALSE;
+
 Std_ReturnType wh_Autosar_KeystoreBegin(whClientContext** outCtx)
 {
     whClientContext*        ctx = wh_Autosar_KeystoreClient();
     wh_AutosarDriverObject* obj;
+    Std_ReturnType          ret = E_OK;
 
     if (ctx == NULL) {
         return E_NOT_OK;
     }
     obj = clientOwner(ctx);
-    if (obj != NULL && wh_Autosar_WireAcquire(obj) != E_OK) {
+    if (obj != NULL) {
+        ret = wh_Autosar_WireAcquire(obj);
+    }
+    else {
+        wh_Autosar_LockKeys();
+        if (s_keystoreBusy) {
+            ret = CRYPTO_E_BUSY;
+        }
+        else {
+            s_keystoreBusy = TRUE;
+        }
+        wh_Autosar_UnlockKeys();
+    }
+    if (ret != E_OK) {
         return CRYPTO_E_BUSY;
     }
     *outCtx = ctx;
@@ -87,6 +96,11 @@ void wh_Autosar_KeystoreEnd(whClientContext* ctx)
     wh_AutosarDriverObject* obj = clientOwner(ctx);
     if (obj != NULL) {
         wh_Autosar_WireRelease(obj);
+    }
+    else {
+        wh_Autosar_LockKeys();
+        s_keystoreBusy = FALSE;
+        wh_Autosar_UnlockKeys();
     }
 }
 
@@ -101,39 +115,11 @@ void wh_Autosar_KeystoreEnd(whClientContext* ctx)
 #define WH_AUTOSAR_KEYID_FLAGS 0u
 #endif
 
-/* (cryptoKeyId, keyElementId) → 16-bit whKeyId.
- *
- * Packing:
- *   bits 15..10   reserved zero (server-side flags only)
- *   bit  9        WH_KEYID_CLIENT_WRAPPED_FLAG  (must stay 0 here)
- *   bit  8        WH_KEYID_CLIENT_GLOBAL_FLAG   (must stay 0 here)
- *   bits  7..0    cryptoKeyId (8 bits, supports 256 distinct keys)
- *
- * Only keyElementId == 1 (CRYPTO_KE_MATERIAL) gets a wolfHSM keystore
- * slot. The wire format reserves bits 8 and 9 for client-to-server
- * GLOBAL/WRAPPED flags (see wolfhsm/wh_keyid.h) and the server masks
- * everything else with WH_KEYID_MASK (0x00FF), so the previous scheme
- * that packed keyElementId into bits 11..8 silently re-routed every
- * material-key request to the global namespace under
- * WOLFHSM_CFG_GLOBAL_KEYS and discarded bits 10..11 entirely.
- *
- * Non-material elements (ALGORITHM / KEYSIZE / IV / ...) are AUTOSAR
- * metadata that ride on the CSM/CryIf side, not as separate wolfHSM
- * cache slots: the key material is the only thing the HSM holds.
- * cryptoKeyId > 255, keyElementId != 1, or cryptoKeyId == 0 return 0
- * (an invalid id which every wh_Client_* call rejects).
- *
- * Integrators needing more than 256 keys, or independent storage of
- * non-material elements, provide a strong override of this function
- * that consults a richer mapping (typically a generator-emitted lookup
- * table indexed by (cryptoKeyId, keyElementId)).
- */
 WH_AUTOSAR_WEAK whKeyId wh_Autosar_ComposeKeyId(uint32 cryptoKeyId,
                                                 uint32 keyElementId)
 {
     if (cryptoKeyId == 0u || cryptoKeyId > 0xFFu || keyElementId != 1u) {
         return (whKeyId)0u;
     }
-    return (whKeyId)WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, /*user*/ 0u,
-                                  (uint16)(cryptoKeyId & 0xFFu));
+    return (whKeyId)((cryptoKeyId & WH_KEYID_MASK) | WH_AUTOSAR_KEYID_FLAGS);
 }

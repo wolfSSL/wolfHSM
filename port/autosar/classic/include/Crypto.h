@@ -88,11 +88,10 @@ void Crypto_Init(const Crypto_ConfigType* configPtr);
 /** Fills in the module's Std_VersionInfoType. */
 void Crypto_GetVersionInfo(Std_VersionInfoType* versionInfo);
 
-/** Crypto_ProcessJob — submit a job to the given driver object. May block
- *  (sync) or queue (async); see Crypto_JobPrimitiveInfoType.processingType. */
+/** Runs a sync job or queues an async job on the given driver object. */
 Std_ReturnType Crypto_ProcessJob(uint32 objectId, Crypto_JobType* job);
 
-/** Crypto_CancelJob — request cancellation of a queued/running job. */
+/** Cancels a queued or running job. */
 Std_ReturnType Crypto_CancelJob(uint32 objectId, Crypto_JobType* job);
 
 /** Writes a key element value into a Crypto Key. */
@@ -103,7 +102,7 @@ Std_ReturnType Crypto_KeyElementSet(uint32 cryptoKeyId, uint32 keyElementId,
 Std_ReturnType Crypto_KeyElementGet(uint32 cryptoKeyId, uint32 keyElementId,
                                     uint8* result, uint32* resultLength);
 
-/** Crypto_KeyElementCopy — copy a key element between Crypto Keys. */
+/** Copies a key element between Crypto Keys. */
 Std_ReturnType Crypto_KeyElementCopy(uint32 cryptoKeyId, uint32 keyElementId,
                                      uint32 targetCryptoKeyId,
                                      uint32 targetKeyElementId);
@@ -111,13 +110,13 @@ Std_ReturnType Crypto_KeyElementCopy(uint32 cryptoKeyId, uint32 keyElementId,
 /** Copies all elements between Crypto Keys. */
 Std_ReturnType Crypto_KeyCopy(uint32 cryptoKeyId, uint32 targetCryptoKeyId);
 
-/** Crypto_KeyElementCopyPartial — copy part of a key element into another. */
+/** Copies part of a key element into another. */
 Std_ReturnType Crypto_KeyElementCopyPartial(
     uint32 cryptoKeyId, uint32 keyElementId, uint32 keyElementSourceOffset,
     uint32 keyElementTargetOffset, uint32 keyElementCopyLength,
     uint32 targetCryptoKeyId, uint32 targetKeyElementId);
 
-/** Crypto_KeyElementIdsGet — list the element ids a Crypto Key holds. */
+/** Lists the element ids a Crypto Key holds. */
 Std_ReturnType Crypto_KeyElementIdsGet(uint32  cryptoKeyId,
                                        uint32* keyElementIdsPtr,
                                        uint32* keyElementIdsLengthPtr);
@@ -152,8 +151,7 @@ Std_ReturnType Crypto_KeyExchangeCalcSecret(uint32       cryptoKeyId,
 Std_ReturnType Crypto_RandomSeed(uint32 cryptoKeyId, const uint8* seedPtr,
                                  uint32 seedLength);
 
-/** Crypto_MainFunction — drives async job state machines and dispatches
- *  CryIf_CallbackNotification on completion. Called from a BSW OS task. */
+/** Advances async jobs and calls CryIf_CallbackNotification on completion. */
 void Crypto_MainFunction(void);
 
 #ifdef __cplusplus

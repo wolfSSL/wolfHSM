@@ -19,10 +19,7 @@
 /*
  * port/autosar/classic/src/Crypto_KeyGen.c
  *
- * Crypto_KeyGenerate dispatches by the algorithm metadata in the
- * Crypto_KeyDescriptorType for the target Crypto Key. The descriptor
- * table is supplied by the integrator via Crypto_PBcfg (generator
- * output in a real BSW project).
+ * Crypto_KeyGenerate, dispatched by the target key's descriptor.
  */
 
 #include "Crypto.h"
@@ -56,75 +53,67 @@ Std_ReturnType wh_Autosar_KeyGenerateImpl(whClientContext* ctx,
 {
     const Crypto_KeyDescriptorType* desc =
         wh_Autosar_LookupKeyDescriptor(cryptoKeyId);
-    whKeyId outId                   = wh_Autosar_ComposeKeyId(cryptoKeyId, 1u);
-    uint8   label[WH_NVM_LABEL_LEN] = {0};
-    int     rc                      = WH_ERROR_NOTIMPL;
+    whKeyId    outId = wh_Autosar_ComposeKeyId(cryptoKeyId, 1u);
+    uint8      label[WH_NVM_LABEL_LEN] = {0};
+    int        rc                      = WH_ERROR_NOTIMPL;
+    whNvmFlags flags;
 
     if (desc == NULL || outId == 0u) {
         return E_NOT_OK;
     }
-    if (wh_Autosar_KeyMarkInvalid(cryptoKeyId) != E_OK) {
-        return E_NOT_OK;
+    if (wh_Autosar_KeyMarkWritten(cryptoKeyId) != E_OK) {
+        return CRYPTO_E_KEY_WRITE_FAIL;
     }
+    flags = wh_Autosar_KeyFlags(cryptoKeyId);
 
 #ifdef WOLFHSM_CFG_NO_CRYPTO
     (void)ctx;
     (void)label;
+    (void)flags;
 #else
     switch (desc->family) {
 #ifdef HAVE_ECC
         case CRYPTO_ALGOFAM_ECCNIST:
         case CRYPTO_ALGOFAM_ECDH:
             rc = wh_Client_EccMakeCacheKey(ctx, (int)(desc->keyLength / 8u),
-                                           desc->eccCurveId, &outId,
-                                           (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
+                                           desc->eccCurveId, &outId, flags,
                                            (uint16)sizeof(label), label);
             break;
 #endif
 #ifdef HAVE_ED25519
         case CRYPTO_ALGOFAM_ED25519:
-            rc = wh_Client_Ed25519MakeCacheKey(
-                ctx, &outId, (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
-                (uint16)sizeof(label), label);
+            rc = wh_Client_Ed25519MakeCacheKey(ctx, &outId, flags,
+                                               (uint16)sizeof(label), label);
             break;
 #endif
 #ifdef HAVE_CURVE25519
         case CRYPTO_ALGOFAM_X25519:
             rc = wh_Client_Curve25519MakeCacheKey(
-                ctx, (uint16)(desc->keyLength / 8u), &outId,
-                (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY, label,
+                ctx, (uint16)(desc->keyLength / 8u), &outId, flags, label,
                 (uint16)sizeof(label));
             break;
 #endif
 #if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
         case CRYPTO_ALGOFAM_RSA:
             rc = wh_Client_RsaMakeCacheKey(ctx, desc->keyLength, 65537u, &outId,
-                                           (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
-                                           (uint32)sizeof(label), label);
+                                           flags, (uint32)sizeof(label), label);
             break;
 #endif
 #ifdef WOLFSSL_HAVE_MLDSA
         case WH_AUTOSAR_ALGOFAM_MLDSA:
             rc = wh_Client_MlDsaMakeCacheKey(ctx, 0, desc->mlDsaLevel, &outId,
-                                             (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
-                                             (uint16)sizeof(label), label);
+                                             flags, (uint16)sizeof(label),
+                                             label);
             break;
 #endif
-        case CRYPTO_ALGOFAM_AES: {
-            uint8  mat[64];
-            uint32 keyBytes = desc->keyLength / 8u;
-            if (keyBytes == 0u || keyBytes > sizeof(mat)) {
+        case CRYPTO_ALGOFAM_AES:
+            if (desc->keyLength == 0u || desc->keyLength > 512u) {
                 return E_NOT_OK;
             }
-            rc = wh_Client_RngGenerate(ctx, mat, keyBytes);
-            if (rc == WH_ERROR_OK) {
-                rc = wh_Client_KeyCache(ctx, (uint32)WH_NVM_FLAGS_USAGE_ANY,
-                                        label, (uint16)sizeof(label), mat,
-                                        (uint16)keyBytes, &outId);
-            }
-            wh_Utils_ForceZero(mat, sizeof(mat));
+            rc = wh_Client_KeyCacheRandom(
+                ctx, (uint32)flags, label, (uint16)sizeof(label),
+                (uint16)(desc->keyLength / 8u), &outId);
             break;
-        }
         default:
             rc = WH_ERROR_NOTIMPL;
             break;

@@ -48,8 +48,11 @@ Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
     if (!wh_Autosar_KeyIsValid(cryptoKeyId)) {
         return CRYPTO_E_KEY_NOT_VALID;
     }
-    if (wh_Autosar_KeyMarkInvalid(targetCryptoKeyId) != E_OK) {
-        return E_NOT_OK;
+    if (wh_Autosar_KeySaltGet(cryptoKeyId, salt, &saltLen) != E_OK) {
+        saltLen = 0u;
+    }
+    if (wh_Autosar_KeyMarkWritten(targetCryptoKeyId) != E_OK) {
+        return CRYPTO_E_KEY_WRITE_FAIL;
     }
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
@@ -57,8 +60,10 @@ Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
 #ifdef HAVE_HKDF
         case CRYPTO_ALGOFAM_HKDF:
             rc = wh_Client_HkdfMakeCacheKey(
-                ctx, tgt->hashType, srcId, NULL, 0u, NULL, 0u, NULL, 0u, &dstId,
-                0u, label, (uint32)sizeof(label), tgt->keyLength / 8u);
+                ctx, tgt->hashType, srcId, NULL, 0u,
+                (saltLen != 0u) ? salt : NULL, saltLen, NULL, 0u, &dstId,
+                wh_Autosar_KeyFlags(targetCryptoKeyId), label,
+                (uint32)sizeof(label), tgt->keyLength / 8u);
             break;
 #endif
 #ifdef HAVE_CMAC_KDF
@@ -68,8 +73,9 @@ Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
                 saltLen = AES_128_KEY_SIZE;
             }
             rc = wh_Client_CmacKdfMakeCacheKey(
-                ctx, srcId, NULL, 0u, srcId, NULL, 0u, NULL, 0u, &dstId, 0u,
-                label, (uint32)sizeof(label), tgt->keyLength / 8u);
+                ctx, WH_KEYID_ERASED, salt, saltLen, srcId, NULL, 0u, NULL, 0u,
+                &dstId, wh_Autosar_KeyFlags(targetCryptoKeyId), label,
+                (uint32)sizeof(label), tgt->keyLength / 8u);
             break;
 #endif
         default:

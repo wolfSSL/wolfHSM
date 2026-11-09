@@ -27,7 +27,6 @@
 
 #include <stdint.h>
 
-#include "wolfhsm/wh_keyid.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -125,14 +124,6 @@ typedef enum {
 int wh_AutosarMap_OpKind(uint32_t service, uint32_t family, uint32_t mode,
                          uint32_t secondaryFamily, wh_AutosarOpKind* outOp);
 
-/*
- * AUTOSAR uses a 32-bit cryptoKeyId. wolfHSM uses a 16-bit whKeyId. We pack
- * the wolfHSM type/user/id into the low 16 bits and reserve the upper 16
- * bits for AUTOSAR-side bookkeeping (driver object, validity bit). The
- * mapping is reversible.
- */
-whKeyId  wh_AutosarMap_KeyIdToWh(uint32_t autosarKeyId);
-uint32_t wh_AutosarMap_KeyIdFromWh(whKeyId whId);
 
 #ifdef __cplusplus
 } /* extern "C" */

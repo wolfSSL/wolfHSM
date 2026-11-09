@@ -75,13 +75,17 @@ static Std_ReturnType runJob(Crypto_JobType* job)
 }
 
 static int aesBlock(Crypto_ServiceInfoType svc, Crypto_AlgorithmModeType mode,
-                    Crypto_ProcessingType pt, const uint8* in, uint8* out)
+                    Crypto_ProcessingType pt, const uint8* iv, const uint8* in,
+                    uint8* out)
 {
     uint32                      outLen = 16u;
     Crypto_PrimitiveInfoType    pi;
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
 
+    if (iv != NULL && Crypto_KeyElementSet(CIPHER_KEY, 5u, iv, 16u) != E_OK) {
+        return 1;
+    }
     testBuildJob(&job, &jpi, &pi, svc, CRYPTO_ALGOFAM_AES, mode, CIPHER_KEY, pt,
                  7700u);
     job.jobPrimitiveInputOutput.inputPtr        = in;
@@ -105,13 +109,13 @@ static int modeKat(Crypto_AlgorithmModeType mode, const uint8* iv,
         return 1;
     }
     for (i = 0; i < 2; ++i) {
-        if (aesBlock(CRYPTO_ENCRYPT, mode, pts[i], kPt, out) != 0 ||
+        if (aesBlock(CRYPTO_ENCRYPT, mode, pts[i], iv, kPt, out) != 0 ||
             memcmp(out, ct, 16) != 0) {
             fprintf(stderr, "  aes-%s: %s encrypt\n", name,
                     i ? "async" : "sync");
             return 1;
         }
-        if (aesBlock(CRYPTO_DECRYPT, mode, pts[i], ct, back) != 0 ||
+        if (aesBlock(CRYPTO_DECRYPT, mode, pts[i], iv, ct, back) != 0 ||
             memcmp(back, kPt, 16) != 0) {
             fprintf(stderr, "  aes-%s: %s decrypt\n", name,
                     i ? "async" : "sync");
@@ -145,6 +149,9 @@ static int testAesModes(void)
 }
 
 #ifdef HAVE_AESGCM
+static const uint8 kNonce[12] = {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                                 0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88};
+
 static int gcmJob(Crypto_ServiceInfoType svc, Crypto_ProcessingType pt,
                   const uint8* in, const uint8* aad, uint32 aadLen, uint8* tag,
                   uint32* tagLen, uint8* out, Crypto_VerifyResultType* ver,
@@ -155,6 +162,9 @@ static int gcmJob(Crypto_ServiceInfoType svc, Crypto_ProcessingType pt,
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
 
+    if (Crypto_KeyElementSet(CIPHER_KEY, 5u, kNonce, sizeof(kNonce)) != E_OK) {
+        return 1;
+    }
     testBuildJob(&job, &jpi, &pi, svc, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_GCM,
                  CIPHER_KEY, pt, 7710u);
     job.jobPrimitiveInputOutput.inputPtr             = in;
@@ -178,9 +188,7 @@ static int gcmJob(Crypto_ServiceInfoType svc, Crypto_ProcessingType pt,
 
 static int testAesGcmBody(void)
 {
-    static const uint8 nonce[12] = {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
-                                    0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88};
-    static const uint8 aad[20]   = {0xfe, 0xed, 0xfa, 0xce, 0xde};
+    static const uint8 aad[20] = {0xfe, 0xed, 0xfa, 0xce, 0xde};
     uint8              pt[32];
     uint8              ct[32], swCt[32], back[32];
     uint8              tag[16], swTag[16];
@@ -191,13 +199,13 @@ static int testAesGcmBody(void)
 
     for (i = 0; i < 32; ++i)
         pt[i] = (uint8)(i * 3 + 1);
-    if (installKey(nonce, sizeof(nonce)) != 0 ||
+    if (installKey(NULL, 0u) != 0 ||
         wc_AesInit(&sw, NULL, INVALID_DEVID) != 0) {
         return 1;
     }
     if (wc_AesGcmSetKey(&sw, kKey, sizeof(kKey)) != 0 ||
-        wc_AesGcmEncrypt(&sw, swCt, pt, sizeof(pt), nonce, sizeof(nonce), swTag,
-                         sizeof(swTag), aad, sizeof(aad)) != 0) {
+        wc_AesGcmEncrypt(&sw, swCt, pt, sizeof(pt), kNonce, sizeof(kNonce),
+                         swTag, sizeof(swTag), aad, sizeof(aad)) != 0) {
         wc_AesFree(&sw);
         return 1;
     }
@@ -246,7 +254,11 @@ static int testAesGcm(void)
 
 static int testKeyCopyBody(void)
 {
-    uint8 out[16];
+    uint8                       out[16];
+    uint32                      outLen = 16u;
+    Crypto_PrimitiveInfoType    pi;
+    Crypto_JobPrimitiveInfoType jpi;
+    Crypto_JobType              job;
 
     if (installKey(kCbcIv, 16u) != 0 ||
         Crypto_KeyCopy(CIPHER_KEY, CIPHER_KEY + 1u) != E_OK ||
@@ -255,24 +267,16 @@ static int testKeyCopyBody(void)
         fprintf(stderr, "  keycopy: KeyCopy\n");
         return 1;
     }
-    {
-        Crypto_PrimitiveInfoType    pi;
-        Crypto_JobPrimitiveInfoType jpi;
-        Crypto_JobType              job;
-        uint32                      outLen = 16u;
-
-        testBuildJob(&job, &jpi, &pi, CRYPTO_ENCRYPT, CRYPTO_ALGOFAM_AES,
-                     CRYPTO_ALGOMODE_CBC, CIPHER_KEY + 1u,
-                     CRYPTO_PROCESSING_SYNC, 7720u);
-        job.jobPrimitiveInputOutput.inputPtr        = kPt;
-        job.jobPrimitiveInputOutput.inputLength     = 16u;
-        job.jobPrimitiveInputOutput.outputPtr       = out;
-        job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
-        if (testCryIfProcessJob(0u, &job) != E_OK ||
-            memcmp(out, kCbcCt, 16) != 0) {
-            fprintf(stderr, "  keycopy: copied key gives wrong ciphertext\n");
-            return 1;
-        }
+    testBuildJob(&job, &jpi, &pi, CRYPTO_ENCRYPT, CRYPTO_ALGOFAM_AES,
+                 CRYPTO_ALGOMODE_CBC, CIPHER_KEY + 1u, CRYPTO_PROCESSING_SYNC,
+                 7720u);
+    job.jobPrimitiveInputOutput.inputPtr        = kPt;
+    job.jobPrimitiveInputOutput.inputLength     = 16u;
+    job.jobPrimitiveInputOutput.outputPtr       = out;
+    job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
+    if (testCryIfProcessJob(0u, &job) != E_OK || memcmp(out, kCbcCt, 16) != 0) {
+        fprintf(stderr, "  keycopy: copied key gives wrong ciphertext\n");
+        return 1;
     }
     printf("  keycopy: copied AES key encrypts like the source\n");
     return 0;
@@ -286,7 +290,7 @@ static int testKeyCopy(void)
 
 #if defined(WOLFSSL_SHA384) && defined(WOLFSSL_SHA512)
 static int multiCallHash(Crypto_AlgorithmFamilyType fam, uint32 dLenWant,
-                         const uint8* want)
+                         const uint8* want, Crypto_ProcessingType pt)
 {
     static const uint8          msg[] = "abc";
     uint8                       digest[64];
@@ -297,22 +301,22 @@ static int multiCallHash(Crypto_AlgorithmFamilyType fam, uint32 dLenWant,
     uint32                      i;
 
     testBuildJob(&job, &jpi, &pi, CRYPTO_HASH, fam, CRYPTO_ALGOMODE_NOT_SET, 0u,
-                 CRYPTO_PROCESSING_SYNC, 7730u);
+                 pt, 7730u);
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode            = CRYPTO_OPERATIONMODE_START;
-    if (testCryIfProcessJob(0u, &job) != E_OK)
+    if (runJob(&job) != E_OK)
         return 1;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_UPDATE;
     for (i = 0; i < 3u; ++i) {
         job.jobPrimitiveInputOutput.inputPtr    = msg + i;
         job.jobPrimitiveInputOutput.inputLength = 1u;
-        if (testCryIfProcessJob(0u, &job) != E_OK)
+        if (runJob(&job) != E_OK)
             return 1;
     }
     job.jobPrimitiveInputOutput.mode        = CRYPTO_OPERATIONMODE_FINISH;
     job.jobPrimitiveInputOutput.inputLength = 0u;
-    if (testCryIfProcessJob(0u, &job) != E_OK)
+    if (runJob(&job) != E_OK)
         return 1;
     return (dLen == dLenWant && memcmp(digest, want, dLenWant) == 0) ? 0 : 1;
 }
@@ -325,12 +329,14 @@ static int testHashMultiCall384512(void)
         wc_Sha512Hash((const byte*)"abc", 3, want512) != 0) {
         return 1;
     }
-    if (multiCallHash(CRYPTO_ALGOFAM_SHA2_384, 48u, want384) != 0 ||
-        multiCallHash(CRYPTO_ALGOFAM_SHA2_512, 64u, want512) != 0) {
+    if (multiCallHash(CRYPTO_ALGOFAM_SHA2_384, 48u, want384,
+                      CRYPTO_PROCESSING_SYNC) != 0 ||
+        multiCallHash(CRYPTO_ALGOFAM_SHA2_512, 64u, want512,
+                      CRYPTO_PROCESSING_ASYNC) != 0) {
         fprintf(stderr, "  hash: multi-call SHA-384/512\n");
         return 1;
     }
-    printf("  hash: SHA-384/512 START/UPDATE/FINISH OK\n");
+    printf("  hash: SHA-384 sync + SHA-512 async START/UPDATE/FINISH OK\n");
     return 0;
 }
 #endif

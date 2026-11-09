@@ -24,6 +24,10 @@
 
 #include "wolfhsm/ara_crypto/crypto_provider.hpp"
 
+#ifdef WOLFHSM_CFG_NO_CRYPTO
+#error "The Adaptive CryptoProvider needs wolfCrypt (WOLFHSM_CFG_NO_CRYPTO)"
+#endif
+
 #include "wh_autosar_safe_compare.h"
 
 #include <cstring>
@@ -36,7 +40,6 @@ extern "C" {
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_utils.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/sha256.h"
 #ifdef WOLFSSL_SHA384
 #include "wolfssl/wolfcrypt/sha512.h"
@@ -59,7 +62,6 @@ extern "C" {
 #include "wolfssl/wolfcrypt/wc_mldsa.h"
 #endif
 #include "wolfssl/wolfcrypt/hash.h"
-#endif
 }
 
 namespace wolfhsm {
@@ -91,6 +93,9 @@ Result<ByteVector> RandomGeneratorCtx::Generate(std::size_t count)
     if (client_ == nullptr || count == 0u) {
         return SecurityErrc::kInvalidArgument;
     }
+    if (!FitsU32(count)) {
+        return SecurityErrc::kInvalidInputSize;
+    }
     ByteVector out(count);
     int        rc = wh_Client_RngGenerate(client_, out.data(),
                                           static_cast<std::uint32_t>(count));
@@ -103,7 +108,6 @@ Result<ByteVector> RandomGeneratorCtx::Generate(std::size_t count)
 HashFunctionCtx::HashFunctionCtx(whClientContext* client, CryptoAlgId algId)
     : client_(client), alg_(algId), started_(false)
 {
-#ifndef WOLFHSM_CFG_NO_CRYPTO
     static_assert(sizeof(wc_Sha256) <= sizeof(state_),
                   "HashFunctionCtx::state_ too small for wc_Sha256");
 #ifdef WOLFSSL_SHA384
@@ -114,39 +118,37 @@ HashFunctionCtx::HashFunctionCtx(whClientContext* client, CryptoAlgId algId)
     static_assert(sizeof(wc_Sha512) <= sizeof(state_),
                   "HashFunctionCtx::state_ too small for wc_Sha512");
 #endif
-#endif
     std::memset(state_, 0, sizeof(state_));
 }
 
-HashFunctionCtx::~HashFunctionCtx()
+static void FreeShaState(CryptoAlgId alg, std::uint8_t* state)
 {
-#ifndef WOLFHSM_CFG_NO_CRYPTO
-    if (started_) {
-        if (alg_ == AlgId::kSha256) {
-            wc_Sha256Free(reinterpret_cast<wc_Sha256*>(state_));
-        }
+    if (alg == AlgId::kSha256) {
+        wc_Sha256Free(reinterpret_cast<wc_Sha256*>(state));
+    }
 #ifdef WOLFSSL_SHA384
-        else if (alg_ == AlgId::kSha384) {
-            wc_Sha384Free(reinterpret_cast<wc_Sha384*>(state_));
-        }
+    else if (alg == AlgId::kSha384) {
+        wc_Sha384Free(reinterpret_cast<wc_Sha384*>(state));
+    }
 #endif
 #ifdef WOLFSSL_SHA512
-        else if (alg_ == AlgId::kSha512) {
-            wc_Sha512Free(reinterpret_cast<wc_Sha512*>(state_));
-        }
-#endif
+    else if (alg == AlgId::kSha512) {
+        wc_Sha512Free(reinterpret_cast<wc_Sha512*>(state));
     }
 #endif
 }
 
+HashFunctionCtx::~HashFunctionCtx()
+{
+    if (started_) {
+        FreeShaState(alg_, state_);
+    }
+    wh_Utils_ForceZero(state_, sizeof(state_));
+}
+
 Result<void> HashFunctionCtx::Start()
 {
-#ifdef WOLFHSM_CFG_NO_CRYPTO
-    return SecurityErrc::kRuntimeFault;
-#else
     int rc = WH_ERROR_NOTIMPL;
-    /* Size of state_ is checked at class scope via static_assert in the
-     * constructor; no need to repeat it here. */
     if (alg_ == AlgId::kSha256) {
         rc = wc_InitSha256_ex(reinterpret_cast<wc_Sha256*>(state_), nullptr,
                               WH_CLIENT_DEVID(client_));
@@ -168,25 +170,26 @@ Result<void> HashFunctionCtx::Start()
     }
     started_ = true;
     return Result<void>();
-#endif
 }
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
 /* Halve on WH_ERROR_REQUEST_SIZE until the client accepts the chunk. */
-static int oneSha256Chunk(whClientContext* c, wc_Sha256* s,
-                          const std::uint8_t* in, std::uint32_t want,
-                          bool* outSent, std::uint32_t* outAccepted)
+template <typename S>
+static int
+oneShaChunk(whClientContext* c, S* s, const std::uint8_t* in,
+            std::uint32_t want, bool* outSent, std::uint32_t* outAccepted,
+            int (*req)(whClientContext*, S*, const uint8_t*, uint32_t, bool*),
+            int (*res)(whClientContext*, S*))
 {
     int rc       = WH_ERROR_BADARGS;
     *outSent     = false;
     *outAccepted = 0u;
     while (want > 0u) {
         bool sent = false;
-        rc        = wh_Client_Sha256UpdateRequest(c, s, in, want, &sent);
+        rc        = req(c, s, in, want, &sent);
         if (rc == WH_ERROR_OK) {
             if (sent) {
                 do {
-                    rc = wh_Client_Sha256UpdateResponse(c, s);
+                    rc = res(c, s);
                 } while (rc == WH_ERROR_NOTREADY);
             }
             *outSent     = sent;
@@ -199,63 +202,6 @@ static int oneSha256Chunk(whClientContext* c, wc_Sha256* s,
     }
     return rc;
 }
-#ifdef WOLFSSL_SHA384
-static int oneSha384Chunk(whClientContext* c, wc_Sha384* s,
-                          const std::uint8_t* in, std::uint32_t want,
-                          bool* outSent, std::uint32_t* outAccepted)
-{
-    int rc       = WH_ERROR_BADARGS;
-    *outSent     = false;
-    *outAccepted = 0u;
-    while (want > 0u) {
-        bool sent = false;
-        rc        = wh_Client_Sha384UpdateRequest(c, s, in, want, &sent);
-        if (rc == WH_ERROR_OK) {
-            if (sent) {
-                do {
-                    rc = wh_Client_Sha384UpdateResponse(c, s);
-                } while (rc == WH_ERROR_NOTREADY);
-            }
-            *outSent     = sent;
-            *outAccepted = want;
-            return rc;
-        }
-        if (rc != WH_ERROR_REQUEST_SIZE)
-            return rc;
-        want /= 2u;
-    }
-    return rc;
-}
-#endif
-#ifdef WOLFSSL_SHA512
-static int oneSha512Chunk(whClientContext* c, wc_Sha512* s,
-                          const std::uint8_t* in, std::uint32_t want,
-                          bool* outSent, std::uint32_t* outAccepted)
-{
-    int rc       = WH_ERROR_BADARGS;
-    *outSent     = false;
-    *outAccepted = 0u;
-    while (want > 0u) {
-        bool sent = false;
-        rc        = wh_Client_Sha512UpdateRequest(c, s, in, want, &sent);
-        if (rc == WH_ERROR_OK) {
-            if (sent) {
-                do {
-                    rc = wh_Client_Sha512UpdateResponse(c, s);
-                } while (rc == WH_ERROR_NOTREADY);
-            }
-            *outSent     = sent;
-            *outAccepted = want;
-            return rc;
-        }
-        if (rc != WH_ERROR_REQUEST_SIZE)
-            return rc;
-        want /= 2u;
-    }
-    return rc;
-}
-#endif
-#endif
 
 Result<void> HashFunctionCtx::Update(const std::uint8_t* data, std::size_t size)
 {
@@ -268,13 +214,9 @@ Result<void> HashFunctionCtx::Update(const std::uint8_t* data, std::size_t size)
     if (data == nullptr) {
         return SecurityErrc::kInvalidArgument;
     }
-#ifdef WOLFHSM_CFG_NO_CRYPTO
-    return SecurityErrc::kRuntimeFault;
-#else
-    /* Chunk the input across as many Sha*UpdateRequest cycles as the
-     * wolfHSM client's per-call inline capacity demands. Without this
-     * loop, any payload exceeding the comm buffer slack returns
-     * BADARGS and the hash silently fails. */
+    if (!FitsU32(size)) {
+        return SecurityErrc::kInvalidInputSize;
+    }
     std::uint32_t       remaining = static_cast<std::uint32_t>(size);
     const std::uint8_t* p         = data;
     int                 rc        = WH_ERROR_OK;
@@ -282,19 +224,25 @@ Result<void> HashFunctionCtx::Update(const std::uint8_t* data, std::size_t size)
         std::uint32_t accepted = 0u;
         bool          sent     = false;
         if (alg_ == AlgId::kSha256) {
-            rc = oneSha256Chunk(client_, reinterpret_cast<wc_Sha256*>(state_),
-                                p, remaining, &sent, &accepted);
+            rc = oneShaChunk(client_, reinterpret_cast<wc_Sha256*>(state_), p,
+                             remaining, &sent, &accepted,
+                             wh_Client_Sha256UpdateRequest,
+                             wh_Client_Sha256UpdateResponse);
         }
 #ifdef WOLFSSL_SHA384
         else if (alg_ == AlgId::kSha384) {
-            rc = oneSha384Chunk(client_, reinterpret_cast<wc_Sha384*>(state_),
-                                p, remaining, &sent, &accepted);
+            rc = oneShaChunk(client_, reinterpret_cast<wc_Sha384*>(state_), p,
+                             remaining, &sent, &accepted,
+                             wh_Client_Sha384UpdateRequest,
+                             wh_Client_Sha384UpdateResponse);
         }
 #endif
 #ifdef WOLFSSL_SHA512
         else if (alg_ == AlgId::kSha512) {
-            rc = oneSha512Chunk(client_, reinterpret_cast<wc_Sha512*>(state_),
-                                p, remaining, &sent, &accepted);
+            rc = oneShaChunk(client_, reinterpret_cast<wc_Sha512*>(state_), p,
+                             remaining, &sent, &accepted,
+                             wh_Client_Sha512UpdateRequest,
+                             wh_Client_Sha512UpdateResponse);
         }
 #endif
         else {
@@ -308,7 +256,6 @@ Result<void> HashFunctionCtx::Update(const std::uint8_t* data, std::size_t size)
     }
     (void)rc;
     return Result<void>();
-#endif
 }
 
 Result<ByteVector> HashFunctionCtx::Finish()
@@ -316,9 +263,6 @@ Result<ByteVector> HashFunctionCtx::Finish()
     if (!started_) {
         return SecurityErrc::kProcessingNotStarted;
     }
-#ifdef WOLFHSM_CFG_NO_CRYPTO
-    return SecurityErrc::kRuntimeFault;
-#else
     int        rc = WH_ERROR_NOTIMPL;
     ByteVector out;
 
@@ -360,26 +304,21 @@ Result<ByteVector> HashFunctionCtx::Finish()
     }
 #endif
 
-    started_ = false; /* wolfCrypt resets state in FinalResponse */
+    FreeShaState(alg_, state_);
+    wh_Utils_ForceZero(state_, sizeof(state_));
+    started_ = false;
     if (rc != WH_ERROR_OK) {
         return SecurityErrc::kRuntimeFault;
     }
     return Result<ByteVector>(std::move(out));
-#endif
 }
 
-/* -------------------------------------------------------------------
- * Helpers shared by the new contexts.
- * ------------------------------------------------------------------- */
-
-/* isVerifyRejection / wh_Autosar_ConstantCompare are defined in the
- * shared header port/autosar/common/include/wh_autosar_safe_compare.h
- * (included via crypto_provider.cpp's include block). One copy each
- * across the port; both Classic and Adaptive link against it. */
-
-/* ---------------- SymmetricBlockCipherCtx --------------------------- */
-
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+/* Plain client key ids only: no global, wrapped or hardware flag bits. */
+static bool KeyIdOk(KeyId keyId)
+{
+    return !WH_KEYID_ISERASED(keyId) &&
+           (keyId & WH_CLIENT_KEYID_FLAGS_MASK) == 0u;
+}
 
 SymmetricBlockCipherCtx::SymmetricBlockCipherCtx(whClientContext* client,
                                                  CryptoAlgId algId, KeyId keyId,
@@ -422,20 +361,21 @@ Result<ByteVector> SymmetricBlockCipherCtx::ProcessBlocks(
     rc = WH_ERROR_NOTIMPL;
     if (alg_ == AlgId::kAesCbc) {
 #ifdef HAVE_AES_CBC
-        rc = wh_Client_AesCbc(client_, &aes, encrypt ? 1 : 0, in, inLen,
-                              out.data());
+        rc = wh_Client_AesCbc(client_, &aes, encrypt ? 1 : 0, in,
+                              static_cast<std::uint32_t>(inLen), out.data());
 #endif
     }
     else if (alg_ == AlgId::kAesCtr) {
 #ifdef WOLFSSL_AES_COUNTER
         /* CTR is symmetric; the server mis-keys enc=0. */
-        rc = wh_Client_AesCtr(client_, &aes, 1, in, inLen, out.data());
+        rc = wh_Client_AesCtr(client_, &aes, 1, in,
+                              static_cast<std::uint32_t>(inLen), out.data());
 #endif
     }
     else if (alg_ == AlgId::kAesEcb) {
 #ifdef HAVE_AES_ECB
-        rc = wh_Client_AesEcb(client_, &aes, encrypt ? 1 : 0, in, inLen,
-                              out.data());
+        rc = wh_Client_AesEcb(client_, &aes, encrypt ? 1 : 0, in,
+                              static_cast<std::uint32_t>(inLen), out.data());
 #endif
     }
     wc_AesFree(&aes);
@@ -472,6 +412,10 @@ AuthCipherCtx::ProcessEncrypt(const std::uint8_t* iv, std::size_t ivLen,
 #else
     if (client_ == nullptr || iv == nullptr || pt == nullptr || tagLen > 16u) {
         return SecurityErrc::kInvalidArgument;
+    }
+    if (tagLen < kMinTagLen || !FitsU32(ivLen) || !FitsU32(aadLen) ||
+        !FitsU32(ptLen)) {
+        return SecurityErrc::kInvalidInputSize;
     }
     Aes aes;
     int rc = wc_AesInit(&aes, nullptr, WH_CLIENT_DEVID(client_));
@@ -520,6 +464,10 @@ AuthCipherCtx::ProcessDecrypt(const std::uint8_t* iv, std::size_t ivLen,
         tag == nullptr || tagLen > 16u) {
         return SecurityErrc::kInvalidArgument;
     }
+    if (tagLen < kMinTagLen || !FitsU32(ivLen) || !FitsU32(aadLen) ||
+        !FitsU32(ctLen)) {
+        return SecurityErrc::kInvalidInputSize;
+    }
     Aes aes;
     int rc = wc_AesInit(&aes, nullptr, WH_CLIENT_DEVID(client_));
     if (rc != 0)
@@ -551,29 +499,46 @@ MessageAuthnCodeCtx::MessageAuthnCodeCtx(whClientContext* client, KeyId keyId)
 {
 }
 
-Result<ByteVector> MessageAuthnCodeCtx::Generate(const std::uint8_t* in,
-                                                 std::size_t         inLen)
+SecurityErrc MessageAuthnCodeCtx::ComputeMac(const std::uint8_t* in,
+                                             std::size_t         inLen,
+                                             std::uint8_t (&mac)[kMacLen])
 {
 #ifndef WOLFSSL_CMAC
     (void)in;
     (void)inLen;
+    (void)mac;
     return SecurityErrc::kRuntimeFault;
 #else
-    if (client_ == nullptr)
+    if (client_ == nullptr || (in == nullptr && inLen != 0u))
         return SecurityErrc::kInvalidArgument;
+    if (!FitsU32(inLen))
+        return SecurityErrc::kInvalidInputSize;
     Cmac cmac;
     std::memset(&cmac, 0, sizeof(cmac));
-    int rc = wh_Client_CmacSetKeyId(&cmac, keyId_);
-    if (rc != 0)
+    std::uint32_t macLen = kMacLen;
+    int           rc     = wh_Client_CmacSetKeyId(&cmac, keyId_);
+    if (rc == 0)
+        rc = wh_Client_Cmac(client_, &cmac, WC_CMAC_AES, nullptr, 0u, in,
+                            static_cast<std::uint32_t>(inLen), mac, &macLen);
+    wh_Utils_ForceZero(&cmac, sizeof(cmac));
+    if (rc != 0 || macLen != kMacLen) {
+        wh_Utils_ForceZero(mac, kMacLen);
         return SecurityErrc::kRuntimeFault;
-    std::uint8_t  macBuf[AES_BLOCK_SIZE];
-    std::uint32_t macLen = sizeof(macBuf);
-    rc = wh_Client_Cmac(client_, &cmac, WC_CMAC_AES, nullptr, 0u, in,
-                        static_cast<std::uint32_t>(inLen), macBuf, &macLen);
-    if (rc != 0)
-        return SecurityErrc::kRuntimeFault;
-    return Result<ByteVector>(ByteVector(macBuf, macBuf + macLen));
+    }
+    return SecurityErrc::kOk;
 #endif
+}
+
+Result<ByteVector> MessageAuthnCodeCtx::Generate(const std::uint8_t* in,
+                                                 std::size_t         inLen)
+{
+    std::uint8_t macBuf[kMacLen];
+    SecurityErrc err = ComputeMac(in, inLen, macBuf);
+    if (err != SecurityErrc::kOk)
+        return err;
+    ByteVector out(macBuf, macBuf + kMacLen);
+    wh_Utils_ForceZero(macBuf, sizeof(macBuf));
+    return Result<ByteVector>(std::move(out));
 }
 
 Result<bool> MessageAuthnCodeCtx::Verify(const std::uint8_t* in,
@@ -581,14 +546,17 @@ Result<bool> MessageAuthnCodeCtx::Verify(const std::uint8_t* in,
                                          const std::uint8_t* mac,
                                          std::size_t         macLen)
 {
-    auto r = Generate(in, inLen);
-    if (!r.HasValue())
-        return r.Error();
-    const auto& computed = r.Value();
-    if (computed.size() != macLen)
-        return Result<bool>(false);
-    return Result<bool>(
-        wh_Autosar_ConstantCompare(computed.data(), mac, macLen) != 0);
+    if (mac == nullptr || macLen == 0u || (in == nullptr && inLen != 0u))
+        return SecurityErrc::kInvalidArgument;
+    if (macLen < kMinMacLen || macLen > kMacLen)
+        return SecurityErrc::kInvalidInputSize;
+    std::uint8_t computed[kMacLen];
+    SecurityErrc err = ComputeMac(in, inLen, computed);
+    if (err != SecurityErrc::kOk)
+        return err;
+    bool match = wh_Utils_ConstantCompare(computed, mac, macLen) == 0;
+    wh_Utils_ForceZero(computed, sizeof(computed));
+    return Result<bool>(match);
 }
 
 #ifndef NO_RSA
@@ -616,6 +584,12 @@ static int pssMgf(enum wc_HashType type)
 }
 #endif
 
+static bool EcdsaDigestLenOk(std::size_t len)
+{
+    return len == WC_SHA256_DIGEST_SIZE || len == WC_SHA384_DIGEST_SIZE ||
+           len == WC_SHA512_DIGEST_SIZE;
+}
+
 #ifdef WOLFSSL_HAVE_MLDSA
 static int mlDsaLevel(CryptoAlgId alg)
 {
@@ -637,10 +611,15 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
 {
     if (client_ == nullptr || in == nullptr)
         return SecurityErrc::kInvalidArgument;
+    if (!FitsU32(inLen))
+        return SecurityErrc::kInvalidInputSize;
 
     if (alg_ == AlgId::kEcdsaP256) {
         ecc_key key;
-        int     rc = wc_ecc_init_ex(&key, nullptr, WH_DEV_ID);
+        int     rc;
+        if (!EcdsaDigestLenOk(inLen))
+            return SecurityErrc::kInvalidInputSize;
+        rc = wc_ecc_init_ex(&key, nullptr, WH_CLIENT_DEVID(client_));
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         (void)wh_Client_EccSetKeyId(&key, keyId_);
@@ -721,20 +700,21 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
 #endif
 #ifdef WOLFSSL_HAVE_MLDSA
     if (mlDsaLevel(alg_) > 0) {
-        MlDsaKey key;
-        if (wc_MlDsaKey_Init(&key, nullptr, WH_DEV_ID) != 0)
+        std::unique_ptr<MlDsaKey> key(new (std::nothrow) MlDsaKey);
+        if (key == nullptr ||
+            wc_MlDsaKey_Init(key.get(), nullptr, WH_CLIENT_DEVID(client_)) != 0)
             return SecurityErrc::kRuntimeFault;
         ByteVector sig(DILITHIUM_MAX_SIG_SIZE);
         word32     sigLen = static_cast<word32>(sig.size());
-        int        rc =
-            wc_MlDsaKey_SetParams(&key, static_cast<byte>(mlDsaLevel(alg_)));
+        int        rc     = wc_MlDsaKey_SetParams(key.get(),
+                                                  static_cast<byte>(mlDsaLevel(alg_)));
         if (rc == 0)
-            rc = wh_Client_MlDsaSetKeyId(&key, keyId_);
+            rc = wh_Client_MlDsaSetKeyId(key.get(), keyId_);
         if (rc == 0)
             rc = wh_Client_MlDsaSign(client_, in, static_cast<word32>(inLen),
-                                     sig.data(), &sigLen, &key, nullptr, 0u,
-                                     WC_HASH_TYPE_NONE);
-        wc_MlDsaKey_Free(&key);
+                                     sig.data(), &sigLen, key.get(), nullptr,
+                                     0u, WC_HASH_TYPE_NONE);
+        wc_MlDsaKey_Free(key.get());
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         sig.resize(sigLen);
@@ -757,10 +737,15 @@ Result<bool> VerifierPublicCtx::Verify(const std::uint8_t* in,
 {
     if (client_ == nullptr || in == nullptr || sig == nullptr)
         return SecurityErrc::kInvalidArgument;
+    if (!FitsU32(inLen) || !FitsU32(sigLen))
+        return SecurityErrc::kInvalidInputSize;
 
     if (alg_ == AlgId::kEcdsaP256) {
         ecc_key key;
-        int     rc = wc_ecc_init_ex(&key, nullptr, WH_DEV_ID);
+        int     rc;
+        if (!EcdsaDigestLenOk(inLen) || sigLen > 0xFFFFu)
+            return SecurityErrc::kInvalidInputSize;
+        rc = wc_ecc_init_ex(&key, nullptr, WH_CLIENT_DEVID(client_));
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         (void)wh_Client_EccSetKeyId(&key, keyId_);
@@ -837,7 +822,7 @@ Result<bool> VerifierPublicCtx::Verify(const std::uint8_t* in,
             return Result<bool>(
                 alg_ == AlgId::kRsaPss ||
                 (static_cast<word32>(n) == encLen &&
-                 wh_Autosar_ConstantCompare(plain, enc, encLen) != 0));
+                 wh_Utils_ConstantCompare(plain, enc, encLen) == 0));
         }
         if (wh_Autosar_IsVerifyRejection(n))
             return Result<bool>(false);
@@ -846,20 +831,21 @@ Result<bool> VerifierPublicCtx::Verify(const std::uint8_t* in,
 #endif
 #ifdef WOLFSSL_HAVE_MLDSA
     if (mlDsaLevel(alg_) > 0) {
-        MlDsaKey key;
-        int      res = -1;
-        if (wc_MlDsaKey_Init(&key, nullptr, WH_DEV_ID) != 0)
+        std::unique_ptr<MlDsaKey> key(new (std::nothrow) MlDsaKey);
+        int                       res = -1;
+        if (key == nullptr ||
+            wc_MlDsaKey_Init(key.get(), nullptr, WH_CLIENT_DEVID(client_)) != 0)
             return SecurityErrc::kRuntimeFault;
-        int rc =
-            wc_MlDsaKey_SetParams(&key, static_cast<byte>(mlDsaLevel(alg_)));
+        int rc = wc_MlDsaKey_SetParams(key.get(),
+                                       static_cast<byte>(mlDsaLevel(alg_)));
         if (rc == 0)
-            rc = wh_Client_MlDsaSetKeyId(&key, keyId_);
+            rc = wh_Client_MlDsaSetKeyId(key.get(), keyId_);
         if (rc == 0)
-            rc =
-                wh_Client_MlDsaVerify(client_, sig, static_cast<word32>(sigLen),
-                                      in, static_cast<word32>(inLen), &res,
-                                      &key, nullptr, 0u, WC_HASH_TYPE_NONE);
-        wc_MlDsaKey_Free(&key);
+            rc = wh_Client_MlDsaVerify(
+                client_, sig, static_cast<word32>(sigLen), in,
+                static_cast<word32>(inLen), &res, key.get(), nullptr, 0u,
+                WC_HASH_TYPE_NONE);
+        wc_MlDsaKey_Free(key.get());
         if (res == 0 || res == 1)
             return Result<bool>(res == 1);
         if (wh_Autosar_IsVerifyRejection(rc))
@@ -881,6 +867,8 @@ Result<ByteVector> KeyAgreementPrivateCtx::AgreeKey(KeyId partnerPublicKeyId)
 {
     if (client_ == nullptr)
         return SecurityErrc::kInvalidArgument;
+    if (!KeyIdOk(partnerPublicKeyId))
+        return SecurityErrc::kUnknownIdentifier;
     if (alg_ == AlgId::kEcdhP256) {
         std::uint8_t  secret[80];
         std::uint16_t secretLen = sizeof(secret);
@@ -891,9 +879,13 @@ Result<ByteVector> KeyAgreementPrivateCtx::AgreeKey(KeyId partnerPublicKeyId)
         do {
             rc = wh_Client_EccSharedSecretResponse(client_, secret, &secretLen);
         } while (rc == WH_ERROR_NOTREADY);
+        ByteVector out;
+        if (rc == WH_ERROR_OK)
+            out.assign(secret, secret + secretLen);
+        wh_Utils_ForceZero(secret, sizeof(secret));
         if (rc != WH_ERROR_OK)
             return SecurityErrc::kRuntimeFault;
-        return Result<ByteVector>(ByteVector(secret, secret + secretLen));
+        return Result<ByteVector>(std::move(out));
     }
 #ifdef HAVE_CURVE25519
     if (alg_ == AlgId::kX25519) {
@@ -942,6 +934,8 @@ Result<ByteVector> KeyDerivationFunctionCtx::Derive(std::size_t outBytes,
 {
     if (client_ == nullptr || outBytes == 0u)
         return SecurityErrc::kInvalidArgument;
+    if (!FitsU32(outBytes) || !FitsU32(saltLen) || !FitsU32(infoLen))
+        return SecurityErrc::kInvalidInputSize;
     ByteVector out(outBytes);
     int        rc = WH_ERROR_NOTIMPL;
 #ifdef HAVE_HKDF
@@ -967,15 +961,19 @@ Result<ByteVector> KeyDerivationFunctionCtx::Derive(std::size_t outBytes,
 }
 
 Result<void> KeyStorageProvider::SaveKey(KeyId keyId, const std::uint8_t* key,
-                                         std::size_t len)
+                                         std::size_t len, bool exportable)
 {
     if (client_ == nullptr || key == nullptr || len == 0u || len > 0xFFFFu)
         return SecurityErrc::kInvalidArgument;
+    if (!KeyIdOk(keyId))
+        return SecurityErrc::kUnknownIdentifier;
     std::uint8_t  label[WH_NVM_LABEL_LEN] = {0};
     std::uint16_t outId                   = keyId;
-    int           rc                      = wh_Client_KeyCache(
-        client_, static_cast<std::uint32_t>(WH_NVM_FLAGS_USAGE_ANY), label,
-        sizeof(label), key, static_cast<std::uint16_t>(len), &outId);
+    std::uint32_t flags = static_cast<std::uint32_t>(WH_NVM_FLAGS_USAGE_ANY);
+    if (!exportable)
+        flags |= static_cast<std::uint32_t>(WH_NVM_FLAGS_NONEXPORTABLE);
+    int rc = wh_Client_KeyCache(client_, flags, label, sizeof(label), key,
+                                static_cast<std::uint16_t>(len), &outId);
     return (rc == WH_ERROR_OK) ? Result<void>()
                                : Result<void>(SecurityErrc::kRuntimeFault);
 }
@@ -984,20 +982,28 @@ Result<ByteVector> KeyStorageProvider::LoadKey(KeyId keyId)
 {
     if (client_ == nullptr)
         return SecurityErrc::kInvalidArgument;
+    if (!KeyIdOk(keyId))
+        return SecurityErrc::kUnknownIdentifier;
     std::uint8_t  label[WH_NVM_LABEL_LEN];
     std::uint8_t  buf[4096];
     std::uint16_t outSz = sizeof(buf);
     int           rc =
         wh_Client_KeyExport(client_, keyId, label, sizeof(label), buf, &outSz);
+    ByteVector out;
+    if (rc == WH_ERROR_OK)
+        out.assign(buf, buf + outSz);
+    wh_Utils_ForceZero(buf, sizeof(buf));
     if (rc != WH_ERROR_OK)
         return SecurityErrc::kUnknownIdentifier;
-    return Result<ByteVector>(ByteVector(buf, buf + outSz));
+    return Result<ByteVector>(std::move(out));
 }
 
 Result<void> KeyStorageProvider::Commit(KeyId keyId)
 {
     if (client_ == nullptr)
         return SecurityErrc::kInvalidArgument;
+    if (!KeyIdOk(keyId))
+        return SecurityErrc::kUnknownIdentifier;
     return (wh_Client_KeyCommit(client_, keyId) == WH_ERROR_OK)
                ? Result<void>()
                : Result<void>(SecurityErrc::kRuntimeFault);
@@ -1007,36 +1013,29 @@ Result<void> KeyStorageProvider::Erase(KeyId keyId)
 {
     if (client_ == nullptr)
         return SecurityErrc::kInvalidArgument;
-    /* Revoke flips the policy bit so the server rejects every
-     * subsequent operation (sign, encrypt, ...) on this key; Erase
-     * removes the persisted NVM copy. Together they take the key out
-     * of operational use, which is the AUTOSAR-side meaning of
-     * "erase". Note: wolfHSM Revoke leaves the cache slot live, so a
-     * raw KeyExport against the same id can still return the bytes
-     * until the slot is evicted — Revoke does not zeroise. Treating
-     * the keystore as a one-way door (write, use, revoke, never
-     * re-export) is the contract callers must honour.
-     *
-     * At least one of the two backends must report success; if both
-     * fail the key was unknown and we surface kUnknownIdentifier. */
-    int rcRevoke = wh_Client_KeyRevoke(client_, keyId);
-    int rcErase  = wh_Client_KeyErase(client_, keyId);
-    if (rcRevoke == WH_ERROR_OK || rcErase == WH_ERROR_OK)
+    if (!KeyIdOk(keyId))
+        return SecurityErrc::kUnknownIdentifier;
+    int rc = wh_Client_KeyErase(client_, keyId);
+    if (rc == WH_ERROR_OK)
         return Result<void>();
-    return SecurityErrc::kUnknownIdentifier;
+    if (rc == WH_ERROR_NOTFOUND)
+        return SecurityErrc::kUnknownIdentifier;
+    if (rc != WH_ERROR_ACCESS)
+        return SecurityErrc::kRuntimeFault;
+    /* Erase refused: revoke blocks further use but leaves the key stored. */
+    if (wh_Client_KeyRevoke(client_, keyId) != WH_ERROR_OK)
+        return SecurityErrc::kRuntimeFault;
+    return SecurityErrc::kAccessViolation;
 }
-
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
-
-/* ---------------- Provider factory methods -------------------------- */
 
 std::unique_ptr<SymmetricBlockCipherCtx>
 WolfhsmCryptoProvider::CreateSymmetricBlockCipherCtx(CryptoAlgId   algId,
                                                      KeyId         keyId,
                                                      std::uint32_t keyBits)
 {
-    if (algId != AlgId::kAesEcb && algId != AlgId::kAesCbc &&
-        algId != AlgId::kAesCtr) {
+    if ((algId != AlgId::kAesEcb && algId != AlgId::kAesCbc &&
+         algId != AlgId::kAesCtr) ||
+        !KeyIdOk(keyId)) {
         return nullptr;
     }
     return std::make_unique<SymmetricBlockCipherCtx>(client_, algId, keyId,
@@ -1046,12 +1045,16 @@ WolfhsmCryptoProvider::CreateSymmetricBlockCipherCtx(CryptoAlgId   algId,
 std::unique_ptr<AuthCipherCtx>
 WolfhsmCryptoProvider::CreateAuthCipherCtx(KeyId keyId, std::uint32_t keyBits)
 {
+    if (!KeyIdOk(keyId))
+        return nullptr;
     return std::make_unique<AuthCipherCtx>(client_, keyId, keyBits);
 }
 
 std::unique_ptr<MessageAuthnCodeCtx>
 WolfhsmCryptoProvider::CreateMessageAuthnCodeCtx(KeyId keyId)
 {
+    if (!KeyIdOk(keyId))
+        return nullptr;
     return std::make_unique<MessageAuthnCodeCtx>(client_, keyId);
 }
 
@@ -1066,7 +1069,7 @@ static bool IsSignatureAlg(CryptoAlgId algId)
 std::unique_ptr<SignerPrivateCtx>
 WolfhsmCryptoProvider::CreateSignerPrivateCtx(CryptoAlgId algId, KeyId keyId)
 {
-    if (!IsSignatureAlg(algId)) {
+    if (!IsSignatureAlg(algId) || !KeyIdOk(keyId)) {
         return nullptr;
     }
     return std::make_unique<SignerPrivateCtx>(client_, algId, keyId);
@@ -1075,7 +1078,7 @@ WolfhsmCryptoProvider::CreateSignerPrivateCtx(CryptoAlgId algId, KeyId keyId)
 std::unique_ptr<VerifierPublicCtx>
 WolfhsmCryptoProvider::CreateVerifierPublicCtx(CryptoAlgId algId, KeyId keyId)
 {
-    if (!IsSignatureAlg(algId)) {
+    if (!IsSignatureAlg(algId) || !KeyIdOk(keyId)) {
         return nullptr;
     }
     return std::make_unique<VerifierPublicCtx>(client_, algId, keyId);
@@ -1085,7 +1088,8 @@ std::unique_ptr<KeyAgreementPrivateCtx>
 WolfhsmCryptoProvider::CreateKeyAgreementPrivateCtx(CryptoAlgId algId,
                                                     KeyId       privateKeyId)
 {
-    if (algId != AlgId::kEcdhP256 && algId != AlgId::kX25519)
+    if ((algId != AlgId::kEcdhP256 && algId != AlgId::kX25519) ||
+        !KeyIdOk(privateKeyId))
         return nullptr;
     return std::make_unique<KeyAgreementPrivateCtx>(client_, algId,
                                                     privateKeyId);
@@ -1095,7 +1099,8 @@ std::unique_ptr<KeyDerivationFunctionCtx>
 WolfhsmCryptoProvider::CreateKeyDerivationFunctionCtx(CryptoAlgId algId,
                                                       KeyId       ikmKeyId)
 {
-    if (algId != AlgId::kHkdfSha256 && algId != AlgId::kCmacKdf)
+    if ((algId != AlgId::kHkdfSha256 && algId != AlgId::kCmacKdf) ||
+        !KeyIdOk(ikmKeyId))
         return nullptr;
     return std::make_unique<KeyDerivationFunctionCtx>(client_, algId, ikmKeyId);
 }

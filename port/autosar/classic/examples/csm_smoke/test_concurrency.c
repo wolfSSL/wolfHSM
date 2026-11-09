@@ -19,19 +19,8 @@
 /*
  * port/autosar/classic/examples/csm_smoke/test_concurrency.c
  *
- * Category-4: concurrency stress.
- *
- * 4 worker threads spend ~1 second each issuing a random mix of sync
- * and async ops against driver object 0. A 5th thread issues
- * Crypto_CancelJob on random active async jobs. After all workers
- * exit, the test waits for all expected callbacks, then asserts:
- *   - total callbacks == async-submissions minus cancellations
- *   - active slot count == 0
- *   - active hash state count == 0
- *
- * The earlier "MainFunction reads slot state outside the lock" race
- * surfaces here as either a wrong callback count or a leaked slot;
- * pre-fix this test would fail roughly 1 run in 5.
+ * STRESS_WORKERS threads submit async RNG jobs for STRESS_DURATION_MS while
+ * one more thread cancels random submitted jobs; checks callbacks and leaks.
  */
 
 #include "test_helpers.h"
@@ -47,21 +36,14 @@
 #define STRESS_DURATION_MS 500
 #define STRESS_MAX_ASYNC 16 /* per worker */
 
-/* Each worker tracks the async jobs it submitted so we can match them
- * up with callbacks at the end. */
 typedef struct {
-    int id;
-    int asyncSubmitted;
-    int cancelsRequested;
-    /* Tracked job structures live in the worker's stack frame until it
-     * exits; main thread joins workers before checking callbacks, so
-     * lifetimes are safe. We use a heap allocation here to keep the
-     * stack small. */
+    int                          id;
+    int                          asyncSubmitted;
+    int                          cancelsRequested;
     Crypto_JobType*              jobs;
     Crypto_JobPrimitiveInfoType* jpis;
     uint8 (*outs)[32];
-    uint32* outLens;
-    /* Atomic-ish: which slots have been cancelled (1) vs untouched (0). */
+    uint32*         outLens;
     volatile uint8* cancelled;
 } stressWorker;
 
@@ -75,11 +57,6 @@ static int randInt(unsigned int* seed, int lo, int hi)
     return lo + (int)((*seed >> 8) % (unsigned)(hi - lo + 1));
 }
 
-/* Async RNG submit — fills the worker's tracking arrays. Slot-full
- * (Crypto_ProcessJob returns E_NOT_OK because all CRYPTO_MAX_ASYNC_JOBS
- * slots are occupied) is treated as expected back-pressure, not a
- * failure: the test deliberately pushes submission faster than the
- * MainFunction can drain. */
 static int stressAsyncRng(stressWorker* w)
 {
     int idx = w->asyncSubmitted;
@@ -104,10 +81,10 @@ static int stressAsyncRng(stressWorker* w)
     job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
     if (testCryIfProcessJob(0u, job) != E_OK) {
-        /* Slots saturated — drop, will retry on next iteration. */
+        /* Queue full is expected back-pressure; retry next iteration. */
         return 0;
     }
-    w->asyncSubmitted++;
+    __atomic_store_n(&w->asyncSubmitted, idx + 1, __ATOMIC_RELEASE);
     __sync_fetch_and_add(&s_totalAsync, 1);
     return 0;
 }
@@ -118,20 +95,14 @@ static void* stressWorkerFn(void* arg)
     int             failures = 0;
     struct timespec start, now;
     long            elapsedMs = 0;
-    /* Brief sleep between submits — async submission itself doesn't
-     * touch the wolfHSM client (just allocates a slot), but spacing
-     * keeps the queue from saturating and pegging MainFunction. */
-    struct timespec gap = {0, 1 * 1000 * 1000};
+    struct timespec gap       = {0, 1 * 1000 * 1000};
 
-    /* Stress is async-only on purpose: sync calls would race
-     * MainFunction's wolfHSM client access (the client is single-
-     * threaded). Production integrators must serialise sync vs.
-     * MainFunction at a layer above; we don't want our smoke to fail
-     * because of a documented constraint. The slot state machine is
-     * fully exercised by async submit + cancel concurrent traffic. */
+    /* Async only: the wolfHSM client is single-threaded, so sync jobs
+     * here would race MainFunction. */
     (void)w;
     clock_gettime(CLOCK_MONOTONIC, &start);
-    while (elapsedMs < STRESS_DURATION_MS && !s_stressStop) {
+    while (elapsedMs < STRESS_DURATION_MS &&
+           !__atomic_load_n(&s_stressStop, __ATOMIC_ACQUIRE)) {
         failures += stressAsyncRng(w);
         nanosleep(&gap, NULL);
         clock_gettime(CLOCK_MONOTONIC, &now);
@@ -150,10 +121,11 @@ static void* stressCancelFn(void* arg)
     struct timespec sleepReq  = {0, 2 * 1000 * 1000}; /* 2 ms */
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    while (elapsedMs < STRESS_DURATION_MS && !s_stressStop) {
+    while (elapsedMs < STRESS_DURATION_MS &&
+           !__atomic_load_n(&s_stressStop, __ATOMIC_ACQUIRE)) {
         int           wId = randInt(&seed, 0, STRESS_WORKERS - 1);
         stressWorker* w   = &workers[wId];
-        int           n   = w->asyncSubmitted;
+        int           n = __atomic_load_n(&w->asyncSubmitted, __ATOMIC_ACQUIRE);
         if (n > 0) {
             int pick = randInt(&seed, 0, n - 1);
             if (!w->cancelled[pick]) {
@@ -179,7 +151,6 @@ static int testConcurrencyStress(void)
     stressWorker workers[STRESS_WORKERS];
     int          i, failures = 0;
 
-    /* Allocate per-worker tracking arrays. */
     for (i = 0; i < STRESS_WORKERS; ++i) {
         workers[i].id               = i;
         workers[i].asyncSubmitted   = 0;
@@ -207,11 +178,9 @@ static int testConcurrencyStress(void)
         pthread_join(threads[i], &rc);
         failures += (int)(intptr_t)rc;
     }
-    s_stressStop = 1;
+    __atomic_store_n(&s_stressStop, 1, __ATOMIC_RELEASE);
     pthread_join(cancelThread, NULL);
 
-    /* Expected callbacks: every async submission produces exactly one
-     * callback unless it was successfully cancelled. */
     int expected = s_totalAsync - s_totalCancel;
     if (testWaitCallbacks(prev + expected, 30000) != 0) {
         fprintf(
@@ -221,8 +190,7 @@ static int testConcurrencyStress(void)
         failures++;
     }
 
-    /* Allow one extra MainFunction tick for any cancellation-drain to
-     * complete before we check the leak counters. */
+    /* Let MainFunction drain cancelled slots before the leak check. */
     struct timespec t = {0, 50 * 1000 * 1000};
     nanosleep(&t, NULL);
 

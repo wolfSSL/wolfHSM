@@ -10,8 +10,9 @@ This port exposes the wolfHSM client API as standard AUTOSAR Crypto interfaces:
   AP Execution Manifest, plugs into any AP runtime supporting providers.
 
 Both layers translate AUTOSAR-shaped calls into `wh_Client_*` calls against
-a wolfHSM server running on the secure core. Key material never leaves the
-server; only handles cross the boundary.
+a wolfHSM server running on the secure core. Jobs pass key handles, not key
+material. Classic keys can be read back only when their descriptor marks
+them exportable.
 
 ## Layout
 

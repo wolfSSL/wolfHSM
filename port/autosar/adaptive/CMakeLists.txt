@@ -13,10 +13,6 @@ endif()
 if(NOT DEFINED WOLFSSL_DIR)
     set(WOLFSSL_DIR ${WOLFHSM_DIR}/../wolfssl)
 endif()
-# Resolve to absolute paths so they don't get reinterpreted against this
-# target's source dir. This matters when a relative -DWOLFHSM_DIR is
-# passed for a standalone build; when inherited from a parent project the
-# values are already absolute and this is a no-op.
 get_filename_component(WOLFHSM_DIR "${WOLFHSM_DIR}" ABSOLUTE
                        BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 get_filename_component(WOLFSSL_DIR "${WOLFSSL_DIR}" ABSOLUTE
@@ -31,10 +27,7 @@ target_include_directories(wolfhsm_ara_crypto PUBLIC
     ${WOLFHSM_DIR}
     ${WOLFSSL_DIR}
 )
-# Integrators override WOLFHSM_CONFIG_DIR to point at their own
-# wolfhsm_cfg.h / user_settings.h. The default points at the shared
-# port/autosar config so the library builds out of the box for
-# verification.
+# Integrators set WOLFHSM_CONFIG_DIR to their own config headers.
 if(NOT DEFINED WOLFHSM_CONFIG_DIR)
     set(WOLFHSM_CONFIG_DIR ${CMAKE_CURRENT_LIST_DIR}/../common/config)
 endif()

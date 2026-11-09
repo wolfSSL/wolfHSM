@@ -122,11 +122,6 @@ class RandomGeneratorCtx {
     whClientContext* client_;
 };
 
-/* --- Hash function context ------------------------------------------- */
-/* Streaming: Update sends each chunk to the wolfHSM server immediately
- * via Sha*UpdateRequest/Response. Internal storage is the wolfCrypt hash
- * state (kept opaque here as a raw byte array — sized to fit any of the
- * supported variants — so this header doesn't pull in wolfCrypt). */
 class HashFunctionCtx {
   public:
     HashFunctionCtx(whClientContext* client, CryptoAlgId algId);
@@ -140,13 +135,7 @@ class HashFunctionCtx {
     whClientContext* client_;
     CryptoAlgId      alg_;
     bool             started_;
-    /* Opaque storage for wc_Sha256 / wc_Sha384 / wc_Sha512. 512 bytes
-     * comfortably exceeds the largest variant on every wolfCrypt build.
-     * Aligned to 16 bytes — wc_Sha384/Sha512 may use 128-bit-aligned
-     * fields on architectures with SHA-NI / SVE acceleration, and ARM /
-     * RISC-V with strict-alignment traps reject misaligned 64-bit
-     * loads. The static_asserts in the ctor verify size only; alignas
-     * carries the alignment guarantee. */
+    /* Opaque wc_Sha256/384/512 state, so this header needs no wolfCrypt. */
     alignas(16) std::uint8_t state_[512];
 };
 
@@ -207,8 +196,9 @@ class MessageAuthnCodeCtx {
 
     /* Returns the full kMacLen-byte AES-CMAC. */
     Result<ByteVector> Generate(const std::uint8_t* in, std::size_t inLen);
-    Result<bool>       Verify(const std::uint8_t* in, std::size_t inLen,
-                              const std::uint8_t* mac, std::size_t macLen);
+    /* Compares the leading macLen bytes; macLen must be 8 to 16. */
+    Result<bool> Verify(const std::uint8_t* in, std::size_t inLen,
+                        const std::uint8_t* mac, std::size_t macLen);
 
   private:
     SecurityErrc ComputeMac(const std::uint8_t* in, std::size_t inLen,
@@ -245,16 +235,6 @@ class VerifierPublicCtx {
     KeyId            keyId_;
 };
 
-/* --- Key agreement (ECDH P-256, X25519) ----------------------------
- *
- * Thread-safety: like all other context classes in this file, a single
- * KeyAgreementPrivateCtx instance is bound to one whClientContext and is
- * NOT safe to use concurrently from multiple threads. wolfHSM's
- * client-side protocol enforces a one-request-in-flight contract per
- * whClientContext, so concurrent AgreeKey() calls on the same ctx (or
- * on different ctxs sharing the same client) will collide. AP runtimes
- * that fan work out across worker threads must serialize at the
- * provider level or hand each thread its own whClientContext. */
 class KeyAgreementPrivateCtx {
   public:
     KeyAgreementPrivateCtx(whClientContext* client, CryptoAlgId algId,
@@ -288,9 +268,9 @@ class KeyStorageProvider {
   public:
     KeyStorageProvider(whClientContext* client) : client_(client) {}
 
-    /* Cache key material under the given whKeyId, with USAGE_ANY flags
-     * so the server accepts the key for any subsequent operation. */
-    Result<void> SaveKey(KeyId keyId, const std::uint8_t* key, std::size_t len);
+    /* Caches key with WH_NVM_FLAGS_USAGE_ANY; non-exportable unless asked. */
+    Result<void> SaveKey(KeyId keyId, const std::uint8_t* key, std::size_t len,
+                         bool exportable = false);
 
     /* Returns the plaintext key; kUnknownIdentifier on any failure. */
     Result<ByteVector> LoadKey(KeyId keyId);

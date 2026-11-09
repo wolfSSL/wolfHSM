@@ -25,6 +25,10 @@
 #include "test_helpers.h"
 
 #include "wolfhsm/wh_client.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
+#ifdef HAVE_CURVE25519
+#include "wolfssl/wolfcrypt/curve25519.h"
+#endif
 
 static Std_ReturnType aesCbcEncrypt(uint32 keyId, uint8 out[16])
 {
@@ -406,6 +410,260 @@ static int testEd25519Async(void)
 }
 #endif
 
+static Std_ReturnType keyJob(Crypto_ServiceInfoType svc, uint32 keyId,
+                             uint32 targetKeyId, Crypto_ProcessingType pt)
+{
+    static const uint8          seed[16] = {0x5e, 0xed};
+    Crypto_PrimitiveInfoType    pi;
+    Crypto_JobPrimitiveInfoType jpi;
+    Crypto_JobType              job;
+    Std_ReturnType              res = E_NOT_OK;
+
+    testBuildJob(&job, &jpi, &pi, svc, CRYPTO_ALGOFAM_NOT_SET,
+                 CRYPTO_ALGOMODE_NOT_SET, keyId, pt, 7700u);
+    job.jobPrimitiveInputOutput.targetCryIfKeyId = targetKeyId;
+    if (svc == CRYPTO_RANDOMSEED) {
+        job.jobPrimitiveInputOutput.inputPtr    = seed;
+        job.jobPrimitiveInputOutput.inputLength = sizeof(seed);
+    }
+    if (pt == CRYPTO_PROCESSING_SYNC) {
+        return testCryIfProcessJob(0u, &job);
+    }
+    return (testRunAsync(&job, &res) == E_OK) ? res : E_NOT_OK;
+}
+
+static int testKeyDeriveJobsBody(void)
+{
+    static const uint8 ikm[32] = {0x1c, 0x2d, 0x3e};
+    uint8              want[32];
+    uint8              got[32];
+    uint32             len = sizeof(want);
+    int                pt;
+
+    if (Crypto_KeyElementSet(136u, 1u, ikm, sizeof(ikm)) != E_OK ||
+        Crypto_KeySetValid(136u) != E_OK ||
+        Crypto_KeyDerive(136u, 124u) != E_OK ||
+        Crypto_KeyElementGet(124u, 1u, want, &len) != E_OK || len != 32u) {
+        fprintf(stderr, "  derive job: direct KeyDerive\n");
+        return 1;
+    }
+    for (pt = 0; pt < 2; ++pt) {
+        testEraseKey(124u);
+        len = sizeof(got);
+        if (keyJob(CRYPTO_KEYDERIVE, 136u, 124u,
+                   pt ? CRYPTO_PROCESSING_ASYNC : CRYPTO_PROCESSING_SYNC) !=
+                E_OK ||
+            Crypto_KeyElementGet(124u, 1u, got, &len) != E_OK || len != 32u ||
+            memcmp(got, want, sizeof(want)) != 0) {
+            fprintf(stderr, "  derive job: %s KEYDERIVE differs\n",
+                    pt ? "async" : "sync");
+            return 1;
+        }
+    }
+    printf("  derive job: sync + async KEYDERIVE match Crypto_KeyDerive\n");
+    return 0;
+}
+
+static int testKeyDeriveJobs(void)
+{
+    static const uint32 keys[] = {136u, 124u};
+    return testWithKeys(testKeyDeriveJobsBody, keys, 2);
+}
+
+static int testKeyStateJobsBody(void)
+{
+    static const uint8   k[16] = {0x37};
+    uint8                ct[16];
+    Crypto_KeyStatusType st = CRYPTO_KEYSTATUS_VALID;
+
+    if (Crypto_KeyElementSet(137u, 1u, k, sizeof(k)) != E_OK ||
+        Crypto_KeySetValid(137u) != E_OK || aesCbcEncrypt(137u, ct) != E_OK) {
+        fprintf(stderr, "  key jobs: setup\n");
+        return 1;
+    }
+    if (keyJob(CRYPTO_KEYSETINVALID, 137u, 0u, CRYPTO_PROCESSING_SYNC) !=
+            E_OK ||
+        Crypto_KeyGetStatus(137u, &st) != E_OK ||
+        st != CRYPTO_KEYSTATUS_INVALID ||
+        aesCbcEncrypt(137u, ct) != CRYPTO_E_KEY_NOT_VALID) {
+        fprintf(stderr, "  key jobs: sync KEYSETINVALID\n");
+        return 1;
+    }
+    if (keyJob(CRYPTO_KEYSETVALID, 137u, 0u, CRYPTO_PROCESSING_ASYNC) != E_OK ||
+        aesCbcEncrypt(137u, ct) != E_OK) {
+        fprintf(stderr, "  key jobs: async KEYSETVALID\n");
+        return 1;
+    }
+    if (keyJob(CRYPTO_KEYSETINVALID, 137u, 0u, CRYPTO_PROCESSING_ASYNC) !=
+            E_OK ||
+        aesCbcEncrypt(137u, ct) != CRYPTO_E_KEY_NOT_VALID) {
+        fprintf(stderr, "  key jobs: async KEYSETINVALID\n");
+        return 1;
+    }
+    if (keyJob(CRYPTO_RANDOMSEED, 0u, 0u, CRYPTO_PROCESSING_SYNC) != E_NOT_OK ||
+        keyJob(CRYPTO_RANDOMSEED, 0u, 0u, CRYPTO_PROCESSING_ASYNC) !=
+            E_NOT_OK) {
+        fprintf(stderr, "  key jobs: RANDOMSEED accepted\n");
+        return 1;
+    }
+    printf("  key jobs: KEYSETINVALID, async KEYSETVALID, RANDOMSEED "
+           "rejected\n");
+    return 0;
+}
+
+static int testKeyStateJobs(void)
+{
+    static const uint32 keys[] = {137u};
+    return testWithKeys(testKeyStateJobsBody, keys, 1);
+}
+
+#ifdef HAVE_CURVE25519
+/* Reads the RFC 7748 public value of a generated X25519 key. */
+static int x25519Public(uint32 keyId, uint8* pub, uint32* pubLen)
+{
+    whClientContext* ctx = NULL;
+    uint8            der[96];
+    uint16           derLen = sizeof(der);
+    uint8            label[WH_NVM_LABEL_LEN];
+    word32           idx = 0u;
+    word32           len = *pubLen;
+    curve25519_key   key;
+    int              rc = -1;
+
+    if (wh_Autosar_KeystoreBegin(&ctx) == E_OK) {
+        rc = wh_Client_KeyExportPublic(ctx, wh_Autosar_ComposeKeyId(keyId, 1u),
+                                       WH_KEY_ALGO_CURVE25519, label,
+                                       sizeof(label), der, &derLen);
+        wh_Autosar_KeystoreEnd(ctx);
+    }
+    if (rc != 0 || wc_curve25519_init(&key) != 0) {
+        return -1;
+    }
+    rc = wc_Curve25519PublicKeyDecode(der, &idx, &key, derLen);
+    if (rc == 0) {
+        rc = wc_curve25519_export_public_ex(&key, pub, &len,
+                                            EC25519_LITTLE_ENDIAN);
+    }
+    wc_curve25519_free(&key);
+    *pubLen = len;
+    return rc;
+}
+
+static int testX25519KeyGenerateBody(void)
+{
+    uint8  pubA[32], pubB[32], secA[32], secB[32];
+    uint32 lenA = sizeof(pubA), lenB = sizeof(pubB);
+    uint32 sLenA = sizeof(secA), sLenB = sizeof(secB);
+
+    if (Crypto_KeyGenerate(122u) != E_OK ||
+        x25519Public(122u, pubA, &lenA) != 0 || lenA != 32u) {
+        fprintf(stderr, "  x25519 keygen: KeyGenerate / public value\n");
+        return 1;
+    }
+    if (Crypto_KeyExchangeCalcPubVal(123u, pubB, &lenB) != E_OK ||
+        Crypto_KeyExchangeCalcSecret(122u, pubB, lenB) != E_OK ||
+        Crypto_KeyExchangeCalcSecret(123u, pubA, lenA) != E_OK) {
+        fprintf(stderr, "  x25519 keygen: exchange with a peer\n");
+        return 1;
+    }
+    if (Crypto_KeyElementGet(122u, 1u, secA, &sLenA) != E_OK ||
+        Crypto_KeyElementGet(123u, 1u, secB, &sLenB) != E_OK || sLenA != 32u ||
+        sLenB != 32u || memcmp(secA, secB, 32) != 0) {
+        fprintf(stderr, "  x25519 keygen: shared values differ\n");
+        return 1;
+    }
+    printf("  x25519: KeyGenerate key agrees with a CalcPubVal peer\n");
+    return 0;
+}
+
+static int testX25519KeyGenerate(void)
+{
+    static const uint32 keys[] = {122u, 123u};
+    return testWithKeys(testX25519KeyGenerateBody, keys, 2);
+}
+#endif
+
+static int testKeyElementBranchesBody(void)
+{
+    static const uint8 iv[16] = {0x1f, 0x2e, 0x3d, 0x4c};
+    static const uint8 k[16]  = {0x45};
+    uint8              src[32];
+    uint8              fill[32];
+    uint8              got[32];
+    uint32             len;
+    uint32             ids[4];
+    uint32             nIds = 4u;
+    int                i;
+
+    for (i = 0; i < 32; ++i) {
+        src[i]  = (uint8)(0xA0 + i);
+        fill[i] = 0x55u;
+    }
+    len = sizeof(got);
+    if (Crypto_KeyElementSet(131u, 5u, iv, sizeof(iv)) != E_OK ||
+        Crypto_KeyElementIdsGet(131u, ids, &nIds) != E_OK || nIds != 2u ||
+        ids[0] != 1u || ids[1] != 5u ||
+        Crypto_KeyElementGet(131u, 5u, got, &len) != E_OK || len != 16u ||
+        memcmp(got, iv, sizeof(iv)) != 0) {
+        fprintf(stderr, "  keyelem: IV read-back\n");
+        return 1;
+    }
+    len = 8u;
+    if (Crypto_KeyElementGet(131u, 5u, got, &len) != E_NOT_OK) {
+        fprintf(stderr, "  keyelem: IV into an 8-byte buffer\n");
+        return 1;
+    }
+    len = sizeof(got);
+    if (Crypto_KeyElementGet(132u, 5u, got, &len) !=
+        CRYPTO_E_KEY_NOT_AVAILABLE) {
+        fprintf(stderr, "  keyelem: absent IV\n");
+        return 1;
+    }
+    /* Writing the material drops the IV. */
+    nIds = 4u;
+    if (Crypto_KeyElementSet(131u, 1u, src, sizeof(src)) != E_OK ||
+        Crypto_KeyElementIdsGet(131u, ids, &nIds) != E_OK || nIds != 1u) {
+        fprintf(stderr, "  keyelem: IV kept after material write\n");
+        return 1;
+    }
+    len = sizeof(got);
+    if (Crypto_KeyElementSet(132u, 1u, fill, sizeof(fill)) != E_OK ||
+        Crypto_KeyElementCopyPartial(131u, 1u, 8u, 4u, 16u, 132u, 1u) != E_OK ||
+        Crypto_KeyElementGet(132u, 1u, got, &len) != E_OK || len != 32u ||
+        memcmp(got, fill, 4) != 0 || memcmp(got + 4, src + 8, 16) != 0 ||
+        memcmp(got + 20, fill, 12) != 0) {
+        fprintf(stderr, "  keyelem: partial copy into existing material\n");
+        return 1;
+    }
+    memcpy(fill, got, sizeof(fill));
+    if (Crypto_KeyElementCopyPartial(131u, 1u, 40u, 0u, 8u, 132u, 1u) !=
+        E_NOT_OK) {
+        fprintf(stderr, "  keyelem: source offset past the source\n");
+        return 1;
+    }
+    if (Crypto_KeyElementSet(145u, 1u, k, sizeof(k)) != E_OK ||
+        Crypto_KeySetValid(145u) != E_OK ||
+        Crypto_KeyElementCopy(145u, 1u, 132u, 1u) != CRYPTO_E_KEY_READ_FAIL ||
+        Crypto_KeyCopy(145u, 132u) != CRYPTO_E_KEY_READ_FAIL) {
+        fprintf(stderr, "  keyelem: copy from a non-exportable key\n");
+        return 1;
+    }
+    len = sizeof(got);
+    if (Crypto_KeyElementGet(132u, 1u, got, &len) != E_OK || len != 32u ||
+        memcmp(got, fill, sizeof(fill)) != 0) {
+        fprintf(stderr, "  keyelem: failed copy changed the target\n");
+        return 1;
+    }
+    printf("  keyelem: IV read-back, partial copy merge, copy read checks\n");
+    return 0;
+}
+
+static int testKeyElementBranches(void)
+{
+    static const uint32 keys[] = {131u, 132u, 145u};
+    return testWithKeys(testKeyElementBranchesBody, keys, 3);
+}
+
 int testKeyMgmtAll(void)
 {
     int failures = 0;
@@ -421,5 +679,11 @@ int testKeyMgmtAll(void)
 #ifdef HAVE_ED25519
     TEST_RUN(failures, testEd25519Async);
 #endif
+    TEST_RUN(failures, testKeyDeriveJobs);
+    TEST_RUN(failures, testKeyStateJobs);
+#ifdef HAVE_CURVE25519
+    TEST_RUN(failures, testX25519KeyGenerate);
+#endif
+    TEST_RUN(failures, testKeyElementBranches);
     return failures;
 }

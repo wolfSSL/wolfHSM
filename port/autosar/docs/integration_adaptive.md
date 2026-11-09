@@ -75,6 +75,41 @@ For ECUs that need raw async dispatch - `Crypto_JobType` with
 callbacks - use the **Classic** port (`port/autosar/classic/`); that
 layer implements wolfHSM's `*Request` / `*Response` split natively.
 
+## Context rules
+
+Each `Create*` factory returns `nullptr` for an algorithm ID it does
+not handle, or for a key ID that is 0 or carries a global, wrapped or
+hardware flag bit. Pass plain client key IDs.
+
+- `ProcessBlocks` takes whole 16-byte blocks. CBC and CTR need a
+  16-byte IV; ECB ignores it.
+- `AuthCipherCtx` accepts GCM tags of 12 to 16 bytes. A shorter tag
+  returns `kInvalidInputSize`, and a tag that does not verify returns
+  `kAuthTagMismatch`.
+- `MessageAuthnCodeCtx::Generate` returns the 16-byte AES-CMAC.
+  `Verify` compares the leading `macLen` bytes and accepts 8 to 16;
+  other lengths return `kInvalidInputSize`.
+- ECDSA and RSA `Sign` and `Verify` take a 32, 48 or 64-byte SHA-2
+  digest. Ed25519 and ML-DSA take the message.
+- A length above `UINT32_MAX` returns `kInvalidInputSize`.
+
+## Key storage
+
+`KeyStorageProvider::SaveKey` caches a key with
+`WH_NVM_FLAGS_USAGE_ANY`. The key is non-exportable unless the caller
+passes `exportable = true`. `LoadKey` returns the plaintext key, so it
+works only on exportable keys, and every failure maps to
+`kUnknownIdentifier`. `Commit` writes a cached key to NVM.
+
+Shared secrets, derived keys and loaded keys come back in a plain
+`std::vector`. Wipe them with `wh_Utils_ForceZero` before the vector
+goes out of scope.
+
+`Erase` removes the key from the cache and from NVM. If the server
+refuses the erase, for example for a `WH_NVM_FLAGS_NONDESTROYABLE` key,
+`Erase` revokes the key instead and returns `kAccessViolation`. The
+key can no longer be used, but its bytes stay stored.
+
 ## Building
 
 ```bash

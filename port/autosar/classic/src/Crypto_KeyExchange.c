@@ -19,10 +19,8 @@
 /*
  * port/autosar/classic/src/Crypto_KeyExchange.c
  *
- * Crypto_KeyExchangeCalcPubVal / CalcSecret — ECDH (NIST curves) and
- * X25519. The curve choice comes from the Crypto_KeyDescriptorType for
- * the named cryptoKeyId. Public values are raw: X || Y for ECDH, the
- * RFC 7748 little-endian u-coordinate for X25519.
+ * Crypto_KeyExchange*: ECDH and X25519. Public values are raw X || Y for
+ * ECDH and the RFC 7748 little-endian u-coordinate for X25519.
  */
 
 #include "Crypto.h"
@@ -101,7 +99,7 @@ static int eccSecret(whClientContext* ctx, whKeyId privId, int curveId,
     if (rc != 0) {
         return rc;
     }
-    rc = wc_ecc_init_ex(&priv, NULL, WH_DEV_ID);
+    rc = wc_ecc_init_ex(&priv, NULL, WH_CLIENT_DEVID(ctx));
     if (rc == 0) {
         rc = wc_ecc_import_unsigned(&pub, peer, peer + half, NULL, curveId);
         if (rc == 0) {
@@ -167,7 +165,7 @@ static int x25519Secret(whClientContext* ctx, whKeyId privId, const uint8* peer,
     if (rc != 0) {
         return rc;
     }
-    rc = wc_curve25519_init_ex(&priv, NULL, WH_DEV_ID);
+    rc = wc_curve25519_init_ex(&priv, NULL, WH_CLIENT_DEVID(ctx));
     if (rc == 0) {
         rc = wc_curve25519_import_public_ex(peer, peerLen, &pub,
                                             EC25519_LITTLE_ENDIAN);
@@ -200,8 +198,8 @@ wh_Autosar_KeyExchangeCalcPubValImpl(whClientContext* ctx, uint32 cryptoKeyId,
         publicValueLengthPtr == NULL || *publicValueLengthPtr == 0u) {
         return E_NOT_OK;
     }
-    if (wh_Autosar_KeyMarkInvalid(cryptoKeyId) != E_OK) {
-        return E_NOT_OK;
+    if (wh_Autosar_KeyMarkWritten(cryptoKeyId) != E_OK) {
+        return CRYPTO_E_KEY_WRITE_FAIL;
     }
 
 #ifdef WOLFHSM_CFG_NO_CRYPTO
@@ -212,10 +210,10 @@ wh_Autosar_KeyExchangeCalcPubValImpl(whClientContext* ctx, uint32 cryptoKeyId,
 #ifdef HAVE_ECC
         case CRYPTO_ALGOFAM_ECCNIST:
         case CRYPTO_ALGOFAM_ECDH:
-            rc = wh_Client_EccMakeCacheKey(ctx, (int)(desc->keyLength / 8u),
-                                           desc->eccCurveId, &whId,
-                                           (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
-                                           (uint16)sizeof(label), label);
+            rc = wh_Client_EccMakeCacheKey(
+                ctx, (int)(desc->keyLength / 8u), desc->eccCurveId, &whId,
+                wh_Autosar_KeyFlags(cryptoKeyId) | WH_NVM_FLAGS_NONEXPORTABLE,
+                (uint16)sizeof(label), label);
             if (rc == WH_ERROR_OK) {
                 rc = eccPubValue(ctx, whId, desc->eccCurveId, publicValuePtr,
                                  publicValueLengthPtr);
@@ -226,8 +224,8 @@ wh_Autosar_KeyExchangeCalcPubValImpl(whClientContext* ctx, uint32 cryptoKeyId,
         case CRYPTO_ALGOFAM_X25519:
             rc = wh_Client_Curve25519MakeCacheKey(
                 ctx, (uint16)CURVE25519_KEYSIZE, &whId,
-                (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY, label,
-                (uint16)sizeof(label));
+                wh_Autosar_KeyFlags(cryptoKeyId) | WH_NVM_FLAGS_NONEXPORTABLE,
+                label, (uint16)sizeof(label));
             if (rc == WH_ERROR_OK) {
                 rc = x25519PubValue(ctx, whId, publicValuePtr,
                                     publicValueLengthPtr);
@@ -258,6 +256,9 @@ wh_Autosar_KeyExchangeCalcSecretImpl(whClientContext* ctx, uint32 cryptoKeyId,
     if (desc == NULL || privId == 0u || partnerPublicValuePtr == NULL ||
         partnerPublicValueLength == 0u) {
         return E_NOT_OK;
+    }
+    if (wh_Autosar_KeyIsRevoked(cryptoKeyId)) {
+        return CRYPTO_E_KEY_NOT_VALID;
     }
 
 #ifdef WOLFHSM_CFG_NO_CRYPTO

@@ -19,24 +19,16 @@
 /*
  * port/autosar/classic/examples/csm_smoke/test_kat.c
  *
- * Category-1 tests: Known-Answer Tests against published vectors.
- * Catches any silent wire-level data corruption that the existing
- * "did we get something the right length back" tests would miss.
- *
- * Vectors:
- *   - SHA-256: FIPS 180-4 / NIST CAVS examples
- *   - SHA-384, SHA-512: FIPS 180-4 examples
- *   - AES-CBC-128: NIST SP 800-38A Appendix F.2.1
- *   - AES-CBC-256: NIST SP 800-38A Appendix F.2.5
- *   - ECDSA P-256: self-consistency (sign then verify round trip)
+ * Published-vector KATs for hashes, AES-CBC, CMAC and HKDF, CMAC-KDF against
+ * software, and ECDSA, Ed25519 and RSA PKCS#1 v1.5 sign/verify round trips.
  */
 
 #include "test_helpers.h"
 
+#include "wolfssl/wolfcrypt/kdf.h"
+
 #include <stdio.h>
 #include <string.h>
-
-/* --- Hash KAT helpers ----------------------------------------------- */
 
 typedef struct {
     Crypto_AlgorithmFamilyType family;
@@ -139,8 +131,6 @@ static int testHashKAT(void)
     return failed;
 }
 
-/* --- AES-CBC KAT ----------------------------------------------------- */
-
 #ifdef HAVE_AES_CBC
 typedef struct {
     int         keyBits;
@@ -152,11 +142,11 @@ typedef struct {
 
 /* NIST SP 800-38A Appendix F.2 (first block only). */
 static const aesCbcVector kAesCbcVectors[] = {
-    /* F.2.1 — CBC-AES128.Encrypt */
+    /* F.2.1 CBC-AES128.Encrypt */
     {128, "2b7e151628aed2a6abf7158809cf4f3c",
      "000102030405060708090a0b0c0d0e0f", "6bc1bee22e409f96e93d7e117393172a",
      "7649abac8119b246cee98e9b12e9197d"},
-    /* F.2.5 — CBC-AES256.Encrypt */
+    /* F.2.5 CBC-AES256.Encrypt */
     {256, "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
      "000102030405060708090a0b0c0d0e0f", "6bc1bee22e409f96e93d7e117393172a",
      "f58c4c04d6e5f1ba779eabfb5f7bfbd6"}};
@@ -182,7 +172,6 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
         return 1;
     }
 
-    /* Install the key into the wolfHSM cache. */
     if (Crypto_KeyElementSet(kAesCbcKatKeyId[idx], 1u, key, (uint32)keyLen) !=
             E_OK ||
         Crypto_KeySetValid(kAesCbcKatKeyId[idx]) != E_OK ||
@@ -241,14 +230,9 @@ static int testAesCbcKAT(void)
 }
 #endif /* HAVE_AES_CBC */
 
-/* --- ECDSA self-consistency (sign with key K, verify with key K) ---- */
-
 #if defined(HAVE_ECC) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int testEcdsaSelfConsistency(void)
 {
-    /* Generate a fresh ECC P-256 keypair via Crypto_KeyExchangeCalcPubVal
-     * (which under the hood does EccMakeCacheKey + ExportPublic). Then
-     * sign a fixed digest and verify it with the same handle. */
     uint8                       pub[128];
     uint32                      pubLen = sizeof(pub);
     uint8                       digest[32];
@@ -263,14 +247,13 @@ static int testEcdsaSelfConsistency(void)
     for (i = 0; i < 32; ++i)
         digest[i] = (uint8)(i + 1);
 
-    /* Provision the key under cryptoKeyId 101 (descriptor: ECCNIST/P-256). */
+    /* cryptoKeyId 101 = ECC P-256 in the smoke descriptor table. */
     if (Crypto_KeyExchangeCalcPubVal(101u, pub, &pubLen) != E_OK ||
         pubLen != 64u || Crypto_KeySetValid(101u) != E_OK) {
         fprintf(stderr, "  kat ecdsa: KeyExchangeCalcPubVal failed\n");
         return 1;
     }
 
-    /* Sign. */
     memset(&piSign, 0, sizeof(piSign));
     piSign.service             = CRYPTO_SIGNATUREGENERATE;
     piSign.algorithm.family    = CRYPTO_ALGOFAM_ECCNIST;
@@ -292,7 +275,6 @@ static int testEcdsaSelfConsistency(void)
         return 1;
     }
 
-    /* Verify. */
     memset(&piVer, 0, sizeof(piVer));
     piVer.service   = CRYPTO_SIGNATUREVERIFY;
     piVer.algorithm = piSign.algorithm;
@@ -318,17 +300,8 @@ static int testEcdsaSelfConsistency(void)
         return 1;
     }
 
-    /* Negative path: corrupt a byte inside the signature's value
-     * region (not the DER header), so wolfCrypt's verify completes
-     * its parse and the math rejects the signature cleanly with
-     * rc=0, verifyRes=0. The dispatcher must surface this as
-     * E_OK + verifyPtr=CRYPTO_E_VER_NOT_OK per the R22-11 SWS.
-     *
-     * Flipping byte 0 (the 0x30 SEQUENCE tag) breaks DER parsing on
-     * the server and currently destabilises the wolfHSM POSIX server
-     * — that path is covered by client-side robustness in
-     * doEcdsaSync but not exercised here. See
-     * docs/client_workarounds.md for the upstream report. */
+    /* Corrupt the signature value, not its DER header, so verify parses it
+     * and the math rejects it. */
     if (sigLen < 24u) {
         fprintf(stderr, "  kat ecdsa: signature too short to tamper\n");
         return 1;
@@ -390,8 +363,6 @@ static int testEcdsaSelfConsistency(void)
 }
 #endif
 
-/* --- Ed25519 sign / verify self-consistency ------------------------- */
-
 #if defined(HAVE_ED25519) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int testEd25519SelfConsistency(void)
 {
@@ -408,13 +379,11 @@ static int testEd25519SelfConsistency(void)
     for (i = 0; i < (int)sizeof(msg); ++i)
         msg[i] = (uint8)(i * 11 + 3);
 
-    /* Provision an Ed25519 key under id 102. */
     if (Crypto_KeyGenerate(102u) != E_OK || Crypto_KeySetValid(102u) != E_OK) {
         fprintf(stderr, "  kat ed25519: KeyGenerate failed\n");
         return 1;
     }
 
-    /* Sign. */
     memset(&piSign, 0, sizeof(piSign));
     piSign.service             = CRYPTO_SIGNATUREGENERATE;
     piSign.algorithm.family    = CRYPTO_ALGOFAM_ED25519;
@@ -440,7 +409,6 @@ static int testEd25519SelfConsistency(void)
         return 1;
     }
 
-    /* Verify (good). */
     memset(&piVer, 0, sizeof(piVer));
     piVer.service   = CRYPTO_SIGNATUREVERIFY;
     piVer.algorithm = piSign.algorithm;
@@ -466,7 +434,6 @@ static int testEd25519SelfConsistency(void)
         return 1;
     }
 
-    /* Verify (tampered). */
     sig[20] ^= 0x01u;
     verifyOut = 0xFFu;
     if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
@@ -488,8 +455,6 @@ static int testEd25519SelfConsistency(void)
     return 0;
 }
 #endif
-
-/* --- RSA-2048 PKCS#1 v1.5 sign / verify self-consistency ----------- */
 
 #if !defined(NO_RSA) && !defined(WOLFHSM_CFG_NO_CRYPTO)
 static int testRsaPkcs1v15SelfConsistency(void)
@@ -586,8 +551,6 @@ static int testRsaPkcs1v15SelfConsistency(void)
 }
 #endif
 
-/* --- CMAC sync + async ---------------------------------------------- */
-
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 static int installCmacKey(uint32 cryptoKeyId)
 {
@@ -627,9 +590,16 @@ static int testCmacSyncAndAsync(void)
     /* cryptoKeyId 110 = AES-128 CMAC key (installed below). */
     const uint8 msg[16] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
                            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
-    uint8       mac[16];
-    uint32      macLen = sizeof(mac);
-    uint8       verifyOut;
+    /* SP 800-38B D.1 Example 2 tag. */
+    const uint8    tag[16] = {0x07, 0x0a, 0x16, 0xb4, 0x6b, 0x4d, 0x41, 0x44,
+                              0xf7, 0x9b, 0xdd, 0x9d, 0xd0, 0x4a, 0x28, 0x7c};
+    uint8          mac[16];
+    uint32         macLen = sizeof(mac);
+    uint8          bad[16];
+    uint8          macAsync[16];
+    uint32         macAsyncLen = sizeof(macAsync);
+    uint8          verifyOut;
+    Std_ReturnType res = E_NOT_OK;
     Crypto_PrimitiveInfoType    pi;
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
@@ -639,24 +609,23 @@ static int testCmacSyncAndAsync(void)
         return 1;
     }
 
-    /* --- Sync MAC generate. --- */
     buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 110u, 0u, 1100u);
     job.jobPrimitiveInputOutput.inputPtr        = msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)sizeof(msg);
     job.jobPrimitiveInputOutput.outputPtr       = mac;
     job.jobPrimitiveInputOutput.outputLengthPtr = &macLen;
-    if (testCryIfProcessJob(0u, &job) != E_OK || macLen != 16u) {
+    if (testCryIfProcessJob(0u, &job) != E_OK || macLen != 16u ||
+        memcmp(mac, tag, sizeof(tag)) != 0) {
         fprintf(stderr, "  kat cmac: sync generate failed\n");
         return 1;
     }
 
-    /* --- Sync MAC verify, good tag. --- */
     verifyOut = 0xFFu;
     buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 0u, 1101u);
     job.jobPrimitiveInputOutput.inputPtr             = msg;
     job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
     job.jobPrimitiveInputOutput.secondaryInputPtr    = mac;
-    job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
+    job.jobPrimitiveInputOutput.secondaryInputLength = 128u;
     job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
     if (testCryIfProcessJob(0u, &job) != E_OK || verifyOut != 0x00u) {
         fprintf(stderr,
@@ -665,98 +634,214 @@ static int testCmacSyncAndAsync(void)
         return 1;
     }
 
-    /* --- Sync MAC verify, tampered tag. --- */
-    {
-        uint8 bad[16];
-        memcpy(bad, mac, 16);
-        bad[0] ^= 0x01u;
-        verifyOut = 0xFFu;
-        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 0u, 1102u);
-        job.jobPrimitiveInputOutput.inputPtr             = msg;
-        job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
-        job.jobPrimitiveInputOutput.secondaryInputPtr    = bad;
-        job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
-        job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
-        if (testCryIfProcessJob(0u, &job) != E_OK || verifyOut != 0x01u) {
-            fprintf(stderr,
-                    "  kat cmac: sync verify-bad failed (verifyOut=0x%02x)\n",
-                    verifyOut);
-            return 1;
-        }
+    memcpy(bad, mac, 16);
+    bad[0] ^= 0x01u;
+    verifyOut = 0xFFu;
+    buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 0u, 1102u);
+    job.jobPrimitiveInputOutput.inputPtr             = msg;
+    job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
+    job.jobPrimitiveInputOutput.secondaryInputPtr    = bad;
+    job.jobPrimitiveInputOutput.secondaryInputLength = 128u;
+    job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
+    if (testCryIfProcessJob(0u, &job) != E_OK || verifyOut != 0x01u) {
+        fprintf(stderr,
+                "  kat cmac: sync verify-bad failed (verifyOut=0x%02x)\n",
+                verifyOut);
+        return 1;
     }
 
-    /* --- Async MAC generate. Result must match sync output byte-for-byte. */
-    {
-        uint8  macAsync[16];
-        uint32 macAsyncLen = sizeof(macAsync);
-        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 110u, 1u, 1103u);
-        job.jobPrimitiveInputOutput.inputPtr        = msg;
-        job.jobPrimitiveInputOutput.inputLength     = (uint32)sizeof(msg);
-        job.jobPrimitiveInputOutput.outputPtr       = macAsync;
-        job.jobPrimitiveInputOutput.outputLengthPtr = &macAsyncLen;
-        int prev                                    = testCallbackTotal();
-        if (testCryIfProcessJob(0u, &job) != E_OK) {
-            fprintf(stderr, "  kat cmac: async submit failed\n");
-            return 1;
-        }
-        if (testWaitCallbacks(prev + 1, 5000) != 0 ||
-            gTestCb.lastResult != E_OK) {
-            fprintf(stderr, "  kat cmac: async generate callback failed\n");
-            return 1;
-        }
-        if (macAsyncLen != 16u || memcmp(macAsync, mac, 16) != 0) {
-            fprintf(stderr, "  kat cmac: async mac mismatch sync\n");
-            return 1;
-        }
+    /* Async MAC must match the sync output. */
+    buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 110u, 1u, 1103u);
+    job.jobPrimitiveInputOutput.inputPtr        = msg;
+    job.jobPrimitiveInputOutput.inputLength     = (uint32)sizeof(msg);
+    job.jobPrimitiveInputOutput.outputPtr       = macAsync;
+    job.jobPrimitiveInputOutput.outputLengthPtr = &macAsyncLen;
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK) {
+        fprintf(stderr, "  kat cmac: async generate failed\n");
+        return 1;
+    }
+    if (macAsyncLen != 16u || memcmp(macAsync, mac, 16) != 0) {
+        fprintf(stderr, "  kat cmac: async mac mismatch sync\n");
+        return 1;
     }
 
-    /* --- Async MAC verify, good tag. --- */
-    {
-        verifyOut = 0xFFu;
-        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 1u, 1104u);
-        job.jobPrimitiveInputOutput.inputPtr             = msg;
-        job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
-        job.jobPrimitiveInputOutput.secondaryInputPtr    = mac;
-        job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
-        job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
-        int prev                                         = testCallbackTotal();
-        if (testCryIfProcessJob(0u, &job) != E_OK ||
-            testWaitCallbacks(prev + 1, 5000) != 0 ||
-            gTestCb.lastResult != E_OK || verifyOut != 0x00u) {
-            fprintf(stderr,
-                    "  kat cmac: async verify-good failed (verifyOut=0x%02x)\n",
-                    verifyOut);
-            return 1;
-        }
+    verifyOut = 0xFFu;
+    buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 1u, 1104u);
+    job.jobPrimitiveInputOutput.inputPtr             = msg;
+    job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
+    job.jobPrimitiveInputOutput.secondaryInputPtr    = mac;
+    job.jobPrimitiveInputOutput.secondaryInputLength = 128u;
+    job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK || verifyOut != 0x00u) {
+        fprintf(stderr,
+                "  kat cmac: async verify-good failed (verifyOut=0x%02x)\n",
+                verifyOut);
+        return 1;
     }
 
     printf("  KAT cmac-aes-128: sync gen+verify-good+verify-bad, async gen "
            "(match) + verify-good OK\n");
     return 0;
 }
-#else
-static int testCmacSyncAndAsync(void)
+
+/* RFC 4493 section 4: message prefixes of 0, 16, 40 and 64 bytes. */
+static const char kCmacMsgHex[] =
+    "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51"
+    "30c81c46a35ce411e5fbc1191a0a52eff69f2445df4f9b17ad2b417be66c3710";
+
+static const struct {
+    uint32      len;
+    const char* tagHex;
+} kCmacVectors[] = {{0u, "bb1d6929e95937287fa37d129b756746"},
+                    {16u, "070a16b46b4d4144f79bdd9dd04a287c"},
+                    {40u, "dfa66747de9ae63030ca32611497c827"},
+                    {64u, "51f0bebf7e3b9d92fc49741779363cfe"}};
+
+static Std_ReturnType runCmacJob(Crypto_JobType* job, uint8 async)
 {
+    Std_ReturnType res = E_NOT_OK;
+
+    if (!async) {
+        return testCryIfProcessJob(0u, job);
+    }
+    return (testRunAsync(job, &res) == E_OK) ? res : E_NOT_OK;
+}
+
+static int testCmacRfc4493Body(void)
+{
+    uint8                       msg[64];
+    uint8                       tag[16];
+    uint8                       mac[16];
+    uint32                      macLen;
+    uint8                       verifyOut;
+    uint8                       async;
+    size_t                      i;
+    Crypto_PrimitiveInfoType    pi;
+    Crypto_JobPrimitiveInfoType jpi;
+    Crypto_JobType              job;
+
+    if (installCmacKey(111u) != 0 ||
+        testHexDecode(kCmacMsgHex, msg, sizeof(msg)) != (int)sizeof(msg)) {
+        return 1;
+    }
+    for (i = 0; i < sizeof(kCmacVectors) / sizeof(kCmacVectors[0]); ++i) {
+        if (testHexDecode(kCmacVectors[i].tagHex, tag, sizeof(tag)) !=
+            (int)sizeof(tag)) {
+            return 1;
+        }
+        for (async = 0u; async < 2u; ++async) {
+            macLen = sizeof(mac);
+            buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 111u, async,
+                         1110u);
+            job.jobPrimitiveInputOutput.inputPtr        = msg;
+            job.jobPrimitiveInputOutput.inputLength     = kCmacVectors[i].len;
+            job.jobPrimitiveInputOutput.outputPtr       = mac;
+            job.jobPrimitiveInputOutput.outputLengthPtr = &macLen;
+            if (runCmacJob(&job, async) != E_OK || macLen != 16u ||
+                memcmp(mac, tag, sizeof(tag)) != 0) {
+                fprintf(stderr, "  kat cmac: RFC 4493 ex %u generate (%s)\n",
+                        (unsigned)(i + 1u), async ? "async" : "sync");
+                return 1;
+            }
+            verifyOut = 0xFFu;
+            buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 111u, async, 1111u);
+            job.jobPrimitiveInputOutput.inputPtr          = msg;
+            job.jobPrimitiveInputOutput.inputLength       = kCmacVectors[i].len;
+            job.jobPrimitiveInputOutput.secondaryInputPtr = tag;
+            job.jobPrimitiveInputOutput.secondaryInputLength = 128u;
+            job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
+            if (runCmacJob(&job, async) != E_OK ||
+                verifyOut != CRYPTO_E_VER_OK) {
+                fprintf(stderr, "  kat cmac: RFC 4493 ex %u verify (%s)\n",
+                        (unsigned)(i + 1u), async ? "async" : "sync");
+                return 1;
+            }
+        }
+    }
+    printf("  KAT cmac-aes-128: RFC 4493 examples 1-4, sync + async\n");
     return 0;
 }
-#endif
 
-/* --- Entrypoint ------------------------------------------------------ */
+static int testCmacRfc4493(void)
+{
+    static const uint32 keys[] = {111u};
+    return testWithKeys(testCmacRfc4493Body, keys, 1);
+}
+
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
+static int testKdfKatBody(void)
+{
+#ifdef HAVE_CMAC_KDF
+    static const uint8 zeroSalt[AES_128_KEY_SIZE] = {0};
+#endif
+    uint8  ikm[22];
+    uint8  want[32];
+    uint8  got[32];
+    uint32 gotLen = sizeof(got);
+
+    memset(ikm, 0x0b, sizeof(ikm));
+    if (Crypto_KeyElementSet(135u, 1u, ikm, sizeof(ikm)) != E_OK ||
+        Crypto_KeySetValid(135u) != E_OK) {
+        fprintf(stderr, "  kat kdf: source key\n");
+        return 1;
+    }
+#ifdef HAVE_HKDF
+    /* RFC 5869 A.3 (no salt, no info): first 32 bytes of the OKM. */
+    if (testHexDecode("8da4e775a563c18f715f802a063c5a31"
+                      "b8a11f5c5ee1879ec3454e5f3c738d2d",
+                      want, sizeof(want)) != 32 ||
+        Crypto_KeyDerive(135u, 124u) != E_OK ||
+        Crypto_KeyElementGet(124u, 1u, got, &gotLen) != E_OK || gotLen != 32u ||
+        memcmp(got, want, 32u) != 0) {
+        fprintf(stderr, "  kat kdf: HKDF differs from RFC 5869 A.3\n");
+        return 1;
+    }
+#endif
+#ifdef HAVE_CMAC_KDF
+    /* No salt element: the driver uses a zero block as the salt. */
+    gotLen = sizeof(got);
+    if (wc_KDA_KDF_twostep_cmac(zeroSalt, sizeof(zeroSalt), ikm, sizeof(ikm),
+                                NULL, 0u, want, 16u, NULL,
+                                INVALID_DEVID) != 0 ||
+        Crypto_KeyDerive(135u, 125u) != E_OK ||
+        Crypto_KeyElementGet(125u, 1u, got, &gotLen) != E_OK || gotLen != 16u ||
+        memcmp(got, want, 16u) != 0) {
+        fprintf(stderr, "  kat kdf: CMAC-KDF differs from software\n");
+        return 1;
+    }
+#endif
+    printf("  KAT kdf: HKDF against RFC 5869 A.3, CMAC-KDF against "
+           "software\n");
+    return 0;
+}
+
+static int testKdfKat(void)
+{
+    static const uint32 keys[] = {135u, 124u, 125u};
+    return testWithKeys(testKdfKatBody, keys, 3);
+}
+#endif
+#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 int testKatAll(void)
 {
-    int failures = 0;
+    static const uint32 keys[]   = {0x80u, 0x81u, 101u, 102u, 103u, 110u};
+    int                 failures = 0;
+    size_t              i;
+
     TEST_RUN(failures, testHashKAT);
     TEST_RUN(failures, testAesCbcKAT);
     TEST_RUN(failures, testEcdsaSelfConsistency);
     TEST_RUN(failures, testEd25519SelfConsistency);
     TEST_RUN(failures, testRsaPkcs1v15SelfConsistency);
+#ifndef WOLFHSM_CFG_NO_CRYPTO
     TEST_RUN(failures, testCmacSyncAndAsync);
-    {
-        static const uint32 keys[] = {0x80u, 0x81u, 101u, 102u, 103u, 110u};
-        size_t              i;
-        for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i)
-            testEraseKey(keys[i]);
-    }
+    TEST_RUN(failures, testCmacRfc4493);
+#if defined(HAVE_HKDF) || defined(HAVE_CMAC_KDF)
+    TEST_RUN(failures, testKdfKat);
+#endif
+#endif
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i)
+        testEraseKey(keys[i]);
     return failures;
 }

@@ -19,10 +19,7 @@
 /*
  * port/autosar/classic/examples/csm_smoke/csm_smoke.c
  *
- * Stand-alone test runner for the wolfHSM AUTOSAR Crypto Driver.
- * Owns the platform hooks (TCP transport), the key descriptor table,
- * the existing "basic" tests, and the main() that drives the
- * per-category test files (test_kat.c, test_det.c, ...).
+ * csm_smoke test runner: TCP transport hook, key descriptors and main().
  */
 
 #include "test_helpers.h"
@@ -35,8 +32,6 @@
 
 #define SMOKE_CLIENT_ID 7u
 
-/* --- Platform hook --------------------------------------------------- */
-
 static posixTransportTcpClientContext s_tcpCtx[CRYPTO_DRIVER_OBJECT_COUNT];
 static posixTransportTcpConfig        s_tcpCfg[CRYPTO_DRIVER_OBJECT_COUNT];
 static whCommClientConfig             s_commCfg[CRYPTO_DRIVER_OBJECT_COUNT];
@@ -44,9 +39,16 @@ static whClientConfig                 s_clientCfg[CRYPTO_DRIVER_OBJECT_COUNT];
 static whTransportClientCb            s_tcpCb       = PTT_CLIENT_CB;
 static int                            s_nextHookIdx = 0;
 
+int gTestFailClientConfig = 0;
+
 int wh_Autosar_PlatformClientConfig(whClientContext* client)
 {
-    int idx = s_nextHookIdx++;
+    int idx;
+
+    if (gTestFailClientConfig) {
+        return WH_ERROR_ABORTED;
+    }
+    idx = s_nextHookIdx++;
     if (idx >= (int)(sizeof(s_tcpCtx) / sizeof(s_tcpCtx[0]))) {
         return WH_ERROR_BADARGS;
     }
@@ -64,39 +66,53 @@ int wh_Autosar_PlatformClientConfig(whClientContext* client)
     return wh_Client_Init(client, &s_clientCfg[idx]);
 }
 
-/* --- Strong override of the weak descriptor table. ------------------ */
-/* Smoke harness keys: cryptoKeyId 100 = AES-256, 101 = ECC P-256. */
-
 static const Crypto_KeyDescriptorType s_keyDescriptors[] = {
-    {100u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+    {0x10u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 64u, 0, 0, 0, TRUE},
+    {0x11u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 64u, 0, 0, 0, TRUE},
+    {0xCAu, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, TRUE},
+    {100u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, FALSE},
     {101u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
-     0, 0},
-    {102u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+     0, 0, FALSE},
+    {102u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0,
+     FALSE},
     {103u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PKCS1_V1_5, 2048u, 0, 0,
-     0},
+     0, FALSE},
     {120u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1, 0,
-     0},
+     0, TRUE},
     {121u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1, 0,
-     0},
-    {122u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
-    {123u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+     0, TRUE},
+    {122u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, TRUE},
+    {123u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, TRUE},
     {124u, CRYPTO_ALGOFAM_HKDF, CRYPTO_ALGOMODE_NOT_SET, 256u, 0,
-     WC_HASH_TYPE_SHA256, 0},
-    {125u, WH_AUTOSAR_ALGOFAM_CMAC_KDF, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0},
-    {126u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0},
-    {127u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+     WC_HASH_TYPE_SHA256, 0, TRUE},
+    {125u, WH_AUTOSAR_ALGOFAM_CMAC_KDF, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0,
+     TRUE},
+    {126u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0, FALSE},
+    {127u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0,
+     FALSE},
+    {131u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, TRUE},
+    {132u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0, TRUE},
     {140u, WH_AUTOSAR_ALGOFAM_MLDSA, CRYPTO_ALGOMODE_NOT_SET, 0u, 0, 0,
-     WC_ML_DSA_44},
-    {141u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PSS, 2048u, 0, 0, 0},
+     WC_ML_DSA_44, FALSE},
+    {141u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PSS, 2048u, 0, 0, 0,
+     FALSE},
     {142u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
-     0, 0}};
+     0, 0, FALSE},
+    {143u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0,
+     FALSE},
+    {144u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0, FALSE},
+    {145u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0, FALSE},
+    {146u, WH_AUTOSAR_ALGOFAM_MLDSA, CRYPTO_ALGOMODE_NOT_SET, 0u, 0, 0,
+     WC_ML_DSA_65, FALSE},
+    {147u, WH_AUTOSAR_ALGOFAM_MLDSA, CRYPTO_ALGOMODE_NOT_SET, 0u, 0, 0,
+     WC_ML_DSA_87, FALSE},
+    {150u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0, TRUE},
+    {151u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0, FALSE}};
 
 const Crypto_KeyDescriptorType* const Crypto_KeyDescriptorTable =
     s_keyDescriptors;
 const uint32 Crypto_KeyDescriptorCount =
     sizeof(s_keyDescriptors) / sizeof(s_keyDescriptors[0]);
-
-/* --- Existing "basic" tests (kept for regression coverage) ---------- */
 
 static int testRngSync(void)
 {
@@ -336,6 +352,9 @@ int main(void)
     int                 failures = 0;
     Std_VersionInfoType vi       = {0};
 
+    printf("[init]\n");
+    failures += testDetBeforeInit();
+
     Crypto_Init(NULL);
     Crypto_GetVersionInfo(&vi);
     printf("wolfHSM AUTOSAR Crypto Driver v%u.%u.%u (vendor=%u, module=%u)\n",
@@ -344,7 +363,6 @@ int main(void)
 
     testStartMainFunctionThread();
 
-    /* --- Existing regression tests --- */
     printf("[basic]\n");
     TEST_RUN(failures, testRngSync);
     TEST_RUN(failures, testRngAsync);
@@ -361,20 +379,23 @@ int main(void)
     testEraseKey(0x11u);
 #endif
 
-    /* --- Category-1 KAT vectors --- */
     printf("[kat]\n");
     failures += testKatAll();
 
-    /* --- Category-2 DET coverage --- */
     printf("[det]\n");
     failures += testDetAll();
 
-    /* --- Category-3 Resource accounting --- */
     printf("[accounting]\n");
     failures += testAccountingAll();
 
     printf("[cipher]\n");
     failures += testCipherAll();
+
+    printf("[edge]\n");
+    failures += testEdgeAll();
+
+    printf("[policy]\n");
+    failures += testPolicyAll();
 
     printf("[sig]\n");
     failures += testSigAll();
@@ -382,19 +403,20 @@ int main(void)
     printf("[keymgmt]\n");
     failures += testKeyMgmtAll();
 
-    /* --- Category-6 Cancel-during-pending --- */
+    printf("[limits]\n");
+    failures += testLimitsAll();
+
     printf("[cancel]\n");
     failures += testCancelAll();
 
-    /* --- Category-5 Timeout --- */
     printf("[timeout]\n");
     failures += testTimeoutAll();
 
-    /* --- Category-4 Concurrency stress (longest) --- */
     printf("[concurrency]\n");
     failures += testConcurrencyAll();
 
     testStopMainFunctionThread();
+    (void)wh_Client_CommClose(&wh_Autosar_GetDriverObject(0u)->client);
 
     if (failures != 0) {
         fprintf(stderr, "%d test(s) failed\n", failures);

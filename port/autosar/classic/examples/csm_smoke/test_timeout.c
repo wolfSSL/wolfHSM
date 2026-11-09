@@ -19,14 +19,7 @@
 /*
  * port/autosar/classic/examples/csm_smoke/test_timeout.c
  *
- * Category-5: async timeout. Verifies that a PENDING slot whose age
- * exceeds CRYPTO_ASYNC_TIMEOUT_TICKS is force-cleaned by
- * Crypto_MainFunction, the callback fires with E_NOT_OK, and the
- * slot returns to IDLE without leaking resources.
- *
- * Uses wh_Autosar_DebugInjectFakePending so the timeout is exercised
- * without depending on server orchestration (a real server stall is
- * non-deterministic in CI).
+ * Async timeout: a stale PENDING slot completes with E_NOT_OK.
  */
 
 #include "test_helpers.h"
@@ -49,8 +42,6 @@ static int testTimeoutForcesCallback(void)
     job.jobPrimitiveInfo = &jpi;
     job.jobState         = CRYPTO_JOBSTATE_ACTIVE;
 
-    /* Pause the worker so we can drive MainFunction manually for
-     * deterministic ordering. */
     testPauseMainFunctionThread();
 
     prev = testCallbackTotal();
@@ -61,12 +52,8 @@ static int testTimeoutForcesCallback(void)
         return 1;
     }
 
-    /* Push the clock past the timeout threshold. */
     wh_Autosar_DebugAdvanceTicks(obj, CRYPTO_ASYNC_TIMEOUT_TICKS + 1u);
 
-    /* Hand back to the worker. The next MainFunction iteration will
-     * see the timeout, force-complete the slot, and surface a callback
-     * with E_NOT_OK on the iteration after. Allow two iterations. */
     testResumeMainFunctionThread();
 
     if (testWaitCallbacks(prev + 1, 1000) != 0) {

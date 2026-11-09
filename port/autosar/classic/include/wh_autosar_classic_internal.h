@@ -52,24 +52,13 @@ extern "C" {
 #elif defined(__IAR_SYSTEMS_ICC__)
 #define WH_AUTOSAR_WEAK __weak
 #else
-/* Unknown toolchain: emit a warning so the integrator notices that the
- * weak-symbol fallback is silently empty. Strong overrides of any
- * WH_AUTOSAR_WEAK symbol will collide with the default at link time. To
- * silence this warning, extend the toolchain matrix above with the
- * correct weak-symbol spelling for the new compiler. */
-#if defined(__GNUC__) || defined(__clang__)
-#warning "WH_AUTOSAR_WEAK: unknown toolchain, weak fallback is a no-op"
-#endif
-#define WH_AUTOSAR_WEAK /* no weak support; strong-only build */
+/* Unknown toolchain: the default hooks are strong and cannot be overridden. */
+#define WH_AUTOSAR_WEAK
 #endif
 
 /* Vendor headers disagree on CRYPTO_E_VER_NOT_OK, so use local values. */
 #define WH_AUTOSAR_VER_OK_VAL ((uint8)0x00u)
 #define WH_AUTOSAR_VER_NOT_OK_VAL ((uint8)0x01u)
-
-/* -------------------------------------------------------------------
- * Slot state machine
- * ------------------------------------------------------------------- */
 
 typedef enum {
     WH_AUTOSAR_ASYNC_IDLE = 0,
@@ -90,9 +79,7 @@ typedef enum {
     WH_AUTOSAR_PHASE_HASH_FINAL  = 2
 } wh_AutosarPhase;
 
-/* Per-op state union. Lives across the Request/Response pair(s) so the
- * Response handler can decode the reply and write back into the
- * caller's job buffers. */
+/* Per-op state kept from request to response. */
 typedef struct {
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     union {
@@ -108,7 +95,7 @@ typedef struct {
     } wc;
 #endif
 
-    /* Hash async: input chunking state for multi-Update streaming. */
+    /* Async hash input, fed in chunks over several updates. */
     const uint8* hashInput;
     uint32       hashRemaining;
     uint8*       digestOut;
@@ -121,9 +108,7 @@ typedef struct {
     uint8  sigDigest[64];
     uint32 sigDigestLen;
 
-    /* AES async: caller buffers (captured at Request time so the
-     * Response handler can write back even if the caller mutates the
-     * job struct). */
+    /* AES caller buffers, captured when the request is sent. */
     uint8* cipherOut;
     uint32 cipherLen;
     uint8* tagOut;
@@ -151,23 +136,14 @@ typedef struct {
     wh_AutosarOpState op;
 } wh_AutosarJobSlot;
 
-/* -------------------------------------------------------------------
- * Streamed-hash state (sync path, multi-call START/UPDATE/FINISH)
- *
- * Keyed by jobId AND lives per-driver-object so two driver objects
- * with overlapping jobIds don't collide.
- * ------------------------------------------------------------------- */
+/* Streamed START/UPDATE/FINISH hash state per driver object, by jobId. */
 
 #define WH_AUTOSAR_HASH_SLOTS_PER_OBJ 4u
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 typedef struct {
     boolean inUse;
-    /* TRUE once an UPDATE/FINISH has failed on this slot. The slot
-     * stays allocated (so the caller's jobId still resolves and we
-     * don't leak the wc_Sha* state for FINISH to free) but every
-     * subsequent UPDATE/FINISH returns E_NOT_OK without touching
-     * wolfCrypt — the hash state is undefined after a wire failure. */
+    /* A failed UPDATE fails the rest of the stream; FINISH frees it. */
     boolean          errored;
     boolean          busy;
     uint32           jobId;
@@ -207,17 +183,29 @@ Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
 /* Claims the object's client for a blocking exchange; CRYPTO_E_BUSY while an
  * async request is in flight. */
 Std_ReturnType wh_Autosar_WireAcquire(wh_AutosarDriverObject* obj);
-void           wh_Autosar_WireRelease(wh_AutosarDriverObject* obj);
+/* Releases a streaming hash state left by START/UPDATE jobs; TRUE if found. */
+boolean wh_Autosar_HashStateCancel(wh_AutosarDriverObject* obj, uint32 jobId);
+void    wh_Autosar_WireRelease(wh_AutosarDriverObject* obj);
 
 /* Keystore client plus wire ownership for the direct key APIs. */
 Std_ReturnType wh_Autosar_KeystoreBegin(whClientContext** outCtx);
 void           wh_Autosar_KeystoreEnd(whClientContext* ctx);
 
+/* Guards the key state and IV tables; weak no-ops by default. */
+void wh_Autosar_LockKeys(void);
+void wh_Autosar_UnlockKeys(void);
+
 Std_ReturnType wh_Autosar_KeyMarkInvalid(uint32 cryptoKeyId);
+Std_ReturnType wh_Autosar_KeyMarkWritten(uint32 cryptoKeyId);
 void           wh_Autosar_KeyMarkValid(uint32 cryptoKeyId);
 boolean        wh_Autosar_KeyIsValid(uint32 cryptoKeyId);
-Std_ReturnType wh_Autosar_KeyIvGet(uint32 cryptoKeyId, const uint8** iv,
-                                   uint32* ivLen);
+boolean        wh_Autosar_KeyIsRevoked(uint32 cryptoKeyId);
+/* Copies the key's CRYPTO_KE_CIPHER_IV into iv and clears it. */
+Std_ReturnType wh_Autosar_KeyIvTake(uint32 cryptoKeyId, uint8* iv,
+                                    uint32* ivLen);
+Std_ReturnType wh_Autosar_KeySaltGet(uint32 cryptoKeyId, uint8* salt,
+                                     uint32* saltLen);
+whNvmFlags     wh_Autosar_KeyFlags(uint32 cryptoKeyId);
 
 Std_ReturnType wh_Autosar_KeyElementSetImpl(whClientContext* ctx,
                                             uint32           cryptoKeyId,
@@ -245,10 +233,7 @@ Std_ReturnType wh_Autosar_ProcessJobAsync(wh_AutosarDriverObject* obj,
  * per client. */
 void wh_Autosar_MainFunctionObject(wh_AutosarDriverObject* obj);
 
-/* -------------------------------------------------------------------
- * Keystore (logically separate from per-driver-object job clients)
- * ------------------------------------------------------------------- */
-
+/* Keystore hooks; weak defaults in Crypto_Keystore.c. */
 whClientContext* wh_Autosar_KeystoreClient(void);
 int              wh_Autosar_KeystoreInit(void);
 int              wh_Autosar_KeystoreCleanup(void);
@@ -271,6 +256,7 @@ typedef struct {
     int                        eccCurveId; /* wolfCrypt ECC_SECP* */
     int                        hashType;   /* wolfCrypt WC_HASH_TYPE_* */
     int                        mlDsaLevel; /* WC_ML_DSA_44 / 65 / 87 */
+    boolean                    exportable; /* KeyElementGet may read it */
 } Crypto_KeyDescriptorType;
 
 /* Key descriptor table from the post-build configuration. */
@@ -280,66 +266,31 @@ extern const uint32                          Crypto_KeyDescriptorCount;
 const Crypto_KeyDescriptorType*
 wh_Autosar_LookupKeyDescriptor(uint32 cryptoKeyId);
 
-/* -------------------------------------------------------------------
- * whKeyId composition
- *
- * Default scheme:
- *   bits 15..12   WH_KEYTYPE_CRYPTO
- *   bits 11..8    keyElementId (4 bits, supports element ids 0..15)
- *   bits  7..0    cryptoKeyId  (8 bits, supports 256 distinct keys)
- *
- * cryptoKeyId > 255 or keyElementId > 15 are rejected (returns 0,
- * which all wolfHSM calls treat as an invalid id). Integrators needing
- * more capacity install a strong override of wh_Autosar_ComposeKeyId.
- * ------------------------------------------------------------------- */
-
+/* Maps (cryptoKeyId 1..255, keyElementId 1) to a wolfHSM key id; 0 if none. */
 whKeyId wh_Autosar_ComposeKeyId(uint32 cryptoKeyId, uint32 keyElementId);
 
-/* -------------------------------------------------------------------
- * Async timeout (in MainFunction ticks). Override at compile time. A
- * PENDING slot older than this is force-cleaned and reported E_NOT_OK.
- * ------------------------------------------------------------------- */
+/* Shortest CMAC verify length in bits and GCM tag length in bytes. */
+#ifndef CRYPTO_CMAC_MIN_VERIFY_BITS
+#define CRYPTO_CMAC_MIN_VERIFY_BITS 64u
+#endif
+#ifndef CRYPTO_AEAD_MIN_TAG_LEN
+#define CRYPTO_AEAD_MIN_TAG_LEN 12u
+#endif
+
+/* MainFunction ticks after which an in-flight request fails. */
 #ifndef CRYPTO_ASYNC_TIMEOUT_TICKS
 #define CRYPTO_ASYNC_TIMEOUT_TICKS 10000u
 #endif
 
-/* -------------------------------------------------------------------
- * Test introspection hooks
- *
- * Used by the in-tree test harness to assert leak-freedom, drive
- * timeout paths deterministically, and inject synthetic state. Cheap
- * to include in production builds (a handful of small accessors) and
- * the inject helpers are explicitly guarded so they cannot fire
- * unless a test calls them.
- * ------------------------------------------------------------------- */
-
-/* Returns the number of asyncSlots in a non-IDLE state (i.e. anything
- * the dispatcher is tracking). Tests assert == 0 between cases. */
+#ifdef WH_AUTOSAR_TEST_HOOKS
 uint32 wh_Autosar_DebugActiveSlotCount(const wh_AutosarDriverObject* obj);
-
-/* Returns the number of streamed-hash state slots currently allocated.
- * Tests assert == 0 between cases. */
 uint32 wh_Autosar_DebugActiveHashStateCount(const wh_AutosarDriverObject* obj);
-
-/* Force-advance the MainFunction tick counter. Used by the timeout test
- * to push a slot past CRYPTO_ASYNC_TIMEOUT_TICKS without waiting wall-
- * clock-real time. */
-void wh_Autosar_DebugAdvanceTicks(wh_AutosarDriverObject* obj, uint32 by);
-
-/* Inject a synthetic PENDING slot tied to job, but WITHOUT issuing any
- * wolfHSM Request on the wire. Used exclusively by the timeout test:
- * combined with DebugAdvanceTicks, lets the timeout path fire
- * deterministically without server-side orchestration. Returns 0 on
- * success, -1 if no slot is free. */
-int wh_Autosar_DebugInjectFakePending(wh_AutosarDriverObject* obj,
-                                      Crypto_JobType* job, wh_AutosarOpKind op);
-
-/* Force every slot back to IDLE without consulting the wire, freeing
- * the wolfCrypt context of each. Used by the test runner after a
- * failing test that exited early without draining its in-flight async
- * jobs — otherwise MainFunction's eventual Response handler would
- * write to a freed stack frame. Skips any callback notifications. */
+void   wh_Autosar_DebugAdvanceTicks(wh_AutosarDriverObject* obj, uint32 by);
+/* Adds a PENDING slot with nothing on the wire, for the timeout test. */
+int  wh_Autosar_DebugInjectFakePending(wh_AutosarDriverObject* obj,
+                                       Crypto_JobType* job, wh_AutosarOpKind op);
 void wh_Autosar_DebugForceResetSlots(wh_AutosarDriverObject* obj);
+#endif
 
 #ifdef __cplusplus
 } /* extern "C" */

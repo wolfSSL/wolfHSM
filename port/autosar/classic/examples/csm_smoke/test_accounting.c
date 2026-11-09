@@ -19,23 +19,13 @@
 /*
  * port/autosar/classic/examples/csm_smoke/test_accounting.c
  *
- * Category-3 tests: resource accounting.
- *
- * The TEST_RUN macro already asserts active-slot count and active
- * hash-state count return to zero after every test in every category.
- * This file adds tests for the specific lifecycle paths that have
- * historically leaked resources (FinalRequest failure mid-async,
- * UPDATE without START, async submit-then-cancel before issuance,
- * etc.) so any regression has a dedicated reproducer.
+ * Resource accounting: slot and hash-state leaks on misuse paths.
  */
 
 #include "test_helpers.h"
 
 #include <stdio.h>
 #include <string.h>
-
-/* --- UPDATE without prior START: dispatcher must reject and not
- *     allocate a hash state slot. ------------------------------------ */
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 static int testAccountingHashUpdateWithoutStart(void)
@@ -63,11 +53,6 @@ static int testAccountingHashUpdateWithoutStart(void)
     }
     return 0;
 }
-
-/* --- START / re-START without intervening FINISH: the second START
- *     for the same jobId must free the previous wc_Sha256 before
- *     re-initialising. Active-hash-state count returns to 1 inside
- *     the test and 0 after FINISH. ------------------------------ */
 
 static int testAccountingHashReSart(void)
 {
@@ -109,15 +94,9 @@ static int testAccountingHashReSart(void)
 }
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
-/* --- Many async submissions in tight loop: confirms no slot is
- *     orphaned across the queue → in-flight → complete → idle cycle. */
-
 static int testAccountingAsyncChurn(void)
 {
-    enum {
-        CYCLES = 8
-    }; /* matches CRYPTO_MAX_ASYNC_JOBS so the
-           queue stays at saturation throughout */
+    enum { CYCLES = 8 }; /* fills CRYPTO_MAX_ASYNC_JOBS */
     Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
@@ -140,7 +119,6 @@ static int testAccountingAsyncChurn(void)
     }
     if (testWaitCallbacks(prev + CYCLES, 30000) != 0)
         return 1;
-    /* TEST_RUN will assert active-slot count == 0 after this. */
     return 0;
 }
 
@@ -153,7 +131,7 @@ int testAccountingAll(void)
 #endif
     TEST_RUN(failures, testAccountingAsyncChurn);
     if (failures == 0) {
-        printf("  accounting: leak-free across UPDATE/START misuse + 20-cycle "
+        printf("  accounting: leak-free across UPDATE/START misuse + 8-cycle "
                "async churn\n");
     }
     return failures;

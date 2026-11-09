@@ -19,11 +19,7 @@
 /*
  * port/autosar/adaptive/examples/ap_smoke/ap_smoke.cpp
  *
- * End-to-end smoke for the Adaptive CryptoProvider. Connects to a
- * running wh_posix_server over TCP, exercises each functional cluster
- * once (Random, Hash, SymmetricBlockCipher, AuthCipher, MAC,
- * Signer/Verifier per family, KeyAgreement, KDF, KeyStorage). Returns
- * exit code 0 on success.
+ * Adaptive CryptoProvider smoke test, run against wh_posix_server over TCP.
  */
 
 #include <cstdio>
@@ -40,6 +36,7 @@ extern "C" {
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/asn_public.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/hash.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/sha256.h"
@@ -199,18 +196,19 @@ static int testAesCbc(WolfhsmCryptoProvider& prov)
                                          0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b,
                                          0x12, 0xe9, 0x19, 0x7d};
 
-    /* Install key under whKeyId 0x1101 (USAGE_ANY). */
     auto store = prov.CreateKeyStorageProvider();
-    CHECK("aes-cbc:store",
-          store->SaveKey(0x1101u, key, sizeof(key)).HasValue());
+    CHECK("aes-cbc:store", store->SaveKey(0x01u, key, sizeof(key)).HasValue());
 
     auto cipher =
-        prov.CreateSymmetricBlockCipherCtx(AlgId::kAesCbc, 0x1101u, 128);
+        prov.CreateSymmetricBlockCipherCtx(AlgId::kAesCbc, 0x01u, 128);
     CHECK("aes-cbc:create", cipher != nullptr);
     auto r = cipher->ProcessBlocks(iv, sizeof(iv), pt, sizeof(pt), true);
     CHECK("aes-cbc:encrypt", r.HasValue() && r.Value().size() == 16);
     CHECK("aes-cbc:value", std::memcmp(r.Value().data(), ct, 16) == 0);
-    std::printf("  AES-CBC-128 NIST F.2.1 OK\n");
+    auto d = cipher->ProcessBlocks(iv, sizeof(iv), ct, sizeof(ct), false);
+    CHECK("aes-cbc:decrypt", d.HasValue() && d.Value().size() == 16 &&
+                                 std::memcmp(d.Value().data(), pt, 16) == 0);
+    std::printf("  AES-CBC-128 NIST F.2.1 encrypt + decrypt OK\n");
     return 0;
 }
 
@@ -228,7 +226,7 @@ static int testAesCtr(WolfhsmCryptoProvider& prov)
                                          0x99, 0x0d, 0xb6, 0xce};
 
     auto cipher =
-        prov.CreateSymmetricBlockCipherCtx(AlgId::kAesCtr, 0x1101u, 128);
+        prov.CreateSymmetricBlockCipherCtx(AlgId::kAesCtr, 0x01u, 128);
     CHECK("aes-ctr:create", cipher != nullptr);
     auto e = cipher->ProcessBlocks(ctr, sizeof(ctr), pt, sizeof(pt), true);
     CHECK("aes-ctr:encrypt", e.HasValue() && e.Value().size() == 16 &&
@@ -236,13 +234,14 @@ static int testAesCtr(WolfhsmCryptoProvider& prov)
     auto d = cipher->ProcessBlocks(ctr, sizeof(ctr), ct, sizeof(ct), false);
     CHECK("aes-ctr:decrypt", d.HasValue() && d.Value().size() == 16 &&
                                  std::memcmp(d.Value().data(), pt, 16) == 0);
+    (void)wh_Client_KeyEvict(&g_clientCtx, 0x01u);
     std::printf("  AES-CTR-128 NIST F.5.1 encrypt + decrypt OK\n");
     return 0;
 }
 
 static int testAesGcm(WolfhsmCryptoProvider& prov)
 {
-    /* Use the same key as CBC (different keyId so usage policy applies). */
+    /* The CBC key material, cached under its own keyId. */
     static const std::uint8_t key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
                                          0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
                                          0x09, 0xcf, 0x4f, 0x3c};
@@ -252,9 +251,8 @@ static int testAesGcm(WolfhsmCryptoProvider& prov)
                                         '!', 0,   0,   0,   0,   0,   0,   0};
 
     auto store = prov.CreateKeyStorageProvider();
-    CHECK("aes-gcm:store",
-          store->SaveKey(0x1102u, key, sizeof(key)).HasValue());
-    auto cipher = prov.CreateAuthCipherCtx(0x1102u, 128);
+    CHECK("aes-gcm:store", store->SaveKey(0x02u, key, sizeof(key)).HasValue());
+    auto cipher = prov.CreateAuthCipherCtx(0x02u, 128);
     CHECK("aes-gcm:create", cipher != nullptr);
     auto enc = cipher->ProcessEncrypt(iv, sizeof(iv), aad, sizeof(aad), pt,
                                       sizeof(pt), 16);
@@ -265,7 +263,27 @@ static int testAesGcm(WolfhsmCryptoProvider& prov)
                                       tag, 16);
     CHECK("aes-gcm:dec",
           dec.HasValue() && std::memcmp(dec.Value().data(), pt, 16) == 0);
-    std::printf("  AES-GCM-128 roundtrip OK\n");
+
+    std::uint8_t badTag[16];
+    std::memcpy(badTag, tag, sizeof(badTag));
+    badTag[0] ^= 0x01u;
+    auto decBad = cipher->ProcessDecrypt(iv, sizeof(iv), aad, sizeof(aad), ct,
+                                         16, badTag, sizeof(badTag));
+    CHECK("aes-gcm:bad-tag",
+          !decBad.HasValue() &&
+              decBad.Error() == SecurityErrc::kAuthTagMismatch);
+    auto encShort = cipher->ProcessEncrypt(iv, sizeof(iv), aad, sizeof(aad), pt,
+                                           sizeof(pt), 8);
+    CHECK("aes-gcm:enc-short-tag",
+          !encShort.HasValue() &&
+              encShort.Error() == SecurityErrc::kInvalidInputSize);
+    auto decShort = cipher->ProcessDecrypt(iv, sizeof(iv), aad, sizeof(aad), ct,
+                                           16, tag, 8);
+    CHECK("aes-gcm:dec-short-tag",
+          !decShort.HasValue() &&
+              decShort.Error() == SecurityErrc::kInvalidInputSize);
+    CHECK("aes-gcm:evict", wh_Client_KeyEvict(&g_clientCtx, 0x02u) == 0);
+    std::printf("  AES-GCM-128 roundtrip, bad tag and short tag rejected OK\n");
     return 0;
 }
 
@@ -275,8 +293,8 @@ static int testCmac(WolfhsmCryptoProvider& prov)
                                          0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
                                          0x09, 0xcf, 0x4f, 0x3c};
     auto                      store   = prov.CreateKeyStorageProvider();
-    CHECK("cmac:store", store->SaveKey(0x1103u, key, sizeof(key)).HasValue());
-    auto mac = prov.CreateMessageAuthnCodeCtx(0x1103u);
+    CHECK("cmac:store", store->SaveKey(0x03u, key, sizeof(key)).HasValue());
+    auto mac = prov.CreateMessageAuthnCodeCtx(0x03u);
     CHECK("cmac:create", mac != nullptr);
     const std::uint8_t msg[8] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
     auto               gen    = mac->Generate(msg, sizeof(msg));
@@ -289,16 +307,28 @@ static int testCmac(WolfhsmCryptoProvider& prov)
     bad[0] ^= 0x01u;
     auto verBad = mac->Verify(msg, sizeof(msg), bad, sizeof(bad));
     CHECK("cmac:verify-bad", verBad.HasValue() && !verBad.Value());
-    std::printf("  CMAC-AES generate + verify good + verify tampered OK\n");
+    auto verTrunc = mac->Verify(msg, sizeof(msg), gen.Value().data(), 12);
+    CHECK("cmac:verify-trunc12", verTrunc.HasValue() && verTrunc.Value());
+    auto verTruncBad = mac->Verify(msg, sizeof(msg), bad, 12);
+    CHECK("cmac:verify-trunc12-bad",
+          verTruncBad.HasValue() && !verTruncBad.Value());
+    auto verShort = mac->Verify(msg, sizeof(msg), gen.Value().data(), 4);
+    CHECK("cmac:verify-short",
+          !verShort.HasValue() &&
+              verShort.Error() == SecurityErrc::kInvalidInputSize);
+    auto verNull = mac->Verify(msg, sizeof(msg), nullptr, 16);
+    CHECK("cmac:verify-null",
+          !verNull.HasValue() &&
+              verNull.Error() == SecurityErrc::kInvalidArgument);
+    std::printf("  CMAC-AES generate, verify full/truncated/tampered, bad "
+                "args rejected OK\n");
     return 0;
 }
 
 static int testSignerVerifierEcdsa(WolfhsmCryptoProvider& prov)
 {
-    /* Generate an ECC P-256 key into whKeyId 0x1104. We use the
-     * low-level wolfHSM client for keygen since the Adaptive layer
-     * doesn't ship a KeyGenerator context. */
-    whKeyId      keyId                   = 0x1104u;
+    /* The provider has no key generator, so use the wolfHSM client. */
+    whKeyId      keyId                   = 0x04u;
     std::uint8_t label[WH_NVM_LABEL_LEN] = {0};
     int          rc                      = wh_Client_EccMakeCacheKey(
         &g_clientCtx, 32, ECC_SECP256R1, &keyId,
@@ -308,19 +338,24 @@ static int testSignerVerifierEcdsa(WolfhsmCryptoProvider& prov)
     static const std::uint8_t hash[32] = {
         1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16,
         17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
-    auto signer = prov.CreateSignerPrivateCtx(AlgId::kEcdsaP256, 0x1104u);
-    auto sig    = signer->Sign(hash, sizeof(hash));
+    auto signer = prov.CreateSignerPrivateCtx(AlgId::kEcdsaP256, 0x04u);
+    CHECK("ecdsa:create", signer != nullptr);
+    auto sig = signer->Sign(hash, sizeof(hash));
     CHECK("ecdsa:sign", sig.HasValue());
-    auto verifier = prov.CreateVerifierPublicCtx(AlgId::kEcdsaP256, 0x1104u);
+    static const std::uint8_t notDigest[40] = {0};
+    auto                      odd = signer->Sign(notDigest, sizeof(notDigest));
+    CHECK("ecdsa:sign-40",
+          !odd.HasValue() && odd.Error() == SecurityErrc::kInvalidInputSize);
+    auto verifier = prov.CreateVerifierPublicCtx(AlgId::kEcdsaP256, 0x04u);
     auto good     = verifier->Verify(hash, sizeof(hash), sig.Value().data(),
                                      sig.Value().size());
     CHECK("ecdsa:verify-good", good.HasValue() && good.Value());
-    /* Tamper. */
     auto tampered = sig.Value();
     tampered[20] ^= 0x01u;
     auto bad =
         verifier->Verify(hash, sizeof(hash), tampered.data(), tampered.size());
     CHECK("ecdsa:verify-bad", bad.HasValue() && !bad.Value());
+    (void)wh_Client_KeyEvict(&g_clientCtx, 0x04u);
     std::printf("  ECDSA P-256 sign + verify-good + verify-bad OK\n");
     return 0;
 }
@@ -328,7 +363,7 @@ static int testSignerVerifierEcdsa(WolfhsmCryptoProvider& prov)
 static int testEcdh(WolfhsmCryptoProvider& prov)
 {
     /* Two fresh P-256 keys; agree once and check both succeed. */
-    whKeyId      a = 0x1105u, b = 0x1106u;
+    whKeyId      a = 0x05u, b = 0x06u;
     std::uint8_t label[WH_NVM_LABEL_LEN] = {0};
     int          rc                      = wh_Client_EccMakeCacheKey(
         &g_clientCtx, 32, ECC_SECP256R1, &a,
@@ -342,13 +377,14 @@ static int testEcdh(WolfhsmCryptoProvider& prov)
     auto agreeAB = prov.CreateKeyAgreementPrivateCtx(AlgId::kEcdhP256, a);
     auto secAB   = agreeAB->AgreeKey(b);
     CHECK("ecdh:agree-ab", secAB.HasValue() && secAB.Value().size() == 32);
-    /* Other direction: derive from B's side using A as the peer. The two
-     * shared secrets must be byte-for-byte identical. */
+    /* B's side, with A as the peer, must give the same secret. */
     auto agreeBA = prov.CreateKeyAgreementPrivateCtx(AlgId::kEcdhP256, b);
     auto secBA   = agreeBA->AgreeKey(a);
     CHECK("ecdh:agree-ba", secBA.HasValue() && secBA.Value().size() == 32);
     CHECK("ecdh:agree-match",
           std::memcmp(secAB.Value().data(), secBA.Value().data(), 32) == 0);
+    (void)wh_Client_KeyEvict(&g_clientCtx, a);
+    (void)wh_Client_KeyEvict(&g_clientCtx, b);
     std::printf("  ECDH P-256 bidirectional shared secret OK (%zu bytes)\n",
                 secAB.Value().size());
     return 0;
@@ -373,6 +409,57 @@ static int signVerifyTamper(WolfhsmCryptoProvider& prov, CryptoAlgId alg,
     auto bad = verifier->Verify(in, len, tampered.data(), tampered.size());
     CHECK(tag, bad.HasValue() && !bad.Value());
     *out = sig.Value();
+    return 0;
+}
+
+static int testEd25519(WolfhsmCryptoProvider& prov)
+{
+    whKeyId       keyId                   = WH_KEYID_ERASED;
+    std::uint8_t  label[WH_NVM_LABEL_LEN] = {0};
+    std::uint8_t  der[96];
+    std::uint16_t derLen = sizeof(der);
+    word32        idx    = 0;
+    int           ok     = 0;
+    ed25519_key   pub;
+    ByteVector    sig;
+
+    int rc = wh_Client_Ed25519MakeCacheKey(
+        &g_clientCtx, &keyId, static_cast<whNvmFlags>(WH_NVM_FLAGS_USAGE_ANY),
+        sizeof(label), label);
+    CHECK("ed25519:keygen", rc == WH_ERROR_OK);
+    rc = signVerifyTamper(prov, AlgId::kEd25519, keyId, kMsg, sizeof(kMsg),
+                          &sig, "ed25519");
+    if (rc == 0 &&
+        (wh_Client_KeyExportPublic(&g_clientCtx, keyId, WH_KEY_ALGO_ED25519,
+                                   label, sizeof(label), der, &derLen) != 0 ||
+         wc_ed25519_init(&pub) != 0)) {
+        rc = -1;
+    }
+    if (rc == 0) {
+        if (wc_Ed25519PublicKeyDecode(der, &idx, &pub, derLen) != 0 ||
+            wc_ed25519_verify_msg(sig.data(), sig.size(), kMsg, sizeof(kMsg),
+                                  &ok, &pub) != 0 ||
+            ok != 1) {
+            std::fprintf(stderr, "  [FAIL] ed25519:software-verify\n");
+            rc = -1;
+        }
+        wc_ed25519_free(&pub);
+    }
+    (void)wh_Client_KeyEvict(&g_clientCtx, keyId);
+    if (rc != 0)
+        return 1;
+    std::printf("  Ed25519 sign/verify, pure RFC 8032 software interop OK\n");
+    return 0;
+}
+
+static int testFlaggedKeyIdRejected(WolfhsmCryptoProvider& prov)
+{
+    CHECK("keyid:global-flag",
+          prov.CreateSignerPrivateCtx(AlgId::kEcdsaP256,
+                                      WH_KEYID_CLIENT_GLOBAL_FLAG | 0x04u) ==
+              nullptr);
+    CHECK("keyid:erased", prov.CreateMessageAuthnCodeCtx(0u) == nullptr);
+    std::printf("  Key ids with flag bits or 0 rejected OK\n");
     return 0;
 }
 
@@ -456,7 +543,7 @@ static int testMlDsa(WolfhsmCryptoProvider& prov)
 
 static int testX25519(WolfhsmCryptoProvider& prov)
 {
-    whKeyId      a = 0x1112u, b = 0x1113u;
+    whKeyId      a = 0x12u, b = 0x13u;
     std::uint8_t label[WH_NVM_LABEL_LEN] = {0};
     int          rc                      = wh_Client_Curve25519MakeCacheKey(
         &g_clientCtx, CURVE25519_KEYSIZE, &a,
@@ -483,59 +570,60 @@ static int testX25519(WolfhsmCryptoProvider& prov)
 static int testHkdf(WolfhsmCryptoProvider& prov)
 {
     /* Use one of the cached keys as the IKM source. */
-    auto kdf = prov.CreateKeyDerivationFunctionCtx(AlgId::kHkdfSha256, 0x1103u);
+    auto kdf = prov.CreateKeyDerivationFunctionCtx(AlgId::kHkdfSha256, 0x03u);
     static const std::uint8_t salt[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
                                           0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B,
                                           0x1C, 0x1D, 0x1E, 0x1F};
     static const std::uint8_t info[8]  = {'a', 'p', '-', 't', 'e', 's', 't', 0};
     auto r = kdf->Derive(32, salt, sizeof(salt), info, sizeof(info));
     CHECK("hkdf:derive", r.HasValue() && r.Value().size() == 32);
+    (void)wh_Client_KeyEvict(&g_clientCtx, 0x03u);
     std::printf("  HKDF-SHA256 -> 32 bytes OK\n");
     return 0;
 }
 
 static int testKeyStorage(WolfhsmCryptoProvider& prov)
 {
-    auto               store   = prov.CreateKeyStorageProvider();
-    const std::uint8_t mat[16] = {'k', 'e', 'y', 's', 't', 'o', 'r', 'e',
-                                  '-', 't', 'e', 's', 't', '!', '!', '!'};
-    CHECK("store:save", store->SaveKey(0x1107u, mat, sizeof(mat)).HasValue());
-    auto loaded = store->LoadKey(0x1107u);
+    static const std::uint8_t probe[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    auto                      store    = prov.CreateKeyStorageProvider();
+    const std::uint8_t        mat[16] = {'k', 'e', 'y', 's', 't', 'o', 'r', 'e',
+                                         '-', 't', 'e', 's', 't', '!', '!', '!'};
+    CHECK("store:save",
+          store->SaveKey(0x07u, mat, sizeof(mat), true).HasValue());
+    auto loaded = store->LoadKey(0x07u);
     CHECK("store:load",
           loaded.HasValue() && loaded.Value().size() == sizeof(mat) &&
               std::memcmp(loaded.Value().data(), mat, sizeof(mat)) == 0);
     std::printf("  KeyStorage save / load roundtrip OK\n");
 
-    /* Erase: the AUTOSAR meaning is "take the key out of operational
-     * use". wolfHSM's Revoke flips the policy bit (so any subsequent
-     * crypto op on the keyId is rejected by the server) — we verify
-     * that meaning by attempting a CMAC against the revoked key and
-     * asserting it fails. Note: Revoke does NOT zeroise the cache
-     * slot, so a follow-up LoadKey/Export can still return the
-     * bytes; raw Export sidesteps policy by design. The contract is
-     * "no operations after Erase", not "bytes are unrecoverable". */
-    CHECK("store:erase", store->Erase(0x1107u).HasValue());
-    {
-        auto macAfterErase          = prov.CreateMessageAuthnCodeCtx(0x1107u);
-        const std::uint8_t probe[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-        auto               g = macAfterErase->Generate(probe, sizeof(probe));
-        CHECK("store:erase-blocks-op", !g.HasValue());
-    }
-    std::printf("  KeyStorage erase + post-erase op rejected OK\n");
+    CHECK("store:erase", store->Erase(0x07u).HasValue());
+    auto macAfterErase = prov.CreateMessageAuthnCodeCtx(0x07u);
+    CHECK("store:erase-ctx", macAfterErase != nullptr);
+    CHECK("store:erase-blocks-op",
+          !macAfterErase->Generate(probe, sizeof(probe)).HasValue());
+    CHECK("store:erase-blocks-load", !store->LoadKey(0x07u).HasValue());
+    CHECK("store:resave", store->SaveKey(0x07u, mat, sizeof(mat)).HasValue());
+    std::printf("  KeyStorage erase blocks use and load, id reusable OK\n");
 
-    /* Commit persists the key to NVM. Save a fresh key, commit, then
-     * read it back from a new client to confirm it survives a cache
-     * eviction. We exercise the cache->NVM path here without a server
-     * restart since the POSIX server keeps NVM in RAM. */
+    CHECK("store:save-nonexp",
+          store->SaveKey(0x09u, mat, sizeof(mat)).HasValue());
+    CHECK("store:nonexp-load", !store->LoadKey(0x09u).HasValue());
+    CHECK("store:nonexp-erase", store->Erase(0x09u).HasValue());
+    std::printf("  KeyStorage default save is not exportable OK\n");
+
+    /* Commit persists the key, so it loads back from NVM after eviction. */
     const std::uint8_t mat2[16] = {'c', 'o', 'm', 'm', 'i', 't', 't', 'e',
                                    'd', '-', 'k', 'e', 'y', '!', '!', '!'};
     CHECK("store:save2",
-          store->SaveKey(0x1108u, mat2, sizeof(mat2)).HasValue());
-    CHECK("store:commit", store->Commit(0x1108u).HasValue());
-    auto loaded2 = store->LoadKey(0x1108u);
+          store->SaveKey(0x08u, mat2, sizeof(mat2), true).HasValue());
+    CHECK("store:commit", store->Commit(0x08u).HasValue());
+    CHECK("store:evict", wh_Client_KeyEvict(&g_clientCtx, 0x08u) == 0);
+    auto loaded2 = store->LoadKey(0x08u);
     CHECK("store:load2",
           loaded2.HasValue() && loaded2.Value().size() == sizeof(mat2) &&
               std::memcmp(loaded2.Value().data(), mat2, sizeof(mat2)) == 0);
+    CHECK("store:cleanup7", wh_Client_KeyErase(&g_clientCtx, 0x07u) == 0);
+    CHECK("store:cleanup8", wh_Client_KeyErase(&g_clientCtx, 0x08u) == 0);
     std::printf("  KeyStorage commit roundtrip OK\n");
     return 0;
 }
@@ -562,6 +650,8 @@ int main()
     failures += testSignerVerifierEcdsa(prov);
     failures += testEcdh(prov);
     failures += testX25519(prov);
+    failures += testEd25519(prov);
+    failures += testFlaggedKeyIdRejected(prov);
     failures += testRsa(prov);
     failures += testMlDsa(prov);
     failures += testHkdf(prov);
