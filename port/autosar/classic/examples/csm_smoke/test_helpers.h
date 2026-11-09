@@ -91,6 +91,10 @@ void testStopMainFunctionThread(void);
 void testPauseMainFunctionThread(void);
 void testResumeMainFunctionThread(void);
 
+/* Stands in for CryIf: copies cryIfKeyId into cryptoKeyId (identity key
+ * mapping), then calls Crypto_ProcessJob. */
+Std_ReturnType testCryIfProcessJob(uint32 objectId, Crypto_JobType* job);
+
 /* --- Test runner ---------------------------------------------------- */
 
 /* Run one test function, ensuring no slot or hash-state leaks remain

@@ -223,18 +223,11 @@ int              wh_Autosar_KeystoreCleanup(void);
 void wh_Autosar_LockSlots(wh_AutosarDriverObject* obj);
 void wh_Autosar_UnlockSlots(wh_AutosarDriverObject* obj);
 
-/* -------------------------------------------------------------------
- * Platform hooks (integrator-provided)
- * ------------------------------------------------------------------- */
-
+/* Provided by the integrator. */
 int wh_Autosar_PlatformClientConfig(whClientContext* client);
 
-extern void CryIf_CallbackNotification(Crypto_JobType* job,
-                                       Std_ReturnType  result);
-
-/* -------------------------------------------------------------------
- * Key descriptor table (integrator-provided in Crypto_PBcfg.c)
- * ------------------------------------------------------------------- */
+extern void CryIf_CallbackNotification(Crypto_JobType*   job,
+                                       Crypto_ResultType result);
 
 typedef struct {
     uint32                     cryptoKeyId;

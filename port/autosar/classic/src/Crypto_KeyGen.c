@@ -71,6 +71,7 @@ Std_ReturnType Crypto_KeyGenerate(uint32 cryptoKeyId)
     switch (desc->family) {
 #ifdef HAVE_ECC
         case CRYPTO_ALGOFAM_ECCNIST:
+        case CRYPTO_ALGOFAM_ECDH:
             rc = wh_Client_EccMakeCacheKey(ctx, (int)(desc->keyLength / 8u),
                                            desc->eccCurveId, &outId,
                                            (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,

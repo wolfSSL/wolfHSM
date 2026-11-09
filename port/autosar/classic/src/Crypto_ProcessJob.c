@@ -52,6 +52,15 @@
 
 #include <string.h>
 
+#if (CRYPTO_DEV_ERROR_DETECT == STD_ON)
+#include "Det.h"
+#define CRYPTO_DET_REPORT(errid)                                \
+    (void)Det_ReportError(CRYPTO_MODULE_ID, CRYPTO_INSTANCE_ID, \
+                          CRYPTO_PROCESSJOB_SID, (errid))
+#else
+#define CRYPTO_DET_REPORT(errid) ((void)0)
+#endif
+
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/sha256.h"
 #include "wolfssl/wolfcrypt/sha512.h"
@@ -212,8 +221,7 @@ static int hashUpdateSync(whClientContext* ctx, wh_AutosarHashState* s,
     while (inLen > 0u) {
         bool   sent      = false;
         uint32 thisChunk = inLen;
-        /* wh_Client_Sha*UpdateRequest may reject if inLen exceeds the
-         * per-call capacity; halve until accepted (binary fallback). */
+        /* Halve on WH_ERROR_REQUEST_SIZE until the per-call capacity fits. */
         while (thisChunk > 0u) {
             switch (s->op) {
                 case WH_AUTOSAR_OP_HASH_SHA256:
@@ -237,9 +245,9 @@ static int hashUpdateSync(whClientContext* ctx, wh_AutosarHashState* s,
             }
             if (rc == WH_ERROR_OK)
                 break;
-            if (rc != WH_ERROR_BADARGS)
+            if (rc != WH_ERROR_REQUEST_SIZE)
                 return rc;
-            thisChunk /= 2u; /* halve and retry */
+            thisChunk /= 2u;
         }
         if (rc != WH_ERROR_OK)
             return rc;
@@ -733,7 +741,7 @@ Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
     const Crypto_PrimitiveInfoType* pi = job->jobPrimitiveInfo->primitiveInfo;
     wh_AutosarOpKind                op = resolveOpKind(job);
     whKeyId                         keyId =
-        wh_Autosar_ComposeKeyId(job->jobPrimitiveInfo->cryIfKeyId, 1u);
+        wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
     Std_ReturnType ret = E_NOT_OK;
 
     if (op == WH_AUTOSAR_OP_INVALID) {
@@ -955,7 +963,7 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
     Crypto_JobPrimitiveInputOutputType* io  = jobIo(job);
     int                                 rc  = WH_ERROR_NOTIMPL;
     whKeyId                             keyId =
-        wh_Autosar_ComposeKeyId(job->jobPrimitiveInfo->cryIfKeyId, 1u);
+        wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
 
     switch (slot->opKind) {
         case WH_AUTOSAR_OP_RNG_GENERATE:
@@ -1107,20 +1115,6 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
             break;
         }
 
-        case WH_AUTOSAR_OP_KEYAGREE_ECDH: {
-            whKeyId partnerId;
-            if (io->tertiaryInputPtr == NULL || io->tertiaryInputLength < 2u) {
-                return WH_ERROR_BADARGS;
-            }
-            partnerId         = (whKeyId)(io->tertiaryInputPtr[0] |
-                                  (io->tertiaryInputPtr[1] << 8));
-            slot->op.rawOut   = io->outputPtr;
-            slot->op.rawLen16 = (io->outputLengthPtr != NULL)
-                                    ? (uint16)(*io->outputLengthPtr)
-                                    : 0u;
-            rc = wh_Client_EccSharedSecretRequest(ctx, keyId, partnerId);
-            break;
-        }
 
         case WH_AUTOSAR_OP_MAC_CMAC_AES: {
             boolean verify = (job->jobPrimitiveInfo->primitiveInfo->service ==
@@ -1354,14 +1348,6 @@ static int pollAsyncResponse(wh_AutosarDriverObject* obj,
             break;
         }
 
-        case WH_AUTOSAR_OP_KEYAGREE_ECDH: {
-            uint16 sz = slot->op.rawLen16;
-            rc = wh_Client_EccSharedSecretResponse(ctx, slot->op.rawOut, &sz);
-            if (rc == WH_ERROR_OK && io->outputLengthPtr != NULL) {
-                *io->outputLengthPtr = sz;
-            }
-            break;
-        }
 
         case WH_AUTOSAR_OP_MAC_CMAC_AES: {
             boolean verify = (job->jobPrimitiveInfo->primitiveInfo->service ==

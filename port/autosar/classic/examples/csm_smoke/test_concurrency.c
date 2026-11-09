@@ -59,7 +59,6 @@ typedef struct {
      * stack small. */
     Crypto_JobType*              jobs;
     Crypto_JobPrimitiveInfoType* jpis;
-    Crypto_JobInfoType*          jis;
     uint8 (*outs)[32];
     uint32* outLens;
     /* Atomic-ish: which slots have been cancelled (1) vs untouched (0). */
@@ -88,28 +87,23 @@ static int stressAsyncRng(stressWorker* w)
         return 0;
     Crypto_JobType*                       job = &w->jobs[idx];
     Crypto_JobPrimitiveInfoType*          jpi = &w->jpis[idx];
-    Crypto_JobInfoType*                   ji  = &w->jis[idx];
-    static const Crypto_PrimitiveInfoType pi  = {16u,
-                                                 CRYPTO_RANDOMGENERATE,
+    static const Crypto_PrimitiveInfoType pi  = {CRYPTO_RANDOMGENERATE,
                                                  {CRYPTO_ALGOFAM_RNG,
                                                   CRYPTO_ALGOFAM_NOT_SET, 0u,
                                                   CRYPTO_ALGOMODE_NOT_SET}};
 
     memset(jpi, 0, sizeof(*jpi));
     jpi->primitiveInfo  = &pi;
-    jpi->processingType = 1u;
-    ji->jobId           = (uint32)(w->id * 100000 + idx);
-    ji->jobPriority     = 0u;
+    jpi->processingType = CRYPTO_PROCESSING_ASYNC;
     memset(job, 0, sizeof(*job));
-    job->jobId                                   = ji->jobId;
+    job->jobId                                   = (uint32)(w->id * 100000 + idx);
     job->jobPrimitiveInfo                        = jpi;
-    job->jobInfo                                 = ji;
     w->outLens[idx]                              = (uint32)sizeof(w->outs[idx]);
     job->jobPrimitiveInputOutput.outputPtr       = w->outs[idx];
     job->jobPrimitiveInputOutput.outputLengthPtr = &w->outLens[idx];
     job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
-    if (Crypto_ProcessJob(0u, job) != E_OK) {
+    if (testCryIfProcessJob(0u, job) != E_OK) {
         /* Slots saturated — drop, will retry on next iteration. */
         return 0;
     }
@@ -193,7 +187,6 @@ static int testConcurrencyStress(void)
         workers[i].jobs = calloc(STRESS_MAX_ASYNC, sizeof(Crypto_JobType));
         workers[i].jpis =
             calloc(STRESS_MAX_ASYNC, sizeof(Crypto_JobPrimitiveInfoType));
-        workers[i].jis  = calloc(STRESS_MAX_ASYNC, sizeof(Crypto_JobInfoType));
         workers[i].outs = calloc(STRESS_MAX_ASYNC, sizeof(workers[i].outs[0]));
         workers[i].outLens   = calloc(STRESS_MAX_ASYNC, sizeof(uint32));
         workers[i].cancelled = calloc(STRESS_MAX_ASYNC, sizeof(uint8));
@@ -240,7 +233,6 @@ static int testConcurrencyStress(void)
     for (i = 0; i < STRESS_WORKERS; ++i) {
         free(workers[i].jobs);
         free(workers[i].jpis);
-        free(workers[i].jis);
         free(workers[i].outs);
         free(workers[i].outLens);
         free((void*)workers[i].cancelled);

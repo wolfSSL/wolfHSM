@@ -39,17 +39,14 @@ static int testTimeoutForcesCallback(void)
 {
     wh_AutosarDriverObject*     obj = wh_Autosar_GetDriverObject(0u);
     Crypto_JobType              job = {0};
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji  = {9500u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     int                         prev;
 
-    job.jobId            = ji.jobId;
+    job.jobId            = 9500u;
     job.jobPrimitiveInfo = &jpi;
-    job.jobInfo          = &ji;
     job.jobState         = CRYPTO_JOBSTATE_ACTIVE;
 
     /* Pause the worker so we can drive MainFunction manually for

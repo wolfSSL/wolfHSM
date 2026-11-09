@@ -41,25 +41,22 @@
 static int testAccountingHashUpdateWithoutStart(void)
 {
     const char*                 msg = "fragment";
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_HASH,
                                        {CRYPTO_ALGOFAM_SHA2_256,
                                         CRYPTO_ALGOFAM_NOT_SET, 0u,
                                         CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {7777u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       digest[32];
     uint32                      dLen            = sizeof(digest);
     Crypto_JobType              job             = {0};
-    job.jobId                                   = ji.jobId;
+    job.jobId                                   = 7778u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.inputPtr        = (const uint8*)msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)strlen(msg);
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode            = CRYPTO_OPERATIONMODE_UPDATE;
-    if (Crypto_ProcessJob(0u, &job) != E_NOT_OK) {
+    if (testCryIfProcessJob(0u, &job) != E_NOT_OK) {
         fprintf(stderr,
                 "  accounting: UPDATE-without-START unexpectedly succeeded\n");
         return 1;
@@ -74,32 +71,29 @@ static int testAccountingHashUpdateWithoutStart(void)
 
 static int testAccountingHashReSart(void)
 {
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_HASH,
                                        {CRYPTO_ALGOFAM_SHA2_256,
                                         CRYPTO_ALGOFAM_NOT_SET, 0u,
                                         CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {7778u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       digest[32];
     uint32                      dLen      = sizeof(digest);
     Crypto_JobType              job       = {0};
     wh_AutosarDriverObject*     obj       = wh_Autosar_GetDriverObject(0u);
-    job.jobId                             = ji.jobId;
+    job.jobId                             = 7778u;
     job.jobPrimitiveInfo                  = &jpi;
-    job.jobInfo                           = &ji;
     job.jobPrimitiveInputOutput.outputPtr = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
 
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_START;
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     if (wh_Autosar_DebugActiveHashStateCount(obj) != 1u) {
         fprintf(stderr, "  accounting: first START did not allocate state\n");
         return 1;
     }
     /* Second START on the same jobId must reuse the slot, not leak. */
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     if (wh_Autosar_DebugActiveHashStateCount(obj) != 1u) {
         fprintf(stderr,
@@ -109,7 +103,7 @@ static int testAccountingHashReSart(void)
     /* Wrap up so TEST_RUN's post-condition passes. */
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_FINISH;
     dLen                             = sizeof(digest);
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     return 0;
 }
@@ -124,12 +118,10 @@ static int testAccountingAsyncChurn(void)
         CYCLES = 8
     }; /* matches CRYPTO_MAX_ASYNC_JOBS so the
            queue stays at saturation throughout */
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji[CYCLES];
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     Crypto_JobType              jobs[CYCLES];
     uint8                       out[CYCLES][32];
     uint32                      outLen[CYCLES];
@@ -137,16 +129,13 @@ static int testAccountingAsyncChurn(void)
     int                         k;
     for (k = 0; k < CYCLES; ++k) {
         memset(&jobs[k], 0, sizeof(jobs[k]));
-        ji[k].jobId                                     = (uint32)(8000 + k);
-        ji[k].jobPriority                               = 0u;
-        jobs[k].jobId                                   = ji[k].jobId;
+        jobs[k].jobId                                   = (uint32)(8000 + k);
         jobs[k].jobPrimitiveInfo                        = &jpi;
-        jobs[k].jobInfo                                 = &ji[k];
         outLen[k]                                       = sizeof(out[k]);
         jobs[k].jobPrimitiveInputOutput.outputPtr       = out[k];
         jobs[k].jobPrimitiveInputOutput.outputLengthPtr = &outLen[k];
         jobs[k].jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-        if (Crypto_ProcessJob(0u, &jobs[k]) != E_OK)
+        if (testCryIfProcessJob(0u, &jobs[k]) != E_OK)
             return 1;
     }
     if (testWaitCallbacks(prev + CYCLES, 30000) != 0)

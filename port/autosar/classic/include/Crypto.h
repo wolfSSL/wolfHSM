@@ -46,47 +46,46 @@ extern "C" {
 #endif
 
 #define CRYPTO_AR_RELEASE_MAJOR_VERSION 4
-#define CRYPTO_AR_RELEASE_MINOR_VERSION 7
+#define CRYPTO_AR_RELEASE_MINOR_VERSION 8
 #define CRYPTO_AR_RELEASE_PATCH_VERSION 0
 
 #define CRYPTO_SW_MAJOR_VERSION 1
 #define CRYPTO_SW_MINOR_VERSION 0
 #define CRYPTO_SW_PATCH_VERSION 0
 
-/* --- Service IDs (per SWS) ------------------------------------------- */
+/* Service IDs, SWS_CryptoDriver R22-11 */
 #define CRYPTO_INIT_SID ((uint8)0x00u)
 #define CRYPTO_GETVERSIONINFO_SID ((uint8)0x01u)
 #define CRYPTO_PROCESSJOB_SID ((uint8)0x03u)
-#define CRYPTO_CANCELJOB_SID ((uint8)0x0Du)
 #define CRYPTO_KEYELEMENTSET_SID ((uint8)0x04u)
-#define CRYPTO_KEYELEMENTGET_SID ((uint8)0x06u)
-#define CRYPTO_KEYELEMENTCOPY_SID ((uint8)0x0Cu)
-#define CRYPTO_KEYCOPY_SID ((uint8)0x0Eu)
 #define CRYPTO_KEYSETVALID_SID ((uint8)0x05u)
+#define CRYPTO_KEYELEMENTGET_SID ((uint8)0x06u)
 #define CRYPTO_KEYGENERATE_SID ((uint8)0x07u)
 #define CRYPTO_KEYDERIVE_SID ((uint8)0x08u)
 #define CRYPTO_KEYEXCHANGECALCPUBVAL_SID ((uint8)0x09u)
 #define CRYPTO_KEYEXCHANGECALCSECRET_SID ((uint8)0x0Au)
-#define CRYPTO_RANDOMSEED_SID ((uint8)0x0Bu)
-#define CRYPTO_MAINFUNCTION_SID ((uint8)0x0Fu)
-#define CRYPTO_CERTIFICATEPARSE_SID ((uint8)0x10u)
-#define CRYPTO_CERTIFICATEVERIFY_SID ((uint8)0x11u)
+#define CRYPTO_MAINFUNCTION_SID ((uint8)0x0Cu)
+#define CRYPTO_RANDOMSEED_SID ((uint8)0x0Du)
+#define CRYPTO_CANCELJOB_SID ((uint8)0x0Eu)
+#define CRYPTO_KEYELEMENTCOPY_SID ((uint8)0x0Fu)
+#define CRYPTO_KEYCOPY_SID ((uint8)0x10u)
+#define CRYPTO_KEYELEMENTIDSGET_SID ((uint8)0x11u)
+#define CRYPTO_KEYELEMENTCOPYPARTIAL_SID ((uint8)0x13u)
+#define CRYPTO_KEYGETSTATUS_SID ((uint8)0x14u)
+#define CRYPTO_KEYSETINVALID_SID ((uint8)0x15u)
 
-/* --- DET error codes ------------------------------------------------- */
-#define CRYPTO_E_PARAM_POINTER ((uint8)0x01u)
+/* DET error codes, SWS_CryptoDriver R22-11 */
+#define CRYPTO_E_UNINIT ((uint8)0x00u)
+#define CRYPTO_E_INIT_FAILED ((uint8)0x01u)
+#define CRYPTO_E_PARAM_POINTER ((uint8)0x02u)
 #define CRYPTO_E_PARAM_HANDLE ((uint8)0x04u)
 #define CRYPTO_E_PARAM_VALUE ((uint8)0x05u)
-#define CRYPTO_E_UNINIT ((uint8)0x07u)
-#define CRYPTO_E_INIT_FAILED ((uint8)0x08u)
-#define CRYPTO_E_PARAM_KEY ((uint8)0x0Au)
+#define CRYPTO_E_SMALL_BUFFER ((uint8)0x06u)
 
-/* --- API ------------------------------------------------------------- */
+/** Initializes the driver and all driver objects; configPtr may be NULL. */
+void Crypto_Init(const Crypto_ConfigType* configPtr);
 
-/** Crypto_Init — initialize the Crypto Driver and all configured driver
- *  objects. Establishes wolfHSM client contexts and opens transports. */
-void Crypto_Init(void);
-
-/** Crypto_GetVersionInfo — fill in the published Std_VersionInfoType. */
+/** Fills in the module's Std_VersionInfoType. */
 void Crypto_GetVersionInfo(Std_VersionInfoType* versionInfo);
 
 /** Crypto_ProcessJob — submit a job to the given driver object. May block

@@ -150,6 +150,34 @@ static int testHash(WolfhsmCryptoProvider& prov)
     return 0;
 }
 
+static int testHashLarge(WolfhsmCryptoProvider& prov)
+{
+    static std::uint8_t big[8192];
+    for (std::size_t i = 0; i < sizeof(big); ++i)
+        big[i] = static_cast<std::uint8_t>(i * 7u + 3u);
+
+    auto one = prov.CreateHashFunctionCtx(AlgId::kSha256);
+    CHECK("hashbig:create", one != nullptr);
+    CHECK("hashbig:start", one->Start().HasValue());
+    CHECK("hashbig:update", one->Update(big, sizeof(big)).HasValue());
+    auto rOne = one->Finish();
+    CHECK("hashbig:finish", rOne.HasValue() && rOne.Value().size() == 32);
+
+    auto many = prov.CreateHashFunctionCtx(AlgId::kSha256);
+    CHECK("hashsmall:create", many != nullptr);
+    CHECK("hashsmall:start", many->Start().HasValue());
+    for (std::size_t off = 0; off < sizeof(big); off += 100u) {
+        std::size_t n = (sizeof(big) - off < 100u) ? sizeof(big) - off : 100u;
+        CHECK("hashsmall:update", many->Update(big + off, n).HasValue());
+    }
+    auto rMany = many->Finish();
+    CHECK("hashsmall:finish", rMany.HasValue() && rMany.Value().size() == 32);
+    CHECK("hashbig:match",
+          std::memcmp(rOne.Value().data(), rMany.Value().data(), 32) == 0);
+    std::printf("  Hash SHA-256 8 KiB single update matches 100-byte chunks\n");
+    return 0;
+}
+
 static int testAesCbc(WolfhsmCryptoProvider& prov)
 {
     /* NIST SP 800-38A F.2.1 first block. */
@@ -368,6 +396,7 @@ int main()
     int                   failures = 0;
     failures += testRandom(prov);
     failures += testHash(prov);
+    failures += testHashLarge(prov);
     failures += testAesCbc(prov);
     failures += testAesGcm(prov);
     failures += testCmac(prov);

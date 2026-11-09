@@ -79,7 +79,6 @@ static int runHashVector(const hashVector* v, int idx)
 {
     Crypto_PrimitiveInfoType    pi;
     Crypto_JobPrimitiveInfoType jpi;
-    Crypto_JobInfoType          ji;
     Crypto_JobType              job;
     uint8                       digest[64];
     uint8                       expected[64];
@@ -94,24 +93,21 @@ static int runHashVector(const hashVector* v, int idx)
     msgLen = (v->msgLen < 0) ? (int)strlen(v->msg) : v->msgLen;
 
     memset(&pi, 0, sizeof(pi));
-    pi.resultLength     = v->digestLen;
     pi.service          = CRYPTO_HASH;
     pi.algorithm.family = v->family;
     memset(&jpi, 0, sizeof(jpi));
+    jpi.processingType = CRYPTO_PROCESSING_SYNC;
     jpi.primitiveInfo = &pi;
-    memset(&ji, 0, sizeof(ji));
-    ji.jobId = (uint32)(1000 + idx);
     memset(&job, 0, sizeof(job));
-    job.jobId                                   = ji.jobId;
+    job.jobId                                   = (uint32)(1000 + idx);
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.inputPtr        = (const uint8*)v->msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)msgLen;
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
-    if (Crypto_ProcessJob(0u, &job) != E_OK) {
+    if (testCryIfProcessJob(0u, &job) != E_OK) {
         fprintf(stderr, "  kat hash[%d] family=%u: ProcessJob failed\n", idx,
                 v->family);
         return 1;
@@ -175,7 +171,6 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
     uint32                      outLen = sizeof(out);
     Crypto_PrimitiveInfoType    pi;
     Crypto_JobPrimitiveInfoType jpi;
-    Crypto_JobInfoType          ji;
     Crypto_JobType              job;
 
     keyLen = testHexDecode(v->keyHex, key, sizeof(key));
@@ -195,20 +190,17 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
     }
 
     memset(&pi, 0, sizeof(pi));
-    pi.resultLength        = 16u;
     pi.service             = CRYPTO_ENCRYPT;
     pi.algorithm.family    = CRYPTO_ALGOFAM_AES;
     pi.algorithm.mode      = CRYPTO_ALGOMODE_CBC;
     pi.algorithm.keyLength = (uint32)v->keyBits;
     memset(&jpi, 0, sizeof(jpi));
+    jpi.processingType = CRYPTO_PROCESSING_SYNC;
     jpi.primitiveInfo = &pi;
     jpi.cryIfKeyId    = kAesCbcKatKeyId[idx];
-    memset(&ji, 0, sizeof(ji));
-    ji.jobId = (uint32)(2000 + idx);
     memset(&job, 0, sizeof(job));
-    job.jobId                                        = ji.jobId;
+    job.jobId                                        = (uint32)(2000 + idx);
     job.jobPrimitiveInfo                             = &jpi;
-    job.jobInfo                                      = &ji;
     job.jobPrimitiveInputOutput.inputPtr             = pt;
     job.jobPrimitiveInputOutput.inputLength          = 16u;
     job.jobPrimitiveInputOutput.secondaryInputPtr    = iv;
@@ -217,7 +209,7 @@ static int runAesCbcVector(const aesCbcVector* v, int idx)
     job.jobPrimitiveInputOutput.outputLengthPtr      = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
-    if (Crypto_ProcessJob(0u, &job) != E_OK) {
+    if (testCryIfProcessJob(0u, &job) != E_OK) {
         fprintf(stderr, "  kat aes-cbc[%d]: ProcessJob (encrypt)\n", idx);
         return 1;
     }
@@ -264,7 +256,6 @@ static int testEcdsaSelfConsistency(void)
     uint32                      sigLen    = sizeof(sig);
     Crypto_PrimitiveInfoType    piSign, piVer;
     Crypto_JobPrimitiveInfoType jpiSign, jpiVer;
-    Crypto_JobInfoType          jiSign = {3001u, 0u}, jiVer = {3002u, 0u};
     Crypto_JobType              jobSign = {0}, jobVer = {0};
     int                         i;
 
@@ -281,20 +272,20 @@ static int testEcdsaSelfConsistency(void)
     memset(&piSign, 0, sizeof(piSign));
     piSign.service             = CRYPTO_SIGNATUREGENERATE;
     piSign.algorithm.family    = CRYPTO_ALGOFAM_ECCNIST;
-    piSign.algorithm.mode      = CRYPTO_ALGOMODE_ECDSA;
+    piSign.algorithm.mode      = CRYPTO_ALGOMODE_NOT_SET;
     piSign.algorithm.keyLength = 256u;
     memset(&jpiSign, 0, sizeof(jpiSign));
+    jpiSign.processingType = CRYPTO_PROCESSING_SYNC;
     jpiSign.primitiveInfo                           = &piSign;
     jpiSign.cryIfKeyId                              = 101u;
-    jobSign.jobId                                   = jiSign.jobId;
+    jobSign.jobId                                   = 3201u;
     jobSign.jobPrimitiveInfo                        = &jpiSign;
-    jobSign.jobInfo                                 = &jiSign;
     jobSign.jobPrimitiveInputOutput.inputPtr        = digest;
     jobSign.jobPrimitiveInputOutput.inputLength     = 32u;
     jobSign.jobPrimitiveInputOutput.outputPtr       = sig;
     jobSign.jobPrimitiveInputOutput.outputLengthPtr = &sigLen;
     jobSign.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobSign) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobSign) != E_OK) {
         fprintf(stderr, "  kat ecdsa: sign failed\n");
         return 1;
     }
@@ -304,18 +295,18 @@ static int testEcdsaSelfConsistency(void)
     piVer.service   = CRYPTO_SIGNATUREVERIFY;
     piVer.algorithm = piSign.algorithm;
     memset(&jpiVer, 0, sizeof(jpiVer));
+    jpiVer.processingType = CRYPTO_PROCESSING_SYNC;
     jpiVer.primitiveInfo                                = &piVer;
     jpiVer.cryIfKeyId                                   = 101u;
-    jobVer.jobId                                        = jiVer.jobId;
+    jobVer.jobId                                        = 3202u;
     jobVer.jobPrimitiveInfo                             = &jpiVer;
-    jobVer.jobInfo                                      = &jiVer;
     jobVer.jobPrimitiveInputOutput.inputPtr             = digest;
     jobVer.jobPrimitiveInputOutput.inputLength          = 32u;
     jobVer.jobPrimitiveInputOutput.secondaryInputPtr    = sig;
     jobVer.jobPrimitiveInputOutput.secondaryInputLength = sigLen;
     jobVer.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
     jobVer.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat ecdsa: verify call failed\n");
         return 1;
     }
@@ -342,7 +333,7 @@ static int testEcdsaSelfConsistency(void)
     }
     sig[20] ^= 0x01u;
     verifyOut = 0xFFu;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat ecdsa: verify-bad call returned E_NOT_OK "
                         "(SWS expects E_OK with verifyPtr=NOT_OK)\n");
         return 1;
@@ -372,7 +363,7 @@ static int testEcdsaSelfConsistency(void)
      * disconnect rather than a server crash. */
     sig[0] ^= 0x01u;
     verifyOut = 0xFFu;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr,
                 "  kat ecdsa: malformed-DER verify returned E_NOT_OK\n");
         return 1;
@@ -409,7 +400,6 @@ static int testEd25519SelfConsistency(void)
     uint8                       verifyOut = 0xFFu;
     Crypto_PrimitiveInfoType    piSign, piVer;
     Crypto_JobPrimitiveInfoType jpiSign, jpiVer;
-    Crypto_JobInfoType          jiSign = {3101u, 0u}, jiVer = {3102u, 0u};
     Crypto_JobType              jobSign = {0}, jobVer = {0};
     int                         i;
 
@@ -429,17 +419,17 @@ static int testEd25519SelfConsistency(void)
     piSign.algorithm.mode      = CRYPTO_ALGOMODE_NOT_SET;
     piSign.algorithm.keyLength = 256u;
     memset(&jpiSign, 0, sizeof(jpiSign));
+    jpiSign.processingType = CRYPTO_PROCESSING_SYNC;
     jpiSign.primitiveInfo                           = &piSign;
     jpiSign.cryIfKeyId                              = 102u;
-    jobSign.jobId                                   = jiSign.jobId;
+    jobSign.jobId                                   = 3201u;
     jobSign.jobPrimitiveInfo                        = &jpiSign;
-    jobSign.jobInfo                                 = &jiSign;
     jobSign.jobPrimitiveInputOutput.inputPtr        = msg;
     jobSign.jobPrimitiveInputOutput.inputLength     = sizeof(msg);
     jobSign.jobPrimitiveInputOutput.outputPtr       = sig;
     jobSign.jobPrimitiveInputOutput.outputLengthPtr = &sigLen;
     jobSign.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobSign) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobSign) != E_OK) {
         fprintf(stderr, "  kat ed25519: sign failed\n");
         return 1;
     }
@@ -453,18 +443,18 @@ static int testEd25519SelfConsistency(void)
     piVer.service   = CRYPTO_SIGNATUREVERIFY;
     piVer.algorithm = piSign.algorithm;
     memset(&jpiVer, 0, sizeof(jpiVer));
+    jpiVer.processingType = CRYPTO_PROCESSING_SYNC;
     jpiVer.primitiveInfo                                = &piVer;
     jpiVer.cryIfKeyId                                   = 102u;
-    jobVer.jobId                                        = jiVer.jobId;
+    jobVer.jobId                                        = 3202u;
     jobVer.jobPrimitiveInfo                             = &jpiVer;
-    jobVer.jobInfo                                      = &jiVer;
     jobVer.jobPrimitiveInputOutput.inputPtr             = msg;
     jobVer.jobPrimitiveInputOutput.inputLength          = sizeof(msg);
     jobVer.jobPrimitiveInputOutput.secondaryInputPtr    = sig;
     jobVer.jobPrimitiveInputOutput.secondaryInputLength = sigLen;
     jobVer.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
     jobVer.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat ed25519: verify call failed\n");
         return 1;
     }
@@ -477,7 +467,7 @@ static int testEd25519SelfConsistency(void)
     /* Verify (tampered). */
     sig[20] ^= 0x01u;
     verifyOut = 0xFFu;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat ed25519: bad-sig verify call failed\n");
         return 1;
     }
@@ -509,7 +499,6 @@ static int testRsaPkcs1v15SelfConsistency(void)
     uint8                       verifyOut = 0xFFu;
     Crypto_PrimitiveInfoType    piSign, piVer;
     Crypto_JobPrimitiveInfoType jpiSign, jpiVer;
-    Crypto_JobInfoType          jiSign = {3201u, 0u}, jiVer = {3202u, 0u};
     Crypto_JobType              jobSign = {0}, jobVer = {0};
     int                         i;
 
@@ -528,17 +517,17 @@ static int testRsaPkcs1v15SelfConsistency(void)
     piSign.algorithm.mode      = CRYPTO_ALGOMODE_RSASSA_PKCS1_V1_5;
     piSign.algorithm.keyLength = 2048u;
     memset(&jpiSign, 0, sizeof(jpiSign));
+    jpiSign.processingType = CRYPTO_PROCESSING_SYNC;
     jpiSign.primitiveInfo                           = &piSign;
     jpiSign.cryIfKeyId                              = 103u;
-    jobSign.jobId                                   = jiSign.jobId;
+    jobSign.jobId                                   = 3201u;
     jobSign.jobPrimitiveInfo                        = &jpiSign;
-    jobSign.jobInfo                                 = &jiSign;
     jobSign.jobPrimitiveInputOutput.inputPtr        = hash;
     jobSign.jobPrimitiveInputOutput.inputLength     = sizeof(hash);
     jobSign.jobPrimitiveInputOutput.outputPtr       = sig;
     jobSign.jobPrimitiveInputOutput.outputLengthPtr = &sigLen;
     jobSign.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobSign) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobSign) != E_OK) {
         fprintf(stderr, "  kat rsa: sign failed\n");
         return 1;
     }
@@ -551,18 +540,18 @@ static int testRsaPkcs1v15SelfConsistency(void)
     piVer.service   = CRYPTO_SIGNATUREVERIFY;
     piVer.algorithm = piSign.algorithm;
     memset(&jpiVer, 0, sizeof(jpiVer));
+    jpiVer.processingType = CRYPTO_PROCESSING_SYNC;
     jpiVer.primitiveInfo                                = &piVer;
     jpiVer.cryIfKeyId                                   = 103u;
-    jobVer.jobId                                        = jiVer.jobId;
+    jobVer.jobId                                        = 3202u;
     jobVer.jobPrimitiveInfo                             = &jpiVer;
-    jobVer.jobInfo                                      = &jiVer;
     jobVer.jobPrimitiveInputOutput.inputPtr             = hash;
     jobVer.jobPrimitiveInputOutput.inputLength          = sizeof(hash);
     jobVer.jobPrimitiveInputOutput.secondaryInputPtr    = sig;
     jobVer.jobPrimitiveInputOutput.secondaryInputLength = sigLen;
     jobVer.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
     jobVer.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat rsa: verify call failed\n");
         return 1;
     }
@@ -575,7 +564,7 @@ static int testRsaPkcs1v15SelfConsistency(void)
     /* Tampered: flip a byte deep in the signature value. */
     sig[100] ^= 0x01u;
     verifyOut = 0xFFu;
-    if (Crypto_ProcessJob(0u, &jobVer) != E_OK) {
+    if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
         fprintf(stderr, "  kat rsa: bad-sig verify call failed\n");
         return 1;
     }
@@ -609,25 +598,23 @@ static int installCmacKey(uint32 cryptoKeyId)
 }
 
 static void buildCmacJob(Crypto_JobType* job, Crypto_JobPrimitiveInfoType* jpi,
-                         Crypto_PrimitiveInfoType* pi, Crypto_JobInfoType* ji,
+                         Crypto_PrimitiveInfoType* pi,
                          Crypto_ServiceInfoType service, uint32 cryIfKeyId,
                          uint8 async, uint32 jobId)
 {
     memset(pi, 0, sizeof(*pi));
     pi->service             = service;
-    pi->algorithm.family    = CRYPTO_ALGOFAM_CMAC;
-    pi->algorithm.mode      = CRYPTO_ALGOMODE_NOT_SET;
+    pi->algorithm.family    = CRYPTO_ALGOFAM_AES;
+    pi->algorithm.mode      = CRYPTO_ALGOMODE_CMAC;
     pi->algorithm.keyLength = 128u;
     memset(jpi, 0, sizeof(*jpi));
     jpi->primitiveInfo  = pi;
     jpi->cryIfKeyId     = cryIfKeyId;
-    jpi->processingType = async; /* 0 sync, 1 async */
-    ji->jobId           = jobId;
-    ji->jobPriority     = 0u;
+    jpi->processingType =
+        async ? CRYPTO_PROCESSING_ASYNC : CRYPTO_PROCESSING_SYNC;
     memset(job, 0, sizeof(*job));
     job->jobId                        = jobId;
     job->jobPrimitiveInfo             = jpi;
-    job->jobInfo                      = ji;
     job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 }
 
@@ -641,7 +628,6 @@ static int testCmacSyncAndAsync(void)
     uint8       verifyOut;
     Crypto_PrimitiveInfoType    pi;
     Crypto_JobPrimitiveInfoType jpi;
-    Crypto_JobInfoType          ji;
     Crypto_JobType              job;
 
     if (installCmacKey(110u) != 0) {
@@ -650,25 +636,25 @@ static int testCmacSyncAndAsync(void)
     }
 
     /* --- Sync MAC generate. --- */
-    buildCmacJob(&job, &jpi, &pi, &ji, CRYPTO_MACGENERATE, 110u, 0u, 1100u);
+    buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 110u, 0u, 1100u);
     job.jobPrimitiveInputOutput.inputPtr        = msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)sizeof(msg);
     job.jobPrimitiveInputOutput.outputPtr       = mac;
     job.jobPrimitiveInputOutput.outputLengthPtr = &macLen;
-    if (Crypto_ProcessJob(0u, &job) != E_OK || macLen != 16u) {
+    if (testCryIfProcessJob(0u, &job) != E_OK || macLen != 16u) {
         fprintf(stderr, "  kat cmac: sync generate failed\n");
         return 1;
     }
 
     /* --- Sync MAC verify, good tag. --- */
     verifyOut = 0xFFu;
-    buildCmacJob(&job, &jpi, &pi, &ji, CRYPTO_MACVERIFY, 110u, 0u, 1101u);
+    buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 0u, 1101u);
     job.jobPrimitiveInputOutput.inputPtr             = msg;
     job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
     job.jobPrimitiveInputOutput.secondaryInputPtr    = mac;
     job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
     job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
-    if (Crypto_ProcessJob(0u, &job) != E_OK || verifyOut != 0x00u) {
+    if (testCryIfProcessJob(0u, &job) != E_OK || verifyOut != 0x00u) {
         fprintf(stderr,
                 "  kat cmac: sync verify-good failed (verifyOut=0x%02x)\n",
                 verifyOut);
@@ -681,13 +667,13 @@ static int testCmacSyncAndAsync(void)
         memcpy(bad, mac, 16);
         bad[0] ^= 0x01u;
         verifyOut = 0xFFu;
-        buildCmacJob(&job, &jpi, &pi, &ji, CRYPTO_MACVERIFY, 110u, 0u, 1102u);
+        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 0u, 1102u);
         job.jobPrimitiveInputOutput.inputPtr             = msg;
         job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
         job.jobPrimitiveInputOutput.secondaryInputPtr    = bad;
         job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
         job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
-        if (Crypto_ProcessJob(0u, &job) != E_OK || verifyOut != 0x01u) {
+        if (testCryIfProcessJob(0u, &job) != E_OK || verifyOut != 0x01u) {
             fprintf(stderr,
                     "  kat cmac: sync verify-bad failed (verifyOut=0x%02x)\n",
                     verifyOut);
@@ -699,13 +685,13 @@ static int testCmacSyncAndAsync(void)
     {
         uint8  macAsync[16];
         uint32 macAsyncLen = sizeof(macAsync);
-        buildCmacJob(&job, &jpi, &pi, &ji, CRYPTO_MACGENERATE, 110u, 1u, 1103u);
+        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACGENERATE, 110u, 1u, 1103u);
         job.jobPrimitiveInputOutput.inputPtr        = msg;
         job.jobPrimitiveInputOutput.inputLength     = (uint32)sizeof(msg);
         job.jobPrimitiveInputOutput.outputPtr       = macAsync;
         job.jobPrimitiveInputOutput.outputLengthPtr = &macAsyncLen;
         int prev                                    = testCallbackTotal();
-        if (Crypto_ProcessJob(0u, &job) != E_OK) {
+        if (testCryIfProcessJob(0u, &job) != E_OK) {
             fprintf(stderr, "  kat cmac: async submit failed\n");
             return 1;
         }
@@ -723,14 +709,14 @@ static int testCmacSyncAndAsync(void)
     /* --- Async MAC verify, good tag. --- */
     {
         verifyOut = 0xFFu;
-        buildCmacJob(&job, &jpi, &pi, &ji, CRYPTO_MACVERIFY, 110u, 1u, 1104u);
+        buildCmacJob(&job, &jpi, &pi, CRYPTO_MACVERIFY, 110u, 1u, 1104u);
         job.jobPrimitiveInputOutput.inputPtr             = msg;
         job.jobPrimitiveInputOutput.inputLength          = (uint32)sizeof(msg);
         job.jobPrimitiveInputOutput.secondaryInputPtr    = mac;
         job.jobPrimitiveInputOutput.secondaryInputLength = 16u;
         job.jobPrimitiveInputOutput.verifyPtr            = &verifyOut;
         int prev                                         = testCallbackTotal();
-        if (Crypto_ProcessJob(0u, &job) != E_OK ||
+        if (testCryIfProcessJob(0u, &job) != E_OK ||
             testWaitCallbacks(prev + 1, 5000) != 0 ||
             gTestCb.lastResult != E_OK || verifyOut != 0x00u) {
             fprintf(stderr,

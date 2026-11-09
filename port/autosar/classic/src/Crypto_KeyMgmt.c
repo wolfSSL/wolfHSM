@@ -91,7 +91,7 @@ Std_ReturnType Crypto_KeyElementSet(uint32 cryptoKeyId, uint32 keyElementId,
 
     keyId = wh_Autosar_ComposeKeyId(cryptoKeyId, keyElementId);
     if (keyId == 0u) {
-        CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_KEY);
+        CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_HANDLE);
         return E_NOT_OK;
     }
     packKeyLabel(label, cryptoKeyId, keyElementId);
@@ -132,7 +132,7 @@ Std_ReturnType Crypto_KeyElementGet(uint32 cryptoKeyId, uint32 keyElementId,
 
     keyId = wh_Autosar_ComposeKeyId(cryptoKeyId, keyElementId);
     if (keyId == 0u) {
-        CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTGET_SID, CRYPTO_E_PARAM_KEY);
+        CRYPTO_DET_REPORT(CRYPTO_KEYELEMENTGET_SID, CRYPTO_E_PARAM_HANDLE);
         return E_NOT_OK;
     }
     outSz = (uint16)(*resultLength);
@@ -182,7 +182,7 @@ Std_ReturnType Crypto_KeySetValid(uint32 cryptoKeyId)
     }
     keyId = wh_Autosar_ComposeKeyId(cryptoKeyId, CRYPTO_KE_MATERIAL);
     if (keyId == 0u) {
-        CRYPTO_DET_REPORT(CRYPTO_KEYSETVALID_SID, CRYPTO_E_PARAM_KEY);
+        CRYPTO_DET_REPORT(CRYPTO_KEYSETVALID_SID, CRYPTO_E_PARAM_HANDLE);
         return E_NOT_OK;
     }
     return (wh_Client_KeyCommit(ctx, keyId) == WH_ERROR_OK) ? E_OK : E_NOT_OK;

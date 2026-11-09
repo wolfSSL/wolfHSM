@@ -167,19 +167,12 @@ Result<void> HashFunctionCtx::Start()
 }
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
-/* Issue one Sha*UpdateRequest of the given chunk size, halving on
- * BADARGS until the wolfHSM client accepts it (mirrors hashUpdateSync
- * in the Classic dispatcher). Returns WH_ERROR_OK on success;
- * *outSent / *outAccepted communicate whether a wire round-trip
- * occurred and how many bytes were actually consumed. */
+/* Halve on WH_ERROR_REQUEST_SIZE until the client accepts the chunk. */
 static int oneSha256Chunk(whClientContext* c, wc_Sha256* s,
                           const std::uint8_t* in, std::uint32_t want,
                           bool* outSent, std::uint32_t* outAccepted)
 {
-    int rc = WH_ERROR_BADARGS;
-    /* Always define the output values, including on the failure path,
-     * so a caller that reads them on error sees a coherent state
-     * rather than uninitialised stack. */
+    int rc       = WH_ERROR_BADARGS;
     *outSent     = false;
     *outAccepted = 0u;
     while (want > 0u) {
@@ -195,7 +188,7 @@ static int oneSha256Chunk(whClientContext* c, wc_Sha256* s,
             *outAccepted = want;
             return rc;
         }
-        if (rc != WH_ERROR_BADARGS)
+        if (rc != WH_ERROR_REQUEST_SIZE)
             return rc;
         want /= 2u;
     }
@@ -222,7 +215,7 @@ static int oneSha384Chunk(whClientContext* c, wc_Sha384* s,
             *outAccepted = want;
             return rc;
         }
-        if (rc != WH_ERROR_BADARGS)
+        if (rc != WH_ERROR_REQUEST_SIZE)
             return rc;
         want /= 2u;
     }
@@ -250,7 +243,7 @@ static int oneSha512Chunk(whClientContext* c, wc_Sha512* s,
             *outAccepted = want;
             return rc;
         }
-        if (rc != WH_ERROR_BADARGS)
+        if (rc != WH_ERROR_REQUEST_SIZE)
             return rc;
         want /= 2u;
     }

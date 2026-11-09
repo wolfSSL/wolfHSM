@@ -68,7 +68,7 @@ int wh_Autosar_PlatformClientConfig(whClientContext* client)
 
 static const Crypto_KeyDescriptorType s_keyDescriptors[] = {
     {100u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
-    {101u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_ECDSA, 256u, ECC_SECP256R1,
+    {101u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
      0},
     {102u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
     {103u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PKCS1_V1_5, 2048u, 0, 0}};
@@ -82,43 +82,37 @@ const uint32 Crypto_KeyDescriptorCount =
 
 static int testRngSync(void)
 {
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {1u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       out[32];
     uint32                      outLen          = sizeof(out);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 1u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = out;
     job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    return (Crypto_ProcessJob(0u, &job) == E_OK && outLen == 32u) ? 0 : 1;
+    return (testCryIfProcessJob(0u, &job) == E_OK && outLen == 32u) ? 0 : 1;
 }
 
 static int testRngAsync(void)
 {
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji  = {2u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       out[32];
     uint32                      outLen          = sizeof(out);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 2u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = out;
     job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
     int prev                         = testCallbackTotal();
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     if (testWaitCallbacks(prev + 1, 3000) != 0)
         return 1;
@@ -129,50 +123,44 @@ static int testRngAsync(void)
 static int testSha256Sync(void)
 {
     const char*                 msg = "hello wolfHSM AUTOSAR";
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_HASH,
                                        {CRYPTO_ALGOFAM_SHA2_256,
                                         CRYPTO_ALGOFAM_NOT_SET, 0u,
                                         CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {3u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       digest[32];
     uint32                      dLen            = sizeof(digest);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 3u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.inputPtr        = (const uint8*)msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)strlen(msg);
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    return (Crypto_ProcessJob(0u, &job) == E_OK && dLen == 32u) ? 0 : 1;
+    return (testCryIfProcessJob(0u, &job) == E_OK && dLen == 32u) ? 0 : 1;
 }
 
 static int testSha256AsyncStream(void)
 {
     const char*                 msg = "hello wolfHSM AUTOSAR";
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_HASH,
                                        {CRYPTO_ALGOFAM_SHA2_256,
                                         CRYPTO_ALGOFAM_NOT_SET, 0u,
                                         CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji  = {4u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       digest[32];
     uint32                      dLen            = sizeof(digest);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 4u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.inputPtr        = (const uint8*)msg;
     job.jobPrimitiveInputOutput.inputLength     = (uint32)strlen(msg);
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
     int prev                         = testCallbackTotal();
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     if (testWaitCallbacks(prev + 1, 5000) != 0)
         return 1;
@@ -186,45 +174,40 @@ static int testSha256AsyncLargeChunked(void)
     for (int i = 0; i < BIG; ++i)
         input[i] = (uint8)(i * 7 + 3);
 
-    Crypto_PrimitiveInfoType    pi       = {32u,
-                                            CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi       = {CRYPTO_HASH,
                                             {CRYPTO_ALGOFAM_SHA2_256,
                                              CRYPTO_ALGOFAM_NOT_SET, 0u,
                                              CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpiAsync = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji       = {41u, 0u};
+    Crypto_JobPrimitiveInfoType jpiAsync = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       dA[32];
     uint32                      lA              = sizeof(dA);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 41u;
     job.jobPrimitiveInfo                        = &jpiAsync;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.inputPtr        = input;
     job.jobPrimitiveInputOutput.inputLength     = BIG;
     job.jobPrimitiveInputOutput.outputPtr       = dA;
     job.jobPrimitiveInputOutput.outputLengthPtr = &lA;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
     int prev                         = testCallbackTotal();
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     if (testWaitCallbacks(prev + 1, 10000) != 0 || gTestCb.lastResult != E_OK) {
         return 1;
     }
 
-    Crypto_JobPrimitiveInfoType jpiSync = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          jiS     = {42u, 0u};
+    Crypto_JobPrimitiveInfoType jpiSync = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       dS[32];
     uint32                      lS               = sizeof(dS);
     Crypto_JobType              sync             = {0};
     sync.jobId                                   = 42u;
     sync.jobPrimitiveInfo                        = &jpiSync;
-    sync.jobInfo                                 = &jiS;
     sync.jobPrimitiveInputOutput.inputPtr        = input;
     sync.jobPrimitiveInputOutput.inputLength     = BIG;
     sync.jobPrimitiveInputOutput.outputPtr       = dS;
     sync.jobPrimitiveInputOutput.outputLengthPtr = &lS;
     sync.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-    if (Crypto_ProcessJob(0u, &sync) != E_OK)
+    if (testCryIfProcessJob(0u, &sync) != E_OK)
         return 1;
     return (memcmp(dA, dS, 32) == 0) ? 0 : 1;
 }
@@ -233,38 +216,35 @@ static int testSha256MultiCall(void)
 {
     const char*                 p1  = "hello wolfHSM ";
     const char*                 p2  = "AUTOSAR";
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_HASH,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_HASH,
                                        {CRYPTO_ALGOFAM_SHA2_256,
                                         CRYPTO_ALGOFAM_NOT_SET, 0u,
                                         CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {5u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       digest[32];
     uint32                      dLen            = sizeof(digest);
     Crypto_JobType              job             = {0};
     job.jobId                                   = 5u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = digest;
     job.jobPrimitiveInputOutput.outputLengthPtr = &dLen;
     job.jobPrimitiveInputOutput.mode            = CRYPTO_OPERATIONMODE_START;
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     job.jobPrimitiveInputOutput.mode        = CRYPTO_OPERATIONMODE_UPDATE;
     job.jobPrimitiveInputOutput.inputPtr    = (const uint8*)p1;
     job.jobPrimitiveInputOutput.inputLength = (uint32)strlen(p1);
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     job.jobPrimitiveInputOutput.inputPtr    = (const uint8*)p2;
     job.jobPrimitiveInputOutput.inputLength = (uint32)strlen(p2);
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     job.jobPrimitiveInputOutput.mode        = CRYPTO_OPERATIONMODE_FINISH;
     job.jobPrimitiveInputOutput.inputPtr    = NULL;
     job.jobPrimitiveInputOutput.inputLength = 0u;
     dLen                                    = sizeof(digest);
-    return (Crypto_ProcessJob(0u, &job) == E_OK && dLen == 32u) ? 0 : 1;
+    return (testCryIfProcessJob(0u, &job) == E_OK && dLen == 32u) ? 0 : 1;
 }
 
 static int testKeystoreRoundtrip(void)
@@ -303,28 +283,23 @@ static int testKeystoreNoCollision(void)
 static int testAsyncQueuedJobs(void)
 {
     enum { N = 3 };
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji[N];
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       out[N][32];
     uint32                      outLen[N];
     Crypto_JobType              jobs[N];
     int                         prev = testCallbackTotal();
     for (int k = 0; k < N; ++k) {
         memset(&jobs[k], 0, sizeof(jobs[k]));
-        ji[k].jobId                                     = (uint32)(60 + k);
-        ji[k].jobPriority                               = 0u;
-        jobs[k].jobId                                   = ji[k].jobId;
+        jobs[k].jobId                                   = (uint32)(60 + k);
         jobs[k].jobPrimitiveInfo                        = &jpi;
-        jobs[k].jobInfo                                 = &ji[k];
         outLen[k]                                       = sizeof(out[k]);
         jobs[k].jobPrimitiveInputOutput.outputPtr       = out[k];
         jobs[k].jobPrimitiveInputOutput.outputLengthPtr = &outLen[k];
         jobs[k].jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-        if (Crypto_ProcessJob(0u, &jobs[k]) != E_OK)
+        if (testCryIfProcessJob(0u, &jobs[k]) != E_OK)
             return 1;
     }
     if (testWaitCallbacks(prev + N, 10000) != 0)
@@ -342,7 +317,7 @@ int main(void)
     int                 failures = 0;
     Std_VersionInfoType vi       = {0};
 
-    Crypto_Init();
+    Crypto_Init(NULL);
     Crypto_GetVersionInfo(&vi);
     printf("wolfHSM AUTOSAR Crypto Driver v%u.%u.%u (vendor=%u, module=%u)\n",
            vi.sw_major_version, vi.sw_minor_version, vi.sw_patch_version,

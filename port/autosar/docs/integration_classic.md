@@ -50,6 +50,16 @@ toolchain. The csm_smoke harness keeps a minimal placeholder in
 `classic/examples/csm_smoke/fake_bsw/` for tool-free CI builds; it is
 **not** the source of truth.
 
+`Crypto.c` checks at compile time that your header's service, family and
+mode values match R22-11. A mismatch fails the build rather than routing
+jobs to the wrong primitive. The driver reads the key from
+`job->cryptoKeyId`, which CryIf fills in.
+
+R22-11 defines no family for ML-DSA or CMAC-KDF. The port uses
+`WH_AUTOSAR_ALGOFAM_MLDSA` (default `0x80`) and
+`WH_AUTOSAR_ALGOFAM_CMAC_KDF` (default `0x81`); override them with `-D` to
+match your configuration.
+
 ## Required external symbols
 
 Provide one definition each:
@@ -58,9 +68,9 @@ Provide one definition each:
   the `whClientConfig` for your transport (TCP, shared memory, MMIO,
   whatever connects to your wolfHSM server) and call `wh_Client_Init`.
   Sample TCP implementation is in `examples/csm_smoke/csm_smoke.c`.
-- `void CryIf_CallbackNotification(Crypto_JobType*, Std_ReturnType)` —
+- `void CryIf_CallbackNotification(Crypto_JobType*, Crypto_ResultType)` -
   supplied by your BSW's CryIf module.
-- `Std_ReturnType Det_ReportError(uint16, uint8, uint8, uint8)` —
+- `Std_ReturnType Det_ReportError(uint16, uint8, uint8, uint8)` -
   supplied by your BSW.
 
 ## ARXML / configuration
@@ -105,7 +115,8 @@ requires editing the port files in place).
 
 ### Async behaviour
 
-`Crypto_ProcessJob` with `processingType=1` returns immediately —
+`Crypto_ProcessJob` with `processingType=CRYPTO_PROCESSING_ASYNC`
+returns immediately:
 the slot transitions to QUEUED. `Crypto_MainFunction` promotes the
 oldest QUEUED slot to PENDING and drives the `wh_Client_*Request /
 *Response` pair; **at most one slot is in flight per driver object**,

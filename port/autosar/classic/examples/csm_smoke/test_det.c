@@ -52,7 +52,7 @@ static int expectDet(uint8 apiId, uint8 errorId, const char* label)
 static int testDetProcessJobNullJob(void)
 {
     testDetReset();
-    if (Crypto_ProcessJob(0u, NULL) != E_NOT_OK)
+    if (testCryIfProcessJob(0u, NULL) != E_NOT_OK)
         return 1;
     return expectDet(CRYPTO_PROCESSJOB_SID, CRYPTO_E_PARAM_POINTER,
                      "ProcessJob(NULL)");
@@ -60,11 +60,11 @@ static int testDetProcessJobNullJob(void)
 
 static int testDetProcessJobNullPrimitiveInfo(void)
 {
-    Crypto_JobPrimitiveInfoType jpi = {0u, NULL, 0u, 0u, 0u, FALSE};
+    Crypto_JobPrimitiveInfoType jpi = {0u, NULL, 0u, CRYPTO_PROCESSING_SYNC};
     Crypto_JobType              job = {0};
     job.jobPrimitiveInfo            = &jpi;
     testDetReset();
-    if (Crypto_ProcessJob(0u, &job) != E_NOT_OK)
+    if (testCryIfProcessJob(0u, &job) != E_NOT_OK)
         return 1;
     return expectDet(CRYPTO_PROCESSJOB_SID, CRYPTO_E_PARAM_POINTER,
                      "ProcessJob(NULL primitiveInfo)");
@@ -72,23 +72,20 @@ static int testDetProcessJobNullPrimitiveInfo(void)
 
 static int testDetProcessJobBadObjectId(void)
 {
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 0u, FALSE};
-    Crypto_JobInfoType          ji  = {9001u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_SYNC};
     uint8                       out[32];
     uint32                      outLen          = sizeof(out);
     Crypto_JobType              job             = {0};
-    job.jobId                                   = ji.jobId;
+    job.jobId                                   = 9001u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = out;
     job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     testDetReset();
     /* CRYPTO_DRIVER_OBJECT_COUNT is 1 in the smoke; id 99 is out-of-range. */
-    if (Crypto_ProcessJob(99u, &job) != E_NOT_OK)
+    if (testCryIfProcessJob(99u, &job) != E_NOT_OK)
         return 1;
     return expectDet(CRYPTO_PROCESSJOB_SID, CRYPTO_E_PARAM_HANDLE,
                      "ProcessJob(bad objectId)");
@@ -151,10 +148,10 @@ static int testDetKeyElementSetBadKeyId(void)
     uint8 k[8] = {0};
     testDetReset();
     /* cryptoKeyId 0x100 is outside our 8-bit composition range; the
-     * dispatcher rejects with CRYPTO_E_PARAM_KEY. */
+     * dispatcher rejects with CRYPTO_E_PARAM_HANDLE. */
     if (Crypto_KeyElementSet(0x100u, 1u, k, sizeof(k)) != E_NOT_OK)
         return 1;
-    return expectDet(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_KEY,
+    return expectDet(CRYPTO_KEYELEMENTSET_SID, CRYPTO_E_PARAM_HANDLE,
                      "KeyElementSet(out-of-range cryptoKeyId)");
 }
 

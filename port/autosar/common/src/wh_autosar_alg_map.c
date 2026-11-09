@@ -77,7 +77,8 @@ int wh_AutosarMap_OpKind(uint32_t service, uint32_t family, uint32_t mode,
 
         case WH_AUTOSAR_SERVICE_MAC_GENERATE:
         case WH_AUTOSAR_SERVICE_MAC_VERIFY:
-            if (family == WH_AUTOSAR_ALGOFAM_CMAC) {
+            if (family == WH_AUTOSAR_ALGOFAM_AES &&
+                mode == WH_AUTOSAR_ALGOMODE_CMAC) {
                 op = WH_AUTOSAR_OP_MAC_CMAC_AES;
             }
             break;
@@ -111,50 +112,52 @@ int wh_AutosarMap_OpKind(uint32_t service, uint32_t family, uint32_t mode,
 
         case WH_AUTOSAR_SERVICE_SIGNATURE_GENERATE:
         case WH_AUTOSAR_SERVICE_SIGNATURE_VERIFY:
-            switch (family) {
-                case WH_AUTOSAR_ALGOFAM_RSA:
-                    if (mode == WH_AUTOSAR_ALGOMODE_PSS) {
-                        op = WH_AUTOSAR_OP_SIG_RSA_PSS;
-                    }
-                    else {
-                        op = WH_AUTOSAR_OP_SIG_RSA_PKCS1_V1_5;
-                    }
-                    break;
-                case WH_AUTOSAR_ALGOFAM_ECCNIST:
-                    op = WH_AUTOSAR_OP_SIG_ECDSA;
-                    break;
-                case WH_AUTOSAR_ALGOFAM_ED25519:
-                    op = WH_AUTOSAR_OP_SIG_ED25519;
-                    break;
-                case WH_AUTOSAR_ALGOFAM_MLDSA:
-                    op = WH_AUTOSAR_OP_SIG_MLDSA;
-                    break;
-                default:
-                    break;
+            if (family == WH_AUTOSAR_ALGOFAM_RSA) {
+                if (mode == WH_AUTOSAR_ALGOMODE_PSS) {
+                    op = WH_AUTOSAR_OP_SIG_RSA_PSS;
+                }
+                else if (mode == WH_AUTOSAR_ALGOMODE_PKCS1_V1_5) {
+                    op = WH_AUTOSAR_OP_SIG_RSA_PKCS1_V1_5;
+                }
             }
-            break;
-
-        case WH_AUTOSAR_SERVICE_KEY_EXCHANGE_PUB:
-        case WH_AUTOSAR_SERVICE_KEY_EXCHANGE_SEC:
-            if (family == WH_AUTOSAR_ALGOFAM_ECCNIST) {
-                op = WH_AUTOSAR_OP_KEYAGREE_ECDH;
+            else if (family == WH_AUTOSAR_ALGOFAM_ECCNIST ||
+                     family == WH_AUTOSAR_ALGOFAM_ECDSA) {
+                op = WH_AUTOSAR_OP_SIG_ECDSA;
             }
-            else if (family == WH_AUTOSAR_ALGOFAM_X25519) {
-                op = WH_AUTOSAR_OP_KEYAGREE_X25519;
+            else if (family == WH_AUTOSAR_ALGOFAM_ED25519) {
+                op = WH_AUTOSAR_OP_SIG_ED25519;
             }
-            break;
-
-        case WH_AUTOSAR_SERVICE_KEY_DERIVE:
-            if (family == WH_AUTOSAR_ALGOFAM_HKDF) {
-                op = WH_AUTOSAR_OP_KDF_HKDF;
-            }
-            else if (family == WH_AUTOSAR_ALGOFAM_CMAC_KDF) {
-                op = WH_AUTOSAR_OP_KDF_CMAC;
+            else if (family == WH_AUTOSAR_ALGOFAM_MLDSA) {
+                op = WH_AUTOSAR_OP_SIG_MLDSA;
             }
             break;
 
         case WH_AUTOSAR_SERVICE_RANDOM:
             op = WH_AUTOSAR_OP_RNG_GENERATE;
+            break;
+
+        /* Key management jobs take their algorithm from the key's
+         * descriptor, not from the job's primitive info. */
+        case WH_AUTOSAR_SERVICE_RANDOM_SEED:
+            op = WH_AUTOSAR_OP_RANDOM_SEED;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_GENERATE:
+            op = WH_AUTOSAR_OP_KEY_GENERATE;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_DERIVE:
+            op = WH_AUTOSAR_OP_KEY_DERIVE;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_EXCHANGE_PUB:
+            op = WH_AUTOSAR_OP_KEY_EXCHANGE_PUB;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_EXCHANGE_SEC:
+            op = WH_AUTOSAR_OP_KEY_EXCHANGE_SEC;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_SET_VALID:
+            op = WH_AUTOSAR_OP_KEY_SET_VALID;
+            break;
+        case WH_AUTOSAR_SERVICE_KEY_SET_INVALID:
+            op = WH_AUTOSAR_OP_KEY_SET_INVALID;
             break;
 
         default:

@@ -34,9 +34,28 @@ testCallbackState gTestCb = {PTHREAD_MUTEX_INITIALIZER,
                              NULL,
                              {0}};
 
-void CryIf_CallbackNotification(Crypto_JobType* job, Std_ReturnType result)
+#define TEST_JOB_RESULTS 16
+
+typedef struct {
+    const Crypto_JobType* job;
+    Std_ReturnType        result;
+    int                   done;
+} testJobResult;
+
+static testJobResult s_jobResults[TEST_JOB_RESULTS];
+
+void CryIf_CallbackNotification(Crypto_JobType* job, Crypto_ResultType result)
 {
+    int i;
+
     pthread_mutex_lock(&gTestCb.lock);
+    for (i = 0; i < TEST_JOB_RESULTS; ++i) {
+        if (s_jobResults[i].job == job && !s_jobResults[i].done) {
+            s_jobResults[i].result = result;
+            s_jobResults[i].done   = 1;
+            break;
+        }
+    }
     gTestCb.total++;
     gTestCb.lastResult = result;
     gTestCb.lastJob    = job;
@@ -286,4 +305,23 @@ void wh_Autosar_UnlockSlots(wh_AutosarDriverObject* obj)
 {
     (void)obj;
     pthread_mutex_unlock(&s_slotLock);
+}
+
+static pthread_mutex_t s_keyLock = PTHREAD_MUTEX_INITIALIZER;
+
+void wh_Autosar_LockKeys(void)
+{
+    pthread_mutex_lock(&s_keyLock);
+}
+void wh_Autosar_UnlockKeys(void)
+{
+    pthread_mutex_unlock(&s_keyLock);
+}
+
+Std_ReturnType testCryIfProcessJob(uint32 objectId, Crypto_JobType* job)
+{
+    if (job != NULL && job->jobPrimitiveInfo != NULL) {
+        job->cryptoKeyId = job->jobPrimitiveInfo->cryIfKeyId;
+    }
+    return Crypto_ProcessJob(objectId, job);
 }

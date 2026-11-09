@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 /* Called by Crypto_MainFunction on async completion. */
-void CryIf_CallbackNotification(Crypto_JobType* job, Std_ReturnType result);
+void CryIf_CallbackNotification(Crypto_JobType* job, Crypto_ResultType result);
 
 #ifdef __cplusplus
 }

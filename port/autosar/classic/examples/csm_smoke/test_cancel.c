@@ -46,18 +46,15 @@ static int testCancelQueued(void)
     /* Pause MainFunction so the submitted job stays QUEUED. */
     testPauseMainFunctionThread();
 
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji  = {9100u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       out[32];
     uint32                      outLen          = sizeof(out);
     Crypto_JobType              job             = {0};
-    job.jobId                                   = ji.jobId;
+    job.jobId                                   = 9101u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = out;
     job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
@@ -70,7 +67,7 @@ static int testCancelQueued(void)
      * with testCallbackTotal(). */
     int baselineCb = testCallbacksForJob(&job);
 
-    if (Crypto_ProcessJob(0u, &job) != E_OK) {
+    if (testCryIfProcessJob(0u, &job) != E_OK) {
         testResumeMainFunctionThread();
         return 1;
     }
@@ -99,20 +96,17 @@ static int testCancelPending(void)
      *       one callback fired for this job.
      * Both are accepted. The post-condition that always holds is:
      * callbacks_for_job + cancel_succeeded == 1, and slot → IDLE. */
-    Crypto_PrimitiveInfoType    pi  = {32u,
-                                       CRYPTO_RANDOMGENERATE,
+    Crypto_PrimitiveInfoType    pi  = {CRYPTO_RANDOMGENERATE,
                                        {CRYPTO_ALGOFAM_RNG, CRYPTO_ALGOFAM_NOT_SET,
                                         0u, CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, 0u, 1u, FALSE};
-    Crypto_JobInfoType          ji  = {9101u, 0u};
+    Crypto_JobPrimitiveInfoType jpi = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
     uint8                       out[32];
     uint32                      outLen = sizeof(out);
     Crypto_JobType              job    = {0};
     Std_ReturnType              cancelRc;
     int                         cbForJob;
-    job.jobId                                   = ji.jobId;
+    job.jobId                                   = 9101u;
     job.jobPrimitiveInfo                        = &jpi;
-    job.jobInfo                                 = &ji;
     job.jobPrimitiveInputOutput.outputPtr       = out;
     job.jobPrimitiveInputOutput.outputLengthPtr = &outLen;
     job.jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
@@ -121,7 +115,7 @@ static int testCancelPending(void)
      * for why the absolute count is unreliable across tests. */
     int baselineCb = testCallbacksForJob(&job);
 
-    if (Crypto_ProcessJob(0u, &job) != E_OK)
+    if (testCryIfProcessJob(0u, &job) != E_OK)
         return 1;
     cancelRc = Crypto_CancelJob(0u, &job);
 

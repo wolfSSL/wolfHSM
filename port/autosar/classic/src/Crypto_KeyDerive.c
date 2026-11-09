@@ -52,7 +52,7 @@ Std_ReturnType Crypto_KeyDerive(uint32 cryptoKeyId, uint32 targetCryptoKeyId)
             break;
 #endif
 #ifdef HAVE_CMAC_KDF
-        case CRYPTO_ALGOFAM_CMAC_KDF:
+        case WH_AUTOSAR_ALGOFAM_CMAC_KDF:
             rc = wh_Client_CmacKdfMakeCacheKey(
                 ctx, srcId, NULL, 0u, srcId, NULL, 0u, NULL, 0u, &dstId, 0u,
                 label, (uint32)sizeof(label), tgt->keyLength / 8u);
