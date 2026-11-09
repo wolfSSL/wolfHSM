@@ -95,8 +95,106 @@ Override these in your `Crypto_Cfg.h` (or via `-D`):
 
 - `CRYPTO_VENDOR_ID` - your AUTOSAR-registered vendor identifier.
   Defaults to `0` so an unconfigured build is visibly unconfigured.
-- `CRYPTO_DRIVER_OBJECT_COUNT` — number of Crypto Driver Objects.
-- `CRYPTO_MAX_ASYNC_JOBS` — async slots per driver object.
+- `CRYPTO_DRIVER_OBJECT_COUNT` - number of Crypto Driver Objects.
+- `CRYPTO_MAX_ASYNC_JOBS` - async slots per driver object.
+- `CRYPTO_MAX_INVALID_KEYS` - keys that can be written and not yet set
+  valid at the same time (default 16).
+- `CRYPTO_MAX_RAM_ELEMENTS` - IV and salt elements the driver holds at
+  the same time (default 8).
+- `CRYPTO_CMAC_MIN_VERIFY_BITS` - shortest accepted MAC verify length
+  in bits (default 64). Shorter truncated MACs, as some SecOC profiles
+  use, need a lower value; every bit below it is guessable one at a
+  time by a caller that can run verify jobs.
+- `CRYPTO_AEAD_MIN_TAG_LEN` - shortest AES-GCM tag in bytes (default
+  12, wolfCrypt's own minimum).
+- `CRYPTO_ASYNC_TIMEOUT_TICKS` - MainFunction ticks one request may
+  stay unanswered before the job fails (default 10000).
+- `CRYPTO_KEY_COPY_BUF_SIZE` - largest element that `KeyElementCopy`,
+  `KeyCopy` and `KeyElementCopyPartial` handle (default 512 bytes). The
+  buffer is on the stack, twice for CopyPartial.
+- `CRYPTO_PUBKEY_DER_BUF_SIZE` - stack buffer for the DER public key
+  read during key exchange (default 160 bytes).
+- `CRYPTO_DEV_ERROR_DETECT` - `STD_ON` (default) reports parameter
+  errors to DET.
+
+With `CRYPTO_DRIVER_OBJECT_COUNT` above 1, each driver object has its own
+wolfHSM client. Give each client its own `devId` in the platform hook, and
+build client and server with `WOLFHSM_CFG_GLOBAL_KEYS`: the driver then
+stores keys in the server's global namespace so every object can use them.
+
+### Key descriptors
+
+Each `Crypto_KeyDescriptorType` entry gives the algorithm for one
+`cryptoKeyId`: `family`, `mode`, `keyLength` in bits, `eccCurveId` for
+ECC keys, `hashType` for HKDF targets and `mlDsaLevel`
+(`WC_ML_DSA_44/65/87`) for ML-DSA keys, and `exportable`. KeyGenerate,
+KeyDerive, the key exchange calls and ML-DSA signing read it.
+
+Keys are cached with `WH_NVM_FLAGS_USAGE_ANY`: AUTOSAR leaves key
+usage policy to the CSM, which the driver cannot see.
+
+Keys are created non-exportable unless their descriptor sets
+`exportable`, and `Crypto_KeyElementGet` and `Crypto_KeyElementCopy` on
+such a key return `CRYPTO_E_KEY_READ_FAIL`. Public keys stay readable
+through the key exchange calls. The private key from `CalcPubVal` is
+never exportable, and `KeyElementCopyPartial` needs an exportable
+target unless the target does not exist yet. Symmetric keys from
+`Crypto_KeyGenerate` are generated on the HSM.
+
+## Job and key conventions
+
+The driver follows SWS_Crypto_00073 for job buffers:
+
+1. Encrypt and decrypt take the IV from key element
+   `CRYPTO_KE_CIPHER_IV` (5) and clear it, so set it before every job.
+   The driver keeps it in RAM; setting it does not invalidate the key,
+   and writing new key material clears it. An async job takes the IV
+   when `Crypto_ProcessJob` accepts it.
+2. AEAD encrypt takes the associated data in `secondaryInputPtr` and
+   writes the tag to `secondaryOutputPtr`. AEAD decrypt reads the tag
+   from `tertiaryInputPtr`.
+3. Signature jobs sign the message in `inputPtr`. When
+   `secondaryFamily` names a SHA-2 hash, the driver hashes the message
+   first; with `CRYPTO_ALGOFAM_NOT_SET` the input is taken as the
+   digest and must be 32, 48 or 64 bytes. Ed25519 and ML-DSA always
+   sign the message.
+4. Key exchange public values are raw: X || Y for ECDH, 32 bytes for
+   X25519. CalcSecret stores the shared value in key element 1.
+5. `Crypto_KeyDerive` takes the salt from the source key's element
+   `CRYPTO_KE_KEYDERIVATION_SALT` (13), kept in RAM and cleared by new
+   key material like the IV. CMAC-KDF
+   needs a 16, 24 or 32 byte salt and uses a zero block when none is set.
+6. A streamed hash job stays `CRYPTO_JOBSTATE_ACTIVE` from START until
+   FINISH.
+7. Verify jobs write `CRYPTO_E_VER_NOT_OK` to `verifyPtr` on entry, so
+   a job that fails before verifying never reads as verified.
+8. Key ids are the plain client ids 1 to 255, with the global flag when
+   `CRYPTO_DRIVER_OBJECT_COUNT` is above 1.
+
+Key state follows SWS_Crypto_00039. A key written in this session is
+invalid until `Crypto_KeySetValid`, and jobs using it return
+`CRYPTO_E_KEY_NOT_VALID`. Keys provisioned on the HSM before
+`Crypto_Init` count as valid. `Crypto_KeySetValid` commits material written
+in this session to the HSM's NVM. The valid/invalid state itself lives in
+driver RAM, so a host reset forgets `Crypto_KeySetInvalid` and treats
+keys written but never set valid as valid again. `KeyExchangeCalcSecret`
+refuses a key that was explicitly set invalid, but accepts the fresh key
+from `CalcPubVal`.
+
+The key management API uses driver object 0's wolfHSM client by
+default, and a client carries one request at a time. While an async
+request is in flight on that client, sync jobs and key management calls
+return `CRYPTO_E_BUSY`. If you override `wh_Autosar_KeystoreClient` with a
+dedicated client, the key calls serialise among themselves the same way.
+
+`Crypto_CancelJob` returns `E_NOT_OK` for a job that `Crypto_MainFunction`
+is running as a blocking call or is still sending, or for a streamed
+hash whose UPDATE is running on another task, because its buffers are
+in use.
+
+Provide strong `wh_Autosar_LockKeys` / `wh_Autosar_UnlockKeys` when key
+calls and `Crypto_MainFunction` run on different tasks; they guard the
+key state, IV and salt tables.
 
 ### Slot lock hooks
 

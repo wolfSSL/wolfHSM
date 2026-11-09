@@ -26,24 +26,24 @@ port/autosar/
 
 ## Status
 
-- **Classic** — hash (SHA-256 / 384 / 512), AES (ECB/CBC/CTR/GCM), CMAC,
-  ECDSA P-256, Ed25519, RSA-PKCS#1-v1.5, ECDH P-256, HKDF, CMAC-KDF, RNG,
-  key management. Sync and real-async dispatch through `Crypto_MainFunction`
-  driving wolfHSM `*Request` / `*Response`.
-- **Adaptive** — `WolfhsmCryptoProvider` with 9 context classes:
+- **Classic** - hash (SHA-256 / 384 / 512), AES (ECB/CBC/CTR/GCM), CMAC,
+  ECDSA P-256, Ed25519, RSA PKCS#1 v1.5 and PSS, ML-DSA, ECDH P-256,
+  X25519, HKDF, CMAC-KDF, RNG, key state and job-based key management.
+  Sync and async dispatch, with `Crypto_MainFunction` driving wolfHSM
+  `*Request` / `*Response`.
+- **Adaptive** - `WolfhsmCryptoProvider` with 9 context classes:
   `RandomGeneratorCtx`, `HashFunctionCtx`, `SymmetricBlockCipherCtx`,
   `AuthCipherCtx`, `MessageAuthnCodeCtx`, `SignerPrivateCtx` /
   `VerifierPublicCtx`, `KeyAgreementPrivateCtx`,
   `KeyDerivationFunctionCtx`, `KeyStorageProvider`.
-- **Tests**: `classic/examples/csm_smoke/` (per-category C harness, ~25
-  tests) and `adaptive/examples/ap_smoke/` (per-cluster C++ harness, 9
-  tests). Both run against `examples/posix/wh_posix_server` over TCP and
-  are wired into `.github/workflows/build-and-test-autosar.yml`.
+- **Tests**: `classic/examples/csm_smoke/` and
+  `adaptive/examples/ap_smoke/` run against
+  `examples/posix/wh_posix_server` over TCP and are wired into
+  `.github/workflows/build-and-test-autosar.yml`.
 
-See `docs/algorithm_coverage.md` for the per-primitive matrix (sync /
-async / Adaptive coverage), and `docs/client_workarounds.md` for the one
-client-side translation kept while wolfHSM's verify-handler return
-contract evolves.
+See `docs/algorithm_coverage.md` for the per-primitive matrix,
+`docs/integration_classic.md` for the job and key conventions, and
+`docs/client_workarounds.md` for the verify-result translation.
 
 ## Quickstart
 

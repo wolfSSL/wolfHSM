@@ -62,24 +62,10 @@ codes that mean the input was rejected: `SIG_VERIFY_E`, the RSA
 padding errors, `AES_GCM_AUTH_E`, the ASN.1 parse errors, `MP_VAL` and
 a few neighbours.
 
-```c
-/* wolfHSM transport codes live in -2000..-2199.
- * wolfCrypt errors live in -100..-300 (and a few scattered
- * neighbouring ranges, all > -2000). A negative rc above
- * WH_ERROR_BADARGS is therefore a wolfCrypt-side rejection. */
-static boolean isVerifyRejection(int rc)
-{
-    return (rc < 0 && rc > -2000) ? TRUE : FALSE;
-}
-```
-
-Applied in both the sync `doEcdsaSync` verify path and the async
-`pollAsyncResponse` ECDSA verify arm. When `wh_Client_EccVerify`
-returns a wolfCrypt-range negative `rc` with `verifyRes`
-untouched, the dispatcher surfaces SWS-correct
-`E_OK + verifyPtr=NOT_OK`. The same translation will carry over to
-Ed25519, ML-DSA, and AES-GCM decrypt verify the moment those
-contexts are wired through the dispatcher.
+Every verify path in the Classic dispatcher (ECDSA, Ed25519, RSA,
+ML-DSA and the AES-GCM tag check) and the Adaptive verifiers use it.
+A listed code becomes `E_OK + verifyPtr=NOT_OK`. Any other error,
+such as `MEMORY_E` or a transport failure, stays `E_NOT_OK`.
 
 ---
 
@@ -99,15 +85,6 @@ case, and `isVerifyRejection` covers any rejection code the
 upstream allowlist doesn't explicitly fold. **No port-side
 changes are needed when the upstream patch lands.**
 
-A second item the original investigation flagged (POSIX server main
-loop terminating on every non-OK return) is **already fixed**
-upstream: commit `9a70643` ("Unify server handler return code
-processing") landed in `main` and is an ancestor of `cc433c0`,
-this repo's base. `wh_Server_HandleRequestMessage` captures
-handler rc into `handlerRc` for logging only and returns the
-`SendResponse` rc; handler errors cannot reach the POSIX main
-loop.
-
 ---
 
 ## Smoke coverage
@@ -122,10 +99,3 @@ The `csm_smoke` ECDSA test exercises three paths:
 3. **Malformed-DER signature** (SEQUENCE tag flipped; wolfCrypt
    rejects before math, returns a wolfCrypt-range negative)
    → `verifyPtr=NOT_OK + E_OK` via `isVerifyRejection`.
-
-Path 3 is gated behind `-DWH_SMOKE_TEST_MALFORMED_SIG=1`. Against
-the current unpatched POSIX server, the wolfCrypt rejection
-surfaces a `rc<0` in the response which causes the wolfHSM client
-to tear down the connection, hanging subsequent requests. Once
-upstream folds the rejection codes, the flag can be enabled and
-all three paths run end-to-end.

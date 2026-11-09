@@ -320,22 +320,9 @@ static int testEcdsaSelfConsistency(void)
                 verifyOut);
         return 1;
     }
-    /* Undo so the next stanza starts from a known-good signature. */
     sig[20] ^= 0x01u;
 
-#ifdef WH_SMOKE_TEST_MALFORMED_SIG
-    /* Malformed-DER tamper: flip the SEQUENCE tag. wolfCrypt rejects
-     * the signature before completing math, returning a wolfCrypt-range
-     * negative rc that the verify handler currently puts straight into
-     * respHeader.rc (see port/autosar/docs/client_workarounds.md
-     * Issue 1). With the upstream allowlist fix applied, the handler
-     * folds the rejection into (rc=0, res=0); our isVerifyRejection
-     * branch covers the same case from the client side and surfaces
-     * verifyPtr=NOT_OK + E_OK either way. Enable via
-     * -DWH_SMOKE_TEST_MALFORMED_SIG=1 once a patched wolfHSM is in
-     * use. Pre-patch this triggers a connection-level break (the
-     * client closes after seeing rc<0), surfacing as a server
-     * disconnect rather than a server crash. */
+    /* Malformed DER: flip the SEQUENCE tag. */
     sig[0] ^= 0x01u;
     verifyOut = 0xFFu;
     if (testCryIfProcessJob(0u, &jobVer) != E_OK) {
@@ -351,9 +338,6 @@ static int testEcdsaSelfConsistency(void)
     }
     sig[0] ^= 0x01u;
     printf("  KAT ecdsa P-256: sign + good + math-fail + malformed-DER OK\n");
-#else
-    printf("  KAT ecdsa P-256: sign + good-sig verify + tampered-sig OK\n");
-#endif
     return 0;
 }
 #else
