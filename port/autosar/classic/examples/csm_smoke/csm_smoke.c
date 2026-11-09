@@ -178,7 +178,8 @@ static int testSha256AsyncLargeChunked(void)
                                             {CRYPTO_ALGOFAM_SHA2_256,
                                              CRYPTO_ALGOFAM_NOT_SET, 0u,
                                              CRYPTO_ALGOMODE_NOT_SET}};
-    Crypto_JobPrimitiveInfoType jpiAsync = {0u, &pi, 0u, CRYPTO_PROCESSING_ASYNC};
+    Crypto_JobPrimitiveInfoType jpiAsync = {0u, &pi, 0u,
+                                            CRYPTO_PROCESSING_ASYNC};
     uint8                       dA[32];
     uint32                      lA              = sizeof(dA);
     Crypto_JobType              job             = {0};

@@ -740,9 +740,8 @@ Std_ReturnType wh_Autosar_ProcessJobSync(wh_AutosarDriverObject* obj,
 {
     const Crypto_PrimitiveInfoType* pi = job->jobPrimitiveInfo->primitiveInfo;
     wh_AutosarOpKind                op = resolveOpKind(job);
-    whKeyId                         keyId =
-        wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
-    Std_ReturnType ret = E_NOT_OK;
+    whKeyId        keyId = wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
+    Std_ReturnType ret   = E_NOT_OK;
 
     if (op == WH_AUTOSAR_OP_INVALID) {
         return E_NOT_OK;
@@ -962,8 +961,7 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
     Crypto_JobType*                     job = slot->job;
     Crypto_JobPrimitiveInputOutputType* io  = jobIo(job);
     int                                 rc  = WH_ERROR_NOTIMPL;
-    whKeyId                             keyId =
-        wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
+    whKeyId keyId = wh_Autosar_ComposeKeyId(job->cryptoKeyId, 1u);
 
     switch (slot->opKind) {
         case WH_AUTOSAR_OP_RNG_GENERATE:

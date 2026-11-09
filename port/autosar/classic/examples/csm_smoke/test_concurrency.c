@@ -96,10 +96,10 @@ static int stressAsyncRng(stressWorker* w)
     jpi->primitiveInfo  = &pi;
     jpi->processingType = CRYPTO_PROCESSING_ASYNC;
     memset(job, 0, sizeof(*job));
-    job->jobId                                   = (uint32)(w->id * 100000 + idx);
-    job->jobPrimitiveInfo                        = jpi;
-    w->outLens[idx]                              = (uint32)sizeof(w->outs[idx]);
-    job->jobPrimitiveInputOutput.outputPtr       = w->outs[idx];
+    job->jobId                             = (uint32)(w->id * 100000 + idx);
+    job->jobPrimitiveInfo                  = jpi;
+    w->outLens[idx]                        = (uint32)sizeof(w->outs[idx]);
+    job->jobPrimitiveInputOutput.outputPtr = w->outs[idx];
     job->jobPrimitiveInputOutput.outputLengthPtr = &w->outLens[idx];
     job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
 
