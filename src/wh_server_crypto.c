@@ -3276,7 +3276,6 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
     if (ret != WH_ERROR_OK) {
         return ret;
     }
-    uint32_t enc         = req.enc;
     uint32_t key_len     = req.keyLen;
     uint32_t len         = req.sz;
     uint32_t left        = req.left;
@@ -3310,8 +3309,8 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
         uint32_t cachedKeyLen = sizeof(cachedKey);
 
         ret = _PortKeyResolve(ctx, devId, key_id,
-                              req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                              WH_NVM_FLAGS_USAGE_ENCRYPT |
+                                  WH_NVM_FLAGS_USAGE_DECRYPT,
                               &portKey, cachedKey, &cachedKeyLen);
         if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
             key     = cachedKey;
@@ -3323,10 +3322,11 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
         uint32_t cachedKeyLen = sizeof(cachedKey);
-        ret                   = wh_Server_KeystoreReadKeyEnforce(
+        /* CTR runs the same keystream both ways, so it needs both flags */
+        ret = wh_Server_KeystoreReadKeyEnforce(
             ctx, key_id,
-            enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT : WH_NVM_FLAGS_USAGE_DECRYPT,
-            keyMeta, cachedKey, &cachedKeyLen);
+            WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, keyMeta,
+            cachedKey, &cachedKeyLen);
         if (ret == WH_ERROR_OK) {
             /* override the incoming values with cached key */
             key     = cachedKey;
@@ -3354,9 +3354,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
-            ret =
-                wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len, (byte*)iv,
-                                   enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+            /* CTR uses the encryption key schedule in both directions */
+            ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len,
+                                     (byte*)iv, AES_ENCRYPTION);
         }
         if (ret == WH_ERROR_OK) {
             /* Reject client-supplied left values outside the valid range.
@@ -3370,22 +3370,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
                 /* Restore streaming CTR context from the previous call. */
                 aes->left = left;
                 memcpy(aes->tmp, tmp, sizeof(aes->tmp));
-                if (enc != 0) {
-                    ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in,
-                                           (word32)len);
-                    if (ret == WH_ERROR_OK) {
-                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
-                                                 out, len);
-                    }
-                }
-                else {
-                    /* CTR uses the same function for encrypt and decrypt */
-                    ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in,
-                                           (word32)len);
-                    if (ret == WH_ERROR_OK) {
-                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
-                                                 out, len);
-                    }
+                ret = wc_AesCtrEncrypt(aes, (byte*)out, (byte*)in, (word32)len);
+                if (ret == WH_ERROR_OK) {
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Output", out, len);
                 }
             }
         }
@@ -3444,7 +3431,6 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    uint32_t enc         = req.enc;
     uint32_t keyLen      = req.keySz;
     uint32_t len         = req.input.sz;
     uint32_t left        = req.left;
@@ -3486,8 +3472,8 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
             uint32_t cachedKeyLen = sizeof(cachedKey);
 
             ret = _PortKeyResolve(ctx, devId, keyId,
-                                  req.enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                               : WH_NVM_FLAGS_USAGE_DECRYPT,
+                                  WH_NVM_FLAGS_USAGE_ENCRYPT |
+                                      WH_NVM_FLAGS_USAGE_DECRYPT,
                                   &portKey, cachedKey, &cachedKeyLen);
             if ((ret == WH_ERROR_OK) && (portKey == WH_KEYID_ERASED)) {
                 key    = cachedKey;
@@ -3501,8 +3487,7 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
             uint32_t cachedKeyLen = sizeof(cachedKey);
             ret                   = wh_Server_KeystoreReadKeyEnforce(
                 ctx, keyId,
-                enc != 0 ? WH_NVM_FLAGS_USAGE_ENCRYPT
-                                           : WH_NVM_FLAGS_USAGE_DECRYPT,
+                WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
                 keyMeta, cachedKey, &cachedKeyLen);
             if (ret == WH_ERROR_OK) {
                 key    = cachedKey;
@@ -3552,9 +3537,9 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
-            ret =
-                wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
-                                   enc != 0 ? AES_ENCRYPTION : AES_DECRYPTION);
+            /* CTR uses the encryption key schedule in both directions */
+            ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
+                                     AES_ENCRYPTION);
         }
         if (ret == WH_ERROR_OK) {
             /* Reject client-supplied left values outside the valid range.
@@ -3568,22 +3553,10 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
                 /* Restore streaming CTR context from the previous call. */
                 aes->left = left;
                 memcpy(aes->tmp, tmp, sizeof(aes->tmp));
-                if (enc != 0) {
-                    ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
-                                           (word32)len);
-                    if (ret == WH_ERROR_OK) {
-                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Encrypted output",
-                                                 outAddr, len);
-                    }
-                }
-                else {
-                    /* CTR uses the same function for encrypt and decrypt */
-                    ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
-                                           (word32)len);
-                    if (ret == WH_ERROR_OK) {
-                        WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Decrypted output",
-                                                 outAddr, len);
-                    }
+                ret = wc_AesCtrEncrypt(aes, (byte*)outAddr, (byte*)inAddr,
+                                       (word32)len);
+                if (ret == WH_ERROR_OK) {
+                    WH_DEBUG_VERBOSE_HEXDUMP("[AesCtr] Output", outAddr, len);
                 }
                 if (ret == WH_ERROR_OK) {
                     left = aes->left;

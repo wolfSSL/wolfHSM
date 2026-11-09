@@ -1347,8 +1347,8 @@ static int _whTest_PortKeyOwner(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* The copy keeps the source key's usage flags. Each AES request needs the
- * usage for its direction and CMAC needs sign or verify, standard and DMA */
+/* The copy keeps the source key's usage flags, checked for each AES mode and
+ * CMAC, standard and DMA */
 static int _whTest_PortKeyUsage(TestCtx* t)
 {
     whClientContext* c = t->pair[0].client;
@@ -1364,8 +1364,8 @@ static int _whTest_PortKeyUsage(TestCtx* t)
 
     WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
 
-    /* Encrypt only and decrypt only: each works one way in every AES mode, and
-     * neither can do CMAC */
+    /* Encrypt only and decrypt only: each works one way in every AES mode but
+     * CTR, which needs both, and neither can do CMAC */
     src1 = WH_KEYID_ERASED;
     src2 = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
@@ -1380,12 +1380,20 @@ static int _whTest_PortKeyUsage(TestCtx* t)
                                       WH_NVM_FLAGS_USAGE_DECRYPT, CLIENT1_ID));
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
         for (mode = 0; mode < MODE_COUNT; mode++) {
-            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
-            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, port1, mode, dma, 0, &e));
-            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
-            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, port2, mode, dma, 1, &e));
+            if (mode == MODE_CTR) {
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port1, mode, dma, 1, &e));
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port2, mode, dma, 1, &e));
+            }
+            else {
+                WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port1, mode, dma, 0, &e));
+                WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port2, mode, dma, 1, &e));
+            }
         }
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, port1, dma, tag));
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, port1, dma, tag));

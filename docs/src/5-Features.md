@@ -568,7 +568,8 @@ A client uses a port key ID like any other key ID. It binds the ID to a wolfCryp
 
 | Operation | Required Usage Flags |
 |---|---|
-| AES-ECB, AES-CBC, AES-CTR and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
+| AES-ECB, AES-CBC and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
+| AES-CTR | `WH_NVM_FLAGS_USAGE_ENCRYPT` and `WH_NVM_FLAGS_USAGE_DECRYPT`, in both directions |
 | AES-CMAC, one-shot or multi-step | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` |
 | Every key wrap and data wrap operation, as the KEK | `WH_NVM_FLAGS_USAGE_WRAP`. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks), so they take only fixed keys |
 
@@ -826,6 +827,8 @@ The usage flags constrain which cryptographic operations a given key may partici
 Multiple usage flags may be combined, and `WH_NVM_FLAGS_USAGE_ANY` is a convenience constant equal to the bitwise OR of all USAGE bits. A key whose metadata carries no USAGE bits at all is treated as not permitted for any cryptographic use — attempting to use it returns `WH_ERROR_USAGE`. This is intentional: a default-zero metadata does not silently grant access; the application must explicitly opt in to each operation a key may perform.
 
 Policy enforcement happens server-side on every relevant operation. Every wolfCrypt request that flows through the crypto callback routes through the keystore's usage check before the underlying primitive runs, and the operation is rejected with `WH_ERROR_USAGE` if the flag for that operation is not set. Because enforcement is server-side, and because the metadata is bound into the wrapped blob for wrapped keys, no client request can bypass it. Requests that use a [port key](#port-keys) are checked the same way, against the usage flags in the server's record of the key: those of the source key for a key a client loaded, or those the port registered for a fixed key.
+
+AES-CTR runs the same keystream in both directions, so a key used for CTR needs both `WH_NVM_FLAGS_USAGE_ENCRYPT` and `WH_NVM_FLAGS_USAGE_DECRYPT`, whichever direction the request asks for.
 
 Lifecycle and usage flags are bound to a key at the moment it is first cached or generated and travel with the key into NVM on commit. They cannot be edited in place through the standard client API — once a key has been created with `USAGE_SIGN` only, the only way to also grant `USAGE_VERIFY` is to erase the key and recreate it (or, for a public verification key, to extract the public half through the public-only export path and use it as an independent key). This non-editability is what makes the policy useful as a security control: an attacker who compromises a client cannot loosen the policy on an already-provisioned key.
 
