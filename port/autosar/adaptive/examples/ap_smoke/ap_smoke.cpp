@@ -38,6 +38,12 @@ extern "C" {
 #include "wolfhsm/wh_keyid.h"
 #include "port/posix/posix_transport_tcp.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
+#include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/hash.h"
+#include "wolfssl/wolfcrypt/rsa.h"
+#include "wolfssl/wolfcrypt/sha256.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 }
 
 #include "wolfhsm/ara_crypto/crypto_provider.hpp"
@@ -322,6 +328,132 @@ static int testEcdh(WolfhsmCryptoProvider& prov)
     return 0;
 }
 
+static const std::uint8_t kMsg[] = "Adaptive provider signature input";
+
+static int signVerifyTamper(WolfhsmCryptoProvider& prov, CryptoAlgId alg,
+                            KeyId key, const std::uint8_t* in, std::size_t len,
+                            ByteVector* out, const char* tag)
+{
+    auto signer   = prov.CreateSignerPrivateCtx(alg, key);
+    auto verifier = prov.CreateVerifierPublicCtx(alg, key);
+    CHECK(tag, signer != nullptr && verifier != nullptr);
+    auto sig = signer->Sign(in, len);
+    CHECK(tag, sig.HasValue());
+    auto good =
+        verifier->Verify(in, len, sig.Value().data(), sig.Value().size());
+    CHECK(tag, good.HasValue() && good.Value());
+    auto tampered = sig.Value();
+    tampered[tampered.size() / 2] ^= 0x01u;
+    auto bad = verifier->Verify(in, len, tampered.data(), tampered.size());
+    CHECK(tag, bad.HasValue() && !bad.Value());
+    *out = sig.Value();
+    return 0;
+}
+
+static int testRsa(WolfhsmCryptoProvider& prov)
+{
+    whKeyId       keyId                   = WH_KEYID_ERASED;
+    std::uint8_t  label[WH_NVM_LABEL_LEN] = {0};
+    std::uint8_t  digest[WC_SHA256_DIGEST_SIZE];
+    std::uint8_t  der[512];
+    std::uint8_t  plain[256];
+    std::uint8_t  enc[MAX_DER_DIGEST_SZ];
+    std::uint16_t derLen = sizeof(der);
+    word32        idx    = 0;
+    RsaKey        pub;
+    ByteVector    sig;
+
+    int rc = wh_Client_RsaMakeCacheKey(
+        &g_clientCtx, 2048, 65537, &keyId,
+        static_cast<whNvmFlags>(WH_NVM_FLAGS_USAGE_ANY), sizeof(label), label);
+    CHECK("rsa:keygen", rc == WH_ERROR_OK);
+    CHECK("rsa:export",
+          wh_Client_KeyExportPublic(&g_clientCtx, keyId, WH_KEY_ALGO_RSA, label,
+                                    sizeof(label), der, &derLen) == 0);
+    CHECK("rsa:hash", wc_Sha256Hash(kMsg, sizeof(kMsg), digest) == 0);
+    CHECK("rsa:pub", wc_InitRsaKey_ex(&pub, nullptr, INVALID_DEVID) == 0);
+    rc = wc_RsaPublicKeyDecode(der, &idx, &pub, derLen);
+
+    if (rc == 0)
+        rc = signVerifyTamper(prov, AlgId::kRsaPkcs1v15, keyId, digest,
+                              sizeof(digest), &sig, "rsa:pkcs1");
+    if (rc == 0) {
+        word32 encLen =
+            wc_EncodeSignature(enc, digest, sizeof(digest), SHA256h);
+        int n = wc_RsaSSL_Verify(sig.data(), sig.size(), plain, sizeof(plain),
+                                 &pub);
+        rc    = (n == static_cast<int>(encLen) &&
+              std::memcmp(plain, enc, encLen) == 0)
+                    ? 0
+                    : -1;
+        if (rc != 0)
+            std::fprintf(stderr, "  [FAIL] rsa:pkcs1-digestinfo\n");
+    }
+    if (rc == 0)
+        rc = signVerifyTamper(prov, AlgId::kRsaPss, keyId, digest,
+                              sizeof(digest), &sig, "rsa:pss");
+    if (rc == 0 &&
+        wc_RsaPSS_VerifyCheck(sig.data(), sig.size(), plain, sizeof(plain),
+                              digest, sizeof(digest), WC_HASH_TYPE_SHA256,
+                              WC_MGF1SHA256, &pub) < 0) {
+        std::fprintf(stderr, "  [FAIL] rsa:pss-software-verify\n");
+        rc = -1;
+    }
+    wc_FreeRsaKey(&pub);
+    (void)wh_Client_KeyEvict(&g_clientCtx, keyId);
+    if (rc != 0)
+        return 1;
+    std::printf("  RSA-2048 PKCS#1 v1.5 + PSS sign/verify, software interop "
+                "OK\n");
+    return 0;
+}
+
+static int testMlDsa(WolfhsmCryptoProvider& prov)
+{
+    whKeyId      keyId                   = WH_KEYID_ERASED;
+    std::uint8_t label[WH_NVM_LABEL_LEN] = {0};
+    ByteVector   sig;
+
+    int rc = wh_Client_MlDsaMakeCacheKey(
+        &g_clientCtx, 0, WC_ML_DSA_44, &keyId,
+        static_cast<whNvmFlags>(WH_NVM_FLAGS_USAGE_ANY), sizeof(label), label);
+    CHECK("mldsa:keygen", rc == WH_ERROR_OK);
+    rc = signVerifyTamper(prov, AlgId::kMlDsa44, keyId, kMsg, sizeof(kMsg),
+                          &sig, "mldsa:44");
+    (void)wh_Client_KeyEvict(&g_clientCtx, keyId);
+    if (rc != 0)
+        return 1;
+    std::printf("  ML-DSA-44 sign + verify-good + verify-bad OK (%zu bytes)\n",
+                sig.size());
+    return 0;
+}
+
+static int testX25519(WolfhsmCryptoProvider& prov)
+{
+    whKeyId      a = 0x1112u, b = 0x1113u;
+    std::uint8_t label[WH_NVM_LABEL_LEN] = {0};
+    int          rc                      = wh_Client_Curve25519MakeCacheKey(
+        &g_clientCtx, CURVE25519_KEYSIZE, &a,
+        static_cast<whNvmFlags>(WH_NVM_FLAGS_USAGE_ANY), label, sizeof(label));
+    CHECK("x25519:keygen-a", rc == WH_ERROR_OK);
+    rc = wh_Client_Curve25519MakeCacheKey(
+        &g_clientCtx, CURVE25519_KEYSIZE, &b,
+        static_cast<whNvmFlags>(WH_NVM_FLAGS_USAGE_ANY), label, sizeof(label));
+    CHECK("x25519:keygen-b", rc == WH_ERROR_OK);
+
+    auto ab  = prov.CreateKeyAgreementPrivateCtx(AlgId::kX25519, a);
+    auto ba  = prov.CreateKeyAgreementPrivateCtx(AlgId::kX25519, b);
+    auto sAB = ab->AgreeKey(b);
+    auto sBA = ba->AgreeKey(a);
+    (void)wh_Client_KeyEvict(&g_clientCtx, a);
+    (void)wh_Client_KeyEvict(&g_clientCtx, b);
+    CHECK("x25519:agree", sAB.HasValue() && sBA.HasValue() &&
+                              sAB.Value().size() == 32 &&
+                              sAB.Value() == sBA.Value());
+    std::printf("  X25519 bidirectional shared secret OK\n");
+    return 0;
+}
+
 static int testHkdf(WolfhsmCryptoProvider& prov)
 {
     /* Use one of the cached keys as the IKM source. */
@@ -402,6 +534,9 @@ int main()
     failures += testCmac(prov);
     failures += testSignerVerifierEcdsa(prov);
     failures += testEcdh(prov);
+    failures += testX25519(prov);
+    failures += testRsa(prov);
+    failures += testMlDsa(prov);
     failures += testHkdf(prov);
     failures += testKeyStorage(prov);
 

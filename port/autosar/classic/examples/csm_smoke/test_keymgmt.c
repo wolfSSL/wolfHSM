@@ -26,55 +26,6 @@
 
 #include "wolfhsm/wh_client.h"
 
-static void buildJob(Crypto_JobType* job, Crypto_JobPrimitiveInfoType* jpi,
-                     Crypto_PrimitiveInfoType* pi, Crypto_ServiceInfoType svc,
-                     Crypto_AlgorithmFamilyType fam,
-                     Crypto_AlgorithmModeType mode, uint32 keyId,
-                     Crypto_ProcessingType pt, uint32 jobId)
-{
-    memset(pi, 0, sizeof(*pi));
-    pi->service             = svc;
-    pi->algorithm.family    = fam;
-    pi->algorithm.mode      = mode;
-    pi->algorithm.keyLength = 128u;
-    memset(jpi, 0, sizeof(*jpi));
-    jpi->primitiveInfo  = pi;
-    jpi->cryIfKeyId     = keyId;
-    jpi->processingType = pt;
-    memset(job, 0, sizeof(*job));
-    job->jobId                        = jobId;
-    job->jobPrimitiveInfo             = jpi;
-    job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
-}
-
-/* Runs body with the given keys erased before and after. */
-static int withKeys(int (*body)(void), const uint32* keys, size_t n)
-{
-    size_t i;
-    int    rc;
-
-    for (i = 0; i < n; ++i)
-        testEraseKey(keys[i]);
-    rc = body();
-    for (i = 0; i < n; ++i)
-        testEraseKey(keys[i]);
-    return rc;
-}
-
-static Std_ReturnType runAsync(Crypto_JobType* job, Std_ReturnType* result)
-{
-    int            prev = testCallbackTotal();
-    Std_ReturnType ret  = testCryIfProcessJob(0u, job);
-    if (ret != E_OK) {
-        return ret;
-    }
-    if (testWaitCallbacks(prev + 1, 20000) != 0) {
-        return E_NOT_OK;
-    }
-    *result = gTestCb.lastResult;
-    return E_OK;
-}
-
 static Std_ReturnType aesCbcEncrypt(uint32 keyId, uint8 out[16])
 {
     static const uint8          iv[16] = {0};
@@ -84,8 +35,8 @@ static Std_ReturnType aesCbcEncrypt(uint32 keyId, uint8 out[16])
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
 
-    buildJob(&job, &jpi, &pi, CRYPTO_ENCRYPT, CRYPTO_ALGOFAM_AES,
-             CRYPTO_ALGOMODE_CBC, keyId, CRYPTO_PROCESSING_SYNC, 7100u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_ENCRYPT, CRYPTO_ALGOFAM_AES,
+                 CRYPTO_ALGOMODE_CBC, keyId, CRYPTO_PROCESSING_SYNC, 7100u);
     job.jobPrimitiveInputOutput.inputPtr             = pt;
     job.jobPrimitiveInputOutput.inputLength          = 16u;
     job.jobPrimitiveInputOutput.secondaryInputPtr    = iv;
@@ -129,7 +80,7 @@ static int testKeyStatusBody(void)
 static int testKeyStatus(void)
 {
     static const uint32 keys[] = {130u};
-    return withKeys(testKeyStatusBody, keys, 1);
+    return testWithKeys(testKeyStatusBody, keys, 1);
 }
 
 static int testKeyElementIdsAndCopyPartialBody(void)
@@ -166,7 +117,7 @@ static int testKeyElementIdsAndCopyPartialBody(void)
 static int testKeyElementIdsAndCopyPartial(void)
 {
     static const uint32 keys[] = {131u, 132u};
-    return withKeys(testKeyElementIdsAndCopyPartialBody, keys, 2);
+    return testWithKeys(testKeyElementIdsAndCopyPartialBody, keys, 2);
 }
 
 static int testBusyWhileInFlightBody(void)
@@ -182,12 +133,12 @@ static int testBusyWhileInFlightBody(void)
     Std_ReturnType              busyJob, busyKey;
     int                         prev;
 
-    buildJob(&jobA, &jpiA, &piA, CRYPTO_RANDOMGENERATE, CRYPTO_ALGOFAM_RNG,
-             CRYPTO_ALGOMODE_NOT_SET, 0u, CRYPTO_PROCESSING_ASYNC, 7200u);
+    testBuildJob(&jobA, &jpiA, &piA, CRYPTO_RANDOMGENERATE, CRYPTO_ALGOFAM_RNG,
+                 CRYPTO_ALGOMODE_NOT_SET, 0u, CRYPTO_PROCESSING_ASYNC, 7200u);
     jobA.jobPrimitiveInputOutput.outputPtr       = outA;
     jobA.jobPrimitiveInputOutput.outputLengthPtr = &lenA;
-    buildJob(&jobS, &jpiS, &piS, CRYPTO_RANDOMGENERATE, CRYPTO_ALGOFAM_RNG,
-             CRYPTO_ALGOMODE_NOT_SET, 0u, CRYPTO_PROCESSING_SYNC, 7201u);
+    testBuildJob(&jobS, &jpiS, &piS, CRYPTO_RANDOMGENERATE, CRYPTO_ALGOFAM_RNG,
+                 CRYPTO_ALGOMODE_NOT_SET, 0u, CRYPTO_PROCESSING_SYNC, 7201u);
     jobS.jobPrimitiveInputOutput.outputPtr       = outS;
     jobS.jobPrimitiveInputOutput.outputLengthPtr = &lenS;
 
@@ -221,7 +172,7 @@ static int testBusyWhileInFlightBody(void)
 static int testBusyWhileInFlight(void)
 {
     static const uint32 keys[] = {133u};
-    return withKeys(testBusyWhileInFlightBody, keys, 1);
+    return testWithKeys(testBusyWhileInFlightBody, keys, 1);
 }
 
 static Std_ReturnType pubValJob(uint32 keyId, uint8* pub, uint32* pubLen,
@@ -231,8 +182,8 @@ static Std_ReturnType pubValJob(uint32 keyId, uint8* pub, uint32* pubLen,
     Crypto_JobPrimitiveInfoType jpi;
     Crypto_JobType              job;
 
-    buildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCPUBVAL, fam,
-             CRYPTO_ALGOMODE_NOT_SET, keyId, CRYPTO_PROCESSING_SYNC, 7300u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCPUBVAL, fam,
+                 CRYPTO_ALGOMODE_NOT_SET, keyId, CRYPTO_PROCESSING_SYNC, 7300u);
     job.jobPrimitiveInputOutput.outputPtr       = pub;
     job.jobPrimitiveInputOutput.outputLengthPtr = pubLen;
     return testCryIfProcessJob(0u, &job);
@@ -256,19 +207,21 @@ static int testKeyExchangeJobsEcdhBody(void)
                 lenB);
         return 1;
     }
-    buildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCSECRET, CRYPTO_ALGOFAM_ECDH,
-             CRYPTO_ALGOMODE_NOT_SET, 120u, CRYPTO_PROCESSING_SYNC, 7301u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCSECRET,
+                 CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 120u,
+                 CRYPTO_PROCESSING_SYNC, 7301u);
     job.jobPrimitiveInputOutput.inputPtr    = pubB;
     job.jobPrimitiveInputOutput.inputLength = lenB;
     if (testCryIfProcessJob(0u, &job) != E_OK) {
         fprintf(stderr, "  ecdh: CalcSecret sync job\n");
         return 1;
     }
-    buildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCSECRET, CRYPTO_ALGOFAM_ECDH,
-             CRYPTO_ALGOMODE_NOT_SET, 121u, CRYPTO_PROCESSING_ASYNC, 7302u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_KEYEXCHANGECALCSECRET,
+                 CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 121u,
+                 CRYPTO_PROCESSING_ASYNC, 7302u);
     job.jobPrimitiveInputOutput.inputPtr    = pubA;
     job.jobPrimitiveInputOutput.inputLength = lenA;
-    if (runAsync(&job, &res) != E_OK || res != E_OK) {
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK) {
         fprintf(stderr, "  ecdh: CalcSecret async job\n");
         return 1;
     }
@@ -285,7 +238,7 @@ static int testKeyExchangeJobsEcdhBody(void)
 static int testKeyExchangeJobsEcdh(void)
 {
     static const uint32 keys[] = {120u, 121u};
-    return withKeys(testKeyExchangeJobsEcdhBody, keys, 2);
+    return testWithKeys(testKeyExchangeJobsEcdhBody, keys, 2);
 }
 
 #ifdef HAVE_CURVE25519
@@ -319,7 +272,7 @@ static int testX25519DirectBody(void)
 static int testX25519Direct(void)
 {
     static const uint32 keys[] = {122u, 123u};
-    return withKeys(testX25519DirectBody, keys, 2);
+    return testWithKeys(testX25519DirectBody, keys, 2);
 }
 #endif
 
@@ -364,7 +317,7 @@ static int testKeyDeriveBody(void)
 static int testKeyDerive(void)
 {
     static const uint32 keys[] = {134u, 124u, 125u};
-    return withKeys(testKeyDeriveBody, keys, 3);
+    return testWithKeys(testKeyDeriveBody, keys, 3);
 }
 
 static int testKeyGenerateAndSetValidJobsBody(void)
@@ -376,16 +329,16 @@ static int testKeyGenerateAndSetValidJobsBody(void)
     Crypto_KeyStatusType        st  = CRYPTO_KEYSTATUS_VALID;
     uint8                       ct[16];
 
-    buildJob(&job, &jpi, &pi, CRYPTO_KEYGENERATE, CRYPTO_ALGOFAM_AES,
-             CRYPTO_ALGOMODE_NOT_SET, 126u, CRYPTO_PROCESSING_ASYNC, 7400u);
-    if (runAsync(&job, &res) != E_OK || res != E_OK ||
+    testBuildJob(&job, &jpi, &pi, CRYPTO_KEYGENERATE, CRYPTO_ALGOFAM_AES,
+                 CRYPTO_ALGOMODE_NOT_SET, 126u, CRYPTO_PROCESSING_ASYNC, 7400u);
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK ||
         Crypto_KeyGetStatus(126u, &st) != E_OK ||
         st != CRYPTO_KEYSTATUS_INVALID) {
         fprintf(stderr, "  keygen: async KEYGENERATE job\n");
         return 1;
     }
-    buildJob(&job, &jpi, &pi, CRYPTO_KEYSETVALID, CRYPTO_ALGOFAM_NOT_SET,
-             CRYPTO_ALGOMODE_NOT_SET, 126u, CRYPTO_PROCESSING_SYNC, 7401u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_KEYSETVALID, CRYPTO_ALGOFAM_NOT_SET,
+                 CRYPTO_ALGOMODE_NOT_SET, 126u, CRYPTO_PROCESSING_SYNC, 7401u);
     if (testCryIfProcessJob(0u, &job) != E_OK ||
         aesCbcEncrypt(126u, ct) != E_OK) {
         fprintf(stderr, "  keygen: KEYSETVALID job / use of generated key\n");
@@ -398,7 +351,7 @@ static int testKeyGenerateAndSetValidJobsBody(void)
 static int testKeyGenerateAndSetValidJobs(void)
 {
     static const uint32 keys[] = {126u};
-    return withKeys(testKeyGenerateAndSetValidJobsBody, keys, 1);
+    return testWithKeys(testKeyGenerateAndSetValidJobsBody, keys, 1);
 }
 
 #ifdef HAVE_ED25519
@@ -417,24 +370,27 @@ static int testEd25519AsyncBody(void)
         fprintf(stderr, "  ed25519 async: keygen\n");
         return 1;
     }
-    buildJob(&job, &jpi, &pi, CRYPTO_SIGNATUREGENERATE, CRYPTO_ALGOFAM_ED25519,
-             CRYPTO_ALGOMODE_NOT_SET, 127u, CRYPTO_PROCESSING_ASYNC, 7500u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_SIGNATUREGENERATE,
+                 CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 127u,
+                 CRYPTO_PROCESSING_ASYNC, 7500u);
     job.jobPrimitiveInputOutput.inputPtr        = msg;
     job.jobPrimitiveInputOutput.inputLength     = sizeof(msg);
     job.jobPrimitiveInputOutput.outputPtr       = sig;
     job.jobPrimitiveInputOutput.outputLengthPtr = &sigLen;
-    if (runAsync(&job, &res) != E_OK || res != E_OK || sigLen != 64u) {
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK || sigLen != 64u) {
         fprintf(stderr, "  ed25519 async: sign\n");
         return 1;
     }
-    buildJob(&job, &jpi, &pi, CRYPTO_SIGNATUREVERIFY, CRYPTO_ALGOFAM_ED25519,
-             CRYPTO_ALGOMODE_NOT_SET, 127u, CRYPTO_PROCESSING_ASYNC, 7501u);
+    testBuildJob(&job, &jpi, &pi, CRYPTO_SIGNATUREVERIFY,
+                 CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 127u,
+                 CRYPTO_PROCESSING_ASYNC, 7501u);
     job.jobPrimitiveInputOutput.inputPtr             = msg;
     job.jobPrimitiveInputOutput.inputLength          = sizeof(msg);
     job.jobPrimitiveInputOutput.secondaryInputPtr    = sig;
     job.jobPrimitiveInputOutput.secondaryInputLength = sigLen;
     job.jobPrimitiveInputOutput.verifyPtr            = &ver;
-    if (runAsync(&job, &res) != E_OK || res != E_OK || ver != CRYPTO_E_VER_OK) {
+    if (testRunAsync(&job, &res) != E_OK || res != E_OK ||
+        ver != CRYPTO_E_VER_OK) {
         fprintf(stderr, "  ed25519 async: verify\n");
         return 1;
     }
@@ -445,7 +401,7 @@ static int testEd25519AsyncBody(void)
 static int testEd25519Async(void)
 {
     static const uint32 keys[] = {127u};
-    return withKeys(testEd25519AsyncBody, keys, 1);
+    return testWithKeys(testEd25519AsyncBody, keys, 1);
 }
 #endif
 

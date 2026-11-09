@@ -103,6 +103,13 @@ Std_ReturnType wh_Autosar_KeyGenerateImpl(whClientContext* ctx,
                                            (uint32)sizeof(label), label);
             break;
 #endif
+#ifdef WOLFSSL_HAVE_MLDSA
+        case WH_AUTOSAR_ALGOFAM_MLDSA:
+            rc = wh_Client_MlDsaMakeCacheKey(ctx, 0, desc->mlDsaLevel, &outId,
+                                             (whNvmFlags)WH_NVM_FLAGS_USAGE_ANY,
+                                             (uint16)sizeof(label), label);
+            break;
+#endif
         case CRYPTO_ALGOFAM_AES: {
             uint8  mat[64];
             uint32 keyBytes = desc->keyLength / 8u;

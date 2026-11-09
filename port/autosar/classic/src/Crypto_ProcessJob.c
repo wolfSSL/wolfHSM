@@ -73,12 +73,13 @@
 #ifndef NO_RSA
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
 #endif
+#ifdef WOLFSSL_HAVE_MLDSA
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 #endif
-
-/* -------------------------------------------------------------------
- * Helpers
- * ------------------------------------------------------------------- */
+#include "wolfssl/wolfcrypt/hash.h"
+#endif
 
 static Crypto_JobPrimitiveInputOutputType* jobIo(Crypto_JobType* job)
 {
@@ -108,9 +109,6 @@ static boolean isEncryptService(Crypto_ServiceInfoType svc)
     return (svc == CRYPTO_ENCRYPT || svc == CRYPTO_AEADENCRYPT) ? TRUE : FALSE;
 }
 
-/* Thin C alias over the shared helper. Both Classic and Adaptive
- * classify verify-result rc the same way; the rationale lives in
- * port/autosar/common/include/wh_autosar_safe_compare.h. */
 static boolean isVerifyRejection(int rc)
 {
     return wh_Autosar_IsVerifyRejection(rc) ? TRUE : FALSE;
@@ -525,6 +523,57 @@ static Std_ReturnType doCmacSync(whClientContext* ctx, Crypto_JobType* job,
     return E_OK;
 }
 
+/* Digest to sign or verify: the input hashed with secondaryFamily, or the
+ * input itself when secondaryFamily is NOT_SET. */
+static int jobDigest(Crypto_JobType* job, uint8* out, uint32* outLen,
+                     enum wc_HashType* outType)
+{
+    Crypto_JobPrimitiveInputOutputType* io   = jobIo(job);
+    int                                 type = wh_AutosarMap_HashType(
+        (wh_AutosarAlgoFam)
+            job->jobPrimitiveInfo->primitiveInfo->algorithm.secondaryFamily);
+    int    rc  = WH_ERROR_BADARGS;
+    word32 len = io->inputLength;
+
+    if (io->inputPtr == NULL && len != 0u) {
+        return WH_ERROR_BADARGS;
+    }
+    if (type < 0) {
+        if (len == 0u || len > *outLen) {
+            return WH_ERROR_BADARGS;
+        }
+        (void)memcpy(out, io->inputPtr, len);
+        *outLen  = len;
+        *outType = (len == WC_SHA256_DIGEST_SIZE)   ? WC_HASH_TYPE_SHA256
+                   : (len == WC_SHA384_DIGEST_SIZE) ? WC_HASH_TYPE_SHA384
+                   : (len == WC_SHA512_DIGEST_SIZE) ? WC_HASH_TYPE_SHA512
+                                                    : WC_HASH_TYPE_NONE;
+        return WH_ERROR_OK;
+    }
+    switch (type) {
+        case WC_HASH_TYPE_SHA256:
+            rc = wc_Sha256Hash_ex(io->inputPtr, len, out, NULL, INVALID_DEVID);
+            break;
+#ifdef WOLFSSL_SHA384
+        case WC_HASH_TYPE_SHA384:
+            rc = wc_Sha384Hash_ex(io->inputPtr, len, out, NULL, INVALID_DEVID);
+            break;
+#endif
+#ifdef WOLFSSL_SHA512
+        case WC_HASH_TYPE_SHA512:
+            rc = wc_Sha512Hash_ex(io->inputPtr, len, out, NULL, INVALID_DEVID);
+            break;
+#endif
+        default:
+            break;
+    }
+    if (rc == 0) {
+        *outLen  = (uint32)wc_HashGetDigestSize((enum wc_HashType)type);
+        *outType = (enum wc_HashType)type;
+    }
+    return rc;
+}
+
 static Std_ReturnType doEcdsaSync(whClientContext* ctx, Crypto_JobType* job,
                                   whKeyId keyId, boolean verify)
 {
@@ -532,7 +581,13 @@ static Std_ReturnType doEcdsaSync(whClientContext* ctx, Crypto_JobType* job,
     int                                 rc;
     Crypto_JobPrimitiveInputOutputType* io = jobIo(job);
     Std_ReturnType                      ret;
+    uint8                               digest[WC_MAX_DIGEST_SIZE];
+    uint32                              digestLen = (uint32)sizeof(digest);
+    enum wc_HashType                    hashType;
 
+    if (jobDigest(job, digest, &digestLen, &hashType) != WH_ERROR_OK) {
+        return E_NOT_OK;
+    }
     rc = wc_ecc_init_ex(&key, NULL, WH_DEV_ID);
     if (rc != 0)
         return E_NOT_OK;
@@ -541,18 +596,10 @@ static Std_ReturnType doEcdsaSync(whClientContext* ctx, Crypto_JobType* job,
         if (verify) {
             int verifyRes = -1;
             rc = wh_Client_EccVerify(ctx, &key, io->secondaryInputPtr,
-                                     (uint16)io->secondaryInputLength,
-                                     io->inputPtr, (uint16)io->inputLength,
-                                     &verifyRes);
-            /* Two ways a bad signature surfaces:
-             *   1. rc=0 with verifyRes=0 — wolfCrypt parsed the DER and
-             *      the math rejected. Clean path.
-             *   2. rc<0 in wolfCrypt range with verifyRes untouched —
-             *      wolfCrypt rejected the signature before completing
-             *      math (malformed DER, etc.).
-             * Both are SWS "API succeeded, signature invalid" → E_OK
-             * with verifyPtr=NOT_OK. Only wolfHSM-transport-range
-             * negatives are genuine API failures. */
+                                     (uint16)io->secondaryInputLength, digest,
+                                     (uint16)digestLen, &verifyRes);
+            /* A malformed signature fails with a wolfCrypt error instead of
+             * verifyRes=0; both mean E_OK with verifyPtr=NOT_OK. */
             if (verifyRes == 0 || verifyRes == 1) {
                 writeVerifyResult(job, verifyRes == 1);
                 wc_ecc_free(&key);
@@ -563,23 +610,18 @@ static Std_ReturnType doEcdsaSync(whClientContext* ctx, Crypto_JobType* job,
                 wc_ecc_free(&key);
                 return E_OK;
             }
-            /* Else: transport-level error. Fall through to E_NOT_OK. */
         }
         else {
-            uint16 sigLen = (io->outputLengthPtr != NULL)
-                                ? (uint16)(*io->outputLengthPtr)
-                                : 0u;
-            rc            = wh_Client_EccSign(ctx, &key, io->inputPtr,
-                                              (uint16)io->inputLength, io->outputPtr,
-                                              &sigLen);
+            uint16 sigLen = (*io->outputLengthPtr > 0xFFFFu)
+                                ? 0xFFFFu
+                                : (uint16)(*io->outputLengthPtr);
+            rc = wh_Client_EccSign(ctx, &key, digest, (uint16)digestLen,
+                                   io->outputPtr, &sigLen);
             if (rc == 0 && io->outputLengthPtr != NULL) {
                 *io->outputLengthPtr = sigLen;
             }
         }
     }
-    /* For verify, the API call succeeded as long as wolfHSM reported no
-     * transport / cryptographic error — even if the signature itself
-     * was rejected (which is communicated through verifyPtr). */
     ret = (rc == 0) ? E_OK : E_NOT_OK;
     wc_ecc_free(&key);
     return ret;
@@ -634,80 +676,97 @@ static Std_ReturnType doEd25519Sync(whClientContext* ctx, Crypto_JobType* job,
 #endif /* HAVE_ED25519 */
 
 #ifndef NO_RSA
-/* RSA-PKCS#1 v1.5 sign / verify. The job's inputPtr is expected to be
- * the hash digest the application wants signed (CSM is responsible for
- * the hashing step). wc_RsaSSL_Sign applies the PKCS#1 v1.5 signature
- * padding internally and routes the private-key op through wolfHSM via
- * the cryptocb registered by wc_InitRsaKey_ex(..., WH_DEV_ID). */
-static Std_ReturnType doRsaSync(whClientContext* ctx, Crypto_JobType* job,
-                                whKeyId keyId, boolean verify)
+static int mgfFor(enum wc_HashType type)
 {
-    RsaKey rsa;
-    WC_RNG rng;
-    /* ctx is unused: wc_RsaSSL_Sign / Verify route through the wolfCrypt
-     * cryptocb registered by wc_InitRsaKey_ex(..., WH_DEV_ID), which
-     * picks up the wolfHSM client from the global devId binding. */
-    (void)ctx;
-    int                                 rc;
+    switch (type) {
+        case WC_HASH_TYPE_SHA384:
+            return WC_MGF1SHA384;
+        case WC_HASH_TYPE_SHA512:
+            return WC_MGF1SHA512;
+        default:
+            return WC_MGF1SHA256;
+    }
+}
+
+/* RSASSA-PKCS1-v1_5 (DigestInfo-encoded digest) or RSASSA-PSS. The private
+ * key operation runs on the HSM through the cryptocb bound to WH_DEV_ID. */
+static Std_ReturnType doRsaSync(Crypto_JobType* job, whKeyId keyId,
+                                boolean verify, boolean pss)
+{
+    Crypto_JobPrimitiveInputOutputType* io = jobIo(job);
+    RsaKey                              rsa;
+    WC_RNG                              rng;
     int                                 rngInited = 0;
-    Crypto_JobPrimitiveInputOutputType* io        = jobIo(job);
-    Std_ReturnType                      ret       = E_NOT_OK;
+    int                                 rc;
+    Std_ReturnType                      ret = E_NOT_OK;
+    uint8                               digest[WC_MAX_DIGEST_SIZE];
+    uint32                              digestLen = (uint32)sizeof(digest);
+    enum wc_HashType                    hashType;
+    uint8                               enc[MAX_DER_DIGEST_SZ];
+    word32                              encLen = 0u;
+    uint8                               plain[512];
 
-    rc = wc_InitRsaKey_ex(&rsa, NULL, WH_DEV_ID);
-    if (rc != 0)
+    if (jobDigest(job, digest, &digestLen, &hashType) != WH_ERROR_OK ||
+        hashType == WC_HASH_TYPE_NONE) {
         return E_NOT_OK;
-    rc = wh_Client_RsaSetKeyId(&rsa, keyId);
-    if (rc != 0)
-        goto cleanup;
-
-    if (verify) {
-        /* wc_RsaSSL_Verify returns the recovered, unpadded plaintext
-         * (the hash digest that was signed) on success. We compare to
-         * the caller's inputPtr (= the hash they expected) to decide
-         * the verifyPtr outcome. */
-        uint8_t plain[512];
-        int     plainLen;
-        plainLen =
-            wc_RsaSSL_Verify(io->secondaryInputPtr, io->secondaryInputLength,
-                             plain, (word32)sizeof(plain), &rsa);
-        if (plainLen >= 0) {
-            boolean ok = ((uint32)plainLen == io->inputLength &&
-                          wh_Autosar_ConstantCompare(plain, io->inputPtr,
-                                                     io->inputLength) != 0)
-                             ? TRUE
-                             : FALSE;
-            writeVerifyResult(job, ok);
-            ret = E_OK;
-            goto cleanup;
+    }
+    if (!pss) {
+        encLen =
+            wc_EncodeSignature(enc, digest, digestLen, wc_HashGetOID(hashType));
+        if (encLen == 0u) {
+            return E_NOT_OK;
         }
-        if (isVerifyRejection(plainLen)) {
-            writeVerifyResult(job, FALSE);
-            ret = E_OK;
-            goto cleanup;
-        }
-        /* Else: real transport / setup error. */
-        ret = E_NOT_OK;
+    }
+    if (wc_InitRsaKey_ex(&rsa, NULL, WH_DEV_ID) != 0) {
+        return E_NOT_OK;
+    }
+    if (wh_Client_RsaSetKeyId(&rsa, keyId) != 0) {
         goto cleanup;
     }
 
-    /* Sign path. */
-    rc = wc_InitRng_ex(&rng, NULL, WH_DEV_ID);
-    if (rc != 0)
+    if (verify) {
+        if (pss) {
+            rc = wc_RsaPSS_VerifyCheck(io->secondaryInputPtr,
+                                       io->secondaryInputLength, plain,
+                                       (word32)sizeof(plain), digest, digestLen,
+                                       hashType, mgfFor(hashType), &rsa);
+        }
+        else {
+            rc = wc_RsaSSL_Verify(io->secondaryInputPtr,
+                                  io->secondaryInputLength, plain,
+                                  (word32)sizeof(plain), &rsa);
+        }
+        if (rc >= 0) {
+            boolean ok =
+                pss || ((word32)rc == encLen &&
+                        wh_Autosar_ConstantCompare(plain, enc, encLen));
+            writeVerifyResult(job, ok);
+            ret = E_OK;
+        }
+        else if (isVerifyRejection(rc)) {
+            writeVerifyResult(job, FALSE);
+            ret = E_OK;
+        }
         goto cleanup;
+    }
+
+    if (io->outputPtr == NULL || io->outputLengthPtr == NULL ||
+        wc_InitRng_ex(&rng, NULL, WH_DEV_ID) != 0) {
+        goto cleanup;
+    }
     rngInited = 1;
-    {
-        word32 sigLen =
-            (io->outputLengthPtr != NULL) ? *io->outputLengthPtr : 0u;
-        rc = wc_RsaSSL_Sign(io->inputPtr, io->inputLength, io->outputPtr,
-                            sigLen, &rsa, &rng);
-        if (rc < 0) {
-            ret = E_NOT_OK;
-            goto cleanup;
-        }
-        if (io->outputLengthPtr != NULL) {
-            *io->outputLengthPtr = (uint32)rc;
-        }
-        ret = E_OK;
+    if (pss) {
+        rc = wc_RsaPSS_Sign(digest, digestLen, io->outputPtr,
+                            *io->outputLengthPtr, hashType, mgfFor(hashType),
+                            &rsa, &rng);
+    }
+    else {
+        rc = wc_RsaSSL_Sign(enc, encLen, io->outputPtr, *io->outputLengthPtr,
+                            &rsa, &rng);
+    }
+    if (rc >= 0) {
+        *io->outputLengthPtr = (uint32)rc;
+        ret                  = E_OK;
     }
 
 cleanup:
@@ -717,6 +776,57 @@ cleanup:
     return ret;
 }
 #endif /* !NO_RSA */
+
+#ifdef WOLFSSL_HAVE_MLDSA
+/* Pure ML-DSA (FIPS 204) over the job input; level from the key descriptor. */
+static Std_ReturnType doMlDsaSync(whClientContext* ctx, Crypto_JobType* job,
+                                  whKeyId keyId, boolean verify)
+{
+    const Crypto_KeyDescriptorType* desc =
+        wh_Autosar_LookupKeyDescriptor(job->cryptoKeyId);
+    Crypto_JobPrimitiveInputOutputType* io  = jobIo(job);
+    Std_ReturnType                      ret = E_NOT_OK;
+    MlDsaKey                            key;
+    int                                 rc;
+
+    if (desc == NULL) {
+        return E_NOT_OK;
+    }
+    if (wc_MlDsaKey_Init(&key, NULL, WH_DEV_ID) != 0) {
+        return E_NOT_OK;
+    }
+    rc = wc_MlDsaKey_SetParams(&key, (byte)desc->mlDsaLevel);
+    if (rc == 0) {
+        rc = wh_Client_MlDsaSetKeyId(&key, keyId);
+    }
+    if (rc == 0 && verify) {
+        int res = -1;
+        rc      = wh_Client_MlDsaVerify(
+            ctx, io->secondaryInputPtr, io->secondaryInputLength, io->inputPtr,
+            io->inputLength, &res, &key, NULL, 0u, WC_HASH_TYPE_NONE);
+        if (res == 0 || res == 1) {
+            writeVerifyResult(job, res == 1);
+            ret = E_OK;
+        }
+        else if (isVerifyRejection(rc)) {
+            writeVerifyResult(job, FALSE);
+            ret = E_OK;
+        }
+    }
+    else if (rc == 0 && io->outputLengthPtr != NULL) {
+        word32 sigLen = *io->outputLengthPtr;
+        rc            = wh_Client_MlDsaSign(ctx, io->inputPtr, io->inputLength,
+                                            io->outputPtr, &sigLen, &key, NULL, 0u,
+                                            WC_HASH_TYPE_NONE);
+        if (rc == 0) {
+            *io->outputLengthPtr = sigLen;
+            ret                  = E_OK;
+        }
+    }
+    wc_MlDsaKey_Free(&key);
+    return ret;
+}
+#endif /* WOLFSSL_HAVE_MLDSA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
@@ -777,10 +887,21 @@ static Std_ReturnType dispatchJob(wh_AutosarDriverObject* obj,
 #endif
 #ifndef NO_RSA
         case WH_AUTOSAR_OP_SIG_RSA_PKCS1_V1_5:
-            ret = doRsaSync(&obj->client, job, keyId,
-                            pi->service == CRYPTO_SIGNATUREVERIFY);
+            ret = doRsaSync(job, keyId, pi->service == CRYPTO_SIGNATUREVERIFY,
+                            FALSE);
             break;
-            /* PSS mode left as E_NOT_OK pending a separate wiring pass. */
+#ifdef WC_RSA_PSS
+        case WH_AUTOSAR_OP_SIG_RSA_PSS:
+            ret = doRsaSync(job, keyId, pi->service == CRYPTO_SIGNATUREVERIFY,
+                            TRUE);
+            break;
+#endif
+#endif
+#ifdef WOLFSSL_HAVE_MLDSA
+        case WH_AUTOSAR_OP_SIG_MLDSA:
+            ret = doMlDsaSync(&obj->client, job, keyId,
+                              pi->service == CRYPTO_SIGNATUREVERIFY);
+            break;
 #endif
 #endif
         case WH_AUTOSAR_OP_KEY_GENERATE:
@@ -986,9 +1107,6 @@ static void slotFreeWcResources(wh_AutosarJobSlot* slot)
         case WH_AUTOSAR_OP_AEAD_AES_GCM:
             wc_AesFree(&slot->op.wc.aes);
             break;
-        case WH_AUTOSAR_OP_SIG_ECDSA:
-            wc_ecc_free(&slot->op.wc.ecc);
-            break;
         case WH_AUTOSAR_OP_MAC_CMAC_AES:
             /* wolfCrypt's Cmac struct holds no dynamic state, but free
              * is harmless and future-proof. */
@@ -1112,8 +1230,7 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
             if (slot->op.hashRemaining > 0u) {
                 rc = issueOneHashUpdate(ctx, slot, &sent);
                 if (rc == WH_ERROR_OK && !sent) {
-                    /* Locally buffered; either issue Final (no more
-                     * input) or another Update (input remaining). */
+                    /* Buffered locally without a request; send the next. */
                     if (slot->op.hashRemaining > 0u) {
                         rc = issueOneHashUpdate(ctx, slot, &sent);
                     }
@@ -1200,23 +1317,28 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
                               CRYPTO_SIGNATUREVERIFY)
                                  ? TRUE
                                  : FALSE;
-            rc             = wc_ecc_init_ex(&slot->op.wc.ecc, NULL, WH_DEV_ID);
+            enum wc_HashType hashType;
+            slot->op.sigDigestLen = (uint32)sizeof(slot->op.sigDigest);
+            rc = jobDigest(job, slot->op.sigDigest, &slot->op.sigDigestLen,
+                           &hashType);
+            if (rc == 0 && hashType == WC_HASH_TYPE_NONE) {
+                rc = WH_ERROR_BADARGS;
+            }
             if (rc != 0)
                 break;
-            (void)wh_Client_EccSetKeyId(&slot->op.wc.ecc, keyId);
             if (verify) {
                 rc = wh_Client_EccVerifyRequest(
                     ctx, keyId, io->secondaryInputPtr,
-                    (uint16)io->secondaryInputLength, io->inputPtr,
-                    (uint16)io->inputLength);
+                    (uint16)io->secondaryInputLength, slot->op.sigDigest,
+                    (uint16)slot->op.sigDigestLen);
             }
             else {
                 slot->op.rawOut   = io->outputPtr;
-                slot->op.rawLen16 = (io->outputLengthPtr != NULL)
-                                        ? (uint16)(*io->outputLengthPtr)
-                                        : 0u;
-                rc = wh_Client_EccSignRequest(ctx, keyId, io->inputPtr,
-                                              (uint16)io->inputLength);
+                slot->op.rawLen16 = (*io->outputLengthPtr > 0xFFFFu)
+                                        ? 0xFFFFu
+                                        : (uint16)(*io->outputLengthPtr);
+                rc = wh_Client_EccSignRequest(ctx, keyId, slot->op.sigDigest,
+                                              (uint16)slot->op.sigDigestLen);
             }
             break;
         }
@@ -1233,15 +1355,12 @@ static int issueAsyncRequest(wh_AutosarDriverObject* obj,
             if (rc != 0)
                 break;
             if (verify) {
-                /* Stash the expected MAC across the in-flight Request so
-                 * the Response can constant-time compare. */
                 slot->op.verifyRef    = io->secondaryInputPtr;
                 slot->op.verifyRefLen = io->secondaryInputLength;
             }
             else {
-                slot->op.rawOut = io->outputPtr;
-                slot->op.rawLen32 =
-                    (io->outputLengthPtr != NULL) ? *io->outputLengthPtr : 16u;
+                slot->op.rawOut   = io->outputPtr;
+                slot->op.rawLen32 = *io->outputLengthPtr;
             }
             rc = wh_Client_CmacGenerateRequest(
                 ctx, &slot->op.wc.cmac, WC_CMAC_AES, /*inline key*/ NULL,

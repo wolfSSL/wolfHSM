@@ -4,15 +4,25 @@
   "ProviderType": "Cryptography",
   "Version": { "Major": 1, "Minor": 0, "Patch": 0 },
   "SupportedAlgorithms": [
-    { "AlgId": "0x10006", "Name": "SHA-256",    "Service": "Hash" },
-    { "AlgId": "0x10007", "Name": "SHA-384",    "Service": "Hash" },
-    { "AlgId": "0x10008", "Name": "SHA-512",    "Service": "Hash" },
-    { "AlgId": "0x80000000", "Name": "RNG",     "Service": "Random" }
-  ],
-  "Notes": [
-    "Adaptive provider for wolfHSM. Hash and random are implemented in",
-    "Phase 1. Cipher, MAC, signature, key-agreement and key-storage",
-    "contexts share the same wolfHSM client backing and will be added in",
-    "follow-up work."
+    { "AlgId": "0x10006", "Name": "SHA-256",      "Service": "Hash" },
+    { "AlgId": "0x10007", "Name": "SHA-384",      "Service": "Hash" },
+    { "AlgId": "0x10008", "Name": "SHA-512",      "Service": "Hash" },
+    { "AlgId": "0x210001", "Name": "AES-ECB",     "Service": "SymmetricBlockCipher" },
+    { "AlgId": "0x210002", "Name": "AES-CBC",     "Service": "SymmetricBlockCipher" },
+    { "AlgId": "0x210006", "Name": "AES-CTR",     "Service": "SymmetricBlockCipher" },
+    { "AlgId": "0x210009", "Name": "AES-GCM",     "Service": "AuthCipher" },
+    { "AlgId": "0x340000", "Name": "CMAC-AES",    "Service": "MessageAuthnCode" },
+    { "AlgId": "0x490040", "Name": "ECDSA-P256",  "Service": "Signature" },
+    { "AlgId": "0x4D0000", "Name": "Ed25519",     "Service": "Signature" },
+    { "AlgId": "0x470033", "Name": "RSASSA-PKCS1-v1_5", "Service": "Signature" },
+    { "AlgId": "0x470034", "Name": "RSASSA-PSS",  "Service": "Signature" },
+    { "AlgId": "0x600002", "Name": "ML-DSA-44",   "Service": "Signature" },
+    { "AlgId": "0x600003", "Name": "ML-DSA-65",   "Service": "Signature" },
+    { "AlgId": "0x600005", "Name": "ML-DSA-87",   "Service": "Signature" },
+    { "AlgId": "0x490041", "Name": "ECDH-P256",   "Service": "KeyAgreement" },
+    { "AlgId": "0x4E0000", "Name": "X25519",      "Service": "KeyAgreement" },
+    { "AlgId": "0x710006", "Name": "HKDF-SHA256", "Service": "KeyDerivation" },
+    { "AlgId": "0x720000", "Name": "CMAC-KDF",    "Service": "KeyDerivation" },
+    { "AlgId": "0x80000000", "Name": "RNG",       "Service": "Random" }
   ]
 }

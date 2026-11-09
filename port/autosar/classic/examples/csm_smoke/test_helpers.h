@@ -98,7 +98,18 @@ Std_ReturnType testCryIfProcessJob(uint32 objectId, Crypto_JobType* job);
 /* Removes a test key from the server cache and NVM and clears its state. */
 void testEraseKey(uint32 cryptoKeyId);
 
-/* --- Test runner ---------------------------------------------------- */
+/* Fills job, jpi and pi for a single-call job on cryptoKeyId keyId. */
+void testBuildJob(Crypto_JobType* job, Crypto_JobPrimitiveInfoType* jpi,
+                  Crypto_PrimitiveInfoType* pi, Crypto_ServiceInfoType svc,
+                  Crypto_AlgorithmFamilyType fam, Crypto_AlgorithmModeType mode,
+                  uint32 keyId, Crypto_ProcessingType pt, uint32 jobId);
+
+/* Submits an async job and waits for its callback; *result gets the
+ * callback's result. */
+Std_ReturnType testRunAsync(Crypto_JobType* job, Std_ReturnType* result);
+
+/* Runs body with the given keys erased before and after. */
+int testWithKeys(int (*body)(void), const uint32* keys, size_t n);
 
 /* Run one test function, ensuring no slot or hash-state leaks remain
  * in driver object 0 after it returns. Increments *failures on error. */
@@ -121,6 +132,7 @@ int testConcurrencyAll(void); /* category 4 — concurrency stress */
 int testTimeoutAll(void);     /* category 5 — timeout */
 int testCancelAll(void);      /* category 6 — cancel-during-pending */
 int testKeyMgmtAll(void);     /* key state and key management jobs */
+int testSigAll(void);         /* signatures, interop with software verify */
 
 #ifdef __cplusplus
 }

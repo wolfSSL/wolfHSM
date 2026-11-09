@@ -103,9 +103,8 @@ typedef struct {
 #ifdef WOLFSSL_SHA512
         wc_Sha512 sha512;
 #endif
-        Aes     aes;
-        ecc_key ecc;
-        Cmac    cmac;
+        Aes  aes;
+        Cmac cmac;
     } wc;
 #endif
 
@@ -118,6 +117,9 @@ typedef struct {
     /* Expected value for verify ops, compared when the response arrives. */
     const uint8* verifyRef;
     uint32       verifyRefLen;
+
+    uint8  sigDigest[64];
+    uint32 sigDigestLen;
 
     /* AES async: caller buffers (captured at Request time so the
      * Response handler can write back even if the caller mutates the
@@ -266,10 +268,10 @@ typedef struct {
     uint32                     keyLength;  /* in bits */
     int                        eccCurveId; /* wolfCrypt ECC_SECP* */
     int                        hashType;   /* wolfCrypt WC_HASH_TYPE_* */
+    int                        mlDsaLevel; /* WC_ML_DSA_44 / 65 / 87 */
 } Crypto_KeyDescriptorType;
 
-/* Const-protected: integrators (and the smoke harness) install
- * descriptors through these pointers; the dispatcher only reads. */
+/* Key descriptor table from the post-build configuration. */
 extern const Crypto_KeyDescriptorType* const Crypto_KeyDescriptorTable;
 extern const uint32                          Crypto_KeyDescriptorCount;
 

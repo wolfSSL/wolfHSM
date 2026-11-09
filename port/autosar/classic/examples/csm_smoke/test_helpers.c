@@ -341,3 +341,77 @@ void testEraseKey(uint32 cryptoKeyId)
     }
     wh_Autosar_KeyMarkValid(cryptoKeyId);
 }
+
+void testBuildJob(Crypto_JobType* job, Crypto_JobPrimitiveInfoType* jpi,
+                  Crypto_PrimitiveInfoType* pi, Crypto_ServiceInfoType svc,
+                  Crypto_AlgorithmFamilyType fam, Crypto_AlgorithmModeType mode,
+                  uint32 keyId, Crypto_ProcessingType pt, uint32 jobId)
+{
+    memset(pi, 0, sizeof(*pi));
+    pi->service             = svc;
+    pi->algorithm.family    = fam;
+    pi->algorithm.mode      = mode;
+    pi->algorithm.keyLength = 128u;
+    memset(jpi, 0, sizeof(*jpi));
+    jpi->primitiveInfo  = pi;
+    jpi->cryIfKeyId     = keyId;
+    jpi->processingType = pt;
+    memset(job, 0, sizeof(*job));
+    job->jobId                        = jobId;
+    job->jobPrimitiveInfo             = jpi;
+    job->jobPrimitiveInputOutput.mode = CRYPTO_OPERATIONMODE_SINGLECALL;
+}
+
+int testWithKeys(int (*body)(void), const uint32* keys, size_t n)
+{
+    size_t i;
+    int    rc;
+
+    for (i = 0; i < n; ++i)
+        testEraseKey(keys[i]);
+    rc = body();
+    for (i = 0; i < n; ++i)
+        testEraseKey(keys[i]);
+    return rc;
+}
+
+Std_ReturnType testRunAsync(Crypto_JobType* job, Std_ReturnType* result)
+{
+    testJobResult*  e = NULL;
+    Std_ReturnType  ret;
+    struct timespec deadline;
+    int             i;
+
+    pthread_mutex_lock(&gTestCb.lock);
+    for (i = 0; i < TEST_JOB_RESULTS && e == NULL; ++i) {
+        if (s_jobResults[i].job == NULL) {
+            e = &s_jobResults[i];
+        }
+    }
+    if (e != NULL) {
+        e->job  = job;
+        e->done = 0;
+    }
+    pthread_mutex_unlock(&gTestCb.lock);
+    if (e == NULL) {
+        return E_NOT_OK;
+    }
+
+    ret = testCryIfProcessJob(0u, job);
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 20;
+    pthread_mutex_lock(&gTestCb.lock);
+    while (ret == E_OK && !e->done) {
+        if (pthread_cond_timedwait(&gTestCb.cv, &gTestCb.lock, &deadline) !=
+            0) {
+            ret = E_NOT_OK;
+        }
+    }
+    if (ret == E_OK) {
+        *result = e->result;
+    }
+    e->job  = NULL;
+    e->done = 0;
+    pthread_mutex_unlock(&gTestCb.lock);
+    return ret;
+}

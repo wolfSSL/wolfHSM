@@ -81,6 +81,7 @@ Std_ReturnType wh_Autosar_KeyDeriveImpl(whClientContext* ctx,
     (void)label;
     (void)salt;
 #endif
+    wh_Utils_ForceZero(salt, sizeof(salt));
     return (rc == WH_ERROR_OK) ? E_OK : E_NOT_OK;
 }
 

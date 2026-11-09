@@ -222,6 +222,7 @@ class SignerPrivateCtx {
   public:
     SignerPrivateCtx(whClientContext* client, CryptoAlgId algId, KeyId keyId);
 
+    /* in is the message for Ed25519 and ML-DSA, else a 32/48/64-byte digest. */
     Result<ByteVector> Sign(const std::uint8_t* in, std::size_t inLen);
 
   private:
@@ -348,8 +349,7 @@ class WolfhsmCryptoProvider {
     whClientContext* client_;
 };
 
-/* CryptoAlgId values supported by this provider. Matches values used in
- * the execution manifest. */
+/* CryptoAlgId values, matching the execution manifest. */
 namespace AlgId {
 constexpr CryptoAlgId kSha256      = 0x0001'0006ull;
 constexpr CryptoAlgId kSha384      = 0x0001'0007ull;
@@ -362,6 +362,10 @@ constexpr CryptoAlgId kCmacAes     = 0x0034'0000ull;
 constexpr CryptoAlgId kEcdsaP256   = 0x0049'0040ull;
 constexpr CryptoAlgId kEd25519     = 0x004D'0000ull;
 constexpr CryptoAlgId kRsaPkcs1v15 = 0x0047'0033ull;
+constexpr CryptoAlgId kRsaPss      = 0x0047'0034ull;
+constexpr CryptoAlgId kMlDsa44     = 0x0060'0002ull;
+constexpr CryptoAlgId kMlDsa65     = 0x0060'0003ull;
+constexpr CryptoAlgId kMlDsa87     = 0x0060'0005ull;
 constexpr CryptoAlgId kEcdhP256    = 0x0049'0041ull;
 constexpr CryptoAlgId kX25519      = 0x004E'0000ull;
 constexpr CryptoAlgId kHkdfSha256  = 0x0071'0006ull;

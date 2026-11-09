@@ -19,14 +19,7 @@
 /*
  * port/autosar/adaptive/src/crypto_provider.cpp
  *
- * Implementation of WolfhsmCryptoProvider plus its random and hash
- * contexts. Hash contexts stream: each Update sends the chunk to the
- * wolfHSM server via the Sha*UpdateRequest/Response pair rather than
- * buffering locally.
- *
- * Other ara::crypto context classes (cipher, MAC, signer, key-storage)
- * follow the same wolfHSM-client wrapping pattern and live in sibling
- * .cpp files; this Phase 1 file ships random + hash.
+ * Implementation of WolfhsmCryptoProvider and its context classes.
  */
 
 #include "wolfhsm/ara_crypto/crypto_provider.hpp"
@@ -41,6 +34,7 @@ extern "C" {
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
 #include "wolfhsm/wh_common.h"
+#include "wolfhsm/wh_utils.h"
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #include "wolfssl/wolfcrypt/sha256.h"
@@ -56,14 +50,25 @@ extern "C" {
 #ifndef NO_RSA
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/asn_public.h"
 #endif
+#ifdef HAVE_CURVE25519
+#include "wolfssl/wolfcrypt/curve25519.h"
+#endif
+#ifdef WOLFSSL_HAVE_MLDSA
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
+#endif
+#include "wolfssl/wolfcrypt/hash.h"
 #endif
 }
 
 namespace wolfhsm {
 namespace ara_crypto {
 
-/* ---------------- WolfhsmCryptoProvider ----------------------------- */
+static bool FitsU32(std::size_t n)
+{
+    return static_cast<std::uint64_t>(n) <= 0xFFFFFFFFull;
+}
 
 std::unique_ptr<RandomGeneratorCtx>
 WolfhsmCryptoProvider::CreateRandomGeneratorCtx()
@@ -144,18 +149,18 @@ Result<void> HashFunctionCtx::Start()
      * constructor; no need to repeat it here. */
     if (alg_ == AlgId::kSha256) {
         rc = wc_InitSha256_ex(reinterpret_cast<wc_Sha256*>(state_), nullptr,
-                              WH_DEV_ID);
+                              WH_CLIENT_DEVID(client_));
     }
 #ifdef WOLFSSL_SHA384
     else if (alg_ == AlgId::kSha384) {
         rc = wc_InitSha384_ex(reinterpret_cast<wc_Sha384*>(state_), nullptr,
-                              WH_DEV_ID);
+                              WH_CLIENT_DEVID(client_));
     }
 #endif
 #ifdef WOLFSSL_SHA512
     else if (alg_ == AlgId::kSha512) {
         rc = wc_InitSha512_ex(reinterpret_cast<wc_Sha512*>(state_), nullptr,
-                              WH_DEV_ID);
+                              WH_CLIENT_DEVID(client_));
     }
 #endif
     if (rc != 0) {
@@ -392,7 +397,7 @@ Result<ByteVector> SymmetricBlockCipherCtx::ProcessBlocks(
     if (client_ == nullptr || in == nullptr) {
         return SecurityErrc::kInvalidArgument;
     }
-    if ((inLen % AES_BLOCK_SIZE) != 0u) {
+    if ((inLen % AES_BLOCK_SIZE) != 0u || !FitsU32(inLen)) {
         return SecurityErrc::kInvalidInputSize;
     }
     if (alg_ != AlgId::kAesEcb && (iv == nullptr || ivLen != AES_BLOCK_SIZE)) {
@@ -400,7 +405,7 @@ Result<ByteVector> SymmetricBlockCipherCtx::ProcessBlocks(
     }
 
     Aes aes;
-    int rc = wc_AesInit(&aes, nullptr, WH_DEV_ID);
+    int rc = wc_AesInit(&aes, nullptr, WH_CLIENT_DEVID(client_));
     if (rc != 0)
         return SecurityErrc::kRuntimeFault;
     aes.keylen = static_cast<int>(keyBits_ / 8u);
@@ -441,8 +446,6 @@ Result<ByteVector> SymmetricBlockCipherCtx::ProcessBlocks(
     return Result<ByteVector>(std::move(out));
 }
 
-/* ---------------- AuthCipherCtx (AES-GCM) --------------------------- */
-
 AuthCipherCtx::AuthCipherCtx(whClientContext* client, KeyId keyId,
                              std::uint32_t keyBits)
     : client_(client), keyId_(keyId), keyBits_(keyBits)
@@ -467,12 +470,11 @@ AuthCipherCtx::ProcessEncrypt(const std::uint8_t* iv, std::size_t ivLen,
     (void)tagLen;
     return SecurityErrc::kRuntimeFault;
 #else
-    if (client_ == nullptr || iv == nullptr || pt == nullptr || tagLen == 0u ||
-        tagLen > 16u) {
+    if (client_ == nullptr || iv == nullptr || pt == nullptr || tagLen > 16u) {
         return SecurityErrc::kInvalidArgument;
     }
     Aes aes;
-    int rc = wc_AesInit(&aes, nullptr, WH_DEV_ID);
+    int rc = wc_AesInit(&aes, nullptr, WH_CLIENT_DEVID(client_));
     if (rc != 0)
         return SecurityErrc::kRuntimeFault;
     aes.keylen = static_cast<int>(keyBits_ / 8u);
@@ -515,11 +517,11 @@ AuthCipherCtx::ProcessDecrypt(const std::uint8_t* iv, std::size_t ivLen,
     return SecurityErrc::kRuntimeFault;
 #else
     if (client_ == nullptr || iv == nullptr || ct == nullptr ||
-        tag == nullptr || tagLen == 0u || tagLen > 16u) {
+        tag == nullptr || tagLen > 16u) {
         return SecurityErrc::kInvalidArgument;
     }
     Aes aes;
-    int rc = wc_AesInit(&aes, nullptr, WH_DEV_ID);
+    int rc = wc_AesInit(&aes, nullptr, WH_CLIENT_DEVID(client_));
     if (rc != 0)
         return SecurityErrc::kRuntimeFault;
     aes.keylen = static_cast<int>(keyBits_ / 8u);
@@ -536,16 +538,13 @@ AuthCipherCtx::ProcessDecrypt(const std::uint8_t* iv, std::size_t ivLen,
         /*dec_tag*/ tag,
         /*enc_tag*/ nullptr, static_cast<std::uint32_t>(tagLen), out.data());
     wc_AesFree(&aes);
-    if (rc != 0) {
-        /* Tag mismatch surfaces here. Adapter translates this to the AP
-         * runtime's ara::crypto::SecurityErrc::kAuthTagFail. */
+    if (wh_Autosar_IsVerifyRejection(rc))
         return SecurityErrc::kAuthTagMismatch;
-    }
+    if (rc != 0)
+        return SecurityErrc::kRuntimeFault;
     return Result<ByteVector>(std::move(out));
 #endif
 }
-
-/* ---------------- MessageAuthnCodeCtx (AES-CMAC) ------------------- */
 
 MessageAuthnCodeCtx::MessageAuthnCodeCtx(whClientContext* client, KeyId keyId)
     : client_(client), keyId_(keyId)
@@ -592,7 +591,40 @@ Result<bool> MessageAuthnCodeCtx::Verify(const std::uint8_t* in,
         wh_Autosar_ConstantCompare(computed.data(), mac, macLen) != 0);
 }
 
-/* ---------------- SignerPrivateCtx --------------------------------- */
+#ifndef NO_RSA
+/* Signer/verifier input for RSA is a SHA-2 digest; its length names the
+ * hash. */
+static enum wc_HashType digestHashType(std::size_t len)
+{
+    switch (len) {
+        case WC_SHA256_DIGEST_SIZE:
+            return WC_HASH_TYPE_SHA256;
+        case WC_SHA384_DIGEST_SIZE:
+            return WC_HASH_TYPE_SHA384;
+        case WC_SHA512_DIGEST_SIZE:
+            return WC_HASH_TYPE_SHA512;
+        default:
+            return WC_HASH_TYPE_NONE;
+    }
+}
+
+static int pssMgf(enum wc_HashType type)
+{
+    return (type == WC_HASH_TYPE_SHA384)   ? WC_MGF1SHA384
+           : (type == WC_HASH_TYPE_SHA512) ? WC_MGF1SHA512
+                                           : WC_MGF1SHA256;
+}
+#endif
+
+#ifdef WOLFSSL_HAVE_MLDSA
+static int mlDsaLevel(CryptoAlgId alg)
+{
+    return (alg == AlgId::kMlDsa44)   ? WC_ML_DSA_44
+           : (alg == AlgId::kMlDsa65) ? WC_ML_DSA_65
+           : (alg == AlgId::kMlDsa87) ? WC_ML_DSA_87
+                                      : -1;
+}
+#endif
 
 SignerPrivateCtx::SignerPrivateCtx(whClientContext* client, CryptoAlgId algId,
                                    KeyId keyId)
@@ -612,9 +644,7 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         (void)wh_Client_EccSetKeyId(&key, keyId_);
-        /* Max DER-encoded ECDSA-P256 signature: ASN.1 SEQUENCE wrap (2) +
-         * two INTEGER (3) of up to 33 bytes (high bit pad) = 72; round up
-         * to 80 to leave slack for any wolfCrypt internal padding. */
+        /* A DER ECDSA P-256 signature is at most 72 bytes. */
         std::uint8_t  sig[80];
         std::uint16_t sigLen = sizeof(sig);
         rc                   = wh_Client_EccSign(client_, &key, in,
@@ -627,15 +657,15 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
 #ifdef HAVE_ED25519
     if (alg_ == AlgId::kEd25519) {
         ed25519_key key;
-        int         rc = wc_ed25519_init_ex(&key, nullptr, WH_DEV_ID);
+        int rc = wc_ed25519_init_ex(&key, nullptr, WH_CLIENT_DEVID(client_));
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         (void)wh_Client_Ed25519SetKeyId(&key, keyId_);
         std::uint8_t  sig[ED25519_SIG_SIZE];
         std::uint32_t sigLen = sizeof(sig);
-        rc                   = wh_Client_Ed25519Sign(client_, &key, in,
-                                                     static_cast<std::uint32_t>(inLen),
-                                                     /*pure*/ 0u, nullptr, 0u, sig, &sigLen);
+        rc                   = wh_Client_Ed25519Sign(
+            client_, &key, in, static_cast<std::uint32_t>(inLen),
+            (std::uint8_t)Ed25519, nullptr, 0u, sig, &sigLen);
         wc_ed25519_free(&key);
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
@@ -643,21 +673,44 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
     }
 #endif
 #ifndef NO_RSA
-    if (alg_ == AlgId::kRsaPkcs1v15) {
-        RsaKey rsa;
-        WC_RNG rng;
-        int    rc = wc_InitRsaKey_ex(&rsa, nullptr, WH_DEV_ID);
-        if (rc != 0)
+    if (alg_ == AlgId::kRsaPkcs1v15 || alg_ == AlgId::kRsaPss) {
+        enum wc_HashType type = digestHashType(inLen);
+        std::uint8_t     enc[MAX_DER_DIGEST_SZ];
+        word32           encLen = 0u;
+        RsaKey           rsa;
+        WC_RNG           rng;
+        int              outLen;
+
+        if (type == WC_HASH_TYPE_NONE)
+            return SecurityErrc::kInvalidInputSize;
+        if (alg_ == AlgId::kRsaPkcs1v15) {
+            encLen = wc_EncodeSignature(enc, in, static_cast<word32>(inLen),
+                                        wc_HashGetOID(type));
+            if (encLen == 0u)
+                return SecurityErrc::kRuntimeFault;
+        }
+        if (wc_InitRsaKey_ex(&rsa, nullptr, WH_CLIENT_DEVID(client_)) != 0)
             return SecurityErrc::kRuntimeFault;
         if (wh_Client_RsaSetKeyId(&rsa, keyId_) != 0 ||
-            wc_InitRng_ex(&rng, nullptr, WH_DEV_ID) != 0) {
+            wc_InitRng_ex(&rng, nullptr, WH_CLIENT_DEVID(client_)) != 0) {
             wc_FreeRsaKey(&rsa);
             return SecurityErrc::kRuntimeFault;
         }
         ByteVector sig(512);
-        int        outLen =
-            wc_RsaSSL_Sign(in, static_cast<word32>(inLen), sig.data(),
-                           static_cast<word32>(sig.size()), &rsa, &rng);
+        if (alg_ == AlgId::kRsaPkcs1v15) {
+            outLen =
+                wc_RsaSSL_Sign(enc, encLen, sig.data(),
+                               static_cast<word32>(sig.size()), &rsa, &rng);
+        }
+        else {
+#ifdef WC_RSA_PSS
+            outLen = wc_RsaPSS_Sign(in, static_cast<word32>(inLen), sig.data(),
+                                    static_cast<word32>(sig.size()), type,
+                                    pssMgf(type), &rsa, &rng);
+#else
+            outLen = NOT_COMPILED_IN;
+#endif
+        }
         (void)wc_FreeRng(&rng);
         (void)wc_FreeRsaKey(&rsa);
         if (outLen < 0)
@@ -666,10 +719,30 @@ Result<ByteVector> SignerPrivateCtx::Sign(const std::uint8_t* in,
         return Result<ByteVector>(std::move(sig));
     }
 #endif
+#ifdef WOLFSSL_HAVE_MLDSA
+    if (mlDsaLevel(alg_) > 0) {
+        MlDsaKey key;
+        if (wc_MlDsaKey_Init(&key, nullptr, WH_DEV_ID) != 0)
+            return SecurityErrc::kRuntimeFault;
+        ByteVector sig(DILITHIUM_MAX_SIG_SIZE);
+        word32     sigLen = static_cast<word32>(sig.size());
+        int        rc =
+            wc_MlDsaKey_SetParams(&key, static_cast<byte>(mlDsaLevel(alg_)));
+        if (rc == 0)
+            rc = wh_Client_MlDsaSetKeyId(&key, keyId_);
+        if (rc == 0)
+            rc = wh_Client_MlDsaSign(client_, in, static_cast<word32>(inLen),
+                                     sig.data(), &sigLen, &key, nullptr, 0u,
+                                     WC_HASH_TYPE_NONE);
+        wc_MlDsaKey_Free(&key);
+        if (rc != 0)
+            return SecurityErrc::kRuntimeFault;
+        sig.resize(sigLen);
+        return Result<ByteVector>(std::move(sig));
+    }
+#endif
     return SecurityErrc::kInvalidArgument;
 }
-
-/* ---------------- VerifierPublicCtx -------------------------------- */
 
 VerifierPublicCtx::VerifierPublicCtx(whClientContext* client, CryptoAlgId algId,
                                      KeyId keyId)
@@ -705,14 +778,15 @@ Result<bool> VerifierPublicCtx::Verify(const std::uint8_t* in,
 #ifdef HAVE_ED25519
     if (alg_ == AlgId::kEd25519) {
         ed25519_key key;
-        int         rc = wc_ed25519_init_ex(&key, nullptr, WH_DEV_ID);
+        int rc = wc_ed25519_init_ex(&key, nullptr, WH_CLIENT_DEVID(client_));
         if (rc != 0)
             return SecurityErrc::kRuntimeFault;
         (void)wh_Client_Ed25519SetKeyId(&key, keyId_);
         int verifyRes = -1;
         rc            = wh_Client_Ed25519Verify(
             client_, &key, sig, static_cast<std::uint32_t>(sigLen), in,
-            static_cast<std::uint32_t>(inLen), 0u, nullptr, 0u, &verifyRes);
+            static_cast<std::uint32_t>(inLen), (std::uint8_t)Ed25519, nullptr,
+            0u, &verifyRes);
         wc_ed25519_free(&key);
         if (verifyRes == 0 || verifyRes == 1)
             return Result<bool>(verifyRes == 1);
@@ -722,38 +796,79 @@ Result<bool> VerifierPublicCtx::Verify(const std::uint8_t* in,
     }
 #endif
 #ifndef NO_RSA
-    if (alg_ == AlgId::kRsaPkcs1v15) {
-        RsaKey rsa;
-        int    rc = wc_InitRsaKey_ex(&rsa, nullptr, WH_DEV_ID);
-        if (rc != 0)
+    if (alg_ == AlgId::kRsaPkcs1v15 || alg_ == AlgId::kRsaPss) {
+        enum wc_HashType type = digestHashType(inLen);
+        std::uint8_t     enc[MAX_DER_DIGEST_SZ];
+        word32           encLen = 0u;
+        std::uint8_t     plain[512];
+        RsaKey           rsa;
+        int              n;
+
+        if (type == WC_HASH_TYPE_NONE)
+            return SecurityErrc::kInvalidInputSize;
+        if (alg_ == AlgId::kRsaPkcs1v15) {
+            encLen = wc_EncodeSignature(enc, in, static_cast<word32>(inLen),
+                                        wc_HashGetOID(type));
+            if (encLen == 0u)
+                return SecurityErrc::kRuntimeFault;
+        }
+        if (wc_InitRsaKey_ex(&rsa, nullptr, WH_CLIENT_DEVID(client_)) != 0)
             return SecurityErrc::kRuntimeFault;
         if (wh_Client_RsaSetKeyId(&rsa, keyId_) != 0) {
             wc_FreeRsaKey(&rsa);
             return SecurityErrc::kRuntimeFault;
         }
-        /* Recovered-plaintext buffer sized to the largest RSA modulus we
-         * support (4096 bits = 512 bytes). wolfCrypt-side check in
-         * wc_RsaSSL_Verify bounds writes by the actual signature length,
-         * which equals the modulus size. */
-        std::uint8_t plain[512];
-        int          plainLen =
-            wc_RsaSSL_Verify(sig, static_cast<word32>(sigLen), plain,
-                             static_cast<word32>(sizeof(plain)), &rsa);
-        wc_FreeRsaKey(&rsa);
-        if (plainLen >= 0) {
-            return Result<bool>(static_cast<std::size_t>(plainLen) == inLen &&
-                                wh_Autosar_ConstantCompare(plain, in, inLen) !=
-                                    0);
+        if (alg_ == AlgId::kRsaPkcs1v15) {
+            n = wc_RsaSSL_Verify(sig, static_cast<word32>(sigLen), plain,
+                                 static_cast<word32>(sizeof(plain)), &rsa);
         }
-        if (wh_Autosar_IsVerifyRejection(plainLen))
+        else {
+#ifdef WC_RSA_PSS
+            n = wc_RsaPSS_VerifyCheck(sig, static_cast<word32>(sigLen), plain,
+                                      static_cast<word32>(sizeof(plain)), in,
+                                      static_cast<word32>(inLen), type,
+                                      pssMgf(type), &rsa);
+#else
+            n = NOT_COMPILED_IN;
+#endif
+        }
+        wc_FreeRsaKey(&rsa);
+        if (n >= 0) {
+            return Result<bool>(
+                alg_ == AlgId::kRsaPss ||
+                (static_cast<word32>(n) == encLen &&
+                 wh_Autosar_ConstantCompare(plain, enc, encLen) != 0));
+        }
+        if (wh_Autosar_IsVerifyRejection(n))
+            return Result<bool>(false);
+        return SecurityErrc::kRuntimeFault;
+    }
+#endif
+#ifdef WOLFSSL_HAVE_MLDSA
+    if (mlDsaLevel(alg_) > 0) {
+        MlDsaKey key;
+        int      res = -1;
+        if (wc_MlDsaKey_Init(&key, nullptr, WH_DEV_ID) != 0)
+            return SecurityErrc::kRuntimeFault;
+        int rc =
+            wc_MlDsaKey_SetParams(&key, static_cast<byte>(mlDsaLevel(alg_)));
+        if (rc == 0)
+            rc = wh_Client_MlDsaSetKeyId(&key, keyId_);
+        if (rc == 0)
+            rc =
+                wh_Client_MlDsaVerify(client_, sig, static_cast<word32>(sigLen),
+                                      in, static_cast<word32>(inLen), &res,
+                                      &key, nullptr, 0u, WC_HASH_TYPE_NONE);
+        wc_MlDsaKey_Free(&key);
+        if (res == 0 || res == 1)
+            return Result<bool>(res == 1);
+        if (wh_Autosar_IsVerifyRejection(rc))
             return Result<bool>(false);
         return SecurityErrc::kRuntimeFault;
     }
 #endif
     return SecurityErrc::kInvalidArgument;
 }
-
-/* ---------------- KeyAgreementPrivateCtx --------------------------- */
 
 KeyAgreementPrivateCtx::KeyAgreementPrivateCtx(whClientContext* client,
                                                CryptoAlgId      algId,
@@ -780,16 +895,37 @@ Result<ByteVector> KeyAgreementPrivateCtx::AgreeKey(KeyId partnerPublicKeyId)
             return SecurityErrc::kRuntimeFault;
         return Result<ByteVector>(ByteVector(secret, secret + secretLen));
     }
-    /* X25519 is not wired through the AgreeKey path yet:
-     * wh_Client_Curve25519SharedSecret operates on curve25519_key
-     * structs rather than raw keyIds. The factory below already
-     * refuses kX25519, so this branch is unreachable; surface
-     * kInvalidArgument defensively in case a future caller bypasses
-     * the factory. */
+#ifdef HAVE_CURVE25519
+    if (alg_ == AlgId::kX25519) {
+        curve25519_key priv;
+        curve25519_key pub;
+        std::uint8_t   secret[CURVE25519_KEYSIZE];
+        std::uint16_t  secretLen = sizeof(secret);
+        int            rc =
+            wc_curve25519_init_ex(&priv, nullptr, WH_CLIENT_DEVID(client_));
+        if (rc != 0)
+            return SecurityErrc::kRuntimeFault;
+        rc = wc_curve25519_init_ex(&pub, nullptr, WH_CLIENT_DEVID(client_));
+        if (rc == 0) {
+            rc = wh_Client_Curve25519SetKeyId(&priv, privateKeyId_);
+            if (rc == 0)
+                rc = wh_Client_Curve25519SetKeyId(&pub, partnerPublicKeyId);
+            if (rc == 0)
+                rc = wh_Client_Curve25519SharedSecret(client_, &priv, &pub,
+                                                      EC25519_LITTLE_ENDIAN,
+                                                      secret, &secretLen);
+            wc_curve25519_free(&pub);
+        }
+        wc_curve25519_free(&priv);
+        if (rc != WH_ERROR_OK)
+            return SecurityErrc::kRuntimeFault;
+        ByteVector out(secret, secret + secretLen);
+        wh_Utils_ForceZero(secret, sizeof(secret));
+        return Result<ByteVector>(std::move(out));
+    }
+#endif
     return SecurityErrc::kInvalidArgument;
 }
-
-/* ---------------- KeyDerivationFunctionCtx ------------------------- */
 
 KeyDerivationFunctionCtx::KeyDerivationFunctionCtx(whClientContext* client,
                                                    CryptoAlgId      algId,
@@ -921,11 +1057,18 @@ WolfhsmCryptoProvider::CreateMessageAuthnCodeCtx(KeyId keyId)
     return std::make_unique<MessageAuthnCodeCtx>(client_, keyId);
 }
 
+static bool IsSignatureAlg(CryptoAlgId algId)
+{
+    return algId == AlgId::kEcdsaP256 || algId == AlgId::kEd25519 ||
+           algId == AlgId::kRsaPkcs1v15 || algId == AlgId::kRsaPss ||
+           algId == AlgId::kMlDsa44 || algId == AlgId::kMlDsa65 ||
+           algId == AlgId::kMlDsa87;
+}
+
 std::unique_ptr<SignerPrivateCtx>
 WolfhsmCryptoProvider::CreateSignerPrivateCtx(CryptoAlgId algId, KeyId keyId)
 {
-    if (algId != AlgId::kEcdsaP256 && algId != AlgId::kEd25519 &&
-        algId != AlgId::kRsaPkcs1v15) {
+    if (!IsSignatureAlg(algId)) {
         return nullptr;
     }
     return std::make_unique<SignerPrivateCtx>(client_, algId, keyId);
@@ -934,8 +1077,7 @@ WolfhsmCryptoProvider::CreateSignerPrivateCtx(CryptoAlgId algId, KeyId keyId)
 std::unique_ptr<VerifierPublicCtx>
 WolfhsmCryptoProvider::CreateVerifierPublicCtx(CryptoAlgId algId, KeyId keyId)
 {
-    if (algId != AlgId::kEcdsaP256 && algId != AlgId::kEd25519 &&
-        algId != AlgId::kRsaPkcs1v15) {
+    if (!IsSignatureAlg(algId)) {
         return nullptr;
     }
     return std::make_unique<VerifierPublicCtx>(client_, algId, keyId);
@@ -945,12 +1087,7 @@ std::unique_ptr<KeyAgreementPrivateCtx>
 WolfhsmCryptoProvider::CreateKeyAgreementPrivateCtx(CryptoAlgId algId,
                                                     KeyId       privateKeyId)
 {
-    /* X25519 is declared in CryptoAlgId but not yet wired through the
-     * wolfHSM client surface (Curve25519 keys aren't addressable by
-     * raw keyId). Reject at construction so adapters see "unsupported
-     * algorithm" up front rather than a generic runtime fault on the
-     * first AgreeKey call. */
-    if (algId != AlgId::kEcdhP256)
+    if (algId != AlgId::kEcdhP256 && algId != AlgId::kX25519)
         return nullptr;
     return std::make_unique<KeyAgreementPrivateCtx>(client_, algId,
                                                     privateKeyId);
@@ -970,19 +1107,6 @@ WolfhsmCryptoProvider::CreateKeyStorageProvider()
 {
     return std::make_unique<KeyStorageProvider>(client_);
 }
-
-/* --- Note on SecurityErrc translation ------------------------------- */
-/*
- * The SecurityErrc values declared in crypto_provider.hpp are this
- * provider's internal enumeration — they intentionally mirror the
- * ara::crypto::SecurityErrc shape but are not bound to the AUTOSAR
- * Consortium-licensed header set. The integrator's thin
- * ara::crypto::cryp::CryptoProvider adapter (see
- * docs/integration_adaptive.md) is responsible for translating these
- * values to the SecurityErrc values from their AP runtime's headers.
- * The mapping is direct: a value of kInvalidArgument here maps to
- * ara::crypto::SecurityErrc::kInvalidArgument, etc.
- */
 
 } /* namespace ara_crypto */
 } /* namespace wolfhsm */

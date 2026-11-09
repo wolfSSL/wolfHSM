@@ -31,6 +31,7 @@
 #include "wolfhsm/wh_error.h"
 #include "port/posix/posix_transport_tcp.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/wc_mldsa.h"
 
 #define SMOKE_CLIENT_ID 7u
 
@@ -67,22 +68,28 @@ int wh_Autosar_PlatformClientConfig(whClientContext* client)
 /* Smoke harness keys: cryptoKeyId 100 = AES-256, 101 = ECC P-256. */
 
 static const Crypto_KeyDescriptorType s_keyDescriptors[] = {
-    {100u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
+    {100u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
     {101u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
+     0, 0},
+    {102u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+    {103u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PKCS1_V1_5, 2048u, 0, 0,
      0},
-    {102u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
-    {103u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PKCS1_V1_5, 2048u, 0, 0},
-    {120u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
+    {120u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1, 0,
      0},
-    {121u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
+    {121u, CRYPTO_ALGOFAM_ECDH, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1, 0,
      0},
-    {122u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
-    {123u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0},
+    {122u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+    {123u, CRYPTO_ALGOFAM_X25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
     {124u, CRYPTO_ALGOFAM_HKDF, CRYPTO_ALGOMODE_NOT_SET, 256u, 0,
-     WC_HASH_TYPE_SHA256},
-    {125u, WH_AUTOSAR_ALGOFAM_CMAC_KDF, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0},
-    {126u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0},
-    {127u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0}};
+     WC_HASH_TYPE_SHA256, 0},
+    {125u, WH_AUTOSAR_ALGOFAM_CMAC_KDF, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0},
+    {126u, CRYPTO_ALGOFAM_AES, CRYPTO_ALGOMODE_NOT_SET, 128u, 0, 0, 0},
+    {127u, CRYPTO_ALGOFAM_ED25519, CRYPTO_ALGOMODE_NOT_SET, 256u, 0, 0, 0},
+    {140u, WH_AUTOSAR_ALGOFAM_MLDSA, CRYPTO_ALGOMODE_NOT_SET, 0u, 0, 0,
+     WC_ML_DSA_44},
+    {141u, CRYPTO_ALGOFAM_RSA, CRYPTO_ALGOMODE_RSASSA_PSS, 2048u, 0, 0, 0},
+    {142u, CRYPTO_ALGOFAM_ECCNIST, CRYPTO_ALGOMODE_NOT_SET, 256u, ECC_SECP256R1,
+     0, 0}};
 
 const Crypto_KeyDescriptorType* const Crypto_KeyDescriptorTable =
     s_keyDescriptors;
@@ -362,6 +369,9 @@ int main(void)
     /* --- Category-3 Resource accounting --- */
     printf("[accounting]\n");
     failures += testAccountingAll();
+
+    printf("[sig]\n");
+    failures += testSigAll();
 
     printf("[keymgmt]\n");
     failures += testKeyMgmtAll();
