@@ -61,6 +61,19 @@
 #include "wolfhsm/wh_message_crypto.h"
 
 
+#ifdef WOLFSSL_SHA3
+/* Keccak-256 is a different hash, which the server does not offer */
+static int _Sha3IsKeccak(const wc_Sha3* sha)
+{
+#ifdef WOLFSSL_HASH_FLAGS
+    return (sha != NULL) && ((sha->flags & WC_HASH_SHA3_KECCAK256) != 0u);
+#else
+    (void)sha;
+    return 0;
+#endif
+}
+#endif /* WOLFSSL_SHA3 */
+
 #if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
     (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
 static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info);
@@ -682,15 +695,10 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHA3_384:
             case WC_HASH_TYPE_SHA3_512: {
                 wc_Sha3* sha = info->hash.sha3;
-#ifdef WOLFSSL_HASH_FLAGS
-                /* Keccak-mode SHA3 (legacy 0x01-padding variant) is a software-
-                 * only mode; fall through to wolfCrypt's software path. */
-                if (sha != NULL &&
-                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                if (_Sha3IsKeccak(sha)) {
                     ret = CRYPTOCB_UNAVAILABLE;
                     break;
                 }
-#endif
                 switch (info->hash.type) {
 #ifndef WOLFSSL_NOSHA3_224
                     case WC_HASH_TYPE_SHA3_224:
@@ -733,14 +741,10 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             {
                 /* NULL digest means update, else finalize with outSz bytes */
                 wc_Shake* sha = info->hash.sha3;
-#ifdef WOLFSSL_HASH_FLAGS
-                /* Keccak mode is software only */
-                if (sha != NULL &&
-                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                if (_Sha3IsKeccak(sha)) {
                     ret = CRYPTOCB_UNAVAILABLE;
                     break;
                 }
-#endif
 #ifdef WOLF_CRYPTO_CB_SHAKE_XOF
                 if (info->hash.shakeOp != WC_SHAKE_OP_NONE) {
                     ret = _handleShakeXof(ctx, info);
@@ -1614,13 +1618,10 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHA3_384:
             case WC_HASH_TYPE_SHA3_512: {
                 wc_Sha3* sha = info->hash.sha3;
-#ifdef WOLFSSL_HASH_FLAGS
-                if (sha != NULL &&
-                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+                if (_Sha3IsKeccak(sha)) {
                     ret = CRYPTOCB_UNAVAILABLE;
                     break;
                 }
-#endif
                 switch (info->hash.type) {
 #ifndef WOLFSSL_NOSHA3_224
                     case WC_HASH_TYPE_SHA3_224:
