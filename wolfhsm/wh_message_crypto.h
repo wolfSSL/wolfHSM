@@ -1040,17 +1040,24 @@ int wh_MessageCrypto_TranslateSha3Response(
  * SHAKE
  */
 
-/* SHAKE Request. Data follows: in[inSz], whole blocks unless isLastBlock */
-#define WH_MESSAGE_CRYPTO_SHAKE_OP_HASH 0    /* update, or final on the tail */
-#define WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB 1  /* pad the tail into the state */
-#define WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE 2 /* whole blocks out, no input */
+/* SHAKE ops, set by the request's isLastBlock and outSz:
+ *   isLastBlock=0, outSz=0: update with whole blocks
+ *   isLastBlock=0, outSz>0: squeeze whole blocks, no input
+ *   isLastBlock=1, outSz=0: absorb, pad the tail into the state
+ *   isLastBlock=1, outSz>0: final, pad the tail and output outSz bytes */
+typedef enum {
+    WH_MESSAGE_CRYPTO_SHAKE_OP_UPDATE = 0,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL
+} whMessageCrypto_ShakeOp;
 
+/* SHAKE Request. Data follows: in[inSz] */
 typedef struct {
-    uint32_t isLastBlock;
-    uint32_t inSz;
-    /* Bytes of output wanted on a final or squeeze */
+    uint32_t                  isLastBlock;
+    uint32_t                  inSz;
     uint32_t                  outSz;
-    uint32_t                  op; /* WH_MESSAGE_CRYPTO_SHAKE_OP_* */
+    uint8_t                   WH_PAD[4];
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_ShakeRequest;
 
