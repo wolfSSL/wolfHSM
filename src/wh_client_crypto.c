@@ -9879,7 +9879,6 @@ static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
     req->isLastBlock = 0;
     req->inSz        = wirePos;
     req->outSz       = 0;
-    req->op          = WH_MESSAGE_CRYPTO_SHAKE_OP_HASH;
     memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
 
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
@@ -9948,8 +9947,8 @@ static int _ShakeUpdateResponse(whClientContext* ctx, wc_Shake* sha,
 
 /* Send the sponge, plus the tail buffered in sha->t unless squeezing */
 static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
-                              const whSha3Variant* v, uint32_t op,
-                              uint32_t outSz)
+                              const whSha3Variant*    v,
+                              whMessageCrypto_ShakeOp op, uint32_t outSz)
 {
     int                           ret;
     whMessageCrypto_ShakeRequest* req;
@@ -9961,7 +9960,7 @@ static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
         return WH_ERROR_BADARGS;
     }
     /* Only an absorb asks for no output */
-    if ((op != WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) && (outSz == 0)) {
+    if ((op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) != (outSz == 0)) {
         return WH_ERROR_BADARGS;
     }
     ret = _Sha3RejectKeccak(sha);
@@ -9987,7 +9986,6 @@ static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
     req->isLastBlock = isSqueeze ? 0u : 1u;
     req->inSz        = inSz;
     req->outSz       = outSz;
-    req->op          = op;
     memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
     if (inSz > 0) {
         memcpy((uint8_t*)(req + 1), sha->t, inSz);
@@ -10001,8 +9999,9 @@ static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
 }
 
 static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
-                               const whSha3Variant* v, uint32_t op,
-                               uint8_t* out, uint32_t outSz)
+                               const whSha3Variant*    v,
+                               whMessageCrypto_ShakeOp op, uint8_t* out,
+                               uint32_t outSz)
 {
     int                            ret;
     whMessageCrypto_ShakeResponse* res = NULL;
@@ -10020,7 +10019,7 @@ static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
         if (outSz > 0) {
             memcpy(out, (uint8_t*)(res + 1), outSz);
         }
-        if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_HASH) {
+        if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL) {
             ret = v->initFn(sha, sha->heap, sha->devId);
         }
         else {
@@ -10035,8 +10034,8 @@ static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
 }
 
 static int _ShakeStateOp(whClientContext* ctx, wc_Shake* sha,
-                         const whSha3Variant* v, uint32_t op, uint8_t* out,
-                         uint32_t outSz)
+                         const whSha3Variant* v, whMessageCrypto_ShakeOp op,
+                         uint8_t* out, uint32_t outSz)
 {
     int ret = _ShakeStateRequest(ctx, sha, v, op, outSz);
 
@@ -10102,7 +10101,7 @@ static int _ShakeFinal(whClientContext* ctx, wc_Shake* sha,
     int            ret;
 
     if (outSz <= WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ) {
-        return _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, out,
+        return _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out,
                              outSz);
     }
 
@@ -10127,8 +10126,9 @@ static int _ShakeFinal(whClientContext* ctx, wc_Shake* sha,
 
 /* Update with in, then finish with an absorb or, when out is set, a final */
 static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
-                         const whSha3Variant* v, uint32_t op, const uint8_t* in,
-                         uint32_t inLen, uint8_t* out, uint32_t outSz)
+                         const whSha3Variant* v, whMessageCrypto_ShakeOp op,
+                         const uint8_t* in, uint32_t inLen, uint8_t* out,
+                         uint32_t outSz)
 {
     int             ret;
     _Sha3SavedState saved;
@@ -10182,8 +10182,9 @@ static int _ShakeSqueeze(whClientContext* ctx, wc_Shake* sha,
 int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz)
 {
-    return _ShakeOneshot(ctx, sha, &whShake128, WH_MESSAGE_CRYPTO_SHAKE_OP_HASH,
-                         in, inLen, out, outSz);
+    return _ShakeOneshot(ctx, sha, &whShake128,
+                         WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, in, inLen, out,
+                         outSz);
 }
 
 int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
@@ -10202,14 +10203,14 @@ int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
                                    uint32_t outSz)
 {
     return _ShakeStateRequest(ctx, sha, &whShake128,
-                              WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, outSz);
+                              WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, outSz);
 }
 
 int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
                                     uint8_t* out, uint32_t outSz)
 {
     return _ShakeStateResponse(ctx, sha, &whShake128,
-                               WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, out, outSz);
+                               WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out, outSz);
 }
 
 int wh_Client_Shake128Absorb(whClientContext* ctx, wc_Shake* sha,
@@ -10230,8 +10231,9 @@ int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
 int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz)
 {
-    return _ShakeOneshot(ctx, sha, &whShake256, WH_MESSAGE_CRYPTO_SHAKE_OP_HASH,
-                         in, inLen, out, outSz);
+    return _ShakeOneshot(ctx, sha, &whShake256,
+                         WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, in, inLen, out,
+                         outSz);
 }
 
 int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
@@ -10250,14 +10252,14 @@ int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
                                    uint32_t outSz)
 {
     return _ShakeStateRequest(ctx, sha, &whShake256,
-                              WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, outSz);
+                              WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, outSz);
 }
 
 int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
                                     uint8_t* out, uint32_t outSz)
 {
     return _ShakeStateResponse(ctx, sha, &whShake256,
-                               WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, out, outSz);
+                               WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out, outSz);
 }
 
 int wh_Client_Shake256Absorb(whClientContext* ctx, wc_Shake* sha,

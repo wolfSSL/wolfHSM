@@ -602,7 +602,6 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
 
 /* A raw request; dropSz bytes are cut from the end to make it short */
 typedef struct {
-    uint32_t op;
     uint32_t isLastBlock;
     uint32_t inSz;
     uint32_t outSz;
@@ -639,7 +638,6 @@ static int _ShakeTestRawRequests(whClientContext*        ctx,
         memset(req, 0, sizeof(*req));
         hdr->algoType    = (whMessageCrypto_AlgoType)v->hashType;
         hdr->affinity    = ctx->cryptoAffinity;
-        req->op          = r->op;
         req->isLastBlock = r->isLastBlock;
         req->inSz        = r->inSz;
         req->outSz       = r->outSz;
@@ -677,32 +675,26 @@ static int _ShakeTestServerRequests(whClientContext*        ctx,
     const uint32_t maxSqz = (maxOut / rate) * rate;
     /* Each limit is accepted, and crossing it is rejected below */
     const shakeTestRequest accepted[] = {
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, rate, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, rate - 1u, maxOut, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, rate - 1u, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, maxSqz, 0},
+        /* Update, final, absorb and squeeze */
+        {0, rate, 0, 0},
+        {1, rate - 1u, maxOut, 0},
+        {1, rate - 1u, 0, 0},
+        {0, 0, maxSqz, 0},
     };
     const shakeTestRequest rejected[] = {
         /* Shorter than the request struct, then shorter than inSz */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, 32u, 1u},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 10u, 32u, 1u},
-        /* Non-final input not whole blocks, or asking for output */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, 1u, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 0, rate, 32u, 0},
-        /* Final with a full-block tail, no output, or too much output */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, rate, 32u, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_HASH, 1, 0, maxOut + 1u, 0},
-        /* Absorb with a full-block tail, or asking for output */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, rate, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, 1, 0, rate, 0},
-        /* Squeeze with input, no output, a partial block, or too much */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 1u, rate, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, 0, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, rate + 1u, 0},
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE, 0, 0, maxSqz + rate, 0},
-        /* Unknown op */
-        {WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE + 1u, 1, 0, 32u, 0},
+        {1, 0, 32u, 1u},
+        {1, 10u, 32u, 1u},
+        /* Update not in whole blocks */
+        {0, 1u, 0, 0},
+        /* Final or absorb with a full-block tail, or too much output */
+        {1, rate, 32u, 0},
+        {1, rate, 0, 0},
+        {1, 0, maxOut + 1u, 0},
+        /* Squeeze with input, a partial block, or too much output */
+        {0, 1u, rate, 0},
+        {0, 0, rate + 1u, 0},
+        {0, 0, maxSqz + rate, 0},
     };
     int ret;
 
