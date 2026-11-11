@@ -952,12 +952,15 @@ typedef enum {
     WH_MESSAGE_CRYPTO_SHA3_OP_FINAL
 } whMessageCrypto_Sha3Op;
 
+/* Request flags */
+#define WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256 (1u << 0) /* Keccak-256 pad */
+
 /* SHA3 Request. Data follows: in[inSz] */
 typedef struct {
     uint32_t                  isLastBlock;
     uint32_t                  inSz;
     uint32_t                  outSz;
-    uint32_t                  flags; /* must be 0 */
+    uint32_t                  flags; /* WH_MESSAGE_CRYPTO_SHA3_FLAG_* */
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_Sha3Request;
 

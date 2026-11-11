@@ -485,13 +485,14 @@ static int _ShakeTestZeroLengthFinal(whClientContext*        ctx,
     return WH_ERROR_OK;
 }
 
-#ifdef WOLFSSL_HASH_FLAGS
-/* Keccak mode is software only, so the result must match software */
+#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NO_KECCAK256)
+/* Keccak mode runs on the server and must match software */
 static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
 {
     wc_Shake sha[1];
     uint8_t  dev[32];
     uint8_t  sw[32];
+    uint16_t seq;
     int      ret;
     int      i;
 
@@ -499,6 +500,7 @@ static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
         int      devId = (i == 0) ? WH_CLIENT_DEVID(ctx) : INVALID_DEVID;
         uint8_t* out   = (i == 0) ? dev : sw;
 
+        seq = ctx->comm->seq;
         ret = v->initFn(sha, NULL, devId);
         if (ret == 0) {
             ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
@@ -515,6 +517,10 @@ static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
                            v->name, devId, ret);
             return ret;
         }
+        if ((i == 0) && (seq == ctx->comm->seq)) {
+            WH_ERROR_PRINT("%s keccak-flag hash not on the server\n", v->name);
+            return WH_ERROR_ABORTED;
+        }
     }
 
     if (memcmp(dev, sw, sizeof(dev)) != 0) {
@@ -524,7 +530,7 @@ static int _ShakeTestKeccakFlag(whClientContext* ctx, const shakeTestVariant* v)
     WH_TEST_PRINT("%s keccak flag SUCCESS\n", v->name);
     return WH_ERROR_OK;
 }
-#endif /* WOLFSSL_HASH_FLAGS */
+#endif /* WOLFSSL_HASH_FLAGS && !WOLFSSL_NO_KECCAK256 */
 
 /* The client entry points must reject bad arguments before going on the wire */
 static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
@@ -564,18 +570,6 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
         (v->clientSqueezeFn(ctx, NULL, buf, 1u) != WH_ERROR_BADARGS) ||
         (v->clientSqueezeFn(ctx, sha, NULL, 1u) != WH_ERROR_BADARGS);
 
-#ifdef WOLFSSL_HASH_FLAGS
-    /* Request helpers must reject Keccak mode */
-    if (!bad) {
-        (void)wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
-        bad =
-            (v->clientUpdateRequestFn(ctx, sha, buf, sizeof(buf), &sent) !=
-             WH_ERROR_BADARGS) ||
-            (v->clientFinalRequestFn(ctx, sha, 32u) != WH_ERROR_BADARGS) ||
-            (v->clientAbsorbFn(ctx, sha, buf, sizeof(buf)) != WH_ERROR_BADARGS);
-        (void)wc_Sha3_SetFlags(sha, 0);
-    }
-#endif
     bad = bad || (seq != ctx->comm->seq);
 
     /* A bad response call must still consume the reply */
@@ -619,7 +613,7 @@ int whTest_Crypto_Shake(whClientContext* ctx)
         WH_TEST_RETURN_ON_FAIL(_ShakeTestLongOutput(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestZeroLengthFinal(ctx, v));
         WH_TEST_RETURN_ON_FAIL(_ShakeTestAbsorbSqueeze(ctx, v));
-#ifdef WOLFSSL_HASH_FLAGS
+#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NO_KECCAK256)
         WH_TEST_RETURN_ON_FAIL(_ShakeTestKeccakFlag(ctx, v));
 #endif
     }

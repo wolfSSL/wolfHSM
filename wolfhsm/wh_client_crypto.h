@@ -2913,10 +2913,8 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
  * *requestSent == true, the caller MUST call the matching UpdateResponse
  * before issuing any other async request on the same ctx.
  *
- * Keccak-mode contexts (sha->flags & WC_HASH_SHA3_KECCAK256) are rejected
- * with WH_ERROR_BADARGS: the server applies the standard SHA-3 0x06
- * padding and has no Keccak fallback. Use the cryptocb path, which routes
- * Keccak to software.
+ * Keccak-mode contexts (sha->flags & WC_HASH_SHA3_KECCAK256) are hashed on
+ * the server. A server without Keccak-256 returns NOT_COMPILED_IN.
  */
 
 #ifndef WOLFSSL_NOSHA3_224

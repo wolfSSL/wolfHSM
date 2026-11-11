@@ -9358,23 +9358,6 @@ static uint32_t _Sha3UpdatePerCallCapacity(const wc_Sha3*       sha,
            (uint32_t)(v->blockSize - 1u - sha->i);
 }
 
-/* Reject Keccak-mode contexts. The wire format carries only s[] and the
- * server re-inits the context, applying standard SHA-3 0x06 padding; a
- * Keccak-flagged context would silently produce a wrong digest. The cryptocb
- * path falls back to software for this case; the direct API has no fallback
- * so it must refuse the call. */
-static int _Sha3RejectKeccak(const wc_Sha3* sha)
-{
-#ifdef WOLFSSL_HASH_FLAGS
-    if (sha != NULL && (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
-        return WH_ERROR_BADARGS;
-    }
-#else
-    (void)sha;
-#endif
-    return WH_ERROR_OK;
-}
-
 /* Fill the request fields shared by the non-DMA and DMA paths */
 static void _Sha3SetRequest(whMessageCrypto_Sha3Request* req,
                             const wc_Sha3* sha, uint32_t isLastBlock,
@@ -9384,6 +9367,11 @@ static void _Sha3SetRequest(whMessageCrypto_Sha3Request* req,
     req->inSz        = inSz;
     req->outSz       = outSz;
     req->flags       = 0;
+#ifdef WOLFSSL_HASH_FLAGS
+    if ((sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
+        req->flags = WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256;
+    }
+#endif /* WOLFSSL_HASH_FLAGS */
     memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
 }
 
@@ -9453,11 +9441,6 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
     *requestSent = false;
-
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
 
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
@@ -9569,10 +9552,6 @@ static int _Sha3StateRequest(whClientContext* ctx, wc_Sha3* sha,
     /* Only an absorb asks for no output */
     if ((op == WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB) != (outSz == 0)) {
         return WH_ERROR_BADARGS;
-    }
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
     }
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
@@ -10075,10 +10054,6 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
     }
     *requestSent = false;
 
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
     if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
         return WH_ERROR_REQUEST_PENDING;
     }
@@ -10223,10 +10198,6 @@ static int _Sha3DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha,
 
     if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
-    }
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
     }
     if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
         return WH_ERROR_REQUEST_PENDING;

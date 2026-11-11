@@ -136,8 +136,7 @@
 #define WOLFSSL_SHA512_HASHTYPE
 
 #define WOLFSSL_SHA3
-/* Enables wc_Sha3_SetFlags so the SHA3 Keccak-mode reject/fallback paths are
- * compiled and exercised by the test suite. */
+/* Enables wc_Sha3_SetFlags so the Keccak-256 tests are compiled and run. */
 #define WOLFSSL_HASH_FLAGS
 
 #ifndef WOLFHSM_CFG_TEST_NO_SHAKE128

@@ -5140,7 +5140,7 @@ static int _Sha3CheckRequest(const whMessageCrypto_Sha3Request* req,
         default:
             break;
     }
-    if (req->flags != 0) {
+    if ((req->flags & ~WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256) != 0) {
         ok = 0;
     }
     return ok ? WH_ERROR_OK : WH_ERROR_BADARGS;
@@ -5150,10 +5150,24 @@ static int _Sha3CheckRequest(const whMessageCrypto_Sha3Request* req,
 static int _Sha3Resume(const _Sha3VariantOps* ops, wc_Sha3* sha, int devId,
                        const whMessageCrypto_Sha3Request* req)
 {
-    int ret = ops->initFn(sha, NULL, devId);
+    const int keccak =
+        ((req->flags & WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256) != 0);
+    int ret;
 
+#if !defined(WOLFSSL_HASH_FLAGS) || defined(WOLFSSL_NO_KECCAK256)
+    /* Keccak-256 is a separate hash, which this server does not offer */
+    if (keccak) {
+        return NOT_COMPILED_IN;
+    }
+#endif /* !WOLFSSL_HASH_FLAGS || WOLFSSL_NO_KECCAK256 */
+    ret = ops->initFn(sha, NULL, devId);
     if (ret == 0) {
         memcpy(sha->s, req->resumeState.s, sizeof(sha->s));
+#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NO_KECCAK256)
+        if (keccak) {
+            ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
+        }
+#endif /* WOLFSSL_HASH_FLAGS && !WOLFSSL_NO_KECCAK256 */
     }
     return ret;
 }
