@@ -731,12 +731,6 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
 #endif
 
-                /* Leave a zero-length finalize to software */
-                if (info->hash.digest != NULL && info->hash.outSz == 0) {
-                    ret = CRYPTOCB_UNAVAILABLE;
-                    break;
-                }
-
                 switch (info->hash.type) {
 #ifdef WOLFSSL_SHAKE128
                     case WC_HASH_TYPE_SHAKE128:

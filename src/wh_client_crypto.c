@@ -9682,6 +9682,10 @@ static int _Sha3Final(whClientContext* ctx, wc_Sha3* sha,
     uint8_t        last[WC_SHA3_128_BLOCK_SIZE];
     int            ret;
 
+    /* A final with no output is only a reset */
+    if (outSz == 0) {
+        return v->initFn(sha, sha->heap, sha->devId);
+    }
     if (outSz <= WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ) {
         return _Sha3StateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, out,
                             outSz);
@@ -9736,8 +9740,7 @@ static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
     int             ret;
     _Sha3SavedState saved;
 
-    if (ctx == NULL || sha == NULL || (in == NULL && inLen != 0) ||
-        (out != NULL && outSz == 0)) {
+    if (ctx == NULL || sha == NULL || (in == NULL && inLen != 0)) {
         return WH_ERROR_BADARGS;
     }
 

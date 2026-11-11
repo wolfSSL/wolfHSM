@@ -475,6 +475,23 @@ static int _ShakeTestZeroLengthFinal(whClientContext*        ctx,
         }
     }
 
+    /* The direct API resets too, so sha is ready for reuse */
+    if (ret == 0) {
+        ret =
+            v->clientHashFn(ctx, sha, shakeTestIn, 2u * v->blockSize, out, 0u);
+    }
+    if (ret == 0) {
+        ret = v->updateFn(sha, shakeTestIn, 4u);
+    }
+    if (ret == 0) {
+        ret = v->finalFn(sha, again, sizeof(again));
+    }
+    if ((ret == 0) &&
+        ((out[0] != 0xA5) || (memcmp(again, expected, sizeof(again)) != 0))) {
+        WH_ERROR_PRINT("%s direct zero-length final did not reset\n", v->name);
+        ret = WH_ERROR_ABORTED;
+    }
+
     v->freeFn(sha);
 
     if (ret != 0) {
@@ -553,8 +570,6 @@ static int _ShakeTestBadArgs(whClientContext* ctx, const shakeTestVariant* v)
         (v->clientHashFn(ctx, NULL, buf, sizeof(buf), NULL, 0) !=
          WH_ERROR_BADARGS) ||
         (v->clientHashFn(ctx, sha, NULL, sizeof(buf), NULL, 0) !=
-         WH_ERROR_BADARGS) ||
-        (v->clientHashFn(ctx, sha, shakeTestIn, 2u * v->blockSize, buf, 0) !=
          WH_ERROR_BADARGS) ||
         (v->clientUpdateRequestFn(ctx, sha, buf, sizeof(buf), NULL) !=
          WH_ERROR_BADARGS) ||
