@@ -40,6 +40,7 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/sha3.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_common.h"
@@ -88,7 +89,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_224,
         WC_SHA3_224_BLOCK_SIZE,
         WC_SHA3_224_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_224_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_224_BLOCK_SIZE),
         wc_InitSha3_224,
         wc_Sha3_224_Update,
         wc_Sha3_224_Final,
@@ -112,7 +113,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_256,
         WC_SHA3_256_BLOCK_SIZE,
         WC_SHA3_256_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_256_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_256_BLOCK_SIZE),
         wc_InitSha3_256,
         wc_Sha3_256_Update,
         wc_Sha3_256_Final,
@@ -136,7 +137,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_384,
         WC_SHA3_384_BLOCK_SIZE,
         WC_SHA3_384_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_384_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_384_BLOCK_SIZE),
         wc_InitSha3_384,
         wc_Sha3_384_Update,
         wc_Sha3_384_Final,
@@ -160,7 +161,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_512,
         WC_SHA3_512_BLOCK_SIZE,
         WC_SHA3_512_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE),
         wc_InitSha3_512,
         wc_Sha3_512_Update,
         wc_Sha3_512_Final,
@@ -201,8 +202,10 @@ static int whTest_Sha3Reference(const whTestSha3Variant* v, const uint8_t* in,
  * SHA3-512 has the smallest block (72) so its floor((P)/block)*block lands
  * closest to the payload cap, making it the upper bound (possibly tied
  * with SHA3-224) across variants. 2x multiplier + 256 tail adds margin. */
-#define WH_TEST_SHA3_BIGBUF_SZ \
-    (2u * (WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ + 256u))
+#define WH_TEST_SHA3_BIGBUF_SZ                                              \
+    (2u *                                                                   \
+     (WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE) + \
+      256u))
 static uint8_t whTest_Sha3BigBuf[WH_TEST_SHA3_BIGBUF_SZ];
 
 static void whTest_Sha3FillBuf(uint8_t* buf, uint32_t sz)
@@ -722,6 +725,231 @@ static int _whTest_CryptoSha3DmaAsync(whClientContext* ctx)
 }
 #endif /* WOLFHSM_CFG_DMA */
 
+/* A raw request; dropSz bytes are cut from the end to make it short */
+typedef struct {
+    uint32_t isLastBlock;
+    uint32_t inSz;
+    uint32_t outSz;
+    uint32_t flags;
+    uint32_t dropSz;
+    uint32_t dmaInSz; /* DMA path only */
+    uint32_t dmaOutAddr;
+    uint32_t dmaOutSz;
+} whTestSha3RawRequest;
+
+/* Send each request as-is and require the server to return expected */
+static int _whTest_Sha3RawRequests(whClientContext* ctx, int hashType, int dma,
+                                   const whTestSha3RawRequest* reqs,
+                                   uint32_t cnt, int expected)
+{
+    uint8_t*                              dataPtr;
+    whMessageCrypto_GenericRequestHeader* hdr;
+    whMessageCrypto_Sha3DmaRequest*       dmaReq;
+    whMessageCrypto_Sha3Request*          req;
+    uint8_t*                              in;
+    uint32_t                              reqSz;
+    uint16_t                              group;
+    uint16_t                              action;
+    uint16_t                              dataSz;
+    uint32_t                              i;
+    int                                   rc;
+    int                                   ret = WH_ERROR_OK;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    hdr    = (whMessageCrypto_GenericRequestHeader*)dataPtr;
+    dmaReq = (whMessageCrypto_Sha3DmaRequest*)(hdr + 1);
+    req    = dma ? &dmaReq->req : (whMessageCrypto_Sha3Request*)(hdr + 1);
+    reqSz  = dma ? sizeof(*dmaReq) : sizeof(*req);
+    in     = (uint8_t*)(hdr + 1) + reqSz;
+
+    for (i = 0; (ret == WH_ERROR_OK) && (i < cnt); i++) {
+        const whTestSha3RawRequest* r = &reqs[i];
+
+        memset(dataPtr, 0, sizeof(*hdr) + reqSz);
+        hdr->algoType    = (whMessageCrypto_AlgoType)hashType;
+        hdr->affinity    = ctx->cryptoAffinity;
+        req->isLastBlock = r->isLastBlock;
+        req->inSz        = r->inSz;
+        req->outSz       = r->outSz;
+        req->flags       = r->flags;
+        if (dma) {
+            dmaReq->input.sz    = r->dmaInSz;
+            dmaReq->output.addr = r->dmaOutAddr;
+            dmaReq->output.sz   = r->dmaOutSz;
+        }
+        memcpy(in, whTest_Sha3BigBuf, r->inSz);
+
+        ret = wh_Client_SendRequest(
+            ctx, dma ? WH_MESSAGE_GROUP_CRYPTO_DMA : WH_MESSAGE_GROUP_CRYPTO,
+            WC_ALGO_TYPE_HASH,
+            (uint16_t)(sizeof(*hdr) + reqSz + r->inSz - r->dropSz), dataPtr);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret =
+                    wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                           WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == WH_ERROR_OK) {
+            rc = ((whMessageCrypto_GenericResponseHeader*)dataPtr)->rc;
+            if (rc != expected) {
+                WH_ERROR_PRINT("type %d dma %d raw request %u returned %d, "
+                               "expected %d\n",
+                               hashType, dma, (unsigned)i, rc, expected);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+    return ret;
+}
+
+#define WH_TEST_SHA3_RAW_CNT(a) ((uint32_t)(sizeof(a) / sizeof((a)[0])))
+
+/* The server must check requests itself rather than trust the client */
+static int _whTest_Sha3ServerRequests(whClientContext* ctx, const char* name,
+                                      int hashType, uint32_t rate,
+                                      uint32_t digestSize)
+{
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ;
+    const uint32_t maxSqz = (maxOut / rate) * rate;
+    const uint32_t finSz  = (digestSize != 0) ? digestSize : maxOut;
+    /* Update and final, for every variant */
+    const whTestSha3RawRequest accepted[] = {
+        {0, rate, 0, 0, 0, 0, 0, 0},
+        {1, rate - 1u, finSz, 0, 0, 0, 0, 0},
+    };
+    /* Absorb and squeeze, SHAKE only */
+    const whTestSha3RawRequest xofOps[] = {
+        {1, rate - 1u, 0, 0, 0, 0, 0, 0},
+        {0, 0, maxSqz, 0, 0, 0, 0, 0},
+    };
+    const whTestSha3RawRequest rejected[] = {
+        /* Shorter than the request struct, then shorter than inSz */
+        {1, 0, finSz, 0, 1u, 0, 0, 0},
+        {1, 10u, finSz, 0, 1u, 0, 0, 0},
+        /* Update not in whole blocks */
+        {0, 1u, 0, 0, 0, 0, 0, 0},
+        /* Final with a full-block tail, or too much output */
+        {1, rate, finSz, 0, 0, 0, 0, 0},
+        {1, 0, maxOut + 1u, 0, 0, 0, 0, 0},
+        /* Unknown flags */
+        {0, rate, 0, 1u, 0, 0, 0, 0},
+    };
+    /* SHAKE: absorb with a full tail, squeeze with input or bad sizes */
+    const whTestSha3RawRequest xofRejected[] = {
+        {1, rate, 0, 0, 0, 0, 0, 0},
+        {0, 1u, rate, 0, 0, 0, 0, 0},
+        {0, 0, rate + 1u, 0, 0, 0, 0, 0},
+        {0, 0, maxSqz + rate, 0, 0, 0, 0, 0},
+    };
+    /* SHA3: wrong digest size, absorb and squeeze */
+    const whTestSha3RawRequest fixedRejected[] = {
+        {1, 0, digestSize - 1u, 0, 0, 0, 0, 0},
+        {1, 0, digestSize + 1u, 0, 0, 0, 0, 0},
+        {1, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, rate, 0, 0, 0, 0, 0},
+    };
+    const int isXof = (digestSize == 0);
+    int       ret;
+
+    whTest_Sha3FillBuf(whTest_Sha3BigBuf, WH_TEST_SHA3_BIGBUF_SZ);
+
+    ret = _whTest_Sha3RawRequests(ctx, hashType, 0, accepted,
+                                  WH_TEST_SHA3_RAW_CNT(accepted), WH_ERROR_OK);
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3RawRequests(ctx, hashType, 0, rejected,
+                                      WH_TEST_SHA3_RAW_CNT(rejected),
+                                      WH_ERROR_BADARGS);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3RawRequests(ctx, hashType, 0, xofOps,
+                                      WH_TEST_SHA3_RAW_CNT(xofOps),
+                                      isXof ? WH_ERROR_OK : WH_ERROR_BADARGS);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = isXof
+                  ? _whTest_Sha3RawRequests(ctx, hashType, 0, xofRejected,
+                                            WH_TEST_SHA3_RAW_CNT(xofRejected),
+                                            WH_ERROR_BADARGS)
+                  : _whTest_Sha3RawRequests(ctx, hashType, 0, fixedRejected,
+                                            WH_TEST_SHA3_RAW_CNT(fixedRejected),
+                                            WH_ERROR_BADARGS);
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == WH_ERROR_OK) {
+        /* DMA: output reserved, final with DMA input, partial DMA blocks */
+        const whTestSha3RawRequest dmaRejected[] = {
+            {0, rate, 0, 0, 0, 0, 0x1000u, 0},
+            {0, rate, 0, 0, 0, 0, 0, 8u},
+            {1, 0, finSz, 0, 0, rate, 0, 0},
+            {0, 0, 0, 0, 0, 1u, 0, 0},
+        };
+
+        if (isXof) {
+            /* SHAKE is not offered over DMA */
+            ret = _whTest_Sha3RawRequests(ctx, hashType, 1, accepted,
+                                          WH_TEST_SHA3_RAW_CNT(accepted),
+                                          NOT_COMPILED_IN);
+        }
+        else {
+            ret = _whTest_Sha3RawRequests(ctx, hashType, 1, accepted,
+                                          WH_TEST_SHA3_RAW_CNT(accepted),
+                                          WH_ERROR_OK);
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(ctx, hashType, 1, rejected,
+                                              WH_TEST_SHA3_RAW_CNT(rejected),
+                                              WH_ERROR_BADARGS);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(
+                    ctx, hashType, 1, fixedRejected,
+                    WH_TEST_SHA3_RAW_CNT(fixedRejected), WH_ERROR_BADARGS);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(ctx, hashType, 1, dmaRejected,
+                                              WH_TEST_SHA3_RAW_CNT(dmaRejected),
+                                              WH_ERROR_BADARGS);
+            }
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_PRINT("%s server request checks SUCCESS\n", name);
+    }
+    return ret;
+}
+
+static int _whTest_CryptoSha3ServerRequests(whClientContext* ctx)
+{
+    int    ret = WH_ERROR_OK;
+    size_t v;
+
+    for (v = 0; (ret == WH_ERROR_OK) && (v < sizeof(whTestSha3Variants) /
+                                                 sizeof(whTestSha3Variants[0]));
+         v++) {
+        const whTestSha3Variant* var = &whTestSha3Variants[v];
+
+        ret = _whTest_Sha3ServerRequests(ctx, var->name, var->hashType,
+                                         var->blockSize, var->digestSize);
+    }
+#ifdef WOLFSSL_SHAKE128
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3ServerRequests(ctx, "SHAKE128", WC_HASH_TYPE_SHAKE128,
+                                         WC_SHA3_128_BLOCK_SIZE, 0);
+    }
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3ServerRequests(ctx, "SHAKE256", WC_HASH_TYPE_SHAKE256,
+                                         WC_SHA3_256_BLOCK_SIZE, 0);
+    }
+#endif /* WOLFSSL_SHAKE256 */
+    return ret;
+}
+
 int whTest_Crypto_Sha3(whClientContext* ctx)
 {
     int i;
@@ -742,6 +970,7 @@ int whTest_Crypto_Sha3(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha3DmaAsync(ctx));
 #endif
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha3ServerRequests(ctx));
     return 0;
 }
 

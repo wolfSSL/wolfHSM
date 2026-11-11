@@ -9309,15 +9309,12 @@ int wh_Client_Sha512Dma(whClientContext* ctx, wc_Sha512* sha, const uint8_t* in,
 #endif /* WOLFSSL_SHA512 */
 
 #if defined(WOLFSSL_SHA3)
-/* SHA3 - all four variants (224/256/384/512) share the wc_Sha3 struct and
- * the same wire format. Per-variant differences (block size, digest size,
- * Update/Final functions) are passed via a small dispatch table. */
+/* SHA3 and SHAKE - all six variants share the wc_Sha3 struct and wire format */
 
 typedef struct {
-    int      hashType; /* WC_HASH_TYPE_SHA3_* (also algoType on the wire) */
+    int      hashType; /* WC_HASH_TYPE_* (also algoType on the wire) */
     uint32_t blockSize;
-    uint32_t digestSize;
-    uint32_t maxInlineSz;
+    uint32_t digestSize; /* 0 for SHAKE, where the caller sets the length */
     /* Only initFn is used client-side (context reset after Final). Update/Final
      * run on the server, so no update/final pointers are carried here. */
     int (*initFn)(wc_Sha3* sha, void* heap, int devId);
@@ -9326,30 +9323,39 @@ typedef struct {
 #ifndef WOLFSSL_NOSHA3_224
 static const whSha3Variant whSha3_224 = {
     WC_HASH_TYPE_SHA3_224, WC_SHA3_224_BLOCK_SIZE, WC_SHA3_224_DIGEST_SIZE,
-    WH_MESSAGE_CRYPTO_SHA3_224_MAX_INLINE_UPDATE_SZ, wc_InitSha3_224};
-#endif
+    wc_InitSha3_224};
+#endif /* !WOLFSSL_NOSHA3_224 */
 #ifndef WOLFSSL_NOSHA3_256
 static const whSha3Variant whSha3_256 = {
     WC_HASH_TYPE_SHA3_256, WC_SHA3_256_BLOCK_SIZE, WC_SHA3_256_DIGEST_SIZE,
-    WH_MESSAGE_CRYPTO_SHA3_256_MAX_INLINE_UPDATE_SZ, wc_InitSha3_256};
-#endif
+    wc_InitSha3_256};
+#endif /* !WOLFSSL_NOSHA3_256 */
 #ifndef WOLFSSL_NOSHA3_384
 static const whSha3Variant whSha3_384 = {
     WC_HASH_TYPE_SHA3_384, WC_SHA3_384_BLOCK_SIZE, WC_SHA3_384_DIGEST_SIZE,
-    WH_MESSAGE_CRYPTO_SHA3_384_MAX_INLINE_UPDATE_SZ, wc_InitSha3_384};
-#endif
+    wc_InitSha3_384};
+#endif /* !WOLFSSL_NOSHA3_384 */
 #ifndef WOLFSSL_NOSHA3_512
 static const whSha3Variant whSha3_512 = {
     WC_HASH_TYPE_SHA3_512, WC_SHA3_512_BLOCK_SIZE, WC_SHA3_512_DIGEST_SIZE,
-    WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ, wc_InitSha3_512};
-#endif
+    wc_InitSha3_512};
+#endif /* !WOLFSSL_NOSHA3_512 */
+#ifdef WOLFSSL_SHAKE128
+static const whSha3Variant whShake128 = {
+    WC_HASH_TYPE_SHAKE128, WC_SHA3_128_BLOCK_SIZE, 0u, wc_InitShake128};
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+static const whSha3Variant whShake256 = {
+    WC_HASH_TYPE_SHAKE256, WC_SHA3_256_BLOCK_SIZE, 0u, wc_InitShake256};
+#endif /* WOLFSSL_SHAKE256 */
 
 /* Maximum input absorbable by a single UpdateRequest: inline wire capacity
  * plus room left in the local partial-block buffer. */
 static uint32_t _Sha3UpdatePerCallCapacity(const wc_Sha3*       sha,
                                            const whSha3Variant* v)
 {
-    return v->maxInlineSz + (uint32_t)(v->blockSize - 1u - sha->i);
+    return WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(v->blockSize) +
+           (uint32_t)(v->blockSize - 1u - sha->i);
 }
 
 /* Reject Keccak-mode contexts. The wire format carries only s[] and the
@@ -9369,11 +9375,37 @@ static int _Sha3RejectKeccak(const wc_Sha3* sha)
     return WH_ERROR_OK;
 }
 
+/* Fill the request fields shared by the non-DMA and DMA paths */
+static void _Sha3SetRequest(whMessageCrypto_Sha3Request* req,
+                            const wc_Sha3* sha, uint32_t isLastBlock,
+                            uint32_t inSz, uint32_t outSz)
+{
+    req->isLastBlock = isLastBlock;
+    req->inSz        = inSz;
+    req->outSz       = outSz;
+    req->flags       = 0;
+    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
+}
+
+/* Check the response contains exactly outSz bytes of output */
+static int _Sha3CheckResponse(const whMessageCrypto_Sha3Response* res,
+                              uint16_t dataSz, uint32_t resSz, uint32_t outSz)
+{
+    if ((dataSz <
+         sizeof(whMessageCrypto_GenericResponseHeader) + resSz + outSz) ||
+        (res->outSz != outSz)) {
+        return WH_ERROR_ABORTED;
+    }
+    return WH_ERROR_OK;
+}
+
 /* Pack whole blocks at wire and buffer the tail. Returns bytes packed. */
 static uint32_t _Sha3PackUpdate(wc_Sha3* sha, const whSha3Variant* v,
                                 const uint8_t* in, uint32_t inLen,
                                 uint8_t* wire)
 {
+    const uint32_t maxInlineSz =
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(v->blockSize);
     uint32_t wirePos = 0;
     uint32_t i       = 0;
 
@@ -9391,7 +9423,7 @@ static uint32_t _Sha3PackUpdate(wc_Sha3* sha, const whSha3Variant* v,
 
     /* Pack as many whole input blocks as will fit inline. */
     while ((inLen - i) >= v->blockSize &&
-           (wirePos + v->blockSize) <= v->maxInlineSz) {
+           (wirePos + v->blockSize) <= maxInlineSz) {
         memcpy(wire + wirePos, in + i, v->blockSize);
         wirePos += v->blockSize;
         i += v->blockSize;
@@ -9408,14 +9440,13 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
                               const whSha3Variant* v, const uint8_t* in,
                               uint32_t inLen, bool* requestSent)
 {
-    int                          ret = 0;
+    int                          ret     = 0;
     whMessageCrypto_Sha3Request* req     = NULL;
     uint8_t*                     dataPtr = NULL;
-    uint32_t                     capacity;
     uint32_t                     wirePos;
-    /* Snapshot of partial buffer for rollback if SendRequest fails */
+    /* Buffer for rollback if SendRequest fails */
     uint32_t savedI;
-    uint8_t  savedT[WC_SHA3_224_BLOCK_SIZE]; /* largest block size: 144 */
+    uint8_t  savedT[WC_SHA3_128_BLOCK_SIZE]; /* largest block size */
 
     if (ctx == NULL || sha == NULL || requestSent == NULL ||
         (in == NULL && inLen != 0)) {
@@ -9432,8 +9463,7 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_BADARGS;
     }
 
-    capacity = _Sha3UpdatePerCallCapacity(sha, v);
-    if (inLen > capacity) {
+    if (inLen > _Sha3UpdatePerCallCapacity(sha, v)) {
         return WH_ERROR_REQUEST_SIZE;
     }
     if (inLen == 0) {
@@ -9455,12 +9485,11 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
 
     /* Pure buffer-fill update: nothing to send. */
     if (wirePos == 0) {
+        wc_ForceZero(savedT, sizeof(savedT));
         return WH_ERROR_OK;
     }
 
-    req->isLastBlock = 0;
-    req->inSz        = wirePos;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
+    _Sha3SetRequest(req, sha, 0, wirePos, 0);
 
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
                                 sizeof(whMessageCrypto_GenericRequestHeader) +
@@ -9470,26 +9499,23 @@ static int _Sha3UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         *requestSent = true;
     }
     else {
-        /* Restore partial buffer on failure so caller can retry. */
+        /* Restore so the caller can retry without losing buffered input. */
         sha->i = savedI;
         memcpy(sha->t, savedT, savedI);
     }
+    wc_ForceZero(savedT, sizeof(savedT));
     return ret;
 }
 
-static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
-                               const whSha3Variant* v)
+/* Receive a response and check it has exactly outSz bytes of output */
+static int _Sha3RecvResponse(whClientContext* ctx, const whSha3Variant* v,
+                             uint32_t outSz, whMessageCrypto_Sha3Response** res)
 {
-    uint16_t                      group  = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                      action = WH_MESSAGE_ACTION_NONE;
-    uint16_t                      dataSz = 0;
-    int                           ret    = 0;
-    whMessageCrypto_Sha3Response* res    = NULL;
-    uint8_t*                      dataPtr;
-
-    if (ctx == NULL || sha == NULL) {
-        return WH_ERROR_BADARGS;
-    }
+    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
+    uint16_t action = WH_MESSAGE_ACTION_NONE;
+    uint16_t dataSz = 0;
+    uint8_t* dataPtr;
+    int      ret;
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
     if (dataPtr == NULL) {
@@ -9502,26 +9528,46 @@ static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
         return ret;
     }
 
-    ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&res);
+    ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)res);
     if (ret >= 0) {
-        if (dataSz <
-            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res)) {
-            return WH_ERROR_ABORTED;
-        }
+        ret = _Sha3CheckResponse(*res, dataSz, sizeof(**res), outSz);
+    }
+    return ret;
+}
+
+static int _Sha3UpdateResponse(whClientContext* ctx, wc_Sha3* sha,
+                               const whSha3Variant* v)
+{
+    whMessageCrypto_Sha3Response* res = NULL;
+    int                           ret;
+
+    if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = _Sha3RecvResponse(ctx, v, 0, &res);
+    if (ret == WH_ERROR_OK) {
         memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
     }
     return ret;
 }
 
-static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
-                             const whSha3Variant* v)
+/* Send the state, plus the tail buffered in sha->t unless squeezing */
+static int _Sha3StateRequest(whClientContext* ctx, wc_Sha3* sha,
+                             const whSha3Variant* v, whMessageCrypto_Sha3Op op,
+                             uint32_t outSz)
 {
     int                          ret;
     whMessageCrypto_Sha3Request* req;
-    uint8_t*                     inlineData;
     uint8_t*                     dataPtr;
+    int      isSqueeze = (op == WH_MESSAGE_CRYPTO_SHA3_OP_SQUEEZE);
+    uint32_t inSz;
 
     if (ctx == NULL || sha == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Only an absorb asks for no output */
+    if ((op == WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB) != (outSz == 0)) {
         return WH_ERROR_BADARGS;
     }
     ret = _Sha3RejectKeccak(sha);
@@ -9531,6 +9577,9 @@ static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
     if (sha->i >= v->blockSize) {
         return WH_ERROR_BADARGS;
     }
+    if (outSz > WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ) {
+        return WH_ERROR_NOSPACE;
+    }
 
     dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
     if (dataPtr == NULL) {
@@ -9539,60 +9588,140 @@ static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req = (whMessageCrypto_Sha3Request*)_createCryptoRequest(
         dataPtr, v->hashType, ctx->cryptoAffinity);
-    inlineData = (uint8_t*)(req + 1);
 
-    req->isLastBlock = 1;
-    req->inSz        = sha->i;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
-    if (sha->i > 0) {
-        memcpy(inlineData, sha->t, sha->i);
+    inSz = isSqueeze ? 0u : sha->i;
+    _Sha3SetRequest(req, sha, isSqueeze ? 0u : 1u, inSz, outSz);
+    if (inSz > 0) {
+        memcpy((uint8_t*)(req + 1), sha->t, inSz);
     }
 
     ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
                                 sizeof(whMessageCrypto_GenericRequestHeader) +
-                                    sizeof(*req) + sha->i,
+                                    sizeof(*req) + inSz,
                                 dataPtr);
     return ret;
 }
 
-static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
-                              const whSha3Variant* v, uint8_t* out)
+static int _Sha3StateResponse(whClientContext* ctx, wc_Sha3* sha,
+                              const whSha3Variant* v, whMessageCrypto_Sha3Op op,
+                              uint8_t* out, uint32_t outSz)
 {
-    uint16_t                      group  = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t                      action = WH_MESSAGE_ACTION_NONE;
-    uint16_t                      dataSz = 0;
     int                           ret;
     whMessageCrypto_Sha3Response* res = NULL;
-    uint8_t*                      dataPtr;
-    void*                         savedHeap;
-    int                           savedDevId;
 
-    if (ctx == NULL || sha == NULL || out == NULL) {
+    if (ctx == NULL || sha == NULL) {
         return WH_ERROR_BADARGS;
     }
 
-    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-    if (dataPtr == NULL) {
-        return WH_ERROR_BADARGS;
+    ret = _Sha3RecvResponse(ctx, v, outSz, &res);
+    /* Checked after the receive so the reply is not left pending */
+    if ((ret == WH_ERROR_OK) && (outSz > 0) && (out == NULL)) {
+        ret = WH_ERROR_BADARGS;
     }
-
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&res);
-    if (ret >= 0) {
-        if (dataSz <
-            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res)) {
-            return WH_ERROR_ABORTED;
+    if (ret == WH_ERROR_OK) {
+        if (outSz > 0) {
+            memcpy(out, (uint8_t*)(res + 1), outSz);
         }
-        memcpy(out, res->hash, v->digestSize);
-        /* Reset state, preserving heap and devId. */
-        savedHeap  = sha->heap;
-        savedDevId = sha->devId;
-        (void)v->initFn(sha, savedHeap, savedDevId);
+        if (op == WH_MESSAGE_CRYPTO_SHA3_OP_FINAL) {
+            ret = v->initFn(sha, sha->heap, sha->devId);
+        }
+        else {
+            memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
+            /* The server padded the buffered tail into the state */
+            if (op == WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB) {
+                sha->i = 0;
+            }
+        }
+    }
+    return ret;
+}
+
+static int _Sha3StateOp(whClientContext* ctx, wc_Sha3* sha,
+                        const whSha3Variant* v, whMessageCrypto_Sha3Op op,
+                        uint8_t* out, uint32_t outSz)
+{
+    int ret = _Sha3StateRequest(ctx, sha, v, op, outSz);
+
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = _Sha3StateResponse(ctx, sha, v, op, out, outSz);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+/* Send all of in as whole-block updates, leaving any tail in sha->t */
+static int _Sha3UpdateAll(whClientContext* ctx, wc_Sha3* sha,
+                          const whSha3Variant* v, const uint8_t* in,
+                          uint32_t inLen)
+{
+    int      ret      = WH_ERROR_OK;
+    uint32_t consumed = 0;
+
+    while (ret == WH_ERROR_OK && consumed < inLen) {
+        uint32_t capacity  = _Sha3UpdatePerCallCapacity(sha, v);
+        uint32_t remaining = inLen - consumed;
+        uint32_t chunk     = (remaining < capacity) ? remaining : capacity;
+        bool     sent      = false;
+
+        ret = _Sha3UpdateRequest(ctx, sha, v, in + consumed, chunk, &sent);
+        if (ret == WH_ERROR_OK && sent) {
+            do {
+                ret = _Sha3UpdateResponse(ctx, sha, v);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        consumed += chunk;
+    }
+    return ret;
+}
+
+/* Squeeze whole blocks, as many per request as one response can contain */
+static int _Sha3SqueezeBlocks(whClientContext* ctx, wc_Sha3* sha,
+                              const whSha3Variant* v, uint8_t* out,
+                              uint32_t blockCnt)
+{
+    const uint32_t maxBlocks =
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ / v->blockSize;
+    int ret = WH_ERROR_OK;
+
+    while (ret == WH_ERROR_OK && blockCnt > 0) {
+        uint32_t n = (blockCnt < maxBlocks) ? blockCnt : maxBlocks;
+
+        ret = _Sha3StateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_SQUEEZE, out,
+                           n * v->blockSize);
+        out += n * v->blockSize;
+        blockCnt -= n;
+    }
+    return ret;
+}
+
+/* Finalize. Long SHAKE output takes an absorb and squeezes. */
+static int _Sha3Final(whClientContext* ctx, wc_Sha3* sha,
+                      const whSha3Variant* v, uint8_t* out, uint32_t outSz)
+{
+    const uint32_t fullSz = outSz - (outSz % v->blockSize);
+    uint8_t        last[WC_SHA3_128_BLOCK_SIZE];
+    int            ret;
+
+    if (outSz <= WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ) {
+        return _Sha3StateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, out,
+                            outSz);
+    }
+
+    ret = _Sha3StateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB, NULL, 0);
+    if (ret == WH_ERROR_OK) {
+        ret = _Sha3SqueezeBlocks(ctx, sha, v, out, fullSz / v->blockSize);
+    }
+    if ((ret == WH_ERROR_OK) && (fullSz < outSz)) {
+        ret = _Sha3StateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_SQUEEZE, last,
+                           v->blockSize);
+        if (ret == WH_ERROR_OK) {
+            memcpy(out + fullSz, last, outSz - fullSz);
+        }
+        wc_ForceZero(last, sizeof(last));
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = v->initFn(sha, sha->heap, sha->devId);
     }
     return ret;
 }
@@ -9619,69 +9748,58 @@ static void _Sha3RestoreState(wc_Sha3* sha, const _Sha3SavedState* saved)
     memcpy(sha->t, saved->t, sizeof(saved->t));
 }
 
+/* Update, then absorb or finalize. On failure, restore sha for a fallback. */
 static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
-                        const whSha3Variant* v, const uint8_t* in,
-                        uint32_t inLen, uint8_t* out)
+                        const whSha3Variant* v, whMessageCrypto_Sha3Op op,
+                        const uint8_t* in, uint32_t inLen, uint8_t* out,
+                        uint32_t outSz)
 {
-    int             ret = WH_ERROR_OK;
+    int             ret;
     _Sha3SavedState saved;
 
-    /* _Sha3UpdatePerCallCapacity (below) reads sha->i, so validate sha here
-     * rather than relying on the lower-level helper's NULL check. */
-    if (ctx == NULL || sha == NULL) {
+    if (ctx == NULL || sha == NULL || (in == NULL && inLen != 0) ||
+        (out != NULL && outSz == 0)) {
         return WH_ERROR_BADARGS;
     }
 
-    /* Mirror _Sha3UpdateRequest's invariant: skipping the update branch on
-     * (in == NULL && inLen != 0) would silently digest the current state. */
-    if (in == NULL && inLen != 0) {
-        return WH_ERROR_BADARGS;
-    }
-
-    /* A server without SHA3 answers NOT_COMPILED_IN, which wolfCrypt maps to
-     * CRYPTOCB_UNAVAILABLE and re-hashes the same input in software. Snapshot
-     * so that fallback cannot absorb any of it twice. */
     _Sha3SaveState(sha, &saved);
 
-    if (in != NULL && inLen > 0) {
-        uint32_t consumed = 0;
-        while (ret == WH_ERROR_OK && consumed < inLen) {
-            uint32_t capacity  = _Sha3UpdatePerCallCapacity(sha, v);
-            uint32_t remaining = inLen - consumed;
-            uint32_t chunk     = (remaining < capacity) ? remaining : capacity;
-            bool     sent      = false;
-
-            ret = _Sha3UpdateRequest(ctx, sha, v, in + consumed, chunk, &sent);
-            if (ret != WH_ERROR_OK) {
-                break;
-            }
-            if (sent) {
-                do {
-                    ret = _Sha3UpdateResponse(ctx, sha, v);
-                } while (ret == WH_ERROR_NOTREADY);
-                if (ret != WH_ERROR_OK) {
-                    break;
-                }
-            }
-            consumed += chunk;
-        }
+    ret = _Sha3UpdateAll(ctx, sha, v, in, inLen);
+    if ((ret == WH_ERROR_OK) && (op == WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB)) {
+        ret = _Sha3StateOp(ctx, sha, v, op, NULL, 0);
+    }
+    else if ((ret == WH_ERROR_OK) && (out != NULL)) {
+        ret = _Sha3Final(ctx, sha, v, out, outSz);
     }
 
-    if (ret == WH_ERROR_OK && out != NULL) {
-        ret = _Sha3FinalRequest(ctx, sha, v);
-        if (ret == WH_ERROR_OK) {
-            do {
-                ret = _Sha3FinalResponse(ctx, sha, v, out);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-    }
-
-    /* Leave sha as the caller passed it so a fallback starts clean. */
     if (ret != WH_ERROR_OK) {
         _Sha3RestoreState(sha, &saved);
     }
-
+    wc_ForceZero(&saved, sizeof(saved));
     return ret;
+}
+
+/* Fixed-length variants always output the digest size */
+static int _Sha3Digest(whClientContext* ctx, wc_Sha3* sha,
+                       const whSha3Variant* v, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out)
+{
+    return _Sha3Oneshot(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, in, inLen,
+                        out, v->digestSize);
+}
+
+static int _Sha3FinalRequest(whClientContext* ctx, wc_Sha3* sha,
+                             const whSha3Variant* v)
+{
+    return _Sha3StateRequest(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL,
+                             v->digestSize);
+}
+
+static int _Sha3FinalResponse(whClientContext* ctx, wc_Sha3* sha,
+                              const whSha3Variant* v, uint8_t* out)
+{
+    return _Sha3StateResponse(ctx, sha, v, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, out,
+                              v->digestSize);
 }
 
 /* Per-variant public APIs - thin wrappers over the shared helpers. */
@@ -9690,7 +9808,7 @@ static int _Sha3Oneshot(whClientContext* ctx, wc_Sha3* sha,
 int wh_Client_Sha3_224(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out)
 {
-    return _Sha3Oneshot(ctx, sha, &whSha3_224, in, inLen, out);
+    return _Sha3Digest(ctx, sha, &whSha3_224, in, inLen, out);
 }
 
 int wh_Client_Sha3_224UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
@@ -9721,7 +9839,7 @@ int wh_Client_Sha3_224FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 int wh_Client_Sha3_256(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out)
 {
-    return _Sha3Oneshot(ctx, sha, &whSha3_256, in, inLen, out);
+    return _Sha3Digest(ctx, sha, &whSha3_256, in, inLen, out);
 }
 
 int wh_Client_Sha3_256UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
@@ -9752,7 +9870,7 @@ int wh_Client_Sha3_256FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 int wh_Client_Sha3_384(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out)
 {
-    return _Sha3Oneshot(ctx, sha, &whSha3_384, in, inLen, out);
+    return _Sha3Digest(ctx, sha, &whSha3_384, in, inLen, out);
 }
 
 int wh_Client_Sha3_384UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
@@ -9783,7 +9901,7 @@ int wh_Client_Sha3_384FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 int wh_Client_Sha3_512(whClientContext* ctx, wc_Sha3* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out)
 {
-    return _Sha3Oneshot(ctx, sha, &whSha3_512, in, inLen, out);
+    return _Sha3Digest(ctx, sha, &whSha3_512, in, inLen, out);
 }
 
 int wh_Client_Sha3_512UpdateRequest(whClientContext* ctx, wc_Sha3* sha,
@@ -9811,351 +9929,6 @@ int wh_Client_Sha3_512FinalResponse(whClientContext* ctx, wc_Sha3* sha,
 #endif /* !WOLFSSL_NOSHA3_512 */
 
 #if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
-/* SHAKE reuses the SHA3 helpers. digestSize is unused, the caller sets it. */
-#ifdef WOLFSSL_SHAKE128
-static const whSha3Variant whShake128 = {
-    WC_HASH_TYPE_SHAKE128, WC_SHA3_128_BLOCK_SIZE, 0u,
-    WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ, wc_InitShake128};
-#endif
-#ifdef WOLFSSL_SHAKE256
-static const whSha3Variant whShake256 = {
-    WC_HASH_TYPE_SHAKE256, WC_SHA3_256_BLOCK_SIZE, 0u,
-    WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ, wc_InitShake256};
-#endif
-
-static int _ShakeUpdateRequest(whClientContext* ctx, wc_Shake* sha,
-                               const whSha3Variant* v, const uint8_t* in,
-                               uint32_t inLen, bool* requestSent)
-{
-    int                           ret     = 0;
-    whMessageCrypto_ShakeRequest* req     = NULL;
-    uint8_t*                      dataPtr = NULL;
-    uint32_t                      wirePos;
-    /* Buffer for rollback if SendRequest fails */
-    uint32_t savedI;
-    uint8_t  savedT[WC_SHA3_128_BLOCK_SIZE];
-
-    if (ctx == NULL || sha == NULL || requestSent == NULL ||
-        (in == NULL && inLen != 0)) {
-        return WH_ERROR_BADARGS;
-    }
-    *requestSent = false;
-
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    if (sha->i >= v->blockSize) {
-        return WH_ERROR_BADARGS;
-    }
-
-    if (inLen > _Sha3UpdatePerCallCapacity(sha, v)) {
-        return WH_ERROR_REQUEST_SIZE;
-    }
-    if (inLen == 0) {
-        return WH_ERROR_OK;
-    }
-
-    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-    if (dataPtr == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    req = (whMessageCrypto_ShakeRequest*)_createCryptoRequest(
-        dataPtr, v->hashType, ctx->cryptoAffinity);
-
-    savedI = sha->i;
-    memcpy(savedT, sha->t, sha->i);
-
-    wirePos = _Sha3PackUpdate(sha, v, in, inLen, (uint8_t*)(req + 1));
-
-    /* Pure buffer-fill update: nothing to send. */
-    if (wirePos == 0) {
-        wc_ForceZero(savedT, sizeof(savedT));
-        return WH_ERROR_OK;
-    }
-
-    req->isLastBlock = 0;
-    req->inSz        = wirePos;
-    req->outSz       = 0;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
-
-    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
-                                sizeof(whMessageCrypto_GenericRequestHeader) +
-                                    sizeof(*req) + wirePos,
-                                dataPtr);
-    if (ret == 0) {
-        *requestSent = true;
-    }
-    else {
-        /* Restore so the caller can retry without losing buffered input. */
-        sha->i = savedI;
-        memcpy(sha->t, savedT, savedI);
-    }
-    wc_ForceZero(savedT, sizeof(savedT));
-    return ret;
-}
-
-/* Receive a SHAKE response and check it has exactly outSz bytes of output */
-static int _ShakeRecvResponse(whClientContext* ctx, const whSha3Variant* v,
-                              uint32_t                        outSz,
-                              whMessageCrypto_ShakeResponse** res)
-{
-    uint16_t group  = WH_MESSAGE_GROUP_CRYPTO;
-    uint16_t action = WH_MESSAGE_ACTION_NONE;
-    uint16_t dataSz = 0;
-    uint8_t* dataPtr;
-    int      ret;
-
-    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-    if (dataPtr == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
-                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)res);
-    if ((ret >= 0) && ((dataSz < sizeof(whMessageCrypto_GenericResponseHeader) +
-                                     sizeof(**res) + outSz) ||
-                       ((*res)->outSz != outSz))) {
-        ret = WH_ERROR_ABORTED;
-    }
-    return ret;
-}
-
-static int _ShakeUpdateResponse(whClientContext* ctx, wc_Shake* sha,
-                                const whSha3Variant* v)
-{
-    whMessageCrypto_ShakeResponse* res = NULL;
-    int                            ret;
-
-    if (ctx == NULL || sha == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = _ShakeRecvResponse(ctx, v, 0, &res);
-    if (ret == WH_ERROR_OK) {
-        memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
-    }
-    return ret;
-}
-
-/* Send the sponge, plus the tail buffered in sha->t unless squeezing */
-static int _ShakeStateRequest(whClientContext* ctx, wc_Shake* sha,
-                              const whSha3Variant*    v,
-                              whMessageCrypto_ShakeOp op, uint32_t outSz)
-{
-    int                           ret;
-    whMessageCrypto_ShakeRequest* req;
-    uint8_t*                      dataPtr;
-    int      isSqueeze = (op == WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE);
-    uint32_t inSz;
-
-    if (ctx == NULL || sha == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-    /* Only an absorb asks for no output */
-    if ((op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) != (outSz == 0)) {
-        return WH_ERROR_BADARGS;
-    }
-    ret = _Sha3RejectKeccak(sha);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-    if (sha->i >= v->blockSize) {
-        return WH_ERROR_BADARGS;
-    }
-    if (outSz > WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ) {
-        return WH_ERROR_NOSPACE;
-    }
-
-    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
-    if (dataPtr == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    req = (whMessageCrypto_ShakeRequest*)_createCryptoRequest(
-        dataPtr, v->hashType, ctx->cryptoAffinity);
-
-    inSz             = isSqueeze ? 0u : sha->i;
-    req->isLastBlock = isSqueeze ? 0u : 1u;
-    req->inSz        = inSz;
-    req->outSz       = outSz;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
-    if (inSz > 0) {
-        memcpy((uint8_t*)(req + 1), sha->t, inSz);
-    }
-
-    ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO, WC_ALGO_TYPE_HASH,
-                                sizeof(whMessageCrypto_GenericRequestHeader) +
-                                    sizeof(*req) + inSz,
-                                dataPtr);
-    return ret;
-}
-
-static int _ShakeStateResponse(whClientContext* ctx, wc_Shake* sha,
-                               const whSha3Variant*    v,
-                               whMessageCrypto_ShakeOp op, uint8_t* out,
-                               uint32_t outSz)
-{
-    int                            ret;
-    whMessageCrypto_ShakeResponse* res = NULL;
-
-    if (ctx == NULL || sha == NULL) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = _ShakeRecvResponse(ctx, v, outSz, &res);
-    /* Checked after the receive so the reply is not left pending */
-    if ((ret == WH_ERROR_OK) && (outSz > 0) && (out == NULL)) {
-        ret = WH_ERROR_BADARGS;
-    }
-    if (ret == WH_ERROR_OK) {
-        if (outSz > 0) {
-            memcpy(out, (uint8_t*)(res + 1), outSz);
-        }
-        if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL) {
-            ret = v->initFn(sha, sha->heap, sha->devId);
-        }
-        else {
-            memcpy(sha->s, res->resumeState.s, sizeof(sha->s));
-            /* The server padded the buffered tail into the state */
-            if (op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB) {
-                sha->i = 0;
-            }
-        }
-    }
-    return ret;
-}
-
-static int _ShakeStateOp(whClientContext* ctx, wc_Shake* sha,
-                         const whSha3Variant* v, whMessageCrypto_ShakeOp op,
-                         uint8_t* out, uint32_t outSz)
-{
-    int ret = _ShakeStateRequest(ctx, sha, v, op, outSz);
-
-    if (ret == WH_ERROR_OK) {
-        do {
-            ret = _ShakeStateResponse(ctx, sha, v, op, out, outSz);
-        } while (ret == WH_ERROR_NOTREADY);
-    }
-    return ret;
-}
-
-/* Send all of in as whole-block updates, leaving any tail in sha->t */
-static int _ShakeUpdateAll(whClientContext* ctx, wc_Shake* sha,
-                           const whSha3Variant* v, const uint8_t* in,
-                           uint32_t inLen)
-{
-    int      ret      = WH_ERROR_OK;
-    uint32_t consumed = 0;
-
-    while (ret == WH_ERROR_OK && consumed < inLen) {
-        uint32_t capacity  = _Sha3UpdatePerCallCapacity(sha, v);
-        uint32_t remaining = inLen - consumed;
-        uint32_t chunk     = (remaining < capacity) ? remaining : capacity;
-        bool     sent      = false;
-
-        ret = _ShakeUpdateRequest(ctx, sha, v, in + consumed, chunk, &sent);
-        if (ret == WH_ERROR_OK && sent) {
-            do {
-                ret = _ShakeUpdateResponse(ctx, sha, v);
-            } while (ret == WH_ERROR_NOTREADY);
-        }
-        consumed += chunk;
-    }
-    return ret;
-}
-
-/* Squeeze whole blocks, as many per request as one response can contain */
-static int _ShakeSqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
-                               const whSha3Variant* v, uint8_t* out,
-                               uint32_t blockCnt)
-{
-    const uint32_t maxBlocks =
-        WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ / v->blockSize;
-    int ret = WH_ERROR_OK;
-
-    while (ret == WH_ERROR_OK && blockCnt > 0) {
-        uint32_t n = (blockCnt < maxBlocks) ? blockCnt : maxBlocks;
-
-        ret = _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE,
-                            out, n * v->blockSize);
-        out += n * v->blockSize;
-        blockCnt -= n;
-    }
-    return ret;
-}
-
-/* Finalize, with absorb and squeeze for output too long for one response */
-static int _ShakeFinal(whClientContext* ctx, wc_Shake* sha,
-                       const whSha3Variant* v, uint8_t* out, uint32_t outSz)
-{
-    const uint32_t fullSz = outSz - (outSz % v->blockSize);
-    uint8_t        last[WC_SHA3_128_BLOCK_SIZE];
-    int            ret;
-
-    if (outSz <= WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ) {
-        return _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out,
-                             outSz);
-    }
-
-    ret =
-        _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, NULL, 0);
-    if (ret == WH_ERROR_OK) {
-        ret = _ShakeSqueezeBlocks(ctx, sha, v, out, fullSz / v->blockSize);
-    }
-    if ((ret == WH_ERROR_OK) && (fullSz < outSz)) {
-        ret = _ShakeStateOp(ctx, sha, v, WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE,
-                            last, v->blockSize);
-        if (ret == WH_ERROR_OK) {
-            memcpy(out + fullSz, last, outSz - fullSz);
-        }
-        wc_ForceZero(last, sizeof(last));
-    }
-    if (ret == WH_ERROR_OK) {
-        ret = v->initFn(sha, sha->heap, sha->devId);
-    }
-    return ret;
-}
-
-/* Update with in, then finish with an absorb or, when out is set, a final */
-static int _ShakeOneshot(whClientContext* ctx, wc_Shake* sha,
-                         const whSha3Variant* v, whMessageCrypto_ShakeOp op,
-                         const uint8_t* in, uint32_t inLen, uint8_t* out,
-                         uint32_t outSz)
-{
-    int             ret;
-    _Sha3SavedState saved;
-
-    if (ctx == NULL || sha == NULL || (in == NULL && inLen != 0) ||
-        (out != NULL && outSz == 0)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    _Sha3SaveState(sha, &saved);
-
-    ret = _ShakeUpdateAll(ctx, sha, v, in, inLen);
-    if ((ret == WH_ERROR_OK) && (op == WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB)) {
-        ret = _ShakeStateOp(ctx, sha, v, op, NULL, 0);
-    }
-    else if ((ret == WH_ERROR_OK) && (out != NULL)) {
-        ret = _ShakeFinal(ctx, sha, v, out, outSz);
-    }
-
-    /* Leave sha as the caller passed it so a fallback starts clean. */
-    if (ret != WH_ERROR_OK) {
-        _Sha3RestoreState(sha, &saved);
-    }
-    wc_ForceZero(&saved, sizeof(saved));
-    return ret;
-}
-
 static int _ShakeSqueeze(whClientContext* ctx, wc_Shake* sha,
                          const whSha3Variant* v, uint8_t* out,
                          uint32_t blockCnt)
@@ -10169,7 +9942,7 @@ static int _ShakeSqueeze(whClientContext* ctx, wc_Shake* sha,
 
     _Sha3SaveState(sha, &saved);
 
-    ret = _ShakeSqueezeBlocks(ctx, sha, v, out, blockCnt);
+    ret = _Sha3SqueezeBlocks(ctx, sha, v, out, blockCnt);
     if (ret != WH_ERROR_OK) {
         _Sha3RestoreState(sha, &saved);
     }
@@ -10182,42 +9955,41 @@ static int _ShakeSqueeze(whClientContext* ctx, wc_Shake* sha,
 int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz)
 {
-    return _ShakeOneshot(ctx, sha, &whShake128,
-                         WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, in, inLen, out,
-                         outSz);
+    return _Sha3Oneshot(ctx, sha, &whShake128, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL,
+                        in, inLen, out, outSz);
 }
 
 int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
                                     const uint8_t* in, uint32_t inLen,
                                     bool* requestSent)
 {
-    return _ShakeUpdateRequest(ctx, sha, &whShake128, in, inLen, requestSent);
+    return _Sha3UpdateRequest(ctx, sha, &whShake128, in, inLen, requestSent);
 }
 
 int wh_Client_Shake128UpdateResponse(whClientContext* ctx, wc_Shake* sha)
 {
-    return _ShakeUpdateResponse(ctx, sha, &whShake128);
+    return _Sha3UpdateResponse(ctx, sha, &whShake128);
 }
 
 int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
                                    uint32_t outSz)
 {
-    return _ShakeStateRequest(ctx, sha, &whShake128,
-                              WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, outSz);
+    return _Sha3StateRequest(ctx, sha, &whShake128,
+                             WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, outSz);
 }
 
 int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
                                     uint8_t* out, uint32_t outSz)
 {
-    return _ShakeStateResponse(ctx, sha, &whShake128,
-                               WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out, outSz);
+    return _Sha3StateResponse(ctx, sha, &whShake128,
+                              WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, out, outSz);
 }
 
 int wh_Client_Shake128Absorb(whClientContext* ctx, wc_Shake* sha,
                              const uint8_t* in, uint32_t inLen)
 {
-    return _ShakeOneshot(ctx, sha, &whShake128,
-                         WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, in, inLen, NULL, 0);
+    return _Sha3Oneshot(ctx, sha, &whShake128, WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB,
+                        in, inLen, NULL, 0);
 }
 
 int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
@@ -10231,42 +10003,41 @@ int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
 int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
                        uint32_t inLen, uint8_t* out, uint32_t outSz)
 {
-    return _ShakeOneshot(ctx, sha, &whShake256,
-                         WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, in, inLen, out,
-                         outSz);
+    return _Sha3Oneshot(ctx, sha, &whShake256, WH_MESSAGE_CRYPTO_SHA3_OP_FINAL,
+                        in, inLen, out, outSz);
 }
 
 int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
                                     const uint8_t* in, uint32_t inLen,
                                     bool* requestSent)
 {
-    return _ShakeUpdateRequest(ctx, sha, &whShake256, in, inLen, requestSent);
+    return _Sha3UpdateRequest(ctx, sha, &whShake256, in, inLen, requestSent);
 }
 
 int wh_Client_Shake256UpdateResponse(whClientContext* ctx, wc_Shake* sha)
 {
-    return _ShakeUpdateResponse(ctx, sha, &whShake256);
+    return _Sha3UpdateResponse(ctx, sha, &whShake256);
 }
 
 int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
                                    uint32_t outSz)
 {
-    return _ShakeStateRequest(ctx, sha, &whShake256,
-                              WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, outSz);
+    return _Sha3StateRequest(ctx, sha, &whShake256,
+                             WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, outSz);
 }
 
 int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
                                     uint8_t* out, uint32_t outSz)
 {
-    return _ShakeStateResponse(ctx, sha, &whShake256,
-                               WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL, out, outSz);
+    return _Sha3StateResponse(ctx, sha, &whShake256,
+                              WH_MESSAGE_CRYPTO_SHA3_OP_FINAL, out, outSz);
 }
 
 int wh_Client_Shake256Absorb(whClientContext* ctx, wc_Shake* sha,
                              const uint8_t* in, uint32_t inLen)
 {
-    return _ShakeOneshot(ctx, sha, &whShake256,
-                         WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB, in, inLen, NULL, 0);
+    return _Sha3Oneshot(ctx, sha, &whShake256, WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB,
+                        in, inLen, NULL, 0);
 }
 
 int wh_Client_Shake256SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
@@ -10326,6 +10097,7 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req = (whMessageCrypto_Sha3DmaRequest*)_createCryptoRequest(
         dataPtr, v->hashType, ctx->cryptoAffinity);
+    memset(req, 0, sizeof(*req));
     inlineData = (uint8_t*)(req + 1);
 
     savedI = sha->i;
@@ -10356,11 +10128,8 @@ static int _Sha3DmaUpdateRequest(whClientContext* ctx, wc_Sha3* sha,
         return WH_ERROR_OK;
     }
 
-    req->isLastBlock = 0;
-    req->inSz        = wirePos;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
-    req->input.sz   = dmaSz;
-    req->input.addr = 0;
+    _Sha3SetRequest(&req->req, sha, 0, wirePos, 0);
+    req->input.sz = dmaSz;
 
     if (dmaSz > 0) {
         ret = wh_Client_DmaProcessClientAddress(
@@ -10426,12 +10195,9 @@ static int _Sha3DmaUpdateResponse(whClientContext* ctx, wc_Sha3* sha,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&resp);
         if (ret >= 0) {
-            if (respSz <
-                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp)) {
-                ret = WH_ERROR_ABORTED;
-            }
-            else {
-                memcpy(sha->s, resp->resumeState.s, sizeof(sha->s));
+            ret = _Sha3CheckResponse(&resp->res, respSz, sizeof(*resp), 0);
+            if (ret == WH_ERROR_OK) {
+                memcpy(sha->s, resp->res.resumeState.s, sizeof(sha->s));
             }
         }
     }
@@ -10476,13 +10242,10 @@ static int _Sha3DmaFinalRequest(whClientContext* ctx, wc_Sha3* sha,
 
     req = (whMessageCrypto_Sha3DmaRequest*)_createCryptoRequest(
         dataPtr, v->hashType, ctx->cryptoAffinity);
+    memset(req, 0, sizeof(*req));
     inlineData = (uint8_t*)(req + 1);
 
-    req->isLastBlock = 1;
-    req->inSz        = sha->i;
-    memcpy(req->resumeState.s, sha->s, sizeof(req->resumeState.s));
-    req->input.sz   = 0;
-    req->input.addr = 0;
+    _Sha3SetRequest(&req->req, sha, 1, sha->i, v->digestSize);
 
     if (sha->i > 0) {
         memcpy(inlineData, sha->t, sha->i);
@@ -10502,8 +10265,6 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
     uint8_t*                         dataPtr = NULL;
     whMessageCrypto_Sha3DmaResponse* resp    = NULL;
     uint16_t                         respSz  = 0;
-    void*                            savedHeap;
-    int                              savedDevId;
 
     if (ctx == NULL || sha == NULL || out == NULL) {
         return WH_ERROR_BADARGS;
@@ -10523,14 +10284,12 @@ static int _Sha3DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
     if (ret == WH_ERROR_OK) {
         ret = _getCryptoResponse(dataPtr, v->hashType, (uint8_t**)&resp);
         if (ret >= 0) {
-            if (respSz <
-                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*resp)) {
-                return WH_ERROR_ABORTED;
+            ret = _Sha3CheckResponse(&resp->res, respSz, sizeof(*resp),
+                                     v->digestSize);
+            if (ret == WH_ERROR_OK) {
+                memcpy(out, (uint8_t*)(resp + 1), v->digestSize);
+                ret = v->initFn(sha, sha->heap, sha->devId);
             }
-            memcpy(out, resp->hash, v->digestSize);
-            savedHeap  = sha->heap;
-            savedDevId = sha->devId;
-            (void)v->initFn(sha, savedHeap, savedDevId);
         }
     }
     return ret;

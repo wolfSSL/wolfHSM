@@ -7553,7 +7553,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_224,
         WC_SHA3_224_BLOCK_SIZE,
         WC_SHA3_224_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_224_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_224_BLOCK_SIZE),
         wc_InitSha3_224,
         wc_Sha3_224_Update,
         wc_Sha3_224_Final,
@@ -7577,7 +7577,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_256,
         WC_SHA3_256_BLOCK_SIZE,
         WC_SHA3_256_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_256_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_256_BLOCK_SIZE),
         wc_InitSha3_256,
         wc_Sha3_256_Update,
         wc_Sha3_256_Final,
@@ -7601,7 +7601,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_384,
         WC_SHA3_384_BLOCK_SIZE,
         WC_SHA3_384_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_384_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_384_BLOCK_SIZE),
         wc_InitSha3_384,
         wc_Sha3_384_Update,
         wc_Sha3_384_Final,
@@ -7625,7 +7625,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_512,
         WC_SHA3_512_BLOCK_SIZE,
         WC_SHA3_512_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE),
         wc_InitSha3_512,
         wc_Sha3_512_Update,
         wc_Sha3_512_Final,
@@ -7666,8 +7666,10 @@ static int whTest_Sha3Reference(const whTestSha3Variant* v, const uint8_t* in,
  * SHA3-512 has the smallest block (72) so its floor((P)/block)*block lands
  * closest to the payload cap, making it the upper bound (possibly tied
  * with SHA3-224) across variants. 2x multiplier + 256 tail adds margin. */
-#define WH_TEST_SHA3_BIGBUF_SZ \
-    (2u * (WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ + 256u))
+#define WH_TEST_SHA3_BIGBUF_SZ                                              \
+    (2u *                                                                   \
+     (WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE) + \
+      256u))
 static uint8_t whTest_Sha3BigBuf[WH_TEST_SHA3_BIGBUF_SZ];
 
 static void whTest_Sha3FillBuf(uint8_t* buf, uint32_t sz)
