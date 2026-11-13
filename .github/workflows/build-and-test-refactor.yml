@@ -113,6 +113,10 @@ jobs:
       if: matrix.group == 'pq-dma'
       run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 NOKEYGEN=1 LMS_VERIFY_ONLY=1 XMSS_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
 
+    - name: Build and test refactor DMA ASAN SLHDSA verify-only
+      if: matrix.group == 'pq-dma'
+      run: cd test-refactor/posix && make clean && make -j DMA=1 ASAN=1 SLHDSA_VERIFY_ONLY=1 WOLFSSL_DIR=../../wolfssl && make run
+
     # Build and test ASAN build, with wolfCrypt tests enabled.
     - name: Build and test refactor ASAN TESTWOLFCRYPT
       if: matrix.group == 'wolfcrypt'

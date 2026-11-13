@@ -110,7 +110,7 @@ The wolfHSM server exposes the full set of wolfCrypt software algorithms, and th
 - **Message authentication**: HMAC (over the supported hash functions) and CMAC
 - **Asymmetric**: RSA (encryption, signing, key generation), ECC (ECDSA, ECDH, public key derivation, key validation), Ed25519, Curve25519
 - **Random number generation**: DRBG/RNG backed by the server's entropy source
-- **Post-quantum cryptography**: ML-DSA (FIPS 204) and ML-KEM (FIPS 203)
+- **Post-quantum cryptography**: ML-DSA (FIPS 204), SLH-DSA (FIPS 205) and ML-KEM (FIPS 203)
 
 For the authoritative list of algorithms, parameter ranges, and options, see the [wolfCrypt API reference](https://www.wolfssl.com/documentation/manuals/wolfssl/index.html). An algorithm not yet wired through the crypto callback can still be used locally against the client's own wolfCrypt instance — only operations dispatched to the client's `devId` are offloaded.
 
