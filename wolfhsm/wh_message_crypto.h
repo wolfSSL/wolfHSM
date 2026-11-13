@@ -151,7 +151,6 @@ int wh_MessageCrypto_TranslateRngResponse(
  */
 /* AES CTR Request - fields ordered by size to keep padding trailing */
 typedef struct {
-    uint32_t enc;       /* 1 for encrypt, 0 for decrypt */
     uint32_t keyLen;    /* Length of key in bytes */
     uint32_t sz;        /* Size of input data */
     uint32_t left;      /* unused bytes left from last call */
@@ -1541,10 +1540,10 @@ int wh_MessageCrypto_TranslateAesCbcDmaResponse(
 typedef struct {
     whMessageCrypto_DmaBuffer input;    /* Input buffer */
     whMessageCrypto_DmaBuffer output;   /* Output buffer */
-    uint32_t                  enc;      /* 1 for encrypt, 0 for decrypt */
     uint32_t                  left;     /* unused bytes left from last call */
     uint32_t                  keyId;
     uint32_t                  keySz;    /* inline key size (0 = use keyId) */
+    uint8_t                   WH_PAD[4]; /* Pad to 8-byte alignment */
     /* Trailing data:
      *     uint8_t iv[AES_IV_SIZE]
      *     uint8_t tmp[AES_BLOCK_SIZE]

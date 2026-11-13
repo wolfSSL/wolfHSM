@@ -168,13 +168,12 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef WOLFSSL_AES_COUNTER
         case WC_CIPHER_AES_CTR: {
             /* Extract info parameters */
-            uint32_t       enc = info->cipher.enc;
             Aes*           aes = info->cipher.aesctr.aes;
             const uint8_t* in  = info->cipher.aesctr.in;
             uint32_t       len = info->cipher.aesctr.sz;
             uint8_t*       out = info->cipher.aesctr.out;
 
-            ret = wh_Client_AesCtr(ctx, aes, enc, in, len, out);
+            ret = wh_Client_AesCtr(ctx, aes, in, len, out);
 
         } break;
 #endif /* WOLFSSL_AES_COUNTER */
@@ -1690,13 +1689,12 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
 #ifdef WOLFSSL_AES_COUNTER
             case WC_CIPHER_AES_CTR: {
                 /* Extract info parameters */
-                uint32_t       enc = info->cipher.enc;
                 Aes*           aes = info->cipher.aesctr.aes;
                 const uint8_t* in  = info->cipher.aesctr.in;
                 uint32_t       len = info->cipher.aesctr.sz;
                 uint8_t*       out = info->cipher.aesctr.out;
 
-                ret = wh_Client_AesCtrDma(ctx, aes, enc, in, len, out);
+                ret = wh_Client_AesCtrDma(ctx, aes, in, len, out);
             } break;
 #endif /* WOLFSSL_AES_COUNTER */
 #ifdef HAVE_AES_CBC
