@@ -50,6 +50,40 @@
 
 #if defined(WOLFSSL_SM2) && defined(HAVE_ECC)
 
+#if (defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY)) || \
+    defined(HAVE_ECC_DHE)
+/* Cache the key on the server and bind idKey to it. idKey has no key
+ * material, so every operation on it must run on the server. */
+static int _Sm2BindKeyId(whClientContext* ctx, ecc_key* hsmKey,
+                         whNvmFlags flags, ecc_key* idKey, whKeyId* keyId)
+{
+    uint8_t label[] = "sm2-cached";
+    int     ret;
+
+    ret =
+        wh_Client_EccImportKey(ctx, hsmKey, keyId, flags, sizeof(label), label);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to cache the SM2 key: %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ecc_init_ex(idKey, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret == 0) {
+        ret = wc_ecc_set_curve(idKey, 32, ECC_SM2P256V1);
+        if (ret == 0) {
+            ret = wh_Client_EccSetKeyId(idKey, *keyId);
+        }
+        if (ret != 0) {
+            wc_ecc_free(idKey);
+        }
+    }
+    if (ret != 0) {
+        (void)wh_Client_KeyEvict(ctx, *keyId);
+    }
+    return ret;
+}
+#endif /* (HAVE_ECC_SIGN && HAVE_ECC_VERIFY) || HAVE_ECC_DHE */
+
 #if defined(HAVE_ECC_SIGN) && defined(HAVE_ECC_VERIFY)
 /* Copy an SM2 key so the same key material can be driven through a second
  * context bound to a different devId. */
@@ -190,13 +224,12 @@ static int _whTest_Sm2SignSize(WC_RNG* rng, ecc_key* hsmKey)
     return 0;
 }
 
-/* Sign with a key the client only knows by id */
+/* Sign and verify with a key the client only knows by id */
 static int _whTest_Sm2KeyId(whClientContext* ctx, WC_RNG* rng, ecc_key* hsmKey)
 {
     int     ret;
     ecc_key idKey[1];
-    whKeyId keyId   = WH_KEYID_ERASED;
-    uint8_t label[] = "sm2-cached";
+    whKeyId keyId = WH_KEYID_ERASED;
     byte    hash[32];
     byte    sig[ECC_MAX_SIG_SIZE];
     word32  sigLen   = sizeof(sig);
@@ -204,38 +237,26 @@ static int _whTest_Sm2KeyId(whClientContext* ctx, WC_RNG* rng, ecc_key* hsmKey)
 
     memset(hash, 0x7C, sizeof(hash));
 
-    ret = wh_Client_EccImportKey(ctx, hsmKey, &keyId,
-                                 WH_NVM_FLAGS_USAGE_SIGN |
-                                     WH_NVM_FLAGS_USAGE_VERIFY,
-                                 sizeof(label), label);
+    ret = _Sm2BindKeyId(ctx, hsmKey,
+                        WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY,
+                        idKey, &keyId);
     if (ret != 0) {
-        WH_ERROR_PRINT("Failed to cache the SM2 key: %d\n", ret);
         return ret;
     }
 
-    ret = wc_ecc_init_ex(idKey, NULL, WH_CLIENT_DEVID(ctx));
+    ret = wc_ecc_sm2_sign_hash(hash, sizeof(hash), sig, &sigLen, rng, idKey);
     if (ret == 0) {
-        ret = wc_ecc_set_curve(idKey, 32, ECC_SM2P256V1);
-        if (ret == 0) {
-            ret = wh_Client_EccSetKeyId(idKey, keyId);
-        }
-        if (ret == 0) {
-            ret = wc_ecc_sm2_sign_hash(hash, sizeof(hash), sig, &sigLen, rng,
-                                       idKey);
-        }
-        if (ret == 0) {
-            ret = wc_ecc_sm2_verify_hash(sig, sigLen, hash, sizeof(hash),
-                                         &verified, hsmKey);
-        }
-        if ((ret == 0) && !verified) {
-            ret = WH_TEST_FAIL;
-        }
-        wc_ecc_free(idKey);
+        ret = wc_ecc_sm2_verify_hash(sig, sigLen, hash, sizeof(hash), &verified,
+                                     idKey);
     }
+    if ((ret == 0) && !verified) {
+        ret = WH_TEST_FAIL;
+    }
+    wc_ecc_free(idKey);
     (void)wh_Client_KeyEvict(ctx, keyId);
 
     if (ret != 0) {
-        WH_ERROR_PRINT("SM2 sign by key id failed: %d\n", ret);
+        WH_ERROR_PRINT("SM2 sign/verify by key id failed: %d\n", ret);
     }
     return ret;
 }
@@ -243,11 +264,15 @@ static int _whTest_Sm2KeyId(whClientContext* ctx, WC_RNG* rng, ecc_key* hsmKey)
 
 #ifdef HAVE_ECC_DHE
 /* The HSM result must equal the same agreement computed the other way round,
- * and a short buffer must report the needed length */
-static int _whTest_Sm2SharedSecret(WC_RNG* rng, ecc_key* hsmKey)
+ * also when the client only knows the key by id, and a short buffer must
+ * report the needed length */
+static int _whTest_Sm2SharedSecret(whClientContext* ctx, WC_RNG* rng,
+                                   ecc_key* hsmKey)
 {
     int     ret;
     ecc_key peer[1];
+    ecc_key idKey[1];
+    whKeyId keyId = WH_KEYID_ERASED;
     byte    hsmSecret[32];
     byte    swSecret[32];
     word32  hsmLen = sizeof(hsmSecret);
@@ -298,7 +323,22 @@ static int _whTest_Sm2SharedSecret(WC_RNG* rng, ecc_key* hsmKey)
         ret = WH_TEST_FAIL;
         goto done;
     }
-    ret = 0;
+
+    ret = _Sm2BindKeyId(ctx, hsmKey, WH_NVM_FLAGS_USAGE_DERIVE, idKey, &keyId);
+    if (ret != 0) {
+        goto done;
+    }
+    hsmLen = sizeof(hsmSecret);
+    ret    = wc_ecc_sm2_shared_secret(idKey, peer, hsmSecret, &hsmLen);
+    if ((ret == 0) &&
+        ((hsmLen != swLen) || (memcmp(hsmSecret, swSecret, hsmLen) != 0))) {
+        ret = WH_TEST_FAIL;
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("SM2 shared secret by key id failed: %d\n", ret);
+    }
+    wc_ecc_free(idKey);
+    (void)wh_Client_KeyEvict(ctx, keyId);
 
 done:
     wc_ecc_free(peer);
@@ -341,7 +381,7 @@ static int _whTest_Sm2(whClientContext* ctx)
 #endif
 #ifdef HAVE_ECC_DHE
         if (ret == 0) {
-            ret = _whTest_Sm2SharedSecret(rng, hsmKey);
+            ret = _whTest_Sm2SharedSecret(ctx, rng, hsmKey);
         }
 #endif
         wc_ecc_free(hsmKey);

@@ -46,6 +46,7 @@ WH_TEST_DECL(whTest_ClientIdBinding);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
+WH_TEST_DECL(whTest_CryptoSm4DmaLength);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_DmaNonCoherent);
 WH_TEST_DECL(whTest_HwKeystore);
@@ -159,6 +160,7 @@ const whTestCase whTestsServer[] = {
     {"whTest_SheStateGate", whTest_SheStateGate},
     {"whTest_ShePrngSeedPersistence", whTest_ShePrngSeedPersistence},
     {"whTest_SheSaveReclaim", whTest_SheSaveReclaim},
+    {"whTest_CryptoSm4DmaLength", whTest_CryptoSm4DmaLength},
 };
 const size_t whTestsServerCount = ARRAY_SIZE(whTestsServer);
 

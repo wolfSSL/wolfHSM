@@ -5223,7 +5223,7 @@ static int _HandleSm4EcbDma(whServerContext* ctx, uint16_t magic, int devId,
     if (needed != inSize) {
         return WH_ERROR_BADARGS;
     }
-    if (req.input.sz != req.output.sz) {
+    if ((req.input.sz != req.output.sz) || (req.input.sz > UINT32_MAX)) {
         return WH_ERROR_BADARGS;
     }
     if ((req.input.sz % SM4_BLOCK_SIZE) != 0) {
@@ -5344,7 +5344,7 @@ static int _HandleSm4CbcDma(whServerContext* ctx, uint16_t magic, int devId,
     if (needed != inSize) {
         return WH_ERROR_BADARGS;
     }
-    if (req.input.sz != req.output.sz) {
+    if ((req.input.sz != req.output.sz) || (req.input.sz > UINT32_MAX)) {
         return WH_ERROR_BADARGS;
     }
     if ((req.input.sz % SM4_BLOCK_SIZE) != 0) {
@@ -5474,7 +5474,7 @@ static int _HandleSm4CtrDma(whServerContext* ctx, uint16_t magic, int devId,
     if (needed != inSize) {
         return WH_ERROR_BADARGS;
     }
-    if (req.input.sz != req.output.sz) {
+    if ((req.input.sz != req.output.sz) || (req.input.sz > UINT32_MAX)) {
         return WH_ERROR_BADARGS;
     }
     if (req.unused > SM4_BLOCK_SIZE) {
@@ -5610,7 +5610,8 @@ static int _HandleSm4AuthDma(whServerContext* ctx, uint16_t magic, int devId,
     if (needed != inSize) {
         return WH_ERROR_BADARGS;
     }
-    if (req.input.sz != req.output.sz) {
+    if ((req.input.sz != req.output.sz) || (req.input.sz > UINT32_MAX) ||
+        (req.aad.sz > UINT32_MAX)) {
         return WH_ERROR_BADARGS;
     }
     if (req.authTagSz > sizeof(reqTag)) {
