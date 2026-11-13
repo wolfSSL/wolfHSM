@@ -117,7 +117,7 @@ Clients reach these algorithms through the wolfHSM client library, which offload
 
 ## Does wolfHSM support post-quantum cryptography?
 
-Yes! wolfHSM supports ML-KEM (FIPS 203) for key exchange and ML-DSA (FIPS 204), LMS, and XMSS for digital signatures, with more algorithms being added every day. Clients use them through the standard wolfCrypt API like any other algorithm, and private keys can be generated on the server so they never leave the HSM.
+Yes! wolfHSM supports ML-KEM (FIPS 203) for key exchange and ML-DSA (FIPS 204), SLH-DSA (FIPS 205), LMS, and XMSS for digital signatures, with more algorithms being added every day. Clients use them through the standard wolfCrypt API like any other algorithm, and private keys can be generated on the server so they never leave the HSM.
 
 Like any algorithm without hardware support, post-quantum algorithms run in wolfCrypt software on the HSM core unless the port provides a hardware driver for them.
 
