@@ -10355,18 +10355,14 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
 #endif /* HAVE_AES_CBC */
 
 #ifdef WOLFSSL_AES_COUNTER
-    /* CTR: round-trip via async Request/Response pair. CTR is symmetric, so
-     * wolfCrypt's wc_AesCtrEncrypt is used for both directions — the enc
-     * flag and key schedule are always ENCRYPTION even when the caller's
-     * intent is to decrypt. */
+    /* CTR: round-trip via async Request/Response pair */
     if (ret == 0) {
         ret = wc_AesInit(aes, NULL, devId);
         if (ret == 0) {
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret =
-                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+            ret = wh_Client_AesCtrRequest(ctx, aes, plainIn, sizeof(plainIn));
         }
         if (ret == 0) {
             do {
@@ -10377,7 +10373,7 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrRequest(ctx, aes, 1, cipher, sizeof(cipher));
+            ret = wh_Client_AesCtrRequest(ctx, aes, cipher, sizeof(cipher));
         }
         if (ret == 0) {
             do {
@@ -10404,7 +10400,7 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
                                      AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtr(ctx, aesRef, 1, plainIn, sizeof(plainIn),
+            ret = wh_Client_AesCtr(ctx, aesRef, plainIn, sizeof(plainIn),
                                    refCipher);
         }
         (void)wc_AesFree(aesRef);
@@ -10416,8 +10412,8 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrRequest(ctx, aes, 1, plainIn,
-                                          sizeof(plainIn) / 2);
+            ret =
+                wh_Client_AesCtrRequest(ctx, aes, plainIn, sizeof(plainIn) / 2);
         }
         if (ret == 0) {
             do {
@@ -10425,9 +10421,8 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
             } while (ret == WH_ERROR_NOTREADY);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrRequest(ctx, aes, 1,
-                                          plainIn + sizeof(plainIn) / 2,
-                                          sizeof(plainIn) / 2);
+            ret = wh_Client_AesCtrRequest(
+                ctx, aes, plainIn + sizeof(plainIn) / 2, sizeof(plainIn) / 2);
         }
         if (ret == 0) {
             do {
@@ -10456,8 +10451,7 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
         }
         if (ret == 0) {
             aes->left = AES_BLOCK_SIZE + 1;
-            tmp = wh_Client_AesCtr(ctx, aes, 1, plainIn, sizeof(plainIn),
-                                   cipher);
+            tmp = wh_Client_AesCtr(ctx, aes, plainIn, sizeof(plainIn), cipher);
             if (tmp != WH_ERROR_BADARGS) {
                 WH_ERROR_PRINT(
                     "AES-CTR async: left > AES_BLOCK_SIZE should be "
@@ -10680,16 +10674,14 @@ static int whTest_CryptoAesAsync(whClientContext* ctx, int devId, WC_RNG* rng)
          * transport stays "request pending" until the matching Response is
          * read. */
         if (ret == 0) {
-            ret =
-                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+            ret = wh_Client_AesCtrRequest(ctx, aes, plainIn, sizeof(plainIn));
         }
         if (ret == 0) {
             /* Snapshot per-call state before attempting a stacked Request */
             memcpy(regBefore, (uint8_t*)aes->reg, sizeof(regBefore));
             memcpy(tmpBefore, (uint8_t*)aes->tmp, sizeof(tmpBefore));
             leftBefore = aes->left;
-            tmp =
-                wh_Client_AesCtrRequest(ctx, aes, 1, plainIn, sizeof(plainIn));
+            tmp = wh_Client_AesCtrRequest(ctx, aes, plainIn, sizeof(plainIn));
             if (tmp != WH_ERROR_REQUEST_PENDING) {
                 WH_ERROR_PRINT("AES-CTR async: stacked Request expected "
                                "REQUEST_PENDING, got %d\n",
@@ -11085,7 +11077,7 @@ static int whTest_CryptoAesAsyncKat(whClientContext* ctx, int devId)
                                          AES_ENCRYPTION);
             }
             if (ret == 0) {
-                ret = wh_Client_AesCtrRequest(ctx, aes, 1, ctrPlain,
+                ret = wh_Client_AesCtrRequest(ctx, aes, ctrPlain,
                                               sizeof(ctrPlain));
             }
             if (ret == 0) {
@@ -11107,8 +11099,8 @@ static int whTest_CryptoAesAsyncKat(whClientContext* ctx, int devId)
             }
             if (ret == 0) {
                 memset(outBuf, 0, sizeof(outBuf));
-                ret = wh_Client_AesCtrRequest(ctx, aes, 1, v[i].c,
-                                              sizeof(ctrPlain));
+                ret =
+                    wh_Client_AesCtrRequest(ctx, aes, v[i].c, sizeof(ctrPlain));
             }
             if (ret == 0) {
                 do {
@@ -11440,8 +11432,8 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, plainIn,
-                                             sizeof(plainIn), cipher);
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, plainIn, sizeof(plainIn),
+                                             cipher);
         }
         if (ret == 0) {
             do {
@@ -11452,8 +11444,8 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, cipher,
-                                             sizeof(plainIn), plainOut);
+            ret = wh_Client_AesCtrDmaRequest(ctx, aes, cipher, sizeof(plainIn),
+                                             plainOut);
         }
         if (ret == 0) {
             do {
@@ -11478,8 +11470,8 @@ static int whTest_CryptoAesDmaAsync(whClientContext* ctx, int devId,
         }
         if (ret == 0) {
             aes->left = AES_BLOCK_SIZE + 1;
-            tmp = wh_Client_AesCtrDma(ctx, aes, 1, plainIn, sizeof(plainIn),
-                                      cipher);
+            tmp =
+                wh_Client_AesCtrDma(ctx, aes, plainIn, sizeof(plainIn), cipher);
             if (tmp != WH_ERROR_BADARGS) {
                 WH_ERROR_PRINT(
                     "AES-CTR DMA async: left > AES_BLOCK_SIZE should be "
@@ -11829,7 +11821,7 @@ static int whTest_CryptoAesDmaAsyncKat(whClientContext* ctx, int devId)
                                          AES_ENCRYPTION);
             }
             if (ret == 0) {
-                ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, ctrPlain,
+                ret = wh_Client_AesCtrDmaRequest(ctx, aes, ctrPlain,
                                                  sizeof(ctrPlain), outBuf);
             }
             if (ret == 0) {
@@ -11849,7 +11841,7 @@ static int whTest_CryptoAesDmaAsyncKat(whClientContext* ctx, int devId)
             }
             if (ret == 0) {
                 memset(outBuf, 0, sizeof(outBuf));
-                ret = wh_Client_AesCtrDmaRequest(ctx, aes, 1, v[i].c,
+                ret = wh_Client_AesCtrDmaRequest(ctx, aes, v[i].c,
                                                  sizeof(ctrPlain), outBuf);
             }
             if (ret == 0) {
@@ -17449,7 +17441,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wc_AesSetIV(aes, iv);
                 }
                 if (ret == 0) {
-                    ret = wh_Client_AesCtr(client, aes, 1, plaintext,
+                    ret = wh_Client_AesCtr(client, aes, plaintext,
                                            sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
@@ -17489,7 +17481,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wc_AesSetIV(aes, iv);
                 }
                 if (ret == 0) {
-                    ret = wh_Client_AesCtr(client, aes, 0, ciphertext,
+                    ret = wh_Client_AesCtr(client, aes, ciphertext,
                                            sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
@@ -17688,7 +17680,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wc_AesSetIV(aes, iv);
                 }
                 if (ret == 0) {
-                    ret = wh_Client_AesCtrDma(client, aes, 1, plaintext,
+                    ret = wh_Client_AesCtrDma(client, aes, plaintext,
                                               sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied encryption\n");
@@ -17728,7 +17720,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wc_AesSetIV(aes, iv);
                 }
                 if (ret == 0) {
-                    ret = wh_Client_AesCtrDma(client, aes, 0, ciphertext,
+                    ret = wh_Client_AesCtrDma(client, aes, ciphertext,
                                               sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
                         WH_TEST_PRINT("    PASS: Correctly denied decryption\n");

@@ -480,8 +480,7 @@ static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
         }
         else {
             aes->left = AES_BLOCK_SIZE + 1;
-            tmp = wh_Client_AesCtr(ctx, aes, 1, plainIn, sizeof(plainIn),
-                                   cipher);
+            tmp = wh_Client_AesCtr(ctx, aes, plainIn, sizeof(plainIn), cipher);
             if (tmp != WH_ERROR_BADARGS) {
                 WH_ERROR_PRINT(
                     "AES-CTR: left > AES_BLOCK_SIZE should be BADARGS, "
@@ -506,8 +505,8 @@ static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
             }
             else {
                 aes->left = AES_BLOCK_SIZE + 1;
-                tmp = wh_Client_AesCtrDma(ctx, aes, 1, plainIn,
-                                          sizeof(plainIn), cipher);
+                tmp = wh_Client_AesCtrDma(ctx, aes, plainIn, sizeof(plainIn),
+                                          cipher);
                 if (tmp != WH_ERROR_BADARGS) {
                     WH_ERROR_PRINT(
                         "AES-CTR DMA: left > AES_BLOCK_SIZE should be "
@@ -527,7 +526,7 @@ static int whTest_CryptoAesCtrLeftOob(whClientContext* ctx)
     return ret;
 }
 
-/* SP 800-38A F.5.2: decrypting through the direct API with enc=0 */
+/* SP 800-38A F.5.2: decrypting through the direct APIs */
 static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
 {
     int                    ret = 0;
@@ -549,11 +548,10 @@ static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
     if (ret == 0) {
         ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
         if (ret == 0) {
-            ret =
-                wh_Client_AesCtr(ctx, aes, 0, cipher, AES_BLOCK_SIZE, plainOut);
+            ret = wh_Client_AesCtr(ctx, aes, cipher, AES_BLOCK_SIZE, plainOut);
         }
         if (ret == 0 && memcmp(plainOut, plain, sizeof(plain)) != 0) {
-            WH_ERROR_PRINT("AES-CTR enc=0 output mismatch\n");
+            WH_ERROR_PRINT("AES-CTR decrypt output mismatch\n");
             ret = -1;
         }
 #ifdef WOLFHSM_CFG_DMA
@@ -562,11 +560,11 @@ static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
             ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
         }
         if (ret == 0) {
-            ret = wh_Client_AesCtrDma(ctx, aes, 0, cipher, AES_BLOCK_SIZE,
-                                      plainOut);
+            ret =
+                wh_Client_AesCtrDma(ctx, aes, cipher, AES_BLOCK_SIZE, plainOut);
         }
         if (ret == 0 && memcmp(plainOut, plain, sizeof(plain)) != 0) {
-            WH_ERROR_PRINT("AES-CTR DMA enc=0 output mismatch\n");
+            WH_ERROR_PRINT("AES-CTR DMA decrypt output mismatch\n");
             ret = -1;
         }
 #endif /* WOLFHSM_CFG_DMA */
@@ -624,7 +622,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0) {
-                    ret = wh_Client_AesCtr(ctx, aes, 1, plaintext,
+                    ret = wh_Client_AesCtr(ctx, aes, plaintext,
                                            sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE)
                         ret = 0;
@@ -663,12 +661,12 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0)
-                    ret = wh_Client_AesCtr(ctx, aes, 1, plaintext,
+                    ret = wh_Client_AesCtr(ctx, aes, plaintext,
                                            sizeof(plaintext), ctrCipher);
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0)
-                    ret = wh_Client_AesCtr(ctx, aes, 0, ctrCipher,
+                    ret = wh_Client_AesCtr(ctx, aes, ctrCipher,
                                            sizeof(ctrCipher), ctrOut);
                 if (ret != 0) {
                     WH_ERROR_PRINT("AES-CTR with ENCRYPT-only key: expected "
@@ -707,7 +705,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0) {
-                    ret = wh_Client_AesCtr(ctx, aes, 0, ciphertext,
+                    ret = wh_Client_AesCtr(ctx, aes, ciphertext,
                                            sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE)
                         ret = 0;
@@ -903,7 +901,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0) {
-                    ret = wh_Client_AesCtrDma(ctx, aes, 1, plaintext,
+                    ret = wh_Client_AesCtrDma(ctx, aes, plaintext,
                                               sizeof(plaintext), ctrCipher);
                     if (ret == WH_ERROR_USAGE)
                         ret = 0;
@@ -942,12 +940,12 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0)
-                    ret = wh_Client_AesCtrDma(ctx, aes, 1, plaintext,
+                    ret = wh_Client_AesCtrDma(ctx, aes, plaintext,
                                               sizeof(plaintext), ctrCipher);
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0)
-                    ret = wh_Client_AesCtrDma(ctx, aes, 0, ctrCipher,
+                    ret = wh_Client_AesCtrDma(ctx, aes, ctrCipher,
                                               sizeof(ctrCipher), ctrOut);
                 if (ret != 0) {
                     WH_ERROR_PRINT(
@@ -987,7 +985,7 @@ int whTest_CryptoAesKeyUsagePolicies(whClientContext* ctx)
                 if (ret == 0)
                     ret = wc_AesSetIV(aes, iv);
                 if (ret == 0) {
-                    ret = wh_Client_AesCtrDma(ctx, aes, 0, ciphertext,
+                    ret = wh_Client_AesCtrDma(ctx, aes, ciphertext,
                                               sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE)
                         ret = 0;

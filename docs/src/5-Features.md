@@ -723,7 +723,7 @@ Define `WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT` for these targets. Every 
 ```c
 WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(sizeof(plain))];
 
-ret = wh_Client_AesCtrDma(client, aes, 1, plain, sizeof(plain), cipher);
+ret = wh_Client_AesCtrDma(client, aes, plain, sizeof(plain), cipher);
 ```
 
 `WH_DMA_ALIGNED` and `WH_DMA_PAD_SIZE()` are no-ops without `WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT`. wolfHSM's own internal output buffers follow the rule. For caller buffers, the port's callback can check the start with `WH_DMA_IS_ALIGNED()` (as `posixTransportShm_ClientStaticMemDmaCallback` does for buffers it uses in place) or copy through an aligned, padded bounce buffer (as that callback does with `posixTransportShm_DmaAlloc()` for buffers outside the DMA area); padding cannot be checked.

@@ -1637,13 +1637,12 @@ int wh_Client_AesGetKeyId(Aes* key, whNvmId* outId);
  *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] aes Pointer to the AES structure.
- * @param[in] enc Ignored by CTR, present for API symmetry with the other modes.
  * @param[in] in Pointer to the input data.
  * @param[in] len Length of the input and output data in bytes.
  * @param[out] out Pointer to the output data.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
+int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, const uint8_t* in,
                      uint32_t len, uint8_t* out);
 
 /**
@@ -1656,14 +1655,13 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
  *
  * @param[in] ctx Pointer to the wolfHSM client context.
  * @param[in] aes Pointer to the AES structure.
- * @param[in] enc Ignored by CTR, present for API symmetry with the other modes.
  * @param[in] in Pointer to the input data.
  * @param[in] len Length of the input and output data in bytes.
  * @param[out] out Pointer to the output data.
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
-                        const uint8_t* in, uint32_t len, uint8_t* out);
+int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, const uint8_t* in,
+                        uint32_t len, uint8_t* out);
 
 /**
  * @brief Send an AES-CTR encrypt/decrypt request to the server (non-blocking)
@@ -1682,14 +1680,12 @@ int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
  *
  * @param[in] ctx Pointer to the client context
  * @param[in] aes Pointer to the AES structure with key and counter state
- * @param[in] enc 1 for encrypt, 0 for decrypt (ignored by CTR, present for API
- *                symmetry with the other modes)
  * @param[in] in  Pointer to the input data (may be NULL only if len == 0)
  * @param[in] len Length of the input data in bytes
  * @return int Returns 0 on success or a negative error code on failure.
  */
-int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
-                            const uint8_t* in, uint32_t len);
+int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, const uint8_t* in,
+                            uint32_t len);
 
 /**
  * @brief Receive the server's AES-CTR response (non-blocking)
@@ -1728,8 +1724,6 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
  *
  * @param[in]  ctx Pointer to the client context
  * @param[in]  aes Pointer to the AES structure with key and counter state
- * @param[in]  enc Ignored by CTR, present for API symmetry with the other
- *                 modes
  * @param[in]  in  Pointer to the input data (may be NULL only if len == 0)
  * @param[in]  len Length of the input data in bytes
  * @param[out] out Pointer to the output buffer
@@ -1738,7 +1732,7 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
  *             error code on failure. On failure any acquired DMA mapping is
  *             released before returning.
  */
-int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes,
                                const uint8_t* in, uint32_t len, uint8_t* out);
 
 /**

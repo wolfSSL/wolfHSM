@@ -87,7 +87,6 @@ int wh_MessageCrypto_TranslateAesCtrRequest(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    WH_T32(magic, dest, src, enc);
     WH_T32(magic, dest, src, keyLen);
     WH_T32(magic, dest, src, sz);
     WH_T16(magic, dest, src, keyId);
@@ -1869,7 +1868,6 @@ int wh_MessageCrypto_TranslateAesCtrDmaRequest(
         return WH_ERROR_BADARGS;
     }
 
-    WH_T32(magic, dest, src, enc);
     WH_T32(magic, dest, src, left);
     WH_T32(magic, dest, src, keyId);
     WH_T32(magic, dest, src, keySz);
