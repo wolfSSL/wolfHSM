@@ -569,7 +569,7 @@ A client uses a port key ID like any other key ID. It binds the ID to a wolfCryp
 | Operation | Required Usage Flags |
 |---|---|
 | AES-ECB, AES-CBC and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
-| AES-CTR | `WH_NVM_FLAGS_USAGE_ENCRYPT` and `WH_NVM_FLAGS_USAGE_DECRYPT`, in both directions |
+| AES-CTR | `WH_NVM_FLAGS_USAGE_ENCRYPT`, in both directions |
 | AES-CMAC, one-shot or multi-step | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` |
 | Every key wrap and data wrap operation, as the KEK | `WH_NVM_FLAGS_USAGE_WRAP`. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks), so they take only fixed keys |
 

@@ -1365,7 +1365,7 @@ static int _whTest_PortKeyUsage(TestCtx* t)
     WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
 
     /* Encrypt only and decrypt only: each works one way in every AES mode but
-     * CTR, which needs both, and neither can do CMAC */
+     * CTR, which needs only encrypt, and neither can do CMAC */
     src1 = WH_KEYID_ERASED;
     src2 = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
@@ -1380,14 +1380,12 @@ static int _whTest_PortKeyUsage(TestCtx* t)
                                       WH_NVM_FLAGS_USAGE_DECRYPT, CLIENT1_ID));
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
         for (mode = 0; mode < MODE_COUNT; mode++) {
+            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
             if (mode == MODE_CTR) {
-                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                      _TryAes(c, port1, mode, dma, 1, &e));
                 WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
                                       _TryAes(c, port2, mode, dma, 1, &e));
             }
             else {
-                WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
                 WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
                                       _TryAes(c, port1, mode, dma, 0, &e));
                 WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
