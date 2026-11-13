@@ -3228,11 +3228,9 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
          * policy against the same locked snapshot that is read. The crypto
          * below then runs entirely on the private copy. */
         uint32_t cachedKeyLen = sizeof(cachedKey);
-        /* CTR runs the same keystream both ways, so it needs both flags */
-        ret = wh_Server_KeystoreReadKeyEnforce(
-            ctx, key_id,
-            WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT, keyMeta,
-            cachedKey, &cachedKeyLen);
+        ret                   = wh_Server_KeystoreReadKeyEnforce(
+            ctx, key_id, WH_NVM_FLAGS_USAGE_ENCRYPT, keyMeta, cachedKey,
+            &cachedKeyLen);
         if (ret == WH_ERROR_OK) {
             /* override the incoming values with cached key */
             key     = cachedKey;
@@ -3370,9 +3368,8 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
              * crypto below then runs entirely on the private copy. */
             uint32_t cachedKeyLen = sizeof(cachedKey);
             ret                   = wh_Server_KeystoreReadKeyEnforce(
-                ctx, keyId,
-                WH_NVM_FLAGS_USAGE_ENCRYPT | WH_NVM_FLAGS_USAGE_DECRYPT,
-                keyMeta, cachedKey, &cachedKeyLen);
+                ctx, keyId, WH_NVM_FLAGS_USAGE_ENCRYPT, keyMeta, cachedKey,
+                &cachedKeyLen);
             if (ret == WH_ERROR_OK) {
                 key    = cachedKey;
                 keyLen = keyMeta->len;

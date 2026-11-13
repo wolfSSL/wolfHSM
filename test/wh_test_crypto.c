@@ -17470,17 +17470,17 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    /* AES-CTR: decrypt without DECRYPT flag */
-    WH_TEST_PRINT("  Testing AES CTR decrypt without DECRYPT flag...\n");
+    /* AES-CTR: decrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR decrypt without ENCRYPT flag...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
         uint8_t ctrOut[16]         = {0};
 
         keyId = WH_KEYID_ERASED;
-        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
-                                   (uint8_t*)"ctr-no-dec", strlen("ctr-no-dec"),
-                                   key, keyLen, &keyId);
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   (uint8_t*)"ctr-dec-only",
+                                   strlen("ctr-dec-only"), key, keyLen, &keyId);
         if (ret == 0) {
             ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
@@ -17709,17 +17709,17 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    /* AES-CTR DMA: decrypt without DECRYPT flag */
-    WH_TEST_PRINT("  Testing AES CTR DMA decrypt without DECRYPT flag...\n");
+    /* AES-CTR DMA: decrypt without ENCRYPT flag */
+    WH_TEST_PRINT("  Testing AES CTR DMA decrypt without ENCRYPT flag...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
         WH_DMA_ALIGNED uint8_t ctrOut[WH_DMA_PAD_SIZE(16)] = {0};
 
         keyId = WH_KEYID_ERASED;
-        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_ENCRYPT,
-                                   (uint8_t*)"dctr-no-dec",
-                                   strlen("dctr-no-dec"), key, keyLen, &keyId);
+        ret   = wh_Client_KeyCache(client, WH_NVM_FLAGS_USAGE_DECRYPT,
+                                   (uint8_t*)"dctr-dec-only",
+                                   strlen("dctr-dec-only"), key, keyLen, &keyId);
         if (ret == 0) {
             ret = wc_AesInit(aes, NULL, WH_CLIENT_DEVID(client));
             if (ret == 0) {
