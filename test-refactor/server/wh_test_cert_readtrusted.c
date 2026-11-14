@@ -39,11 +39,7 @@
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
-
-/* wh_test_cert_data.h defines rather than declares, so it can only be
- * included once across the suite */
-extern const unsigned char ROOT_A_CERT[];
-extern const size_t        ROOT_A_CERT_len;
+#include "wh_test_cert_data_extern.h"
 
 /* Mirrors the staging clamp in the non-DMA READTRUSTED handler. Reading at
  * both STAGED_LEN and STAGED_LEN + 1 pins the clamp from either side */
