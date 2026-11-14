@@ -1037,6 +1037,88 @@ int wh_MessageCrypto_TranslateSha3Response(
 
 
 /*
+ * SHAKE
+ */
+
+/* SHAKE ops, set by the request's isLastBlock and outSz:
+ *   isLastBlock=0, outSz=0: update with whole blocks
+ *   isLastBlock=0, outSz>0: squeeze whole blocks, no input
+ *   isLastBlock=1, outSz=0: absorb, pad the tail into the state
+ *   isLastBlock=1, outSz>0: final, pad the tail and output outSz bytes */
+typedef enum {
+    WH_MESSAGE_CRYPTO_SHAKE_OP_UPDATE = 0,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_SQUEEZE,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_ABSORB,
+    WH_MESSAGE_CRYPTO_SHAKE_OP_FINAL
+} whMessageCrypto_ShakeOp;
+
+/* SHAKE Request. Data follows: in[inSz] */
+typedef struct {
+    uint32_t                  isLastBlock;
+    uint32_t                  inSz;
+    uint32_t                  outSz;
+    uint8_t                   WH_PAD[4];
+    whMessageCrypto_Sha3State resumeState;
+} whMessageCrypto_ShakeRequest;
+
+/* SHAKE Response, same size as the request. Data follows: out[outSz] */
+typedef struct {
+    whMessageCrypto_Sha3State resumeState;
+    uint32_t                  outSz;
+    uint8_t                   WH_PAD[12];
+} whMessageCrypto_ShakeResponse;
+
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_ShakeResponse) ==
+                           sizeof(whMessageCrypto_ShakeRequest),
+                       "ShakeRequest and ShakeResponse must be the same size");
+
+/* Per-variant max inline update sizes, in whole blocks */
+#define WH_MESSAGE_CRYPTO_SHAKE128_MAX_INLINE_UPDATE_SZ         \
+    (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
+       (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
+       (uint32_t)sizeof(whMessageCrypto_ShakeRequest)) /        \
+      168u) *                                                   \
+     168u)
+
+#define WH_MESSAGE_CRYPTO_SHAKE256_MAX_INLINE_UPDATE_SZ         \
+    (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
+       (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
+       (uint32_t)sizeof(whMessageCrypto_ShakeRequest)) /        \
+      136u) *                                                   \
+     136u)
+
+/* Max output per response. Longer output takes an absorb and squeezes. */
+#define WH_MESSAGE_CRYPTO_SHAKE_MAX_INLINE_OUTPUT_SZ           \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                               \
+     (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
+     (uint32_t)sizeof(whMessageCrypto_ShakeResponse))
+
+/* Each SHAKE variant must fit one block inline */
+#ifdef WOLFSSL_SHAKE128
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                               (uint32_t)sizeof(whMessageCrypto_ShakeRequest) +
+                               168u <=
+                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+                       "Comm buffer too small to fit a SHAKE128 block");
+#endif
+#ifdef WOLFSSL_SHAKE256
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                               (uint32_t)sizeof(whMessageCrypto_ShakeRequest) +
+                               136u <=
+                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+                       "Comm buffer too small to fit a SHAKE256 block");
+#endif
+
+int wh_MessageCrypto_TranslateShakeRequest(
+    uint16_t magic, const whMessageCrypto_ShakeRequest* src,
+    whMessageCrypto_ShakeRequest* dest);
+
+int wh_MessageCrypto_TranslateShakeResponse(
+    uint16_t magic, const whMessageCrypto_ShakeResponse* src,
+    whMessageCrypto_ShakeResponse* dest);
+
+
+/*
  * CMAC (AES)
  */
 
