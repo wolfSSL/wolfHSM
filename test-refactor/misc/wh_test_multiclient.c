@@ -2109,35 +2109,36 @@ static int _testNvmNonAddVerbRejections(whClientContext* client1,
 }
 
 /*
- * Verify that WRAPPED and HW client flags cannot access differently typed
+ * Verify that WRAPPED and PORT client flags cannot access differently typed
  * objects through the NVM API.
  */
-static int _testNvmWrappedHwFlagIsolation(whClientContext* client1,
-                                          whServerContext* server1,
-                                          whClientContext* client2,
-                                          whServerContext* server2)
+static int _testNvmWrappedPortFlagIsolation(whClientContext* client1,
+                                            whServerContext* server1,
+                                            whClientContext* client2,
+                                            whServerContext* server2)
 {
     const whNvmId   planted_id     = 9;
     const uint8_t   secret[]       = "planted-non-nvm-secret";
     const whNvmSize secretSz       = (whNvmSize)sizeof(secret);
     const whKeyId   clientFlags[2] = {WH_KEYID_CLIENT_WRAPPED_FLAG,
-                                      WH_KEYID_CLIENT_HW_FLAG};
+                                      WH_KEYID_CLIENT_PORT_FLAG};
     int32_t         out_rc         = 0;
     whNvmSize       out_len        = 0;
     uint8_t         buf[64]        = {0};
     whNvmMetadata   meta           = {0};
     whKeyId         wrappedId;
-    whKeyId         hwId;
+    whKeyId         portKeyId;
     int             i;
 
     (void)client2;
     (void)server2;
 
-    WH_TEST_PRINT("Testing NVM WRAPPED/HW flag type isolation...\n");
+    WH_TEST_PRINT("Testing NVM WRAPPED/PORT flag type isolation...\n");
 
     wrappedId =
         WH_MAKE_KEYID(WH_KEYTYPE_WRAPPED, server1->comm->client_id, planted_id);
-    hwId = WH_MAKE_KEYID(WH_KEYTYPE_HW, server1->comm->client_id, planted_id);
+    portKeyId =
+        WH_MAKE_KEYID(WH_KEYTYPE_PORT, server1->comm->client_id, planted_id);
 
     meta.access = WH_NVM_ACCESS_ANY;
     meta.flags  = WH_NVM_FLAGS_NONE;
@@ -2145,7 +2146,7 @@ static int _testNvmWrappedHwFlagIsolation(whClientContext* client1,
     meta.id     = wrappedId;
     WH_TEST_ASSERT_RETURN(
         wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
-    meta.id = hwId;
+    meta.id = portKeyId;
     WH_TEST_ASSERT_RETURN(
         wh_Nvm_AddObject(server1->nvm, &meta, secretSz, secret) == WH_ERROR_OK);
 
@@ -2171,13 +2172,13 @@ static int _testNvmWrappedHwFlagIsolation(whClientContext* client1,
 
     WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, wrappedId, &meta) ==
                           WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, hwId, &meta) ==
+    WH_TEST_ASSERT_RETURN(wh_Nvm_GetMetadata(server1->nvm, portKeyId, &meta) ==
                           WH_ERROR_OK);
 
     (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &wrappedId);
-    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &hwId);
+    (void)wh_Nvm_DestroyObjects(server1->nvm, 1, &portKeyId);
 
-    WH_TEST_PRINT("  NVM WRAPPED/HW flag isolation: PASS\n");
+    WH_TEST_PRINT("  NVM WRAPPED/PORT flag isolation: PASS\n");
     return WH_ERROR_OK;
 }
 
@@ -2203,7 +2204,7 @@ static int _runNvmIdTranslationTests(whClientContext* client1,
     WH_TEST_RETURN_ON_FAIL(
         _testNvmNonAddVerbRejections(client1, server1, client2, server2));
     WH_TEST_RETURN_ON_FAIL(
-        _testNvmWrappedHwFlagIsolation(client1, server1, client2, server2));
+        _testNvmWrappedPortFlagIsolation(client1, server1, client2, server2));
     WH_TEST_PRINT("All NVM Id Translation Tests PASSED ===\n");
     return WH_ERROR_OK;
 }

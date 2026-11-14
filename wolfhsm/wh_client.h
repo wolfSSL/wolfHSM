@@ -1044,6 +1044,120 @@ int wh_Client_KeyRevokeResponse(whClientContext* c);
  */
 int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId);
 
+/**
+ * @brief Sends a request to copy a keystore key into a port key.
+ *
+ * The port key keeps the source key's usage flags and can then be used
+ * like any key ID wherever port keys are supported. Only port keys the server
+ * port registered as loadable can be loaded. Refer to the port-specific
+ * documentation for more details on which keys are loadable.
+ *
+ * The loaded key belongs only to this client unless portKeyId has the global
+ * flag.
+ *
+ * Requires a server built with WOLFHSM_CFG_PORTKEY_LOAD.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] portKeyId Port key to load, from WH_CLIENT_KEYID_MAKE_PORT(). The
+ *            ID must not be 0.
+ * @param[in] srcKeyId Key ID of the keystore key to copy.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_PortKeyLoadFromKeystoreRequest(whClientContext* c,
+                                             whKeyId          portKeyId,
+                                             whKeyId          srcKeyId);
+
+/**
+ * @brief Receives the response to a port key load request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *         available yet, or a negative error code on failure.
+ */
+int wh_Client_PortKeyLoadFromKeystoreResponse(whClientContext* c);
+
+/**
+ * @brief Copies a keystore key into a port key, blocking until done.
+ *
+ * See wh_Client_PortKeyLoadFromKeystoreRequest().
+ */
+int wh_Client_PortKeyLoadFromKeystore(whClientContext* c, whKeyId portKeyId,
+                                      whKeyId srcKeyId);
+
+/**
+ * @brief Sends a request to clear a port key this client loaded.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] portKeyId Port key to clear. The ID must not be 0.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_PortKeyClearRequest(whClientContext* c, whKeyId portKeyId);
+
+/**
+ * @brief Receives the response to a port key clear request.
+ *
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *         available yet, or a negative error code on failure.
+ */
+int wh_Client_PortKeyClearResponse(whClientContext* c);
+
+/**
+ * @brief Clears a port key this client loaded, blocking until done.
+ */
+int wh_Client_PortKeyClear(whClientContext* c, whKeyId portKeyId);
+
+/**
+ * @brief Sends a request to clear every port key this client loaded.
+ *
+ * Keys loaded as global and keys the port loaded are not cleared.
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_PortKeyClearAllRequest(whClientContext* c);
+
+/**
+ * @brief Receives the response to wh_Client_PortKeyClearAllRequest().
+ *
+ * @param[in] c Pointer to the client context.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *         available yet, or a negative error code on failure.
+ */
+int wh_Client_PortKeyClearAllResponse(whClientContext* c);
+
+/**
+ * @brief Clears every port key this client loaded, blocking until done.
+ *
+ * See wh_Client_PortKeyClearAllRequest().
+ */
+int wh_Client_PortKeyClearAll(whClientContext* c);
+
+/**
+ * @brief Sends a request to describe a port key.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[in] portKeyId Port key to describe.
+ * @return int Returns 0 on success, or a negative error code on failure.
+ */
+int wh_Client_PortKeyGetInfoRequest(whClientContext* c, whKeyId portKeyId);
+
+/**
+ * @brief Receives the response to a port key info request.
+ *
+ * @param[in] c Pointer to the client context.
+ * @param[out] info What the key holds. Every field is 0 if it is empty.
+ * @return int Returns 0 on success, WH_ERROR_NOTREADY if no response is
+ *         available yet, or a negative error code on failure (such as
+ *         WH_ERROR_NOTFOUND for a port key the port did not register).
+ */
+int wh_Client_PortKeyGetInfoResponse(whClientContext* c, whPortKeyInfo* info);
+
+/**
+ * @brief Describes a port key, blocking until done.
+ */
+int wh_Client_PortKeyGetInfo(whClientContext* c, whKeyId portKeyId,
+                             whPortKeyInfo* info);
+
 #ifdef WOLFHSM_CFG_DMA
 
 /**
@@ -1684,9 +1798,9 @@ int wh_Client_CounterDestroy(whClientContext* c, whNvmId counterId);
  *   - Bit 8 (WH_KEYID_CLIENT_GLOBAL_FLAG): selects the shared global NVM
  *     namespace when WOLFHSM_CFG_GLOBAL_KEYS is enabled. Otherwise, requests
  *     with this flag return WH_ERROR_BADARGS.
- *   - Bits 9 and 10 (WH_KEYID_CLIENT_WRAPPED_FLAG and WH_KEYID_CLIENT_HW_FLAG):
- *     invalid for NVM objects. Requests with these flags return
- * WH_ERROR_BADARGS.
+ *   - Bits 9 and 10 (WH_KEYID_CLIENT_WRAPPED_FLAG and
+ *     WH_KEYID_CLIENT_PORT_FLAG): invalid for NVM objects. Requests with
+ *     these flags return WH_ERROR_BADARGS.
  *   - Bits 11 to 15: must be zero.
  *
  * The server translates each request ID into internal TYPE/USER/ID encoding,
@@ -3960,33 +4074,33 @@ int wh_Client_CertVerifyAcertDma(whClientContext* c, const void* cert,
     ((_id) | WH_KEYID_CLIENT_GLOBAL_FLAG | WH_KEYID_CLIENT_WRAPPED_FLAG)
 
 /**
- * @brief Mark a key ID as hardware-only
+ * @brief Make a port key ID
  *
- * Sets the hardware-only flag in a client keyId to indicate to the server
- * that this key's material lives exclusively in a hardware keystore. The
- * server will translate this to KEYTYPE=WH_KEYTYPE_HW and fetch the
- * material from its hardware keystore backend on demand.
+ * Sets the port key flag in a client keyId. The server translates it to
+ * KEYTYPE=WH_KEYTYPE_PORT: a key the port manages, which the server uses by
+ * reference and never caches, stores in NVM or returns to a client. The port
+ * decides what each number names. Port keys work in the operations that
+ * support them, such as AES and CMAC requests and as key wrap KEKs; keystore
+ * operations reject them with WH_ERROR_ACCESS.
  *
- * Hardware-only keys never enter the server key cache or NVM and are never
- * returned to a client. They are only usable as KEKs in the keywrap API
- * (key/data wrap and unwrap); all other keystore and crypto operations
- * reject them with WH_ERROR_ACCESS.
- *
- * @note Requires the server to be built with WOLFHSM_CFG_HWKEYSTORE. On a
- *       server without hardware keystore support the hardware-only flag is
+ * @note Requires the server to be built with WOLFHSM_CFG_PORTKEY. On a
+ *       server without port key support the port key flag is
  *       ignored and the request is treated as an ordinary key ID (looked up
  *       in the normal cache/NVM keystore), which typically fails with a
  *       key-not-found error.
  *
- * @param _id The key ID (0-255), as understood by the server's hardware
- *            keystore backend
- * @return keyId with hardware-only flag set
+ * @param _id The port key number (0-255), as defined by the port
+ * @return keyId with the port key flag set
  *
  * Example:
- *   whKeyId hwKek = WH_CLIENT_KEYID_MAKE_HW(2);
- *   wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, hwKek, ...);
+ *   whKeyId portKek = WH_CLIENT_KEYID_MAKE_PORT(2);
+ *   wh_Client_KeyWrap(client, WC_CIPHER_AES_GCM, portKek, ...);
  */
-#define WH_CLIENT_KEYID_MAKE_HW(_id) ((_id) | WH_KEYID_CLIENT_HW_FLAG)
+#define WH_CLIENT_KEYID_MAKE_PORT(_id) ((_id) | WH_KEYID_CLIENT_PORT_FLAG)
+
+/* Old name of WH_CLIENT_KEYID_MAKE_PORT(). New code should not use it; it is
+ * kept only for backwards compatibility. */
+#define WH_CLIENT_KEYID_MAKE_HW(_id) WH_CLIENT_KEYID_MAKE_PORT(_id)
 
 /**
  * @brief Construct wrapped key metadata ID with explicit ownership
