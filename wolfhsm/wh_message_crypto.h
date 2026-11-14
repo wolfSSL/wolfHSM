@@ -915,113 +915,106 @@ int wh_MessageCrypto_TranslateSha2Response(
     whMessageCrypto_Sha2Response* dest);
 
 /*
- * SHA3 (all variants: 224/256/384/512)
+ * SHA3 and SHAKE (SHA3-224/256/384/512, SHAKE128/256)
  *
- * All SHA3 variants share the same wc_Sha3 struct and the same 200-byte
- * Keccak state, so one wire format serves all four. The variant is
- * communicated via the algoType field in the generic crypto request
- * header (WC_HASH_TYPE_SHA3_224/256/384/512). Per-variant constraints
- * (block size, digest size) are enforced by the server.
+ * All variants share the wc_Sha3 struct and the 200-byte Keccak state, so one
+ * wire format serves all six. The variant is the algoType in the generic
+ * crypto request header (WC_HASH_TYPE_SHA3_* or WC_HASH_TYPE_SHAKE*).
  *
  * Wire layout in the comm buffer:
  *   whMessageCrypto_GenericRequestHeader
  *   whMessageCrypto_Sha3Request
  *   uint8_t in[inSz]
  *
- * Non-final updates: inSz must be a multiple of the variant's block
- * size (144/136/104/72). The client buffers any partial-block tail
- * locally in sha3->t[] and only sends it on Final with isLastBlock=1.
+ *   whMessageCrypto_GenericResponseHeader
+ *   whMessageCrypto_Sha3Response
+ *   uint8_t out[outSz]
+ *
+ * The client buffers any partial block locally in sha3->t[], so the wire only
+ * contains whole blocks, except for the tail sent with isLastBlock=1.
  */
 
-/* SHA3 resume state - 200-byte Keccak state, shared across
- * SHA3-224/256/384/512. The partial-block buffer lives on the
- * client and the wire only carries whole-block input. */
+/* SHA3 resume state - 200-byte Keccak state */
 typedef struct {
     uint64_t s[25]; /* Keccak state */
 } whMessageCrypto_Sha3State;
 
-/* SHA3 Request (variable-length input data follows the struct). */
+/* Ops, set by the request's isLastBlock and outSz:
+ *   isLastBlock=0, outSz=0: update with whole blocks
+ *   isLastBlock=0, outSz>0: squeeze whole blocks, no input (SHAKE only)
+ *   isLastBlock=1, outSz=0: absorb, pad the tail into the state (SHAKE only)
+ *   isLastBlock=1, outSz>0: final, pad the tail and output outSz bytes. For
+ *                           SHA3, outSz must be the digest size. */
+typedef enum {
+    WH_MESSAGE_CRYPTO_SHA3_OP_UPDATE = 0,
+    WH_MESSAGE_CRYPTO_SHA3_OP_SQUEEZE,
+    WH_MESSAGE_CRYPTO_SHA3_OP_ABSORB,
+    WH_MESSAGE_CRYPTO_SHA3_OP_FINAL
+} whMessageCrypto_Sha3Op;
+
+/* Request flags */
+#define WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256 (1u << 0) /* Keccak-256 pad */
+
+/* SHA3 Request. Data follows: in[inSz] */
 typedef struct {
     uint32_t                  isLastBlock;
     uint32_t                  inSz;
+    uint32_t                  outSz;
+    uint32_t                  flags; /* WH_MESSAGE_CRYPTO_SHA3_FLAG_* */
     whMessageCrypto_Sha3State resumeState;
 } whMessageCrypto_Sha3Request;
 
-/* SHA3 Response. On non-final updates, carries the updated Keccak state.
- * On Final, the hash[] field carries the digest (length implied by the
- * variant). */
+/* SHA3 Response, same size as the request. Data follows: out[outSz] */
 typedef struct {
     whMessageCrypto_Sha3State resumeState;
-    uint8_t hash[64]; /* WC_SHA3_512_DIGEST_SIZE - max across variants */
+    uint32_t                  outSz;
+    uint8_t                   WH_PAD[12];
 } whMessageCrypto_Sha3Response;
 
-/* Per-variant max-inline update sizes (block sizes differ across variants
- * so each gets its own macro, rounded down to a whole-block multiple). */
-#define WH_MESSAGE_CRYPTO_SHA3_224_MAX_INLINE_UPDATE_SZ         \
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_Sha3Response) ==
+                           sizeof(whMessageCrypto_Sha3Request),
+                       "Sha3Request and Sha3Response must be the same size");
+
+/* Max inline update size for a block size, in whole blocks */
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(blockSz)    \
     (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
        (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
        (uint32_t)sizeof(whMessageCrypto_Sha3Request)) /         \
-      144u) *                                                   \
-     144u)
+      (uint32_t)(blockSz)) *                                    \
+     (uint32_t)(blockSz))
 
-#define WH_MESSAGE_CRYPTO_SHA3_256_MAX_INLINE_UPDATE_SZ         \
-    (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
-       (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
-       (uint32_t)sizeof(whMessageCrypto_Sha3Request)) /         \
-      136u) *                                                   \
-     136u)
+/* Max output per response. Longer output takes an absorb and squeezes. */
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ            \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                               \
+     (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
+     (uint32_t)sizeof(whMessageCrypto_Sha3Response))
 
-#define WH_MESSAGE_CRYPTO_SHA3_384_MAX_INLINE_UPDATE_SZ         \
-    (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
-       (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
-       (uint32_t)sizeof(whMessageCrypto_Sha3Request)) /         \
-      104u) *                                                   \
-     104u)
-
-#define WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ         \
-    (((WOLFHSM_CFG_COMM_DATA_LEN -                              \
-       (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
-       (uint32_t)sizeof(whMessageCrypto_Sha3Request)) /         \
-      72u) *                                                    \
-     72u)
-
-/* Each enabled SHA3 variant must fit at least one block inline. Gated
- * per-variant (mirroring the dispatch table and cryptocb cases) so a build that
- * compiles out a variant isn't forced to size its comm buffer for it; SHA3-224
- * has the largest block (144) and sets the floor when enabled. Written in
- * additive form (like the DMA assert below) because the capacity macros above
- * subtract header sizes as unsigned values: on an undersized comm buffer they
- * wrap to a huge value and a `capacity >= block` check would falsely pass. */
+/* Largest block among the enabled variants. Left undefined when none are. */
 #if defined(WOLFSSL_SHA3)
-#ifndef WOLFSSL_NOSHA3_224
-WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                               (uint32_t)sizeof(whMessageCrypto_Sha3Request) +
-                               144u <=
-                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
-                       "Comm buffer too small to fit a SHA3-224 block");
-#endif
-#ifndef WOLFSSL_NOSHA3_256
-WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                               (uint32_t)sizeof(whMessageCrypto_Sha3Request) +
-                               136u <=
-                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
-                       "Comm buffer too small to fit a SHA3-256 block");
-#endif
-#ifndef WOLFSSL_NOSHA3_384
-WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                               (uint32_t)sizeof(whMessageCrypto_Sha3Request) +
-                               104u <=
-                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
-                       "Comm buffer too small to fit a SHA3-384 block");
-#endif
-#ifndef WOLFSSL_NOSHA3_512
-WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
-                               (uint32_t)sizeof(whMessageCrypto_Sha3Request) +
-                               72u <=
-                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
-                       "Comm buffer too small to fit a SHA3-512 block");
+#ifdef WOLFSSL_SHAKE128
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 168u
+#elif !defined(WOLFSSL_NOSHA3_224)
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 144u
+#elif !defined(WOLFSSL_NOSHA3_256) || defined(WOLFSSL_SHAKE256)
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 136u
+#elif !defined(WOLFSSL_NOSHA3_384)
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 104u
+#elif !defined(WOLFSSL_NOSHA3_512)
+#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 72u
 #endif
 #endif /* WOLFSSL_SHA3 */
+
+/* Each enabled variant must fit at least one block inline. Written in additive
+ * form because the capacity macro above subtracts header sizes as unsigned
+ * values: on an undersized comm buffer it wraps to a huge value and a
+ * `capacity >= block` check would falsely pass. */
+#ifdef WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ
+WH_UTILS_STATIC_ASSERT((uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) +
+                               (uint32_t)sizeof(whMessageCrypto_Sha3Request) +
+                               WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ <=
+                           (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN,
+                       "Comm buffer too small to fit a SHA3 block");
+#endif /* WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ */
 
 int wh_MessageCrypto_TranslateSha3State(uint16_t                         magic,
                                         const whMessageCrypto_Sha3State* src,
@@ -1367,52 +1360,35 @@ int wh_MessageCrypto_TranslateSha2DmaResponse(
 
 /* SHA3 DMA Request - state is passed inline (not via DMA) for
  * cross-architecture safety. Only whole-block input data goes via DMA.
- * Variant is conveyed in the generic request header's algoType field.
+ * req follows the non-DMA rules above.
  *
  * Wire layout in the comm buffer:
  *   whMessageCrypto_GenericRequestHeader
  *   whMessageCrypto_Sha3DmaRequest
- *   uint8_t in[inSz]   (inline trailing data: assembled first block from
- *                        partial buffer, or partial tail on Final)
+ *   uint8_t in[req.inSz]  (inline trailing data: assembled first block from
+ *                          partial buffer, or partial tail on Final)
  *
- * Non-final: DMA input must be whole blocks. inSz is 0 or BLOCK_SIZE
+ * Non-final: DMA input must be whole blocks. req.inSz is 0 or BLOCK_SIZE
  *   (assembled first block from client partial buffer).
- * Final: inSz is 0..(BLOCK_SIZE-1), no DMA input.
+ * Final: req.inSz is 0..(BLOCK_SIZE-1), no DMA input.
+ * output is reserved for SHAKE and must be empty.
  */
 typedef struct {
-    whMessageCrypto_DmaBuffer input;
-    uint32_t                  isLastBlock;
-    uint32_t                  inSz;
-    whMessageCrypto_Sha3State resumeState;
+    whMessageCrypto_DmaBuffer   input;
+    whMessageCrypto_DmaBuffer   output;
+    whMessageCrypto_Sha3Request req;
 } whMessageCrypto_Sha3DmaRequest;
 
-/* SHA3 DMA Response - carries updated state or final hash inline */
+/* SHA3 DMA Response. Data follows: out[res.outSz] */
 typedef struct {
-    whMessageCrypto_Sha3State     resumeState;
     whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-    uint8_t                       hash[64]; /* WC_SHA3_512_DIGEST_SIZE */
+    whMessageCrypto_Sha3Response  res;
 } whMessageCrypto_Sha3DmaResponse;
-
-/* Largest block among the *enabled* SHA3 variants; bounds the single assembled
- * block the DMA path copies inline. Tracks the per-variant gating above so
- * disabling SHA3-224 doesn't keep its 144-byte requirement. Left undefined when
- * every variant is disabled, which drops the DMA assert below. */
-#if defined(WOLFSSL_SHA3)
-#ifndef WOLFSSL_NOSHA3_224
-#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 144u
-#elif !defined(WOLFSSL_NOSHA3_256)
-#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 136u
-#elif !defined(WOLFSSL_NOSHA3_384)
-#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 104u
-#elif !defined(WOLFSSL_NOSHA3_512)
-#define WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ 72u
-#endif
-#endif /* WOLFSSL_SHA3 */
 
 #if defined(WOLFHSM_CFG_DMA) && defined(WH_MESSAGE_CRYPTO_SHA3_MAX_BLOCK_SZ)
 /* The DMA update/final paths copy one assembled block inline immediately after
  * the (larger) Sha3DmaRequest header, before wh_Client_SendRequest can reject
- * an oversized message. The non-DMA asserts above bound only
+ * an oversized message. The non-DMA assert above bounds only
  * sizeof(Sha3Request), so the DMA wire size needs its own bound. The largest
  * inline copy is one full block of the largest enabled variant. */
 WH_UTILS_STATIC_ASSERT(

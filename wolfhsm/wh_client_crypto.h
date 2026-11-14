@@ -2913,10 +2913,8 @@ int wh_Client_Sha512DmaFinalResponse(whClientContext* ctx, wc_Sha512* sha,
  * *requestSent == true, the caller MUST call the matching UpdateResponse
  * before issuing any other async request on the same ctx.
  *
- * Keccak-mode contexts (sha->flags & WC_HASH_SHA3_KECCAK256) are rejected
- * with WH_ERROR_BADARGS: the server applies the standard SHA-3 0x06
- * padding and has no Keccak fallback. Use the cryptocb path, which routes
- * Keccak to software.
+ * Keccak-mode contexts (sha->flags & WC_HASH_SHA3_KECCAK256) are hashed on
+ * the server. A server without Keccak-256 returns NOT_COMPILED_IN.
  */
 
 #ifndef WOLFSSL_NOSHA3_224
@@ -3014,6 +3012,42 @@ int wh_Client_Sha3_512DmaFinalResponse(whClientContext* ctx, wc_Sha3* sha,
                                        uint8_t* out);
 #endif /* WOLFHSM_CFG_DMA */
 #endif /* !WOLFSSL_NOSHA3_512 */
+
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+/* Like SHA3, plus outSz. Only FinalRequest limits outSz to one response. */
+#ifdef WOLFSSL_SHAKE128
+int wh_Client_Shake128(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake128UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake128UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake128FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake128FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+int wh_Client_Shake128Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen);
+int wh_Client_Shake128SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt);
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+int wh_Client_Shake256(whClientContext* ctx, wc_Shake* sha, const uint8_t* in,
+                       uint32_t inLen, uint8_t* out, uint32_t outSz);
+int wh_Client_Shake256UpdateRequest(whClientContext* ctx, wc_Shake* sha,
+                                    const uint8_t* in, uint32_t inLen,
+                                    bool* requestSent);
+int wh_Client_Shake256UpdateResponse(whClientContext* ctx, wc_Shake* sha);
+int wh_Client_Shake256FinalRequest(whClientContext* ctx, wc_Shake* sha,
+                                   uint32_t outSz);
+int wh_Client_Shake256FinalResponse(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t outSz);
+int wh_Client_Shake256Absorb(whClientContext* ctx, wc_Shake* sha,
+                             const uint8_t* in, uint32_t inLen);
+int wh_Client_Shake256SqueezeBlocks(whClientContext* ctx, wc_Shake* sha,
+                                    uint8_t* out, uint32_t blockCnt);
+#endif /* WOLFSSL_SHAKE256 */
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
 
 #endif /* WOLFSSL_SHA3 */
 

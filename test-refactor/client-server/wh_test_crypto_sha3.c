@@ -23,8 +23,8 @@
  * (WH_CLIENT_DEVID). A single set of tests runs against all compiled
  * variants via a small dispatch table:
  *   sync      wolfCrypt API across length edge cases vs software reference,
- *             plus one-shot wrapper bad-arg rejection and the Keccak-mode
- *             fallback/reject contract
+ *             plus one-shot wrapper bad-arg rejection and Keccak-256 on
+ *             the server
  *   async     direct exercise of the wh_Client_Sha3_* request/response
  *             primitives
  *   dma async same, via the DMA messaging path
@@ -40,11 +40,14 @@
 #include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/types.h"
 #include "wolfssl/wolfcrypt/sha3.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
+#include "wolfssl/wolfcrypt/cryptocb.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_client_cryptocb.h"
 #include "wolfhsm/wh_message_crypto.h"
 
 #include "wh_test_common.h"
@@ -88,7 +91,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_224,
         WC_SHA3_224_BLOCK_SIZE,
         WC_SHA3_224_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_224_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_224_BLOCK_SIZE),
         wc_InitSha3_224,
         wc_Sha3_224_Update,
         wc_Sha3_224_Final,
@@ -112,7 +115,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_256,
         WC_SHA3_256_BLOCK_SIZE,
         WC_SHA3_256_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_256_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_256_BLOCK_SIZE),
         wc_InitSha3_256,
         wc_Sha3_256_Update,
         wc_Sha3_256_Final,
@@ -136,7 +139,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_384,
         WC_SHA3_384_BLOCK_SIZE,
         WC_SHA3_384_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_384_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_384_BLOCK_SIZE),
         wc_InitSha3_384,
         wc_Sha3_384_Update,
         wc_Sha3_384_Final,
@@ -160,7 +163,7 @@ static const whTestSha3Variant whTestSha3Variants[] = {
         WC_HASH_TYPE_SHA3_512,
         WC_SHA3_512_BLOCK_SIZE,
         WC_SHA3_512_DIGEST_SIZE,
-        WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ,
+        WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE),
         wc_InitSha3_512,
         wc_Sha3_512_Update,
         wc_Sha3_512_Final,
@@ -201,8 +204,10 @@ static int whTest_Sha3Reference(const whTestSha3Variant* v, const uint8_t* in,
  * SHA3-512 has the smallest block (72) so its floor((P)/block)*block lands
  * closest to the payload cap, making it the upper bound (possibly tied
  * with SHA3-224) across variants. 2x multiplier + 256 tail adds margin. */
-#define WH_TEST_SHA3_BIGBUF_SZ \
-    (2u * (WH_MESSAGE_CRYPTO_SHA3_512_MAX_INLINE_UPDATE_SZ + 256u))
+#define WH_TEST_SHA3_BIGBUF_SZ                                              \
+    (2u *                                                                   \
+     (WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_UPDATE_SZ(WC_SHA3_512_BLOCK_SIZE) + \
+      256u))
 static uint8_t whTest_Sha3BigBuf[WH_TEST_SHA3_BIGBUF_SZ];
 
 static void whTest_Sha3FillBuf(uint8_t* buf, uint32_t sz)
@@ -321,116 +326,116 @@ static int whTest_CryptoSha3OneshotBadArgs(whClientContext*         ctx,
     return 0;
 }
 
-#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NOSHA3_256)
-/* Keccak-mode (legacy 0x01-padding) SHA3-256 is a software-only mode. Lock in
- * the deliberate behavioral split for a KECCAK256-flagged context:
- *   - wolfCrypt API path (HSM devId): the cryptocb returns CRYPTOCB_UNAVAILABLE
- *     so wolfCrypt falls back to software and still produces the Keccak digest
- *     (NOT a standard SHA3-256 digest, which is what a silent offload of the
- *     0x06-padding wire format would yield).
- *   - direct client API (and DMA variant): must be rejected with
- *     WH_ERROR_BADARGS, since the wire format would re-pad as standard SHA3. */
-static int whTest_CryptoSha3Keccak(whClientContext* ctx, int devId)
+/* Keccak-256 needs hash flags, and certifiable FIPS builds refuse it */
+#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NO_KECCAK256)
+#define WH_TEST_KECCAK256
+#endif /* WOLFSSL_HASH_FLAGS && !WOLFSSL_NO_KECCAK256 */
+
+#if defined(WH_TEST_KECCAK256) && !defined(WOLFSSL_NOSHA3_256)
+/* A devId bound to the DMA-only callback, which has no non-DMA fallback */
+#define WH_TEST_SHA3_DMA_DEVID 0x57534433 /* "WSD3" */
+
+static const char whTest_Sha3KeccakIn[] = "wolfHSM SHA3 Keccak-mode vector";
+
+/* SHA3-256 of the vector, via a direct API fn or wolfCrypt if fn is NULL */
+static int whTest_Sha3KeccakHash(whClientContext* ctx, int devId, word32 flags,
+                                 int (*fn)(whClientContext*, wc_Sha3*,
+                                           const uint8_t*, uint32_t, uint8_t*),
+                                 uint8_t* out)
 {
-    int        ret;
-    wc_Sha3    sha[1];
-    uint8_t    out[WC_SHA3_256_DIGEST_SIZE];
-    uint8_t    keccakRef[WC_SHA3_256_DIGEST_SIZE];
-    uint8_t    sha3Ref[WC_SHA3_256_DIGEST_SIZE];
-    const char in[]  = "wolfHSM SHA3 Keccak-mode fallback vector";
-    uint32_t   inLen = (uint32_t)(sizeof(in) - 1u);
+    const uint32_t inLen = (uint32_t)(sizeof(whTest_Sha3KeccakIn) - 1u);
+    wc_Sha3        sha[1];
+    int            ret;
 
-    /* Software Keccak reference (0x01 padding). */
-    ret = wc_InitSha3_256(sha, NULL, INVALID_DEVID);
-    if (ret == 0) {
-        ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
-    }
-    if (ret == 0) {
-        ret = wc_Sha3_256_Update(sha, (const byte*)in, inLen);
-    }
-    if (ret == 0) {
-        ret = wc_Sha3_256_Final(sha, keccakRef);
-    }
-    if (ret != 0) {
-        WH_ERROR_PRINT("Keccak reference failed: %d\n", ret);
-        return ret;
-    }
-
-    /* Software standard SHA3-256 reference (0x06 padding). Must differ from the
-     * Keccak digest, else the comparisons below would prove nothing. */
-    ret = wc_InitSha3_256(sha, NULL, INVALID_DEVID);
-    if (ret == 0) {
-        ret = wc_Sha3_256_Update(sha, (const byte*)in, inLen);
-    }
-    if (ret == 0) {
-        ret = wc_Sha3_256_Final(sha, sha3Ref);
-    }
-    if (ret != 0) {
-        WH_ERROR_PRINT("SHA3-256 reference failed: %d\n", ret);
-        return ret;
-    }
-    if (memcmp(keccakRef, sha3Ref, WC_SHA3_256_DIGEST_SIZE) == 0) {
-        WH_ERROR_PRINT("Keccak and SHA3-256 digests unexpectedly equal\n");
-        return -1;
-    }
-
-    /* cryptocb contract: HSM devId + KECCAK256 flag falls back to software and
-     * matches the Keccak (not the standard SHA3) reference. */
     ret = wc_InitSha3_256(sha, NULL, devId);
     if (ret == 0) {
-        ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
+        ret = wc_Sha3_SetFlags(sha, flags);
     }
-    if (ret == 0) {
-        ret = wc_Sha3_256_Update(sha, (const byte*)in, inLen);
+    if ((ret == 0) && (fn != NULL)) {
+        ret = fn(ctx, sha, (const uint8_t*)whTest_Sha3KeccakIn, inLen, out);
     }
-    if (ret == 0) {
-        ret = wc_Sha3_256_Final(sha, out);
+    else if (ret == 0) {
+        ret = wc_Sha3_256_Update(sha, (const byte*)whTest_Sha3KeccakIn, inLen);
+        if (ret == 0) {
+            ret = wc_Sha3_256_Final(sha, out);
+        }
     }
+    wc_Sha3_256_Free(sha);
+    return ret;
+}
+
+/* Keccak-256 must run on the server and match the software reference */
+static int whTest_Sha3KeccakPath(whClientContext* ctx, const char* path,
+                                 int devId,
+                                 int (*fn)(whClientContext*, wc_Sha3*,
+                                           const uint8_t*, uint32_t, uint8_t*),
+                                 const uint8_t* ref)
+{
+    const uint16_t seq = ctx->comm->seq;
+    uint8_t        out[WC_SHA3_256_DIGEST_SIZE];
+    int            ret;
+
+    ret = whTest_Sha3KeccakHash(ctx, devId, WC_HASH_SHA3_KECCAK256, fn, out);
     if (ret != 0) {
-        WH_ERROR_PRINT("Keccak cryptocb fallback failed: %d\n", ret);
+        WH_ERROR_PRINT("Keccak %s failed: %d\n", path, ret);
         return ret;
     }
-    if (memcmp(out, keccakRef, WC_SHA3_256_DIGEST_SIZE) != 0) {
-        WH_ERROR_PRINT("Keccak cryptocb fallback mismatch (devId=0x%X)\n",
-                       devId);
+    if ((seq == ctx->comm->seq) || (memcmp(out, ref, sizeof(out)) != 0)) {
+        WH_ERROR_PRINT("Keccak %s not on the server or wrong\n", path);
         return -1;
     }
-
-    /* direct client API contract: KECCAK256 flag must be rejected. */
-    ret = wc_InitSha3_256(sha, NULL, devId);
-    if (ret == 0) {
-        ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
-    }
-    if (ret != 0) {
-        return ret;
-    }
-    ret = wh_Client_Sha3_256(ctx, sha, (const uint8_t*)in, inLen, out);
-    if (ret != WH_ERROR_BADARGS) {
-        WH_ERROR_PRINT("Keccak direct API: expected BADARGS, got %d\n", ret);
-        return -1;
-    }
-
-#ifdef WOLFHSM_CFG_DMA
-    ret = wc_InitSha3_256(sha, NULL, devId);
-    if (ret == 0) {
-        ret = wc_Sha3_SetFlags(sha, WC_HASH_SHA3_KECCAK256);
-    }
-    if (ret != 0) {
-        return ret;
-    }
-    ret = wh_Client_Sha3_256Dma(ctx, sha, (const uint8_t*)in, inLen, out);
-    if (ret != WH_ERROR_BADARGS) {
-        WH_ERROR_PRINT("Keccak direct DMA API: expected BADARGS, got %d\n",
-                       ret);
-        return -1;
-    }
-#endif
-
-    WH_TEST_PRINT("SHA3-256 KECCAK fallback/reject DEVID=0x%X SUCCESS\n",
-                  devId);
     return 0;
 }
-#endif /* WOLFSSL_HASH_FLAGS && !WOLFSSL_NOSHA3_256 */
+
+static int whTest_CryptoSha3Keccak(whClientContext* ctx, int devId)
+{
+    uint8_t keccakRef[WC_SHA3_256_DIGEST_SIZE];
+    uint8_t sha3Ref[WC_SHA3_256_DIGEST_SIZE];
+    int     ret;
+
+    /* Software references, which must differ for the checks to mean much */
+    ret = whTest_Sha3KeccakHash(ctx, INVALID_DEVID, WC_HASH_SHA3_KECCAK256,
+                                NULL, keccakRef);
+    if (ret == 0) {
+        ret = whTest_Sha3KeccakHash(ctx, INVALID_DEVID, 0, NULL, sha3Ref);
+    }
+    if ((ret == 0) && (memcmp(keccakRef, sha3Ref, sizeof(keccakRef)) == 0)) {
+        WH_ERROR_PRINT("Keccak and SHA3-256 digests unexpectedly equal\n");
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret =
+            whTest_Sha3KeccakPath(ctx, "wolfCrypt API", devId, NULL, keccakRef);
+    }
+    if (ret == 0) {
+        ret = whTest_Sha3KeccakPath(ctx, "direct API", devId,
+                                    wh_Client_Sha3_256, keccakRef);
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == 0) {
+        ret = whTest_Sha3KeccakPath(ctx, "direct DMA API", devId,
+                                    wh_Client_Sha3_256Dma, keccakRef);
+    }
+#ifndef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    if (ret == 0) {
+        ret = wc_CryptoCb_RegisterDevice(WH_TEST_SHA3_DMA_DEVID,
+                                         wh_Client_CryptoCbDma, ctx);
+        if (ret == 0) {
+            ret = whTest_Sha3KeccakPath(
+                ctx, "DMA callback", WH_TEST_SHA3_DMA_DEVID, NULL, keccakRef);
+            wc_CryptoCb_UnRegisterDevice(WH_TEST_SHA3_DMA_DEVID);
+        }
+    }
+#endif /* !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
+#endif /* WOLFHSM_CFG_DMA */
+
+    if (ret == 0) {
+        WH_TEST_PRINT("SHA3-256 KECCAK DEVID=0x%X SUCCESS\n", devId);
+    }
+    return ret;
+}
+#endif /* WH_TEST_KECCAK256 && !WOLFSSL_NOSHA3_256 */
 
 /* Per-variant native async test. Exercises: basic single round, pure-buffer
  * fill, multi-round, and oversized-input rejection. */
@@ -676,7 +681,7 @@ static int _whTest_CryptoSha3Sync(whClientContext* ctx, int devId)
         if (ret != 0)
             break;
     }
-#if defined(WOLFSSL_HASH_FLAGS) && !defined(WOLFSSL_NOSHA3_256)
+#if defined(WH_TEST_KECCAK256) && !defined(WOLFSSL_NOSHA3_256)
     if (ret == 0) {
         ret = whTest_CryptoSha3Keccak(ctx, devId);
     }
@@ -722,6 +727,253 @@ static int _whTest_CryptoSha3DmaAsync(whClientContext* ctx)
 }
 #endif /* WOLFHSM_CFG_DMA */
 
+/* A raw request; dropSz bytes are cut from the end to make it short */
+typedef struct {
+    uint32_t isLastBlock;
+    uint32_t inSz;
+    uint32_t outSz;
+    uint32_t flags;
+    uint32_t dropSz;
+    uint32_t dmaInSz; /* DMA path only */
+    uint32_t dmaOutAddr;
+    uint32_t dmaOutSz;
+} whTestSha3RawRequest;
+
+/* Send each request as-is and require the server to return expected */
+static int _whTest_Sha3RawRequests(whClientContext* ctx, int hashType, int dma,
+                                   const whTestSha3RawRequest* reqs,
+                                   uint32_t cnt, int expected)
+{
+    uint8_t*                              dataPtr;
+    whMessageCrypto_GenericRequestHeader* hdr;
+    whMessageCrypto_Sha3DmaRequest*       dmaReq;
+    whMessageCrypto_Sha3Request*          req;
+    uint8_t*                              in;
+    uint32_t                              reqSz;
+    uint16_t                              group;
+    uint16_t                              action;
+    uint16_t                              dataSz;
+    uint32_t                              i;
+    int                                   rc;
+    int                                   ret = WH_ERROR_OK;
+
+    dataPtr = wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    hdr    = (whMessageCrypto_GenericRequestHeader*)dataPtr;
+    dmaReq = (whMessageCrypto_Sha3DmaRequest*)(hdr + 1);
+    req    = dma ? &dmaReq->req : (whMessageCrypto_Sha3Request*)(hdr + 1);
+    reqSz  = dma ? sizeof(*dmaReq) : sizeof(*req);
+    in     = (uint8_t*)(hdr + 1) + reqSz;
+
+    for (i = 0; (ret == WH_ERROR_OK) && (i < cnt); i++) {
+        const whTestSha3RawRequest* r = &reqs[i];
+
+        memset(dataPtr, 0, sizeof(*hdr) + reqSz);
+        hdr->algoType    = (whMessageCrypto_AlgoType)hashType;
+        hdr->affinity    = ctx->cryptoAffinity;
+        req->isLastBlock = r->isLastBlock;
+        req->inSz        = r->inSz;
+        req->outSz       = r->outSz;
+        req->flags       = r->flags;
+        if (dma) {
+            dmaReq->input.sz    = r->dmaInSz;
+            dmaReq->output.addr = r->dmaOutAddr;
+            dmaReq->output.sz   = r->dmaOutSz;
+        }
+        memcpy(in, whTest_Sha3BigBuf, r->inSz);
+
+        ret = wh_Client_SendRequest(
+            ctx, dma ? WH_MESSAGE_GROUP_CRYPTO_DMA : WH_MESSAGE_GROUP_CRYPTO,
+            WC_ALGO_TYPE_HASH,
+            (uint16_t)(sizeof(*hdr) + reqSz + r->inSz - r->dropSz), dataPtr);
+        if (ret == WH_ERROR_OK) {
+            do {
+                ret =
+                    wh_Client_RecvResponse(ctx, &group, &action, &dataSz,
+                                           WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+            } while (ret == WH_ERROR_NOTREADY);
+        }
+        if (ret == WH_ERROR_OK) {
+            rc = ((whMessageCrypto_GenericResponseHeader*)dataPtr)->rc;
+            if (rc != expected) {
+                WH_ERROR_PRINT("type %d dma %d raw request %u returned %d, "
+                               "expected %d\n",
+                               hashType, dma, (unsigned)i, rc, expected);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+    }
+    return ret;
+}
+
+#define WH_TEST_SHA3_RAW_CNT(a) ((uint32_t)(sizeof(a) / sizeof((a)[0])))
+
+#ifdef WH_TEST_KECCAK256
+#define WH_TEST_SHA3_KECCAK_RC WH_ERROR_OK
+#else
+#define WH_TEST_SHA3_KECCAK_RC NOT_COMPILED_IN
+#endif /* WH_TEST_KECCAK256 */
+
+/* The server must check requests itself rather than trust the client */
+static int _whTest_Sha3ServerRequests(whClientContext* ctx, const char* name,
+                                      int hashType, uint32_t rate,
+                                      uint32_t digestSize)
+{
+    const uint32_t maxOut = WH_MESSAGE_CRYPTO_SHA3_MAX_INLINE_OUTPUT_SZ;
+    const uint32_t maxSqz = (maxOut / rate) * rate;
+    const uint32_t finSz  = (digestSize != 0) ? digestSize : maxOut;
+    /* Update and final, for every variant */
+    const whTestSha3RawRequest accepted[] = {
+        {0, rate, 0, 0, 0, 0, 0, 0},
+        {1, rate - 1u, finSz, 0, 0, 0, 0, 0},
+    };
+    /* Update and final in Keccak mode, if the server offers it */
+    const whTestSha3RawRequest keccak[] = {
+        {0, rate, 0, WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256, 0, 0, 0, 0},
+        {1, rate - 1u, finSz, WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256, 0, 0, 0,
+         0},
+    };
+    /* Absorb and squeeze, SHAKE only */
+    const whTestSha3RawRequest xofOps[] = {
+        {1, rate - 1u, 0, 0, 0, 0, 0, 0},
+        {0, 0, maxSqz, 0, 0, 0, 0, 0},
+    };
+    const whTestSha3RawRequest rejected[] = {
+        /* Shorter than the request struct, then shorter than inSz */
+        {1, 0, finSz, 0, 1u, 0, 0, 0},
+        {1, 10u, finSz, 0, 1u, 0, 0, 0},
+        /* Update not in whole blocks */
+        {0, 1u, 0, 0, 0, 0, 0, 0},
+        /* Final with a full-block tail, or too much output */
+        {1, rate, finSz, 0, 0, 0, 0, 0},
+        {1, 0, maxOut + 1u, 0, 0, 0, 0, 0},
+        /* Unknown flags */
+        {0, rate, 0, WH_MESSAGE_CRYPTO_SHA3_FLAG_KECCAK256 << 1, 0, 0, 0, 0},
+    };
+    /* SHAKE: absorb with a full tail, squeeze with input or bad sizes */
+    const whTestSha3RawRequest xofRejected[] = {
+        {1, rate, 0, 0, 0, 0, 0, 0},
+        {0, 1u, rate, 0, 0, 0, 0, 0},
+        {0, 0, rate + 1u, 0, 0, 0, 0, 0},
+        {0, 0, maxSqz + rate, 0, 0, 0, 0, 0},
+    };
+    /* SHA3: wrong digest size, absorb and squeeze */
+    const whTestSha3RawRequest fixedRejected[] = {
+        {1, 0, digestSize - 1u, 0, 0, 0, 0, 0},
+        {1, 0, digestSize + 1u, 0, 0, 0, 0, 0},
+        {1, 0, 0, 0, 0, 0, 0, 0},
+        {0, 0, rate, 0, 0, 0, 0, 0},
+    };
+    const int isXof = (digestSize == 0);
+    int       ret;
+
+    whTest_Sha3FillBuf(whTest_Sha3BigBuf, WH_TEST_SHA3_BIGBUF_SZ);
+
+    ret = _whTest_Sha3RawRequests(ctx, hashType, 0, accepted,
+                                  WH_TEST_SHA3_RAW_CNT(accepted), WH_ERROR_OK);
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3RawRequests(ctx, hashType, 0, rejected,
+                                      WH_TEST_SHA3_RAW_CNT(rejected),
+                                      WH_ERROR_BADARGS);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3RawRequests(ctx, hashType, 0, keccak,
+                                      WH_TEST_SHA3_RAW_CNT(keccak),
+                                      WH_TEST_SHA3_KECCAK_RC);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3RawRequests(ctx, hashType, 0, xofOps,
+                                      WH_TEST_SHA3_RAW_CNT(xofOps),
+                                      isXof ? WH_ERROR_OK : WH_ERROR_BADARGS);
+    }
+    if (ret == WH_ERROR_OK) {
+        ret = isXof
+                  ? _whTest_Sha3RawRequests(ctx, hashType, 0, xofRejected,
+                                            WH_TEST_SHA3_RAW_CNT(xofRejected),
+                                            WH_ERROR_BADARGS)
+                  : _whTest_Sha3RawRequests(ctx, hashType, 0, fixedRejected,
+                                            WH_TEST_SHA3_RAW_CNT(fixedRejected),
+                                            WH_ERROR_BADARGS);
+    }
+#ifdef WOLFHSM_CFG_DMA
+    if (ret == WH_ERROR_OK) {
+        /* DMA: output reserved, final with DMA input, partial DMA blocks */
+        const whTestSha3RawRequest dmaRejected[] = {
+            {0, rate, 0, 0, 0, 0, 0x1000u, 0},
+            {0, rate, 0, 0, 0, 0, 0, 8u},
+            {1, 0, finSz, 0, 0, rate, 0, 0},
+            {0, 0, 0, 0, 0, 1u, 0, 0},
+        };
+
+        if (isXof) {
+            /* SHAKE is not offered over DMA */
+            ret = _whTest_Sha3RawRequests(ctx, hashType, 1, accepted,
+                                          WH_TEST_SHA3_RAW_CNT(accepted),
+                                          NOT_COMPILED_IN);
+        }
+        else {
+            ret = _whTest_Sha3RawRequests(ctx, hashType, 1, accepted,
+                                          WH_TEST_SHA3_RAW_CNT(accepted),
+                                          WH_ERROR_OK);
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(ctx, hashType, 1, rejected,
+                                              WH_TEST_SHA3_RAW_CNT(rejected),
+                                              WH_ERROR_BADARGS);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(ctx, hashType, 1, keccak,
+                                              WH_TEST_SHA3_RAW_CNT(keccak),
+                                              WH_TEST_SHA3_KECCAK_RC);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(
+                    ctx, hashType, 1, fixedRejected,
+                    WH_TEST_SHA3_RAW_CNT(fixedRejected), WH_ERROR_BADARGS);
+            }
+            if (ret == WH_ERROR_OK) {
+                ret = _whTest_Sha3RawRequests(ctx, hashType, 1, dmaRejected,
+                                              WH_TEST_SHA3_RAW_CNT(dmaRejected),
+                                              WH_ERROR_BADARGS);
+            }
+        }
+    }
+#endif /* WOLFHSM_CFG_DMA */
+    if (ret == WH_ERROR_OK) {
+        WH_TEST_PRINT("%s server request checks SUCCESS\n", name);
+    }
+    return ret;
+}
+
+static int _whTest_CryptoSha3ServerRequests(whClientContext* ctx)
+{
+    int    ret = WH_ERROR_OK;
+    size_t v;
+
+    for (v = 0; (ret == WH_ERROR_OK) && (v < sizeof(whTestSha3Variants) /
+                                                 sizeof(whTestSha3Variants[0]));
+         v++) {
+        const whTestSha3Variant* var = &whTestSha3Variants[v];
+
+        ret = _whTest_Sha3ServerRequests(ctx, var->name, var->hashType,
+                                         var->blockSize, var->digestSize);
+    }
+#ifdef WOLFSSL_SHAKE128
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3ServerRequests(ctx, "SHAKE128", WC_HASH_TYPE_SHAKE128,
+                                         WC_SHA3_128_BLOCK_SIZE, 0);
+    }
+#endif /* WOLFSSL_SHAKE128 */
+#ifdef WOLFSSL_SHAKE256
+    if (ret == WH_ERROR_OK) {
+        ret = _whTest_Sha3ServerRequests(ctx, "SHAKE256", WC_HASH_TYPE_SHAKE256,
+                                         WC_SHA3_256_BLOCK_SIZE, 0);
+    }
+#endif /* WOLFSSL_SHAKE256 */
+    return ret;
+}
+
 int whTest_Crypto_Sha3(whClientContext* ctx)
 {
     int i;
@@ -742,6 +994,7 @@ int whTest_Crypto_Sha3(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha3DmaAsync(ctx));
 #endif
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoSha3ServerRequests(ctx));
     return 0;
 }
 

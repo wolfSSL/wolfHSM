@@ -759,29 +759,23 @@ int wh_MessageCrypto_TranslateSha3Request(
     }
     WH_T32(magic, dest, src, isLastBlock);
     WH_T32(magic, dest, src, inSz);
+    WH_T32(magic, dest, src, outSz);
+    WH_T32(magic, dest, src, flags);
     return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
                                                &dest->resumeState);
 }
 
-/* SHA3 Response translation */
+/* SHA3 Response translation. Trailing output bytes need no translation. */
 int wh_MessageCrypto_TranslateSha3Response(
     uint16_t magic, const whMessageCrypto_Sha3Response* src,
     whMessageCrypto_Sha3Response* dest)
 {
-    int ret;
-
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    ret = wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
-                                              &dest->resumeState);
-    if (ret != 0) {
-        return ret;
-    }
-    if (src != dest) {
-        memcpy(dest->hash, src->hash, sizeof(src->hash));
-    }
-    return 0;
+    WH_T32(magic, dest, src, outSz);
+    return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
+                                               &dest->resumeState);
 }
 
 
@@ -1128,13 +1122,15 @@ int wh_MessageCrypto_TranslateSha3DmaRequest(
         return WH_ERROR_BADARGS;
     }
     ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
-    if (ret != 0) {
-        return ret;
+    if (ret == 0) {
+        ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->output,
+                                                  &dest->output);
     }
-    WH_T32(magic, dest, src, isLastBlock);
-    WH_T32(magic, dest, src, inSz);
-    return wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
-                                               &dest->resumeState);
+    if (ret == 0) {
+        ret =
+            wh_MessageCrypto_TranslateSha3Request(magic, &src->req, &dest->req);
+    }
+    return ret;
 }
 
 /* SHA3 DMA Response translation */
@@ -1147,16 +1143,13 @@ int wh_MessageCrypto_TranslateSha3DmaResponse(
     if ((src == NULL) || (dest == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    ret = wh_MessageCrypto_TranslateSha3State(magic, &src->resumeState,
-                                              &dest->resumeState);
-    if (ret != 0) {
-        return ret;
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret == 0) {
+        ret = wh_MessageCrypto_TranslateSha3Response(magic, &src->res,
+                                                     &dest->res);
     }
-    if (src != dest) {
-        memcpy(dest->hash, src->hash, sizeof(src->hash));
-    }
-    return wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                   &dest->dmaAddrStatus);
+    return ret;
 }
 
 /* CMAC-AES DMA Request translation */

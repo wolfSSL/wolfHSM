@@ -61,6 +61,11 @@
 #include "wolfhsm/wh_message_crypto.h"
 
 
+#if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
+    (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
+static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info);
+#endif
+
 #if defined(WOLFSSL_HAVE_MLKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
                                int useDma);
@@ -677,15 +682,6 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHA3_384:
             case WC_HASH_TYPE_SHA3_512: {
                 wc_Sha3* sha = info->hash.sha3;
-#ifdef WOLFSSL_HASH_FLAGS
-                /* Keccak-mode SHA3 (legacy 0x01-padding variant) is a software-
-                 * only mode; fall through to wolfCrypt's software path. */
-                if (sha != NULL &&
-                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
-                    ret = CRYPTOCB_UNAVAILABLE;
-                    break;
-                }
-#endif
                 switch (info->hash.type) {
 #ifndef WOLFSSL_NOSHA3_224
                     case WC_HASH_TYPE_SHA3_224:
@@ -718,6 +714,41 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
                 }
             } break;
 #endif /* WOLFSSL_SHA3 */
+#if defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256)
+#ifdef WOLFSSL_SHAKE128
+            case WC_HASH_TYPE_SHAKE128:
+#endif
+#ifdef WOLFSSL_SHAKE256
+            case WC_HASH_TYPE_SHAKE256:
+#endif
+            {
+                /* NULL digest means update, else finalize with outSz bytes */
+                wc_Shake* sha = info->hash.sha3;
+#ifdef WOLF_CRYPTO_CB_SHAKE_XOF
+                if (info->hash.shakeOp != WC_SHAKE_OP_NONE) {
+                    ret = _handleShakeXof(ctx, info);
+                    break;
+                }
+#endif
+
+                switch (info->hash.type) {
+#ifdef WOLFSSL_SHAKE128
+                    case WC_HASH_TYPE_SHAKE128:
+                        ret = wh_Client_Shake128(
+                            ctx, sha, info->hash.in, info->hash.inSz,
+                            info->hash.digest, info->hash.outSz);
+                        break;
+#endif
+#ifdef WOLFSSL_SHAKE256
+                    case WC_HASH_TYPE_SHAKE256:
+                        ret = wh_Client_Shake256(
+                            ctx, sha, info->hash.in, info->hash.inSz,
+                            info->hash.digest, info->hash.outSz);
+                        break;
+#endif
+                }
+            } break;
+#endif /* WOLFSSL_SHAKE128 || WOLFSSL_SHAKE256 */
             default:
                 ret = CRYPTOCB_UNAVAILABLE;
                 break;
@@ -790,6 +821,48 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     }
     return ret;
 }
+
+#if defined(WOLF_CRYPTO_CB_SHAKE_XOF) && \
+    (defined(WOLFSSL_SHAKE128) || defined(WOLFSSL_SHAKE256))
+static int _handleShakeXof(whClientContext* ctx, wc_CryptoInfo* info)
+{
+    wc_Shake* sha = info->hash.sha3;
+    int       op  = info->hash.shakeOp;
+    int       ret = CRYPTOCB_UNAVAILABLE;
+
+    switch (info->hash.type) {
+#ifdef WOLFSSL_SHAKE128
+        case WC_HASH_TYPE_SHAKE128:
+            if (op == WC_SHAKE_OP_ABSORB) {
+                ret = wh_Client_Shake128Absorb(ctx, sha, info->hash.in,
+                                               info->hash.inSz);
+            }
+            else if (op == WC_SHAKE_OP_SQUEEZE) {
+                ret = wh_Client_Shake128SqueezeBlocks(
+                    ctx, sha, info->hash.digest,
+                    info->hash.outSz / (WC_SHA3_128_COUNT * 8u));
+            }
+            break;
+#endif
+#ifdef WOLFSSL_SHAKE256
+        case WC_HASH_TYPE_SHAKE256:
+            if (op == WC_SHAKE_OP_ABSORB) {
+                ret = wh_Client_Shake256Absorb(ctx, sha, info->hash.in,
+                                               info->hash.inSz);
+            }
+            else if (op == WC_SHAKE_OP_SQUEEZE) {
+                ret = wh_Client_Shake256SqueezeBlocks(
+                    ctx, sha, info->hash.digest,
+                    info->hash.outSz / (WC_SHA3_256_COUNT * 8u));
+            }
+            break;
+#endif
+        default:
+            break;
+    }
+    return ret;
+}
+#endif /* WOLF_CRYPTO_CB_SHAKE_XOF */
 
 #if defined(WOLFSSL_HAVE_MLKEM)
 static int _handlePqcKemKeyGen(whClientContext* ctx, wc_CryptoInfo* info,
@@ -1518,13 +1591,6 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             case WC_HASH_TYPE_SHA3_384:
             case WC_HASH_TYPE_SHA3_512: {
                 wc_Sha3* sha = info->hash.sha3;
-#ifdef WOLFSSL_HASH_FLAGS
-                if (sha != NULL &&
-                    (sha->flags & WC_HASH_SHA3_KECCAK256) != 0u) {
-                    ret = CRYPTOCB_UNAVAILABLE;
-                    break;
-                }
-#endif
                 switch (info->hash.type) {
 #ifndef WOLFSSL_NOSHA3_224
                     case WC_HASH_TYPE_SHA3_224:
