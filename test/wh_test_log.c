@@ -1032,8 +1032,7 @@ static int whTest_LogPosixFile(void)
     FILE* export_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(export_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, export_fp));
-    fflush(export_fp);
-    rewind(export_fp);
+    WH_TEST_ASSERT_RETURN(fseek(export_fp, 0, SEEK_SET) == 0);
 
     export_count = 0;
     char line[2048];
@@ -1048,8 +1047,7 @@ static int whTest_LogPosixFile(void)
     export_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(export_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, export_fp));
-    fflush(export_fp);
-    rewind(export_fp);
+    WH_TEST_ASSERT_RETURN(fseek(export_fp, 0, SEEK_SET) == 0);
 
     export_count = 0;
     while (fgets(line, sizeof(line), export_fp) != NULL) {
@@ -1063,8 +1061,7 @@ static int whTest_LogPosixFile(void)
     export_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(export_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, export_fp));
-    fflush(export_fp);
-    rewind(export_fp);
+    WH_TEST_ASSERT_RETURN(fseek(export_fp, 0, SEEK_SET) == 0);
 
     export_count = 0;
     while (fgets(line, sizeof(line), export_fp) != NULL) {
@@ -1170,8 +1167,7 @@ static int whTest_LogPosixFileConcurrent(void)
     FILE* verify_fp = tmpfile();
     WH_TEST_ASSERT_RETURN(verify_fp != NULL);
     WH_TEST_RETURN_ON_FAIL(wh_Log_Export(&logCtx, verify_fp));
-    fflush(verify_fp);
-    rewind(verify_fp);
+    WH_TEST_ASSERT_RETURN(fseek(verify_fp, 0, SEEK_SET) == 0);
 
     /* Count lines in exported file */
     export_count = 0;
