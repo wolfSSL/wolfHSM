@@ -51,6 +51,7 @@ WH_TEST_DECL(whTest_DmaNonCoherent);
 WH_TEST_DECL(whTest_HwKeystore);
 WH_TEST_DECL(whTest_KeystoreReqSize);
 WH_TEST_DECL(whTest_MessageNvmTranslate);
+WH_TEST_DECL(whTest_MessageCryptoTranslate);
 WH_TEST_DECL(whTest_MultiClient);
 WH_TEST_DECL(whTest_Lock);
 WH_TEST_DECL(whTest_Log);
@@ -129,6 +130,7 @@ const whTestCase whTestsMisc[] = {
     {"whTest_CryptoAesGcmDmaAad", whTest_CryptoAesGcmDmaAad},
     {"whTest_KeystoreReqSize", whTest_KeystoreReqSize},
     {"whTest_MessageNvmTranslate", whTest_MessageNvmTranslate},
+    {"whTest_MessageCryptoTranslate", whTest_MessageCryptoTranslate},
     {"whTest_MultiClient", whTest_MultiClient},
     {"whTest_HwKeystore", whTest_HwKeystore},
     {"whTest_Lock", whTest_Lock},
