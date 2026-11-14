@@ -54,6 +54,19 @@ static whLogLevel posixLogFile_StringToLevel(const char* str)
     return WH_LOG_LEVEL_INFO; /* Default */
 }
 
+/* Callers hold the log mutex while reading so the file cannot change.
+   clang-tidy v21 complains about the fgets during lock, but it is intentional
+   and quick in this case. */
+static char* posixLogFile_ReadLine(char* line, int size, FILE* fp)
+{
+#ifdef __clang_analyzer__
+#if __has_attribute(suppress)
+    __attribute__((suppress))
+#endif /* __has_attribute(suppress) */
+#endif /* __clang_analyzer__ */
+    return fgets(line, size, fp);
+}
+
 int posixLogFile_Init(void* context, const void* config)
 {
     posixLogFileContext*      ctx = context;
@@ -206,7 +219,7 @@ int posixLogFile_Export(void* context, void* export_arg)
     }
 
     /* Read and write each line to output */
-    while (fgets(line, sizeof(line), in_fp) != NULL) {
+    while (posixLogFile_ReadLine(line, sizeof(line), in_fp) != NULL) {
         if (fputs(line, out_fp) == EOF) {
             ret = WH_ERROR_ABORTED;
             break;
@@ -266,7 +279,7 @@ int posixLogFile_Iterate(void* context, whLogIterateCb iterate_cb,
     }
 
     /* Read and parse each line */
-    while (fgets(line, sizeof(line), fp) != NULL) {
+    while (posixLogFile_ReadLine(line, sizeof(line), fp) != NULL) {
         whLogEntry         entry;
         char               level_str[32];
         char               file_buf[256];
