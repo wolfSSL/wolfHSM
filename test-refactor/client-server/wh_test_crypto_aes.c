@@ -157,7 +157,7 @@ static int whTest_CryptoAesImpl(whClientContext* ctx, int devId)
             ret = wc_AesCtrEncrypt(aes, cipher, plainIn, sizeof(plainIn));
         }
         if (ret == 0) {
-            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
             ret = wc_AesCtrEncrypt(aes, plainOut, cipher, sizeof(cipher));
@@ -547,7 +547,7 @@ static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
 
     ret = wc_AesInit(aes, NULL, WH_DEV_ID);
     if (ret == 0) {
-        ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+        ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         if (ret == 0) {
             ret = wh_Client_AesCtr(ctx, aes, cipher, AES_BLOCK_SIZE, plainOut);
         }
@@ -558,7 +558,7 @@ static int whTest_CryptoAesCtrDecrypt(whClientContext* ctx)
 #ifdef WOLFHSM_CFG_DMA
         if (ret == 0) {
             memset(plainOut, 0, sizeof(plainOut));
-            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
         }
         if (ret == 0) {
             ret =

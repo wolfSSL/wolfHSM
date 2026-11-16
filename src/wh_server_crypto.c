@@ -102,7 +102,7 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
 #ifndef NO_AES
 
 #ifdef WOLFSSL_AES_COUNTER
-/* Process a AES CBC request packet and produce a response packet */
+/* Process an AES CTR request packet and produce a response packet */
 static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
                          const void* cryptoDataIn, uint16_t inSize,
                          void* cryptoDataOut, uint16_t* outSize);
@@ -3350,7 +3350,6 @@ static int _HandleAesCtr(whServerContext* ctx, uint16_t magic, int devId,
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
-            /* CTR uses the encryption key schedule in both directions */
             ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)key_len,
                                      (byte*)iv, AES_ENCRYPTION);
         }
@@ -3530,7 +3529,6 @@ static int _HandleAesCtrDma(whServerContext* ctx, uint16_t magic, int devId,
             ret = wc_AesSetIV(aes, (byte*)iv);
         }
         else {
-            /* CTR uses the encryption key schedule in both directions */
             ret = wc_AesSetKeyDirect(aes, (byte*)key, (word32)keyLen, (byte*)iv,
                                      AES_ENCRYPTION);
         }

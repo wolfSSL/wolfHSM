@@ -9557,7 +9557,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
                 }
                 else {
                     ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv,
-                                             AES_DECRYPTION);
+                                             AES_ENCRYPTION);
                     if (ret != 0) {
                         WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n",
                                        ret);
@@ -9677,7 +9677,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
         if (ret == WH_ERROR_OK) {
-            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
             }
@@ -9733,7 +9733,7 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
             }
         }
         if (ret == WH_ERROR_OK) {
-            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_DECRYPTION);
+            ret = wc_AesSetKeyDirect(aes, key, sizeof(key), iv, AES_ENCRYPTION);
             if (ret != 0) {
                 WH_ERROR_PRINT("Failed to wc_AesSetKeyDirect %d\n", ret);
             }
@@ -18919,8 +18919,8 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    /* AES-CTR: decrypt without ENCRYPT flag */
-    WH_TEST_PRINT("  Testing AES CTR decrypt without ENCRYPT flag...\n");
+    /* AES-CTR: DECRYPT-only key */
+    WH_TEST_PRINT("  Testing AES CTR with DECRYPT-only key...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
@@ -18941,7 +18941,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wh_Client_AesCtr(client, aes, ciphertext,
                                            sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
-                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        WH_TEST_PRINT("    PASS: Correctly denied operation\n");
                         ret = 0;
                     }
                     else {
@@ -19158,8 +19158,8 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
         return ret;
     }
 
-    /* AES-CTR DMA: decrypt without ENCRYPT flag */
-    WH_TEST_PRINT("  Testing AES CTR DMA decrypt without ENCRYPT flag...\n");
+    /* AES-CTR DMA: DECRYPT-only key */
+    WH_TEST_PRINT("  Testing AES CTR DMA with DECRYPT-only key...\n");
     {
         Aes     aes[1];
         uint8_t iv[AES_BLOCK_SIZE] = {0};
@@ -19180,7 +19180,7 @@ int whTest_CryptoKeyUsagePolicies(whClientContext* client, WC_RNG* rng)
                     ret = wh_Client_AesCtrDma(client, aes, ciphertext,
                                               sizeof(ciphertext), ctrOut);
                     if (ret == WH_ERROR_USAGE) {
-                        WH_TEST_PRINT("    PASS: Correctly denied decryption\n");
+                        WH_TEST_PRINT("    PASS: Correctly denied operation\n");
                         ret = 0;
                     }
                     else {
