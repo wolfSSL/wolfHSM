@@ -2454,6 +2454,178 @@ int wh_Client_CmacDmaFinalResponse(whClientContext* ctx, Cmac* cmac,
 
 #endif /* WOLFSSL_CMAC */
 
+#ifndef NO_HMAC
+
+/**
+ * @brief Generates an HMAC over a whole message.
+ *
+ * The server computes the MAC and returns it. Only one-shot HMAC is
+ * supported, so the whole message must be given in one call. This function
+ * blocks until the server responds.
+ *
+ * Give the key as bytes (key, keyLen) or as the ID of a key stored in the HSM
+ * (keyId), but not both. A key used by ID must have WH_NVM_FLAGS_USAGE_SIGN.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] hashType wolfCrypt hash type, for example WC_SHA256.
+ * @param[in] keyId ID of a key stored in the HSM, or WH_KEYID_ERASED when key
+ * bytes are given.
+ * @param[in] key Key bytes, or NULL when keyId is used.
+ * @param[in] keyLen Length of key in bytes. Must be 0 when keyId is used.
+ * @param[in] in Message to authenticate. Can be NULL only if inLen is 0.
+ * @param[in] inLen Length of the message in bytes. inLen + keyLen must not be
+ * more than WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ.
+ * @param[out] outMac Buffer for the MAC. The full digest is always written.
+ * @param[in,out] outMacLen On input, the size of outMac. On output, the MAC
+ * length, which is the digest size of hashType.
+ * @return WH_ERROR_OK on success. WH_ERROR_BADARGS for invalid arguments,
+ * which include no key and both a key and a key ID. WH_ERROR_REQUEST_SIZE if
+ * the message and key do not fit in one request. WH_ERROR_BUFFER_SIZE if
+ * outMac is too small, with the necessary size in *outMacLen. WH_ERROR_USAGE
+ * if the stored key does not have sign usage. Other negative values are
+ * server or transport errors.
+ */
+int wh_Client_HmacGenerate(whClientContext* ctx, int hashType, whKeyId keyId,
+                           const uint8_t* key, uint32_t keyLen,
+                           const uint8_t* in, uint32_t inLen, uint8_t* outMac,
+                           uint32_t* outMacLen);
+
+/**
+ * @brief Async request half of a non-DMA HMAC generate.
+ *
+ * Sends the request and does not wait for a reply. The arguments are the
+ * same as for wh_Client_HmacGenerate.
+ *
+ * Only one async request can be in flight per whClientContext. The caller
+ * must call wh_Client_HmacGenerateResponse before it sends another request on
+ * the same ctx.
+ *
+ * @param[in] ctx Client context.
+ * @param[in] hashType wolfCrypt hash type, for example WC_SHA256.
+ * @param[in] keyId ID of a key stored in the HSM, or WH_KEYID_ERASED when key
+ * bytes are given.
+ * @param[in] key Key bytes, or NULL when keyId is used.
+ * @param[in] keyLen Length of key in bytes. Must be 0 when keyId is used.
+ * @param[in] in Message to authenticate. Can be NULL only if inLen is 0.
+ * @param[in] inLen Length of the message in bytes. inLen + keyLen must not be
+ * more than WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ.
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid arguments,
+ * WH_ERROR_REQUEST_SIZE if the message and key do not fit in one request,
+ * or a negative error from the transport.
+ */
+int wh_Client_HmacGenerateRequest(whClientContext* ctx, int hashType,
+                                  whKeyId keyId, const uint8_t* key,
+                                  uint32_t keyLen, const uint8_t* in,
+                                  uint32_t inLen);
+
+/**
+ * @brief Async response half of a non-DMA HMAC generate.
+ *
+ * Makes one attempt to receive the response. Returns WH_ERROR_NOTREADY if the
+ * server has not replied yet.
+ *
+ * @param[in] ctx Client context.
+ * @param[out] outMac Buffer for the MAC.
+ * @param[in,out] outMacLen On input, the size of outMac. On output, the MAC
+ * length.
+ * @return WH_ERROR_OK on success, WH_ERROR_NOTREADY if there is no reply yet,
+ * WH_ERROR_BUFFER_SIZE if outMac is too small, with the necessary size in
+ * *outMacLen, or the error returned by the server.
+ */
+int wh_Client_HmacGenerateResponse(whClientContext* ctx, uint8_t* outMac,
+                                   uint32_t* outMacLen);
+
+/**
+ * @brief Associates an HMAC struct with a key stored in the HSM.
+ *
+ * wc_HmacGenerate_ex() and wc_HmacVerify_ex() then use the stored key when
+ * they are called with the struct, the wolfHSM device ID and a NULL key.
+ * Without a key ID in the struct those calls return MISSING_KEY. Initialize
+ * the struct with wc_HmacInit() before this call. The streaming functions
+ * cannot use a stored key and return MISSING_KEY.
+ *
+ * The ID is kept in the wolfCrypt key ID field of the struct, which is the
+ * field that wc_HmacInit_Id() sets. It stays set until wc_HmacInit() or
+ * wc_HmacFree().
+ *
+ * @param[in,out] hmac Pointer to an initialized HMAC struct.
+ * @param[in] keyId Key ID to use. WH_KEYID_ERASED removes the association.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_HmacSetKeyId(Hmac* hmac, whKeyId keyId);
+
+/**
+ * @brief Gets the wolfHSM key ID that an HMAC struct is associated with.
+ *
+ * @param[in] hmac Pointer to the HMAC struct.
+ * @param[out] outId Set to the key ID, or WH_KEYID_ERASED if none is set.
+ * @return int Returns 0 on success or a negative error code on failure.
+ */
+int wh_Client_HmacGetKeyId(Hmac* hmac, whKeyId* outId);
+
+#ifdef WOLFHSM_CFG_DMA
+/**
+ * @brief Generates an HMAC over a whole message that is passed by DMA.
+ *
+ * Same as wh_Client_HmacGenerate, but the server reads the message directly
+ * from client memory, so the comm buffer does not limit the message size.
+ * The key and the MAC still go in the request and the response.
+ *
+ * @param[in] ctx Pointer to the wolfHSM client context.
+ * @param[in] hashType wolfCrypt hash type, for example WC_SHA256.
+ * @param[in] keyId ID of a key stored in the HSM, or WH_KEYID_ERASED when key
+ * bytes are given.
+ * @param[in] key Key bytes, or NULL when keyId is used.
+ * @param[in] keyLen Length of key in bytes. Must be 0 when keyId is used.
+ * @param[in] in Message to authenticate. Can be NULL only if inLen is 0.
+ * @param[in] inLen Length of the message in bytes.
+ * @param[out] outMac Buffer for the MAC. The full digest is always written.
+ * @param[in,out] outMacLen On input, the size of outMac. On output, the MAC
+ * length, which is the digest size of hashType.
+ * @return WH_ERROR_OK on success or a negative error code on failure. See
+ * wh_Client_HmacGenerate.
+ */
+int wh_Client_HmacGenerateDma(whClientContext* ctx, int hashType, whKeyId keyId,
+                              const uint8_t* key, uint32_t keyLen,
+                              const uint8_t* in, uint32_t inLen,
+                              uint8_t* outMac, uint32_t* outMacLen);
+
+/**
+ * @brief Async request half of a DMA HMAC generate.
+ *
+ * Does the PRE address translation for the message buffer and sends the DMA
+ * request. Does not wait for a reply. The arguments are the same as for
+ * wh_Client_HmacGenerateDma.
+ *
+ * Only one async request can be in flight per whClientContext. The caller
+ * must call wh_Client_HmacGenerateDmaResponse before it sends another request
+ * on the same ctx, and must keep in valid until that call completes.
+ *
+ * @return WH_ERROR_OK on success, WH_ERROR_BADARGS for invalid arguments,
+ * WH_ERROR_REQUEST_PENDING if another request is in flight,
+ * WH_ERROR_REQUEST_SIZE if the key does not fit in one request, or a
+ * negative error from the DMA layer or transport. On failure, the DMA
+ * mapping is released before the function returns.
+ */
+int wh_Client_HmacGenerateDmaRequest(whClientContext* ctx, int hashType,
+                                     whKeyId keyId, const uint8_t* key,
+                                     uint32_t keyLen, const uint8_t* in,
+                                     uint32_t inLen);
+
+/**
+ * @brief Async response half of a DMA HMAC generate.
+ *
+ * Makes one attempt to receive the response. Returns WH_ERROR_NOTREADY if the
+ * server has not replied yet. When the server has replied, this call also
+ * does the POST DMA cleanup of the message buffer, even if the reply is an
+ * error. See wh_Client_HmacGenerateResponse for the outputs.
+ */
+int wh_Client_HmacGenerateDmaResponse(whClientContext* ctx, uint8_t* outMac,
+                                      uint32_t* outMacLen);
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* !NO_HMAC */
+
 #ifndef NO_SHA256
 
 /**

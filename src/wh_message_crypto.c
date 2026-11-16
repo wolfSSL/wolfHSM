@@ -831,6 +831,31 @@ int wh_MessageCrypto_TranslateCmacAesResponse(
                                                   &dest->resumeState);
 }
 
+int wh_MessageCrypto_TranslateHmacRequest(
+    uint16_t magic, const whMessageCrypto_HmacRequest* src,
+    whMessageCrypto_HmacRequest* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, hashType);
+    WH_T32(magic, dest, src, inSz);
+    WH_T32(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+int wh_MessageCrypto_TranslateHmacResponse(
+    uint16_t magic, const whMessageCrypto_HmacResponse* src,
+    whMessageCrypto_HmacResponse* dest)
+{
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    WH_T32(magic, dest, src, outSz);
+    return 0;
+}
+
 /* ML-DSA Key Generation Request translation */
 int wh_MessageCrypto_TranslateMlDsaKeyGenRequest(
     uint16_t magic, const whMessageCrypto_MlDsaKeyGenRequest* src,
@@ -1208,6 +1233,47 @@ int wh_MessageCrypto_TranslateCmacAesDmaResponse(
     ret = wh_MessageCrypto_TranslateCmacAesState(magic, &src->resumeState,
                                                  &dest->resumeState);
     return ret;
+}
+
+int wh_MessageCrypto_TranslateHmacDmaRequest(
+    uint16_t magic, const whMessageCrypto_HmacDmaRequest* src,
+    whMessageCrypto_HmacDmaRequest* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->input, &dest->input);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, hashType);
+    WH_T32(magic, dest, src, keySz);
+    WH_T16(magic, dest, src, keyId);
+    return 0;
+}
+
+int wh_MessageCrypto_TranslateHmacDmaResponse(
+    uint16_t magic, const whMessageCrypto_HmacDmaResponse* src,
+    whMessageCrypto_HmacDmaResponse* dest)
+{
+    int ret;
+
+    if ((src == NULL) || (dest == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
+                                                  &dest->dmaAddrStatus);
+    if (ret != 0) {
+        return ret;
+    }
+
+    WH_T32(magic, dest, src, outSz);
+    return 0;
 }
 
 /* ML-DSA DMA Key Generation Request translation */
