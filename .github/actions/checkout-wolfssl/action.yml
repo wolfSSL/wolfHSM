@@ -10,7 +10,8 @@ inputs:
     description: >
       wolfSSL git ref to check out
     required: false
-    default: 'v5.9.4-stable'
+    # wolfSSL master commit that adds one-shot HMAC. No release has it yet.
+    default: '0db6a672e583dca96c9837dd1b54ce0d81f47591'
 
 runs:
   using: 'composite'

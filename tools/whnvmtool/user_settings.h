@@ -119,6 +119,7 @@ extern "C" {
 #define NO_MD4
 #define NO_MD5
 #define NO_DES3
+#define NO_HMAC
 #define WOLFSSL_NO_SHAKE128
 #define WOLFSSL_NO_SHAKE256
 #define NO_PWDBASED
