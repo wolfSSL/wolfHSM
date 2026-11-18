@@ -450,6 +450,10 @@ int wh_Auth_UserDelete(whAuthContext* context, whUserId user_id)
     if (rc == WH_ERROR_OK) {
         rc = context->cb->UserDelete(context->context, context->user.user_id,
                                      user_id);
+        /* If deleting the current user then also wipe the context. */
+        if ((rc == WH_ERROR_OK) && (user_id == context->user.user_id)) {
+            memset(&context->user, 0, sizeof(whAuthUser));
+        }
 
         (void)WH_AUTH_UNLOCK(context);
     } /* LOCK() */
