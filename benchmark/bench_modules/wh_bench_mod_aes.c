@@ -60,8 +60,7 @@ enum { DECRYPT = 0, ENCRYPT = 1 };
 #if defined(WOLFSSL_AES_COUNTER)
 #ifdef WH_BENCH_CRYPTOCB_DMA
 static int _benchAesCtrDma(whClientContext* client, whBenchOpContext* ctx,
-                           int id, const uint8_t* key, size_t keyLen,
-                           int encrypt)
+                           int id, const uint8_t* key, size_t keyLen)
 {
     int            ret       = 0;
     int            needEvict = 0;
@@ -140,7 +139,6 @@ static int _benchAesCtrDma(whClientContext* client, whBenchOpContext* ctx,
         int benchStartRet;
         int benchStopRet;
 
-        /* Encrypt and decrypt are the same operation for AES-CTR */
         benchStartRet = wh_Bench_StartOp(ctx, id);
         ret           = wc_AesCtrEncrypt(aes, out, in, inLen);
         benchStopRet  = wh_Bench_StopOp(ctx, id);
@@ -151,8 +149,7 @@ static int _benchAesCtrDma(whClientContext* client, whBenchOpContext* ctx,
             goto exit;
         }
         if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to wc_AesCtr %s %d\n",
-                            encrypt ? "Encrypt" : "Decrypt", ret);
+            WH_BENCH_PRINTF("Failed to wc_AesCtrEncrypt %d\n", ret);
             goto exit;
         }
         if (benchStopRet != 0) {
@@ -190,7 +187,7 @@ exit:
 #endif /* WH_BENCH_CRYPTOCB_DMA */
 
 static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
-                        const uint8_t* key, size_t keyLen, int encrypt)
+                        const uint8_t* key, size_t keyLen)
 {
     int     ret       = 0;
     int     needEvict = 0;
@@ -245,7 +242,6 @@ static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
         int benchStartRet;
         int benchStopRet;
 
-        /* Encrypt and decrypt are the same operation for AES-CTR */
         benchStartRet = wh_Bench_StartOp(ctx, id);
         ret           = wc_AesCtrEncrypt(aes, WH_BENCH_DATA_OUT_BUFFER,
                                          WH_BENCH_DATA_IN_BUFFER, inLen);
@@ -257,8 +253,7 @@ static int _benchAesCtr(whClientContext* client, whBenchOpContext* ctx, int id,
             goto exit;
         }
         if (ret != 0) {
-            WH_BENCH_PRINTF("Failed to wc_AesCtr %s %d\n",
-                            encrypt ? "Encrypt" : "Decrypt", ret);
+            WH_BENCH_PRINTF("Failed to wc_AesCtrEncrypt %d\n", ret);
             goto exit;
         }
         if (benchStopRet != 0) {
@@ -288,32 +283,14 @@ int wh_Bench_Mod_Aes128CTREncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
     (void)params;
-    return _benchAesCtr(client, ctx, id, (uint8_t*)key128, sizeof(key128),
-                        ENCRYPT);
-}
-
-int wh_Bench_Mod_Aes128CTRDecrypt(whClientContext*  client,
-                                  whBenchOpContext* ctx, int id, void* params)
-{
-    (void)params;
-    return _benchAesCtr(client, ctx, id, (uint8_t*)key128, sizeof(key128),
-                        DECRYPT);
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key128, sizeof(key128));
 }
 
 int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params)
 {
     (void)params;
-    return _benchAesCtr(client, ctx, id, (uint8_t*)key256, sizeof(key256),
-                        ENCRYPT);
-}
-
-int wh_Bench_Mod_Aes256CTRDecrypt(whClientContext*  client,
-                                  whBenchOpContext* ctx, int id, void* params)
-{
-    (void)params;
-    return _benchAesCtr(client, ctx, id, (uint8_t*)key256, sizeof(key256),
-                        DECRYPT);
+    return _benchAesCtr(client, ctx, id, (uint8_t*)key256, sizeof(key256));
 }
 
 int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
@@ -322,25 +299,7 @@ int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
 {
 #if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
-    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
-                           ENCRYPT);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
-}
-
-int wh_Bench_Mod_Aes128CTRDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id,
-                                     void* params)
-{
-#if defined(WH_BENCH_CRYPTOCB_DMA)
-    (void)params;
-    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key128, sizeof(key128),
-                           DECRYPT);
+    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key128, sizeof(key128));
 #else
     (void)client;
     (void)ctx;
@@ -356,25 +315,7 @@ int wh_Bench_Mod_Aes256CTREncryptDma(whClientContext*  client,
 {
 #if defined(WH_BENCH_CRYPTOCB_DMA)
     (void)params;
-    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
-                           ENCRYPT);
-#else
-    (void)client;
-    (void)ctx;
-    (void)id;
-    (void)params;
-    return WH_ERROR_NOTIMPL;
-#endif
-}
-
-int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id,
-                                     void* params)
-{
-#if defined(WH_BENCH_CRYPTOCB_DMA)
-    (void)params;
-    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key256, sizeof(key256),
-                           DECRYPT);
+    return _benchAesCtrDma(client, ctx, id, (uint8_t*)key256, sizeof(key256));
 #else
     (void)client;
     (void)ctx;
