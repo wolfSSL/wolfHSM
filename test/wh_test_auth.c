@@ -1917,9 +1917,9 @@ static int _whTest_Auth_NvmPersistence(void)
     WH_TEST_ASSERT_RETURN(ctx.user.user_id == WH_USER_ID_INVALID);
     WH_TEST_ASSERT_RETURN(!ctx.user.is_active);
     WH_TEST_ASSERT_RETURN(!WH_AUTH_IS_ADMIN(ctx.user.permissions));
-    WH_TEST_ASSERT_RETURN(
-        wh_Auth_UserAdd(&ctx, "backdoor", &reloaded_id, perms,
-                        WH_AUTH_METHOD_PIN, "1111", 4) != WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(wh_Auth_UserAdd(&ctx, "backdoor", &reloaded_id, perms,
+                                          WH_AUTH_METHOD_PIN, "1111",
+                                          4) != WH_ERROR_OK);
 
     WH_TEST_RETURN_ON_FAIL(wh_Auth_Cleanup(&ctx));
 
