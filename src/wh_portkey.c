@@ -27,7 +27,7 @@
 /* Pick up compile-time configuration */
 #include "wolfhsm/wh_settings.h"
 
-#ifdef WOLFHSM_CFG_PORTKEY
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_ENABLE_SERVER)
 
 #include <stdint.h>
 #include <stddef.h>
@@ -158,22 +158,48 @@ static whPortKeyRecord* _FindFree(whPortKeyContext* context)
     return NULL;
 }
 
-void wh_PortKey_KeyIdToRef(whKeyId keyId, uint8_t* ref)
+int wh_PortKey_KeyIdToRef(whKeyId keyId, uint8_t* ref, uint32_t refSz)
 {
+    if ((ref == NULL) || (refSz != WH_PORTKEY_REF_SIZE) ||
+        !WH_KEYID_ISPORT(keyId) || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
     ref[0] = (uint8_t)(keyId >> 8);
     ref[1] = (uint8_t)keyId;
+    return WH_ERROR_OK;
 }
 
-int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz)
+int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz, whKeyId* outId)
 {
     whKeyId keyId;
 
-    if ((ref == NULL) || (refSz != WH_PORTKEY_REF_SIZE)) {
-        return 0;
+    if ((ref == NULL) || (outId == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+    *outId = WH_KEYID_ERASED;
+
+    if (refSz != WH_PORTKEY_REF_SIZE) {
+        return WH_ERROR_NOTFOUND;
     }
     keyId = (whKeyId)(((whKeyId)ref[0] << 8) | ref[1]);
-    return WH_KEYID_ISPORT(keyId) ? (int)WH_KEYID_ID(keyId) : 0;
+    if (!WH_KEYID_ISPORT(keyId) || WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_NOTFOUND;
+    }
+    *outId = (whKeyId)WH_KEYID_ID(keyId);
+    return WH_ERROR_OK;
 }
+
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+/* Mark a loadable key empty, keeping its ID */
+static void _Empty(whPortKeyRecord* entry)
+{
+    entry->id    = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
+                                 WH_KEYID_ID(entry->id));
+    entry->srcId = WH_KEYID_ERASED;
+    entry->flags = 0;
+    entry->len   = 0;
+}
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
 /* Add a record for keyId, unless its ID is already registered */
 static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
@@ -189,7 +215,7 @@ static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
         if (_Find(context, keyId) != NULL) {
-            ret = WH_ERROR_ACCESS;
+            ret = WH_ERROR_NOTBLANK;
         }
         else {
             entry = _FindFree(context);
@@ -202,6 +228,12 @@ static int _Add(whPortKeyContext* context, whKeyId keyId, whNvmFlags flags,
                 entry->flags      = flags;
                 entry->len        = len;
                 entry->accessMode = accessMode;
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
+                if (len == 0) {
+                    /* A loadable key starts empty */
+                    _Empty(entry);
+                }
+#endif
             }
         }
         (void)_Unlock(context);
@@ -273,7 +305,10 @@ static int _GetKeyBytes(int devId, const whPortKeyRecord* entry, uint8_t* out,
         return WH_ERROR_BUFFER_SIZE;
     }
 
-    wh_PortKey_KeyIdToRef(entry->id, ref);
+    ret = wh_PortKey_KeyIdToRef(entry->id, ref, sizeof(ref));
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
     ret = wc_KeyStore_ExportPlain(devId, ref, sizeof(ref), out, &len, NULL);
     if (ret == CRYPTOCB_UNAVAILABLE) {
         /* No device exports the key */
@@ -367,22 +402,14 @@ static int _PortImport(int devId, whKeyId keyId, const uint8_t* key,
     uint8_t ref[WH_PORTKEY_REF_SIZE];
     int     ret;
 
-    wh_PortKey_KeyIdToRef(keyId, ref);
-    /* No key type, as the port knows what each of its keys holds based on
-     * the key ID. */
-    ret = wc_KeyStore_ImportPlain(devId, ref, sizeof(ref), WC_KEYSTORE_KEY_NONE,
-                                  key, keySz, 0, NULL);
+    ret = wh_PortKey_KeyIdToRef(keyId, ref, sizeof(ref));
+    if (ret == WH_ERROR_OK) {
+        /* No key type, as the port knows what each of its keys holds based on
+         * the key ID. */
+        ret = wc_KeyStore_ImportPlain(
+            devId, ref, sizeof(ref), WC_KEYSTORE_KEY_NONE, key, keySz, 0, NULL);
+    }
     return _PortRet(ret);
-}
-
-/* Mark a loadable key empty, keeping its ID */
-static void _Empty(whPortKeyRecord* entry)
-{
-    entry->id    = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL,
-                                 WH_KEYID_ID(entry->id));
-    entry->srcId = WH_KEYID_ERASED;
-    entry->flags = 0;
-    entry->len   = 0;
 }
 
 /* Clear the key through the port and mark it empty. It is marked empty even if
@@ -392,20 +419,19 @@ static int _Remove(int devId, whPortKeyRecord* entry)
     uint8_t ref[WH_PORTKEY_REF_SIZE];
     int     ret;
 
-    wh_PortKey_KeyIdToRef(entry->id, ref);
-    ret = wc_KeyStore_Delete(devId, ref, sizeof(ref), NULL);
+    ret = wh_PortKey_KeyIdToRef(entry->id, ref, sizeof(ref));
+    if (ret == WH_ERROR_OK) {
+        ret = wc_KeyStore_Delete(devId, ref, sizeof(ref), NULL);
+    }
     _Empty(entry);
     return _PortRet(ret);
 }
 
 int wh_PortKey_RegisterLoadable(whPortKeyContext* context, whKeyId keyId)
 {
-    /* No owner until a client loads it. Loaded keys are accessed by
-     * reference */
-    return _Add(context,
-                WH_MAKE_KEYID(WH_KEYID_TYPE(keyId), WH_KEYUSER_GLOBAL,
-                              WH_KEYID_ID(keyId)),
-                0, 0, WH_PORTKEY_ACCESS_BY_REF);
+    /* Length 0 adds it empty, with no owner until a client loads it. Loaded
+     * keys are accessed by reference */
+    return _Add(context, keyId, 0, 0, WH_PORTKEY_ACCESS_BY_REF);
 }
 
 int wh_PortKey_Load(whPortKeyContext* context, int devId, whKeyId keyId,
@@ -542,7 +568,6 @@ int wh_PortKey_GetInfo(whPortKeyContext* context, whKeyId keyId,
     if (!_Valid(context, keyId) || (info == NULL)) {
         return WH_ERROR_BADARGS;
     }
-    memset(info, 0, sizeof(*info));
 
     ret = _Lock(context);
     if (ret == WH_ERROR_OK) {
@@ -550,10 +575,13 @@ int wh_PortKey_GetInfo(whPortKeyContext* context, whKeyId keyId,
         if (entry == NULL) {
             ret = WH_ERROR_NOTFOUND;
         }
-        else if (entry->len != 0) {
-            info->keyBits = (uint32_t)entry->len * 8;
-            info->flags   = entry->flags & WH_NVM_FLAGS_USAGE_ANY;
-            info->owner   = WH_KEYID_USER(entry->id);
+        else {
+            memset(info, 0, sizeof(*info));
+            if (entry->len != 0) {
+                info->keyBits = (uint32_t)entry->len * 8;
+                info->flags   = entry->flags & WH_NVM_FLAGS_USAGE_ANY;
+                info->owner   = WH_KEYID_USER(entry->id);
+            }
         }
         (void)_Unlock(context);
     } /* _Lock() */
@@ -562,4 +590,4 @@ int wh_PortKey_GetInfo(whPortKeyContext* context, whKeyId keyId,
 
 #endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
-#endif /* WOLFHSM_CFG_PORTKEY */
+#endif /* WOLFHSM_CFG_PORTKEY && WOLFHSM_CFG_ENABLE_SERVER */

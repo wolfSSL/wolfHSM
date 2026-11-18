@@ -82,7 +82,8 @@
  *  (WH_KEYTYPE_PORT) in AES and CMAC requests and as key wrap KEKs. The
  *  port's crypto callback runs every operation on a key accessed by reference,
  *  and exports the bytes of a key accessed by value. Requires
- *  WOLF_PRIVATE_KEY_ID and WOLF_CRYPTO_CB_KEYSTORE in wolfCrypt
+ *  WOLF_PRIVATE_KEY_ID and WOLF_CRYPTO_CB_KEYSTORE in the server's wolfCrypt
+ *  build
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_PORTKEY_MAX_KEYS - The number of port keys the port can
@@ -90,8 +91,8 @@
  *      Default: 8
  *
  *  WOLFHSM_CFG_PORTKEY_LOAD - If defined, clients can also load keystore
- *  keys into port keys, clear them, and describe port keys. Requires
- *  WOLFHSM_CFG_PORTKEY
+ *  keys into port keys, clear them, and describe port keys. Define it for
+ *  both the client and the server. Requires WOLFHSM_CFG_PORTKEY
  *      Default: Not defined
  *
  *  WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE - The largest keystore key (in bytes)
@@ -631,13 +632,15 @@
 #error "WOLFSSL_VALIDATE_ECC_IMPORT is not supported in wolfHSM client builds"
 #endif
 
-#if defined(WOLFHSM_CFG_PORTKEY) && !defined(WOLF_PRIVATE_KEY_ID)
+/* Only the server passes port keys to wolfCrypt */
+#if defined(WOLFHSM_CFG_PORTKEY) && defined(WOLFHSM_CFG_ENABLE_SERVER)
+#if !defined(WOLF_PRIVATE_KEY_ID)
 #error "WOLFHSM_CFG_PORTKEY requires WOLF_PRIVATE_KEY_ID"
 #endif
-
-#if defined(WOLFHSM_CFG_PORTKEY) && !defined(WOLF_CRYPTO_CB_KEYSTORE)
+#if !defined(WOLF_CRYPTO_CB_KEYSTORE)
 #error "WOLFHSM_CFG_PORTKEY requires WOLF_CRYPTO_CB_KEYSTORE"
 #endif
+#endif /* WOLFHSM_CFG_PORTKEY && WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_SHE_EXTENSION)
 #if defined(NO_AES) || \
@@ -708,8 +711,9 @@
 #endif
 #endif /* WOLFHSM_CFG_PORTKEY */
 
-/* The port exports by-value keys through wolfCrypt */
-#if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_PORTKEY)
+/* The port exports by-value keys through wolfCrypt, on the server */
+#if defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_PORTKEY) && \
+    defined(WOLFHSM_CFG_ENABLE_SERVER)
 #error "WOLFHSM_CFG_PORTKEY is incompatible with WOLFHSM_CFG_NO_CRYPTO"
 #endif
 

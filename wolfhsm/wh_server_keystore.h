@@ -248,8 +248,8 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whKeyId keyId);
  * @return WH_ERROR_OK on success, WH_ERROR_USAGE if the source has no usage
  *         flags, or an error from the keystore or the port
  */
-int wh_Server_KeystorePortLoad(whServerContext* server, whKeyId portKeyId,
-                               whKeyId srcId);
+int wh_Server_KeystoreLoadToPortKey(whServerContext* server, whKeyId portKeyId,
+                                    whKeyId srcId);
 #endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
 /**

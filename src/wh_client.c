@@ -1450,6 +1450,7 @@ int wh_Client_KeyRevoke(whClientContext* c, whKeyId keyId)
     return ret;
 }
 
+#ifdef WOLFHSM_CFG_PORTKEY_LOAD
 int wh_Client_PortKeyLoadFromKeystoreRequest(whClientContext* c,
                                              whKeyId          portKeyId,
                                              whKeyId          srcKeyId)
@@ -1678,6 +1679,7 @@ int wh_Client_PortKeyGetInfo(whClientContext* c, whKeyId portKeyId,
     }
     return ret;
 }
+#endif /* WOLFHSM_CFG_PORTKEY_LOAD */
 
 int wh_Client_CounterInitRequest(whClientContext* c, whNvmId counterId,
     uint32_t counter)

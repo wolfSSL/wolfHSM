@@ -522,8 +522,8 @@ These keys live outside the wolfHSM [keystore](#keystore), and what they are dif
 
 Two build options enable the feature:
 
-- `WOLFHSM_CFG_PORTKEY` enables port keys. It needs `WOLF_PRIVATE_KEY_ID` and `WOLF_CRYPTO_CB_KEYSTORE` in the wolfCrypt build.
-- `WOLFHSM_CFG_PORTKEY_LOAD` also lets clients [load keystore keys](#clients-can-load-keys) into port keys.
+- `WOLFHSM_CFG_PORTKEY` enables port keys. It needs `WOLF_PRIVATE_KEY_ID` and `WOLF_CRYPTO_CB_KEYSTORE` in the server's wolfCrypt build.
+- `WOLFHSM_CFG_PORTKEY_LOAD` also lets clients [load keystore keys](#clients-can-load-keys) into port keys. Define it for both the client and the server.
 
 #### The Port Key Abstraction
 
@@ -636,11 +636,15 @@ For a fixed key accessed by value, the port's crypto callback also answers the w
 /* Export a by-value key from OTP. Port_OtpRead() is the port's own code */
 static int Port_Export(wc_CryptoInfo* info)
 {
-    int id = wh_PortKey_KeyRefToId(info->keystore.op.exportPlain.keyRef,
-                                   info->keystore.op.exportPlain.keyRefSz);
+    whKeyId id;
     byte*   out   = info->keystore.op.exportPlain.key;
     word32* outSz = info->keystore.op.exportPlain.keySz;
 
+    if (wh_PortKey_KeyRefToId(info->keystore.op.exportPlain.keyRef,
+                              info->keystore.op.exportPlain.keyRefSz,
+                              &id) != WH_ERROR_OK) {
+        return BAD_FUNC_ARG;
+    }
     if (out == NULL) {
         *outSz = AES_256_KEY_SIZE; /* size query */
         return 0;
@@ -679,9 +683,13 @@ For a key accessed by reference, the server never reads the key. It sets up the 
  * slot n */
 static int Port_RefToSlot(const byte* ref, word32 refSz)
 {
-    int id = wh_PortKey_KeyRefToId(ref, refSz); /* 0 if not one */
+    whKeyId id;
 
-    return ((id > 0) && (id < PORT_SLOTS)) ? id : -1;
+    if ((wh_PortKey_KeyRefToId(ref, refSz, &id) != WH_ERROR_OK) ||
+        (id >= PORT_SLOTS)) {
+        return -1;
+    }
+    return (int)id;
 }
 
 static int Port_CryptoCb(int devId, wc_CryptoInfo* info, void* ctx)

@@ -3188,7 +3188,8 @@ static int _PortKeyResolve(whServerContext* ctx, int devId, whKeyId keyId,
     if (ctx->portKey == NULL) {
         return WH_ERROR_NOTFOUND;
     }
-    keyLen = (*inout_keyLen > 0xFFFFu) ? 0xFFFFu : (uint16_t)*inout_keyLen;
+    keyLen =
+        (*inout_keyLen > UINT16_MAX) ? UINT16_MAX : (uint16_t)*inout_keyLen;
     /* The server's device exports a by-value key, so it also runs with
      * software affinity */
     ret = wh_PortKey_Resolve(ctx->portKey, ctx->devId, keyId, usage, outPortKey,
@@ -3211,7 +3212,7 @@ static int _PortKeyResolve(whServerContext* ctx, int devId, whKeyId keyId,
     (void)outPortKey;
     (void)key;
     (void)inout_keyLen;
-    return WH_ERROR_ACCESS;
+    return WH_ERROR_NOTIMPL;
 #endif
 }
 
@@ -3224,9 +3225,13 @@ static int _AesInitForKey(Aes* aes, int devId, whKeyId portKey)
 #ifdef WOLFHSM_CFG_PORTKEY
     if (portKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_PORTKEY_REF_SIZE];
+        int     ret;
 
-        wh_PortKey_KeyIdToRef(portKey, ref);
-        return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, devId);
+        ret = wh_PortKey_KeyIdToRef(portKey, ref, sizeof(ref));
+        if (ret == WH_ERROR_OK) {
+            ret = wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, devId);
+        }
+        return ret;
     }
 #else
     (void)portKey;
@@ -4699,9 +4704,9 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
-/* Resolve CMAC key from request (inline key or keystore ID).
- * outKey must be at least AES_256_KEY_SIZE bytes. A port key is returned
- * in *outPortKey instead, to use by reference */
+/* Resolve CMAC key from request (inline key or keystore ID). The outKey
+ * buffer must hold the largest AES key, AES_256_KEY_SIZE bytes. A port key is
+ * returned in *outPortKey instead, to use by reference */
 static int _CmacResolveKey(whServerContext* ctx, int devId,
                            const uint8_t* requestKey, uint32_t requestKeySz,
                            whKeyId clientKeyId, uint8_t* outKey,
@@ -4779,10 +4784,14 @@ static int _CmacInitForKey(Cmac* cmac, const uint8_t* key, uint32_t keyLen,
 #ifdef WOLFHSM_CFG_PORTKEY
     if (portKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_PORTKEY_REF_SIZE];
+        int     ret;
 
-        wh_PortKey_KeyIdToRef(portKey, ref);
-        return wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, ref,
-                              (int)sizeof(ref), NULL, devId);
+        ret = wh_PortKey_KeyIdToRef(portKey, ref, sizeof(ref));
+        if (ret == WH_ERROR_OK) {
+            ret = wc_InitCmac_Id(cmac, NULL, 0, WC_CMAC_AES, NULL, ref,
+                                 (int)sizeof(ref), NULL, devId);
+        }
+        return ret;
     }
 #else
     (void)portKey;

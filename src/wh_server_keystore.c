@@ -1469,8 +1469,8 @@ int wh_Server_KeystoreRevokeKey(whServerContext* server, whNvmId keyId)
 }
 
 #ifdef WOLFHSM_CFG_PORTKEY_LOAD
-int wh_Server_KeystorePortLoad(whServerContext* server, whKeyId portKeyId,
-                               whKeyId srcId)
+int wh_Server_KeystoreLoadToPortKey(whServerContext* server, whKeyId portKeyId,
+                                    whKeyId srcId)
 {
     uint8_t       key[WOLFHSM_CFG_PORTKEY_MAX_KEY_SIZE];
     uint32_t      keySz = sizeof(key);
@@ -1610,8 +1610,12 @@ static int _KeywrapAesInit(whServerContext* server, Aes* aes,
     if (kek->portKey != WH_KEYID_ERASED) {
         uint8_t ref[WH_PORTKEY_REF_SIZE];
 
-        wh_PortKey_KeyIdToRef(kek->portKey, ref);
-        return wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, server->devId);
+        ret = wh_PortKey_KeyIdToRef(kek->portKey, ref, sizeof(ref));
+        if (ret == WH_ERROR_OK) {
+            ret =
+                wc_AesInit_Id(aes, ref, (int)sizeof(ref), NULL, server->devId);
+        }
+        return ret;
     }
 #endif /* WOLFHSM_CFG_PORTKEY */
 
@@ -3725,7 +3729,7 @@ int wh_Server_HandleKeyRequest(whServerContext* server, uint16_t magic,
                     magic, (whMessageKeystore_PortLoadRequest*)req_packet,
                     &req);
 
-                ret = wh_Server_KeystorePortLoad(
+                ret = wh_Server_KeystoreLoadToPortKey(
                     server,
                     wh_KeyId_TranslateFromClient(
                         WH_KEYTYPE_PORT, server->comm->client_id,

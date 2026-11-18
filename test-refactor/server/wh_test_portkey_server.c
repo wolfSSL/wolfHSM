@@ -199,7 +199,13 @@ static int _whTest_PortKeyModule(void)
         WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER, WH_TEST_PORTKEK_ID);
     whKeyId ownedByOther = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_TEST_PORT_USER + 1,
                                          WH_TEST_PORTKEK_ID + 1);
-    whKeyId out          = WH_KEYID_ERASED;
+    /* KeyIds with no key reference: a keystore key, and a port key with no
+     * ID */
+    whKeyId notPort =
+        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL, WH_TEST_PORTKEK_ID);
+    whKeyId noId = WH_MAKE_KEYID(WH_KEYTYPE_PORT, WH_KEYUSER_GLOBAL, 0);
+    whKeyId out  = WH_KEYID_ERASED;
+    whKeyId id   = WH_KEYID_ERASED;
     uint8_t ref[WH_PORTKEY_REF_SIZE];
     int     i;
 
@@ -219,25 +225,48 @@ static int _whTest_PortKeyModule(void)
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_Init(pks, conf));
 
     /* The key reference is the server keyId, big-endian */
-    wh_PortKey_KeyIdToRef(shared, ref);
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_KeyIdToRef(shared, ref, sizeof(ref)));
     WH_TEST_ASSERT_RETURN((ref[0] == (uint8_t)(shared >> 8)) &&
                           (ref[1] == (uint8_t)shared));
 
-    /* The port reads the port key number from it, whoever owns the key */
-    WH_TEST_ASSERT_RETURN(wh_PortKey_KeyRefToId(ref, sizeof(ref)) ==
-                          WH_TEST_PORTKEK_ID);
-    wh_PortKey_KeyIdToRef(owned, ref);
-    WH_TEST_ASSERT_RETURN(wh_PortKey_KeyRefToId(ref, sizeof(ref)) ==
-                          WH_TEST_PORTKEK_ID + 1);
+    /* It needs a buffer of that size, and a port keyId with an ID */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyIdToRef(shared, NULL, sizeof(ref)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyIdToRef(shared, ref, sizeof(ref) - 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyIdToRef(shared, ref, sizeof(ref) + 1));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyIdToRef(notPort, ref, sizeof(ref)));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyIdToRef(noId, ref, sizeof(ref)));
 
-    /* Not a port key reference: the wrong size, no reference, or another
-     * key type */
-    WH_TEST_ASSERT_RETURN(wh_PortKey_KeyRefToId(ref, sizeof(ref) - 1) == 0);
-    WH_TEST_ASSERT_RETURN(wh_PortKey_KeyRefToId(NULL, sizeof(ref)) == 0);
-    wh_PortKey_KeyIdToRef(
-        WH_MAKE_KEYID(WH_KEYTYPE_CRYPTO, WH_KEYUSER_GLOBAL, WH_TEST_PORTKEK_ID),
-        ref);
-    WH_TEST_ASSERT_RETURN(wh_PortKey_KeyRefToId(ref, sizeof(ref)) == 0);
+    /* The port reads the port key number from it, whoever owns the key */
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_KeyRefToId(ref, sizeof(ref), &id));
+    WH_TEST_ASSERT_RETURN(id == WH_TEST_PORTKEK_ID);
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_KeyIdToRef(owned, ref, sizeof(ref)));
+    WH_TEST_RETURN_ON_FAIL(wh_PortKey_KeyRefToId(ref, sizeof(ref), &id));
+    WH_TEST_ASSERT_RETURN(id == WH_TEST_PORTKEK_ID + 1);
+
+    /* It needs a reference and somewhere to put the number */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyRefToId(NULL, sizeof(ref), &id));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS ==
+                          wh_PortKey_KeyRefToId(ref, sizeof(ref), NULL));
+
+    /* Not a port key reference: the wrong size, another key type, or no ID.
+     * The number is then 0 */
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_PortKey_KeyRefToId(ref, sizeof(ref) - 1, &id));
+    WH_TEST_ASSERT_RETURN(id == 0);
+    ref[0] = (uint8_t)(notPort >> 8);
+    ref[1] = (uint8_t)notPort;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_PortKey_KeyRefToId(ref, sizeof(ref), &id));
+    ref[0] = (uint8_t)(noId >> 8);
+    ref[1] = (uint8_t)noId;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_PortKey_KeyRefToId(ref, sizeof(ref), &id));
 
     /* Only port keyIds with a nonzero ID can be registered */
     WH_TEST_ASSERT_RETURN(
@@ -269,7 +298,7 @@ static int _whTest_PortKeyModule(void)
         WH_PORTKEY_ACCESS_BY_REF));
 
     /* One record per port key number, whoever owns it */
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTBLANK ==
                           wh_PortKey_RegisterFixed(
                               pks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP,
                               WH_TEST_PORTKEK_SIZE, WH_PORTKEY_ACCESS_BY_REF));
@@ -341,6 +370,9 @@ static int _whTest_PortKeyModule(void)
     /* Cleanup zeroizes the context, after which it is refused */
     WH_TEST_ASSERT_RETURN(WH_ERROR_BADARGS == wh_PortKey_Cleanup(NULL));
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_Cleanup(pks));
+    for (i = 0; i < (int)sizeof(pks); i++) {
+        WH_TEST_ASSERT_RETURN(((const uint8_t*)pks)[i] == 0);
+    }
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_BADARGS ==
         wh_PortKey_CheckUse(pks, sharedByUser, WH_NVM_FLAGS_USAGE_WRAP, &out));
@@ -408,11 +440,11 @@ static int _whTest_PortKeyByValue(void)
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterFixed(
         pks, byRef, WH_NVM_FLAGS_USAGE_ENCRYPT, 16, WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_ASSERT_RETURN(
-        WH_ERROR_ACCESS ==
+        WH_ERROR_NOTBLANK ==
         wh_PortKey_RegisterFixed(pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT,
                                  16, WH_PORTKEY_ACCESS_BY_VALUE));
     WH_TEST_ASSERT_RETURN(
-        WH_ERROR_ACCESS ==
+        WH_ERROR_NOTBLANK ==
         wh_PortKey_RegisterFixed(pks, byValueByUser, WH_NVM_FLAGS_USAGE_ENCRYPT,
                                  16, WH_PORTKEY_ACCESS_BY_REF));
 
@@ -630,12 +662,12 @@ static int _whTest_PortKeyLoadable(void)
         wh_PortKey_RegisterFixed(pks, fixedKey, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
                                  WH_PORTKEY_ACCESS_BY_REF));
     WH_TEST_RETURN_ON_FAIL(wh_PortKey_RegisterLoadable(pks, loadable));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTBLANK ==
                           wh_PortKey_RegisterLoadable(pks, fixedKey));
-    WH_TEST_ASSERT_RETURN(WH_ERROR_ACCESS ==
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTBLANK ==
                           wh_PortKey_RegisterLoadable(pks, loadable));
     WH_TEST_ASSERT_RETURN(
-        WH_ERROR_ACCESS ==
+        WH_ERROR_NOTBLANK ==
         wh_PortKey_RegisterFixed(pks, loadable, WH_NVM_FLAGS_USAGE_ENCRYPT, 16,
                                  WH_PORTKEY_ACCESS_BY_REF));
 
@@ -661,6 +693,8 @@ static int _whTest_PortKeyLoadable(void)
      * key can't be loaded, and ID 0 names no key */
     WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
                           wh_PortKey_GetInfo(pks, unregistered, &info));
+    /* A failed describe leaves info as it was */
+    WH_TEST_ASSERT_RETURN(info.keyBits == 128);
     WH_TEST_ASSERT_RETURN(
         WH_ERROR_NOTFOUND ==
         wh_PortKey_Load(pks, devId, unregistered, WH_KEYID_ERASED,

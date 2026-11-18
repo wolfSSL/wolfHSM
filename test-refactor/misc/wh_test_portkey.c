@@ -144,11 +144,13 @@ static int _MockExport(wc_CryptoInfo* info)
 {
     byte*   out   = info->keystore.op.exportPlain.key;
     word32* outSz = info->keystore.op.exportPlain.keySz;
+    whKeyId id    = WH_KEYID_ERASED;
 
     if ((info->keystore.type != WC_KEYSTORE_EXPORT_PLAIN) ||
         (wh_PortKey_KeyRefToId(info->keystore.op.exportPlain.keyRef,
-                               info->keystore.op.exportPlain.keyRefSz) !=
-         WH_TEST_BYVALUE_KEK_ID)) {
+                               info->keystore.op.exportPlain.keyRefSz,
+                               &id) != WH_ERROR_OK) ||
+        (id != WH_TEST_BYVALUE_KEK_ID)) {
         return CRYPTOCB_UNAVAILABLE;
     }
     if (out == NULL) {
@@ -169,9 +171,10 @@ static int _MockExport(wc_CryptoInfo* info)
  * exports the by-value KEK. Software keys are left to wolfCrypt */
 static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
 {
-    Aes* aes;
-    Aes  sw[1];
-    int  ret;
+    Aes*    aes;
+    Aes     sw[1];
+    whKeyId id = WH_KEYID_ERASED;
+    int     ret;
 
     (void)devId;
     (void)ctx;
@@ -189,8 +192,9 @@ static int _MockCryptoCb(int devId, wc_CryptoInfo* info, void* ctx)
         return CRYPTOCB_UNAVAILABLE;
     }
     /* No other port key holds a KEK */
-    if (wh_PortKey_KeyRefToId(aes->id, (uint32_t)aes->idLen) !=
-        WH_TEST_PORTKEK_ID) {
+    if ((wh_PortKey_KeyRefToId(aes->id, (uint32_t)aes->idLen, &id) !=
+         WH_ERROR_OK) ||
+        (id != WH_TEST_PORTKEK_ID)) {
         return WC_HW_E;
     }
 

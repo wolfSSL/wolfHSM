@@ -202,13 +202,14 @@ static uint8_t _aad[20];
 /* Slot named by a key reference, or -1 */
 static int _MockRefSlot(const byte* ref, word32 refSz)
 {
-    int id = wh_PortKey_KeyRefToId(ref, refSz);
+    whKeyId id = WH_KEYID_ERASED;
 
     /* Port key n is slot n */
-    if ((id == 0) || (id >= MOCK_SLOTS) || (_mockRole[id] == MOCK_NONE)) {
+    if ((wh_PortKey_KeyRefToId(ref, refSz, &id) != WH_ERROR_OK) ||
+        (id >= MOCK_SLOTS) || (_mockRole[id] == MOCK_NONE)) {
         return -1;
     }
-    return id;
+    return (int)id;
 }
 
 /* Slot of a key set up by reference. A key wolfCrypt holds itself runs in
@@ -233,8 +234,7 @@ static int _byValueFail;
 /* Export the bytes of the by-value keys */
 static int _MockExport(wc_CryptoInfo* info)
 {
-    int id = wh_PortKey_KeyRefToId(info->keystore.op.exportPlain.keyRef,
-                                   info->keystore.op.exportPlain.keyRefSz);
+    whKeyId        id    = WH_KEYID_ERASED;
     const uint8_t* key   = _byValueKey;
     word32         keySz = sizeof(_byValueKey);
     byte*          out   = info->keystore.op.exportPlain.key;
@@ -243,6 +243,11 @@ static int _MockExport(wc_CryptoInfo* info)
     _byValueCalls++;
     if (_byValueFail != 0) {
         return _byValueFail;
+    }
+    if (wh_PortKey_KeyRefToId(info->keystore.op.exportPlain.keyRef,
+                              info->keystore.op.exportPlain.keyRefSz,
+                              &id) != WH_ERROR_OK) {
+        return BAD_FUNC_ARG;
     }
     if (id == MOCK_BYVALUE_KEK_ID) {
         key   = _key256;

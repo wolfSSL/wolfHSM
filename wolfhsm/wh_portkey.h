@@ -85,9 +85,8 @@ typedef struct whPortKeyCb_t {
     whPortKeyCleanupCb Cleanup; /* Tear down the backend (optional) */
 } whPortKeyCb;
 
-/* Size of the key reference wolfCrypt passes to the port for a port key:
- * the server keyId, big-endian. Ports read it with wh_PortKey_KeyRefToId()
- */
+/* Size of the key reference wolfCrypt passes to the port for a port key.
+ * wolfCrypt treats it as opaque. Ports read it with wh_PortKey_KeyRefToId() */
 #define WH_PORTKEY_REF_SIZE 2
 
 /* Access mode of a fixed key: how the server reaches it */
@@ -173,22 +172,28 @@ int wh_PortKey_Cleanup(whPortKeyContext* context);
  * @brief Write the wolfCrypt key reference for a port key.
  *
  * @param[in] keyId Server keyId of the port key
- * @param[out] ref Buffer of WH_PORTKEY_REF_SIZE bytes
+ * @param[out] ref Buffer for the key reference
+ * @param[in] refSz Size of ref in bytes. Must be WH_PORTKEY_REF_SIZE
+ * @return int WH_ERROR_OK on success, WH_ERROR_BADARGS if ref is NULL, refSz
+ *         is not WH_PORTKEY_REF_SIZE, or keyId is not TYPE=PORT with a nonzero
+ *         ID
  */
-void wh_PortKey_KeyIdToRef(whKeyId keyId, uint8_t* ref);
+int wh_PortKey_KeyIdToRef(whKeyId keyId, uint8_t* ref, uint32_t refSz);
 
 /**
  * @brief Read the port key's ID from a wolfCrypt key reference.
  *
- * Returns only the ID field of the keyId that wh_PortKey_KeyIdToRef()
+ * Gets only the ID field of the keyId that wh_PortKey_KeyIdToRef()
  * wrote, not its type or owner. The port's crypto callback uses it to find the
  * port key an operation names, so it never decodes a key reference itself.
  *
  * @param[in] ref Key reference, such as aes->id or a keystore request's keyRef
  * @param[in] refSz Size of ref in bytes
- * @return int The ID (1 to 255), or 0 if ref is not a port key reference
+ * @param[out] outId The ID (1 to 255), or 0 if ref is not a port key reference
+ * @return int WH_ERROR_OK on success, WH_ERROR_BADARGS if ref or outId is
+ *         NULL, WH_ERROR_NOTFOUND if ref is not a port key reference
  */
-int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz);
+int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz, whKeyId* outId);
 
 /**
  * @brief Register a fixed key, one the port put in place itself, for example
@@ -205,7 +210,7 @@ int wh_PortKey_KeyRefToId(const uint8_t* ref, uint32_t refSz);
  * @param[in] len Key size in bytes, not 0
  * @param[in] accessMode WH_PORTKEY_ACCESS_BY_REF or WH_PORTKEY_ACCESS_BY_VALUE
  * @return int WH_ERROR_OK on success, WH_ERROR_BADARGS for an unknown access
- *         mode, WH_ERROR_ACCESS if the key is already registered,
+ *         mode, WH_ERROR_NOTBLANK if the key is already registered,
  *         WH_ERROR_NOSPACE if no record is free
  */
 int wh_PortKey_RegisterFixed(whPortKeyContext* context, whKeyId keyId,
@@ -280,7 +285,7 @@ int wh_PortKey_Read(whPortKeyContext* context, int devId, whKeyId keyId,
  *
  * @param[in] context Pointer to an initialized port key context
  * @param[in] keyId Server keyId of the port key. USER is ignored
- * @return int WH_ERROR_OK on success, WH_ERROR_ACCESS if the key is already
+ * @return int WH_ERROR_OK on success, WH_ERROR_NOTBLANK if the key is already
  *         registered, WH_ERROR_NOSPACE if no record is free
  */
 int wh_PortKey_RegisterLoadable(whPortKeyContext* context, whKeyId keyId);
