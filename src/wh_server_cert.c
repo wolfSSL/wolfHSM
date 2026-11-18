@@ -908,7 +908,7 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
     rc = wc_ParseCert(&dc, CERT_TYPE, 0, NULL);
     if (rc != 0) {
         wc_FreeDecodedCert(&dc);
-        return rc;
+        return WH_ERROR_ABORTED;
     }
 
     /* Ensure wolfCrypt was able to decode the certificate and store the
@@ -923,7 +923,15 @@ int wh_Server_CertVerifyAcert(whServerContext* server, const uint8_t* cert,
                             dc.keyOID, NULL);
 
     wc_FreeDecodedCert(&dc);
-    return rc;
+    if (rc == 0) {
+        return WH_ERROR_OK;
+    }
+    else if (rc == ASN_SIG_CONFIRM_E || rc == ASN_SIG_OID_E) {
+        return WH_ERROR_CERT_VERIFY;
+    }
+    else {
+        return WH_ERROR_ABORTED;
+    }
 }
 #endif /* WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT */
 
@@ -1613,15 +1621,12 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                 (void)WH_SERVER_NVM_UNLOCK(server);
             } /* WH_SERVER_NVM_LOCK() */
 
+            resp.rc = rc;
             /* Signature verification error is not an error for the server, so
              * propagate this error to the client in the response, otherwise
-             * return the error code from the verify action */
-            if (rc == ASN_SIG_CONFIRM_E || rc == ASN_SIG_OID_E) {
-                resp.rc = WH_ERROR_CERT_VERIFY;
-                rc      = WH_ERROR_OK;
-            }
-            else {
-                resp.rc = rc;
+             * return the error code from the verify action. */
+            if (rc == WH_ERROR_CERT_VERIFY) {
+                rc = WH_ERROR_OK;
             }
 
             /* Convert the response struct */
@@ -1668,15 +1673,13 @@ int wh_Server_HandleCertRequest(whServerContext* server, uint16_t magic,
                     (void)WH_SERVER_NVM_UNLOCK(server);
                 } /* WH_SERVER_NVM_LOCK() */
 
-                /* Signature verification error is not an error for the server,
-                 * so propagate this error to the client in the response,
-                 * otherwise return the error code from the verify action */
-                if (rc == ASN_SIG_CONFIRM_E || rc == ASN_SIG_OID_E) {
-                    resp.rc = WH_ERROR_CERT_VERIFY;
-                    rc      = WH_ERROR_OK;
-                }
-                else {
-                    resp.rc = rc;
+                resp.rc = rc;
+                /* Signature verification error is not an error for the
+                 * server, so propagate this error to the client in the
+                 * response, otherwise return the error code from the verify
+                 * action. */
+                if (rc == WH_ERROR_CERT_VERIFY) {
+                    rc = WH_ERROR_OK;
                 }
             }
             /* Always call POST for successful PRE, regardless of operation
