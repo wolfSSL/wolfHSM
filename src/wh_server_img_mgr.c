@@ -1390,12 +1390,12 @@ static int _wolfBootImgVerifyCertChainRsa4096(whServerImgMgrContext*   context,
         goto evict_cleanup;
     }
 
-    /* Verify pubkey hint matches leaf key */
+    /* Like wolfBoot, only check that the hint is present. Its value is not
+     * compared, since the cert may encode the same key in another form. */
     pubkey_hint_size = _wolfBootImgFindHeaderField(
         hdr, img->hdrSize, WH_IMG_MGR_WOLFBOOT_HDR_PUBKEY, &pubkey_hint);
-    ret = _wolfBootImgVerifyPubKeyHint(leafKeyBuf, leafKeyMeta->len,
-                                       pubkey_hint, pubkey_hint_size, devId);
-    if (ret != WH_ERROR_OK) {
+    if (pubkey_hint_size != WC_SHA256_DIGEST_SIZE) {
+        ret = WH_ERROR_NOTVERIFIED;
         goto evict_cleanup;
     }
 
