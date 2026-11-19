@@ -151,6 +151,10 @@
  *      input (HKDF IKM, CMAC-KDF Z)
  *      Default: 256
  *
+ *  WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE - Largest cached key usable as an
+ *      HMAC key
+ *      Default: 256
+ *
  *  WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT - Number of additional callbacks
  *      Default: 8
  *
@@ -641,6 +645,20 @@
 #endif
 
 #endif /* HAVE_HKDF || HAVE_CMAC_KDF */
+
+#ifndef NO_HMAC
+
+#ifndef WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE
+#define WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE 256
+#endif
+
+/* The client keeps an HMAC key ID in the wolfCrypt key ID field of the Hmac
+ * struct. That field only exists with WOLF_PRIVATE_KEY_ID. */
+#if defined(WOLFHSM_CFG_ENABLE_CLIENT) && !defined(WOLF_PRIVATE_KEY_ID)
+#error "wolfHSM client HMAC requires wolfCrypt built with WOLF_PRIVATE_KEY_ID"
+#endif
+
+#endif /* !NO_HMAC */
 
 #if defined(WOLFHSM_CFG_CERTIFICATE_MANAGER_ACERT)
 #if !defined(WOLFSSL_ACERT) || !defined(WOLFSSL_ASN_TEMPLATE)

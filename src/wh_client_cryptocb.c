@@ -27,6 +27,7 @@
 #if !defined(WOLFHSM_CFG_NO_CRYPTO) && defined(WOLFHSM_CFG_ENABLE_CLIENT)
 
 #include <stdint.h>
+#include <string.h>
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -42,6 +43,7 @@
 #include "wolfssl/wolfcrypt/asn.h"
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
+#include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/rsa.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/ecc.h"
@@ -91,6 +93,10 @@ static int _handlePqcVerify(whClientContext* ctx, wc_CryptoInfo* info,
 static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
                                      int useDma);
 #endif /* WOLFSSL_HAVE_MLDSA || HAVE_FALCON */
+
+#ifndef NO_HMAC
+static int _handleHmac(whClientContext* ctx, wc_CryptoInfo* info, int useDma);
+#endif /* !NO_HMAC */
 
 int wh_Client_CryptoCb(int devId, wc_CryptoInfo* info, void* inCtx)
 {
@@ -628,6 +634,12 @@ int wh_Client_CryptoCbStd(int devId, wc_CryptoInfo* info, void* inCtx)
     } break; /* case WC_ALGO_TYPE_CMAC */
 
 #endif /* WOLFSSL_CMAC */
+
+#ifndef NO_HMAC
+    case WC_ALGO_TYPE_HMAC:
+        ret = _handleHmac(ctx, info, 0);
+        break;
+#endif /* !NO_HMAC */
 
     case WC_ALGO_TYPE_HASH: {
         switch (info->hash.type) {
@@ -1423,6 +1435,64 @@ static int _handlePqcSigCheckPrivKey(whClientContext* ctx, wc_CryptoInfo* info,
 }
 #endif /* HAVE_FALCON || WOLFSSL_HAVE_MLDSA */
 
+#ifndef NO_HMAC
+/* Only the one-shot call from wc_HmacGenerate_ex() goes to the server. The
+ * update and final calls are declined, so wolfCrypt computes a streaming HMAC
+ * on the client. */
+static int _handleHmac(whClientContext* ctx, wc_CryptoInfo* info, int useDma)
+{
+    int      ret;
+    whKeyId  keyId  = WH_KEYID_ERASED;
+    uint32_t outLen = 0;
+    int      macLen;
+
+    if (!WC_CRYPTOCB_HMAC_IS_ONESHOT(info)) {
+        return CRYPTOCB_UNAVAILABLE;
+    }
+
+    macLen = wc_HmacSizeByType(info->hmac.macType);
+    if (macLen < 0) {
+        return macLen;
+    }
+    outLen = (uint32_t)macLen;
+
+    if (info->hmac.key == NULL) {
+        /* With a NULL key the caller initialized the struct, and it holds the
+         * key ID. With key bytes the struct is not initialized or read. */
+        (void)wh_Client_HmacGetKeyId(info->hmac.hmac, &keyId);
+        /* wolfCrypt returns the same error when no device has the key */
+        if (WH_KEYID_ISERASED(keyId)) {
+            return MISSING_KEY;
+        }
+    }
+    else if (info->hmac.keySz == 0) {
+        /* The server does not take an empty key. wolfCrypt computes this MAC
+         * on the client. */
+        return CRYPTOCB_UNAVAILABLE;
+    }
+
+#ifdef WOLFHSM_CFG_DMA
+    if (useDma) {
+        ret = wh_Client_HmacGenerateDma(
+            ctx, info->hmac.macType, keyId, info->hmac.key, info->hmac.keySz,
+            info->hmac.in, info->hmac.inSz, info->hmac.digest, &outLen);
+    }
+    else
+#endif /* WOLFHSM_CFG_DMA */
+    {
+        ret = wh_Client_HmacGenerate(
+            ctx, info->hmac.macType, keyId, info->hmac.key, info->hmac.keySz,
+            info->hmac.in, info->hmac.inSz, info->hmac.digest, &outLen);
+    }
+    (void)useDma;
+
+    if ((ret == WH_ERROR_OK) && (outLen != (uint32_t)macLen)) {
+        ret = WH_ERROR_ABORTED;
+    }
+    return ret;
+}
+#endif /* !NO_HMAC */
+
 
 #if defined(WOLFHSM_CFG_DMA) && \
     defined(WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT)
@@ -1682,6 +1752,12 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
                                 outMacLen);
     } break;
 #endif
+
+#ifndef NO_HMAC
+    case WC_ALGO_TYPE_HMAC:
+        ret = _handleHmac(ctx, info, 1);
+        break;
+#endif /* !NO_HMAC */
 
 #if !defined(NO_AES) || !defined(NO_DES3)
     case WC_ALGO_TYPE_CIPHER:

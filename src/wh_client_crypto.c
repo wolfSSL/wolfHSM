@@ -6800,6 +6800,318 @@ int wh_Client_CmacDma(whClientContext* ctx, Cmac* cmac, CmacType type,
 
 #endif /* WOLFSSL_CMAC */
 
+#ifndef NO_HMAC
+
+int wh_Client_HmacSetKeyId(Hmac* hmac, whKeyId keyId)
+{
+    if (hmac == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    /* Unlike the other algorithms, HMAC keeps its key ID in the wolfCrypt id
+     * field because wolfCrypt internally uses an Hmac's devCtx to mark an
+     * operation in progress */
+    memset(hmac->id, 0, sizeof(hmac->id));
+    hmac->idLen = 0;
+    if (!WH_KEYID_ISERASED(keyId)) {
+        memcpy(hmac->id, &keyId, sizeof(keyId));
+        hmac->idLen = (int)sizeof(keyId);
+    }
+    return WH_ERROR_OK;
+}
+
+int wh_Client_HmacGetKeyId(Hmac* hmac, whKeyId* outId)
+{
+    if (hmac == NULL || outId == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+    *outId = WH_KEYID_ERASED;
+    if (hmac->idLen == (int)sizeof(whKeyId)) {
+        memcpy(outId, hmac->id, sizeof(*outId));
+    }
+    return WH_ERROR_OK;
+}
+
+/* A request must give the key as bytes or as a key ID, but not both */
+static int _HmacCheckRequestArgs(whClientContext* ctx, whKeyId keyId,
+                                 const uint8_t* key, uint32_t keyLen,
+                                 const uint8_t* in, uint32_t inLen)
+{
+    if (ctx == NULL || (in == NULL && inLen != 0) ||
+        (key == NULL && keyLen != 0)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((keyLen != 0) && !WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+    if ((keyLen == 0) && WH_KEYID_ISERASED(keyId)) {
+        return WH_ERROR_BADARGS;
+    }
+    return WH_ERROR_OK;
+}
+
+static int _HmacCopyMac(const uint8_t* mac, uint32_t macLen, uint8_t* outMac,
+                        uint32_t* outMacLen)
+{
+    if (macLen > *outMacLen) {
+        /* Report the necessary size */
+        *outMacLen = macLen;
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    memcpy(outMac, mac, macLen);
+    *outMacLen = macLen;
+    return WH_ERROR_OK;
+}
+
+int wh_Client_HmacGenerateRequest(whClientContext* ctx, int hashType,
+                                  whKeyId keyId, const uint8_t* key,
+                                  uint32_t keyLen, const uint8_t* in,
+                                  uint32_t inLen)
+{
+    whMessageCrypto_HmacRequest* req;
+    uint8_t*                     dataPtr;
+    uint8_t*                     req_in;
+    uint8_t*                     req_key;
+    uint32_t                     hdr_sz;
+    int                          ret;
+
+    ret = _HmacCheckRequestArgs(ctx, keyId, key, keyLen, in, inLen);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    if (inLen > WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ ||
+        keyLen > WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ - inLen) {
+        return WH_ERROR_REQUEST_SIZE;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_HmacRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_HMAC, ctx->cryptoAffinity);
+    memset(req, 0, sizeof(*req));
+
+    hdr_sz  = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+    req_in  = (uint8_t*)(req + 1);
+    req_key = req_in + inLen;
+
+    req->hashType = (uint32_t)hashType;
+    req->inSz     = inLen;
+    req->keySz    = keyLen;
+    req->keyId    = keyId;
+
+    if (inLen > 0) {
+        memcpy(req_in, in, inLen);
+    }
+    if (keyLen > 0) {
+        memcpy(req_key, key, keyLen);
+    }
+
+    return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
+                                 WC_ALGO_TYPE_HMAC,
+                                 (uint16_t)(hdr_sz + inLen + keyLen), dataPtr);
+}
+
+int wh_Client_HmacGenerateResponse(whClientContext* ctx, uint8_t* outMac,
+                                   uint32_t* outMacLen)
+{
+    whMessageCrypto_HmacResponse* res = NULL;
+    uint8_t*                      dataPtr;
+    uint16_t                      group;
+    uint16_t                      action;
+    uint16_t                      res_len = 0;
+    int                           ret;
+
+    if (ctx == NULL || outMac == NULL || outMacLen == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, &group, &action, &res_len,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_HMAC, (uint8_t**)&res);
+    if (ret == WH_ERROR_OK) {
+        const uint32_t hdr_sz =
+            sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+        /* The MAC bytes the response claims must be in the received frame */
+        if (res_len < hdr_sz || res->outSz > (res_len - hdr_sz)) {
+            ret = WH_ERROR_ABORTED;
+        }
+        else {
+            ret = _HmacCopyMac((const uint8_t*)(res + 1), res->outSz, outMac,
+                               outMacLen);
+        }
+    }
+    return ret;
+}
+
+int wh_Client_HmacGenerate(whClientContext* ctx, int hashType, whKeyId keyId,
+                           const uint8_t* key, uint32_t keyLen,
+                           const uint8_t* in, uint32_t inLen, uint8_t* outMac,
+                           uint32_t* outMacLen)
+{
+    int ret;
+
+    /* Check before the send so that no response is left unread */
+    if (outMac == NULL || outMacLen == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_HmacGenerateRequest(ctx, hashType, keyId, key, keyLen, in,
+                                        inLen);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_HmacGenerateResponse(ctx, outMac, outMacLen);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+
+#ifdef WOLFHSM_CFG_DMA
+int wh_Client_HmacGenerateDmaRequest(whClientContext* ctx, int hashType,
+                                     whKeyId keyId, const uint8_t* key,
+                                     uint32_t keyLen, const uint8_t* in,
+                                     uint32_t inLen)
+{
+    whMessageCrypto_HmacDmaRequest* req;
+    uint8_t*                        dataPtr;
+    uint32_t                        hdr_sz;
+    uintptr_t                       inAddr = 0;
+    int                             ret;
+
+    ret = _HmacCheckRequestArgs(ctx, keyId, key, keyLen, in, inLen);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* Stop if a request is pending. The PRE below would overwrite the cleanup
+     * record of that request. */
+    if (wh_CommClient_IsRequestPending(ctx->comm) == 1) {
+        return WH_ERROR_REQUEST_PENDING;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    req = (whMessageCrypto_HmacDmaRequest*)_createCryptoRequest(
+        dataPtr, WC_ALGO_TYPE_HMAC, ctx->cryptoAffinity);
+    hdr_sz = sizeof(whMessageCrypto_GenericRequestHeader) + sizeof(*req);
+
+    if (keyLen > (uint32_t)WOLFHSM_CFG_COMM_DATA_LEN - hdr_sz) {
+        return WH_ERROR_REQUEST_SIZE;
+    }
+
+    memset(req, 0, sizeof(*req));
+    req->hashType = (uint32_t)hashType;
+    req->keySz    = keyLen;
+    req->keyId    = keyId;
+
+    if (keyLen > 0) {
+        memcpy((uint8_t*)(req + 1), key, keyLen);
+    }
+
+    /* The Response does the matching POST */
+    ret = wh_Client_DmaAsyncPre(ctx, &ctx->dma.asyncCtx.buf, (uintptr_t)in,
+                                inLen, WH_DMA_OPER_CLIENT_READ_PRE, &inAddr);
+    if (ret == WH_ERROR_OK) {
+        req->input.addr = inAddr;
+        req->input.sz   = inLen;
+
+        ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
+                                    WC_ALGO_TYPE_HMAC,
+                                    (uint16_t)(hdr_sz + keyLen), dataPtr);
+    }
+
+    /* Release the mapping on failure. The POST does nothing if no mapping was
+     * made. */
+    if (ret != WH_ERROR_OK) {
+        (void)wh_Client_DmaAsyncPost(ctx, &ctx->dma.asyncCtx.buf);
+    }
+    return ret;
+}
+
+int wh_Client_HmacGenerateDmaResponse(whClientContext* ctx, uint8_t* outMac,
+                                      uint32_t* outMacLen)
+{
+    whMessageCrypto_HmacDmaResponse* res = NULL;
+    uint8_t*                         dataPtr;
+    uint16_t                         respSz = 0;
+    int                              ret;
+
+    if (ctx == NULL || outMac == NULL || outMacLen == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    if (dataPtr == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_RecvResponse(ctx, NULL, NULL, &respSz,
+                                 WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    /* Keep the mapping until the response arrives */
+    if (ret == WH_ERROR_NOTREADY) {
+        return ret;
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret = _getCryptoResponse(dataPtr, WC_ALGO_TYPE_HMAC, (uint8_t**)&res);
+        if (ret == WH_ERROR_OK) {
+            const uint32_t hdr_sz =
+                sizeof(whMessageCrypto_GenericResponseHeader) + sizeof(*res);
+            /* The MAC bytes the response claims must be in the received
+             * frame */
+            if (respSz < hdr_sz || res->outSz > (respSz - hdr_sz)) {
+                ret = WH_ERROR_ABORTED;
+            }
+            else {
+                ret = _HmacCopyMac((const uint8_t*)(res + 1), res->outSz,
+                                   outMac, outMacLen);
+            }
+        }
+    }
+
+    (void)wh_Client_DmaAsyncPost(ctx, &ctx->dma.asyncCtx.buf);
+    return ret;
+}
+
+int wh_Client_HmacGenerateDma(whClientContext* ctx, int hashType, whKeyId keyId,
+                              const uint8_t* key, uint32_t keyLen,
+                              const uint8_t* in, uint32_t inLen,
+                              uint8_t* outMac, uint32_t* outMacLen)
+{
+    int ret;
+
+    /* Check before the send so that no response is left unread */
+    if (outMac == NULL || outMacLen == NULL) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_Client_HmacGenerateDmaRequest(ctx, hashType, keyId, key, keyLen,
+                                           in, inLen);
+    if (ret == WH_ERROR_OK) {
+        do {
+            ret = wh_Client_HmacGenerateDmaResponse(ctx, outMac, outMacLen);
+        } while (ret == WH_ERROR_NOTREADY);
+    }
+    return ret;
+}
+#endif /* WOLFHSM_CFG_DMA */
+
+#endif /* !NO_HMAC */
+
 #ifndef NO_SHA256
 
 /* Maximum number of input bytes that wh_Client_Sha256UpdateRequest can absorb

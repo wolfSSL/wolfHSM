@@ -1102,6 +1102,46 @@ int wh_MessageCrypto_TranslateCmacAesResponse(
 
 
 /*
+ * HMAC
+ */
+
+/* The whole message must be in one request. Streaming is not supported. */
+typedef struct {
+    uint32_t hashType; /* wolfCrypt hash type (WC_SHA256, etc.) */
+    uint32_t inSz;
+    uint32_t keySz; /* inline key size (0 if using keyId) */
+    uint16_t keyId;
+    uint8_t  WH_PAD[2];
+    /* Data follows:
+     * uint8_t in[inSz]
+     * uint8_t key[keySz]
+     */
+} whMessageCrypto_HmacRequest;
+
+typedef struct {
+    uint32_t outSz; /* MAC size, the digest size of hashType */
+    /* Data follows:
+     * uint8_t out[outSz]
+     */
+} whMessageCrypto_HmacResponse;
+
+/* The number of inline bytes that one HMAC request can hold. The message and
+ * an inline key share them, so inSz + keySz must not be more than this. */
+#define WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ         \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                              \
+     (uint32_t)sizeof(whMessageCrypto_GenericRequestHeader) - \
+     (uint32_t)sizeof(whMessageCrypto_HmacRequest))
+
+int wh_MessageCrypto_TranslateHmacRequest(
+    uint16_t magic, const whMessageCrypto_HmacRequest* src,
+    whMessageCrypto_HmacRequest* dest);
+
+int wh_MessageCrypto_TranslateHmacResponse(
+    uint16_t magic, const whMessageCrypto_HmacResponse* src,
+    whMessageCrypto_HmacResponse* dest);
+
+
+/*
  * ML-DSA
  */
 
@@ -1476,6 +1516,38 @@ int wh_MessageCrypto_TranslateCmacAesDmaRequest(
 int wh_MessageCrypto_TranslateCmacAesDmaResponse(
     uint16_t magic, const whMessageCrypto_CmacAesDmaResponse* src,
     whMessageCrypto_CmacAesDmaResponse* dest);
+
+/* Only the message goes by DMA. The key and the MAC are inline.
+ *
+ * Wire layout in the comm buffer:
+ *   whMessageCrypto_GenericRequestHeader
+ *   whMessageCrypto_HmacDmaRequest
+ *   uint8_t key[keySz]
+ */
+typedef struct {
+    whMessageCrypto_DmaBuffer input;    /* message */
+    uint32_t                  hashType; /* wolfCrypt hash type */
+    uint32_t                  keySz;    /* inline key size (0 = use keyId) */
+    uint16_t                  keyId;
+    uint8_t                   WH_PAD[6];
+} whMessageCrypto_HmacDmaRequest;
+
+typedef struct {
+    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
+    uint32_t                      outSz;
+    uint8_t                       WH_PAD[4];
+    /* Data follows:
+     * uint8_t out[outSz]
+     */
+} whMessageCrypto_HmacDmaResponse;
+
+int wh_MessageCrypto_TranslateHmacDmaRequest(
+    uint16_t magic, const whMessageCrypto_HmacDmaRequest* src,
+    whMessageCrypto_HmacDmaRequest* dest);
+
+int wh_MessageCrypto_TranslateHmacDmaResponse(
+    uint16_t magic, const whMessageCrypto_HmacDmaResponse* src,
+    whMessageCrypto_HmacDmaResponse* dest);
 
 /* AES-ECB DMA Request - only input and output data go via DMA. Key is
  * passed inline. */

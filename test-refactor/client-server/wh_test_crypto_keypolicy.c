@@ -42,6 +42,7 @@
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/ecc.h"
+#include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include "wolfssl/wolfcrypt/sha256.h"
 
@@ -450,6 +451,44 @@ static int _whTest_CryptoKeyUsagePolicies(whClientContext* client)
         return ret;
     }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
+
+#if !defined(NO_HMAC) && !defined(NO_SHA256)
+    WH_TEST_PRINT("  Testing HMAC generate without SIGN flag...\n");
+    {
+        whKeyId  hmacKeyId = WH_KEYID_ERASED;
+        uint8_t  message[64];
+        uint8_t  tag[WC_SHA256_DIGEST_SIZE];
+        uint32_t tagLen = sizeof(tag);
+
+        ret = wc_RNG_GenerateBlock(rng, message, sizeof(message));
+        if (ret == 0) {
+            /* No usage other than SIGN permits HMAC generate */
+            ret = wh_Client_KeyCache(
+                client, WH_NVM_FLAGS_USAGE_ANY & ~WH_NVM_FLAGS_USAGE_SIGN,
+                (uint8_t*)"hmac-no-sign", strlen("hmac-no-sign"), key,
+                sizeof(key), &hmacKeyId);
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_HmacGenerate(client, WC_SHA256, hmacKeyId, NULL, 0,
+                                       message, sizeof(message), tag, &tagLen);
+            if (ret == WH_ERROR_USAGE) {
+                WH_TEST_PRINT("    PASS: Correctly denied HMAC generate\n");
+                ret = 0;
+            }
+            else {
+                WH_ERROR_PRINT("    FAIL: Expected WH_ERROR_USAGE, got %d\n",
+                               ret);
+                ret = WH_ERROR_ABORTED;
+            }
+            wh_Client_KeyEvict(client, hmacKeyId);
+        }
+    }
+    if (ret != 0) {
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+#endif /* !NO_HMAC && !NO_SHA256 */
 
 #ifdef WOLFHSM_CFG_KEYWRAP
     WH_TEST_PRINT("  Testing key wrap without WRAP flag...\n");

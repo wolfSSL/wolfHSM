@@ -33,7 +33,7 @@ Architectural overview of the client/server libraries and communication stack.
 ### [5. Features](5-Features.md)
 Detailed reference for each major wolfHSM subsystem.
 
-- Cryptography and wolfCrypt integration (offload, algorithms, hardware acceleration, blocking/non-blocking, request timeouts)
+- Cryptography and wolfCrypt integration (offload, algorithms, hardware acceleration, blocking/non-blocking, request timeouts, algorithm-specific information)
 - Non-Volatile Memory (NVM interface, metadata, backends, flash abstraction)
 - Keystore (key cache, key IDs, global keys, wrapped keys, usage policies)
 - Certificate management (trusted roots, chain verification, verify cache, Acert support)

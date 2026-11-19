@@ -109,6 +109,7 @@ whMessageCrypto_EccMakePubRequest     pkEccMakePubReq;
 whMessageCrypto_EccCheckRequest       pkEccCheckReq;
 whMessageCrypto_RngRequest            rngReq;
 whMessageCrypto_CmacAesRequest        cmacReq;
+whMessageCrypto_HmacRequest           hmacReq;
 whMessageCrypto_AesCbcResponse        cipherAesCbcRes;
 whMessageCrypto_AesGcmResponse        cipherAesGcmRes;
 whMessageCrypto_RsaKeyGenResponse     pkRsakgRes;
@@ -123,6 +124,7 @@ whMessageCrypto_EccMakePubResponse    pkEccMakePubRes;
 whMessageCrypto_EccCheckResponse      pkEccCheckRes;
 whMessageCrypto_RngResponse           rngRes;
 whMessageCrypto_CmacAesResponse       cmacRes;
+whMessageCrypto_HmacResponse          hmacRes;
 whMessageCrypto_Sha256Request         hashSha256Req;
 whMessageCrypto_Sha512Request         hashSha512Req;
 whMessageCrypto_Sha2Response          hashSha2Res;
@@ -177,6 +179,8 @@ whMessageCrypto_PqcStatefulSigVerifyDmaRequest    pqStatefulSigVerifyDmaReq;
 whMessageCrypto_PqcStatefulSigVerifyDmaResponse   pqStatefulSigVerifyDmaRes;
 whMessageCrypto_PqcStatefulSigSigsLeftDmaRequest  pqStatefulSigSigsLeftDmaReq;
 whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse pqStatefulSigSigsLeftDmaRes;
+whMessageCrypto_HmacDmaRequest                    hmacDmaReq;
+whMessageCrypto_HmacDmaResponse                   hmacDmaRes;
 #endif /* WOLFHSM_CFG_DMA */
 
 #endif /* !WOLFHSM_CFG_NO_CRYPTO */

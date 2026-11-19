@@ -11,6 +11,8 @@ This chapter provides a detailed overview of the high level features that wolfHS
     - [Hardware Acceleration and Crypto Affinity](#hardware-acceleration-and-crypto-affinity)
     - [Blocking and Non-Blocking Interfaces](#blocking-and-non-blocking-interfaces)
     - [Crypto Operation Timeouts](#crypto-operation-timeouts)
+    - [Algorithm-Specific Information](#algorithm-specific-information)
+        - [HMAC](#hmac)
 - [Non-Volatile Memory (NVM)](#non-volatile-memory-nvm)
     - [High Level NVM Interface](#high-level-nvm-interface)
     - [Object Metadata and Access Attributes](#object-metadata-and-access-attributes)
@@ -107,7 +109,7 @@ The wolfHSM server exposes the full set of wolfCrypt software algorithms, and th
 
 - **Symmetric ciphers**: AES in CBC, CTR, ECB, GCM, and CCM modes; AES key wrap
 - **Hashing**: SHA-1, SHA-2 (SHA-224, SHA-256, SHA-384, SHA-512), SHA-3
-- **Message authentication**: HMAC (over the supported hash functions) and CMAC
+- **Message authentication**: CMAC, and HMAC over the supported hash functions for whole messages (see [HMAC](#hmac))
 - **Asymmetric**: RSA (encryption, signing, key generation), ECC (ECDSA, ECDH, public key derivation, key validation), Ed25519, Curve25519
 - **Random number generation**: DRBG/RNG backed by the server's entropy source
 - **Post-quantum cryptography**: ML-DSA (FIPS 204) and ML-KEM (FIPS 203)
@@ -118,7 +120,7 @@ For the authoritative list of algorithms, parameter ranges, and options, see the
 
 When a client offloads an operation, it usually does *not* send the key with the request. The key lives in the server [keystore](#keystore) under a numeric **key ID**, and the client refers to it by that ID alone. The bytes never cross the client/server boundary — the client holds only the ID, and the server looks up the material when it runs the operation. This is what lets an HSM guard a private key while still letting a client sign or decrypt with it.
 
-A wolfCrypt key object is tied to a server-side key ID with a per-algorithm `SetKeyId` call. Every offloaded algorithm has one — `wh_Client_RsaSetKeyId`, `wh_Client_EccSetKeyId`, `wh_Client_AesSetKeyId`, `wh_Client_Ed25519SetKeyId`, `wh_Client_Curve25519SetKeyId`, `wh_Client_CmacSetKeyId`, `wh_Client_MlDsaSetKeyId`, and so on (each with a matching `GetKeyId`). You initialize an ordinary wolfCrypt key struct with the client's devId, associate it with a key ID instead of loading key bytes, and call wolfCrypt as usual:
+A wolfCrypt key object is tied to a server-side key ID with a per-algorithm `SetKeyId` call. Every offloaded algorithm has one — `wh_Client_RsaSetKeyId`, `wh_Client_EccSetKeyId`, `wh_Client_AesSetKeyId`, `wh_Client_Ed25519SetKeyId`, `wh_Client_Curve25519SetKeyId`, `wh_Client_CmacSetKeyId`, `wh_Client_HmacSetKeyId`, `wh_Client_MlDsaSetKeyId`, and so on (each with a matching `GetKeyId`). You initialize an ordinary wolfCrypt key struct with the client's devId, associate it with a key ID instead of loading key bytes, and call wolfCrypt as usual:
 
 ```c
 RsaKey  rsa;
@@ -179,6 +181,57 @@ A blocking call waits until the server responds (see [Blocking and Non-Blocking 
 A timeout is configured per client through the `respTimeoutConfig` field of the `whCommClientConfig`. The client starts the timer when it sends a request, checks it while polling for the response, and stops it once the response arrives. Setting `respTimeoutConfig` to `NULL` disables the timeout (the client waits indefinitely), so the feature can be compiled in but left off for individual clients.
 
 wolfHSM has no built-in notion of time, so the actual time measurement is supplied by the platform through a small callback table (`whTimeoutCb`) of init, set, start, stop, and check-expired functions. This keeps the core free of OS dependencies. The POSIX port ships a ready-made implementation (`POSIX_TIMEOUT_CB`, based on `CLOCK_MONOTONIC`); other platforms supply their own. Durations are expressed in microseconds, with `WH_MSEC_TO_USEC()`, `WH_SEC_TO_USEC()`, and `WH_MIN_TO_USEC()` helper macros for readability. An application may also register an optional expired callback that runs when the timer elapses and can override the expiration — for example, restart the timer to grant a legitimately slow operation more time.
+
+### Algorithm-Specific Information
+
+Most algorithms work through wolfHSM the same way they do in wolfCrypt and are not described individually. This section covers the ones with behavior that is specific to wolfHSM.
+
+#### HMAC
+
+The server computes HMAC for whole messages only. The key and the complete message go to the server in one request and the MAC comes back. Streaming HMAC, where the message is passed in several pieces, is not offloaded.
+
+Through wolfCrypt, use the one-shot HMAC functions with the client's devId:
+
+```c
+Hmac   hmac;
+byte   tag[WC_SHA256_DIGEST_SIZE];
+word32 tagSz = sizeof(tag);
+
+/* One request to the server computes the MAC */
+ret = wc_HmacGenerate_ex(&hmac, WC_SHA256, tag, &tagSz, msg, msgSz,
+                         key, keySz, NULL, WH_CLIENT_DEVID(client));
+
+/* The server computes the MAC again and the client compares it */
+ret = wc_HmacVerify_ex(&hmac, WC_SHA256, tag, tagSz, msg, msgSz,
+                       key, keySz, NULL, WH_CLIENT_DEVID(client));
+```
+
+To use a key stored in the HSM, bind its key ID to the HMAC struct and call the same one-shot functions with no key bytes:
+
+```c
+wc_HmacInit(&hmac, NULL, WH_CLIENT_DEVID(client));
+wh_Client_HmacSetKeyId(&hmac, keyId);
+
+tagSz = sizeof(tag);
+ret = wc_HmacGenerate_ex(&hmac, WC_SHA256, tag, &tagSz, msg, msgSz,
+                         NULL, 0, NULL, WH_CLIENT_DEVID(client));
+ret = wc_HmacVerify_ex(&hmac, WC_SHA256, tag, tagSz, msg, msgSz,
+                       NULL, 0, NULL, WH_CLIENT_DEVID(client));
+wc_HmacFree(&hmac);
+```
+
+A NULL key input plus the wolfHSM client `devId` tells the one-shot functions to use the key that the struct names. The caller must initialize the `hmac` struct before the call and free it afterwards. If no key ID is bound to the struct, the call returns `MISSING_KEY`.
+
+wolfHSM offload for streaming functions `wc_HmacUpdate()` and `wc_HmacFinal()` using HSM-resident keys is currently not supported. If used with the wolfHSM client devId and a remote keyId, they return `MISSING_KEY`, because there are no key bytes on the client for wolfCrypt to use. If used with caller-supplied key bytes, wolfCrypt computes the HMAC on the client, and the hash calls inside it still use the wolfHSM hash offload. The same applies to wolfCrypt functions that pass HMAC its input in pieces, such as `wc_HKDF_Expand_ex()`, `wc_PRF()`, and `wc_PBKDF2_ex()`. The exception to this is the one-shot `wc_HKDF_ex()`, which is fully supported by wolfHSM. Consult the API documentation for more information.
+
+The HMAC operation is also available without wolfCrypt as `wh_Client_HmacGenerate()`, which takes the key either as bytes or as a key ID. `wh_Client_HmacGenerateRequest()` and `wh_Client_HmacGenerateResponse()` are its non-blocking halves, and the `wh_Client_HmacGenerateDma*()` functions pass the message by [DMA](#dma-support).
+
+A few rules apply to every form:
+
+- The MAC is always the full digest of the chosen hash.
+- A key used by ID needs `WH_NVM_FLAGS_USAGE_SIGN`. `WH_NVM_FLAGS_USAGE_VERIFY` alone is not enough, because the MAC is returned to the client. The server reads a stored key of up to `WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE` bytes.
+- The server needs a key. It refuses a request with neither key bytes nor a key ID.
+- Without DMA, the message and any key bytes must fit in one request (`WH_MESSAGE_CRYPTO_HMAC_MAX_INLINE_GENERATE_SZ` bytes together). With DMA the message can be any size.
 
 ## Non-Volatile Memory (NVM)
 

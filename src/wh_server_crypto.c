@@ -4642,6 +4642,115 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
+#ifndef NO_HMAC
+
+/* The returned key points into the request for an inline key, or into keyBuf
+ * for a key read by ID. keyBuf must hold WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE
+ * bytes. */
+static int _HmacResolveKey(whServerContext* ctx, const uint8_t* requestKey,
+                           uint32_t requestKeySz, whKeyId clientKeyId,
+                           uint8_t* keyBuf, const uint8_t** outKey,
+                           uint32_t* outKeyLen)
+{
+    int ret = WH_ERROR_OK;
+
+    if (requestKeySz != 0) {
+        *outKey    = requestKey;
+        *outKeyLen = requestKeySz;
+    }
+    else if (!WH_KEYID_ISERASED(clientKeyId)) {
+        whKeyId keyId = wh_KeyId_TranslateFromClient(
+            WH_KEYTYPE_CRYPTO, ctx->comm->client_id, clientKeyId);
+        uint32_t keyLen = WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE;
+
+        /* The request returns the MAC to the client, so the key must have
+         * sign usage. Verify usage is not sufficient. */
+        ret = wh_Server_KeystoreReadKeyEnforce(
+            ctx, keyId, WH_NVM_FLAGS_USAGE_SIGN, NULL, keyBuf, &keyLen);
+        if (ret == WH_ERROR_OK) {
+            *outKey    = keyBuf;
+            *outKeyLen = keyLen;
+        }
+    }
+    else {
+        /* An HMAC with no key is not permitted */
+        ret = WH_ERROR_BADARGS;
+    }
+
+    return ret;
+}
+
+static int _HandleHmac(whServerContext* ctx, uint16_t magic, int devId,
+                       const void* cryptoDataIn, uint16_t inSize,
+                       void* cryptoDataOut, uint16_t* outSize)
+{
+    int                          ret;
+    whMessageCrypto_HmacRequest  req;
+    whMessageCrypto_HmacResponse res;
+    uint32_t                     available;
+    const uint8_t*               in;
+    const uint8_t*               key    = NULL;
+    uint32_t                     keyLen = 0;
+    uint8_t                      keyBuf[WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE];
+    /* The request and response use the same buffer. Make the MAC here and
+     * copy it out after the message and key are used. */
+    uint8_t mac[WC_MAX_DIGEST_SIZE];
+    word32  macLen = sizeof(mac);
+    Hmac    hmac[1];
+
+    if (inSize < sizeof(whMessageCrypto_HmacRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateHmacRequest(magic, cryptoDataIn, &req);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* The sizes come from the client. They must fit in the request
+     * received. */
+    available = inSize - sizeof(whMessageCrypto_HmacRequest);
+    if (req.inSz > available) {
+        return WH_ERROR_BADARGS;
+    }
+    available -= req.inSz;
+    if (req.keySz > available) {
+        return WH_ERROR_BADARGS;
+    }
+
+    in = (const uint8_t*)cryptoDataIn + sizeof(whMessageCrypto_HmacRequest);
+
+    WH_DEBUG_SERVER_VERBOSE("hmac hashType:%d inSz:%d keySz:%d keyId:%x\n",
+                            (int)req.hashType, (int)req.inSz, (int)req.keySz,
+                            req.keyId);
+
+    ret = _HmacResolveKey(ctx, in + req.inSz, req.keySz, req.keyId, keyBuf,
+                          &key, &keyLen);
+
+    if (ret == WH_ERROR_OK) {
+        ret = wc_HmacGenerate_ex(hmac, (int)req.hashType, mac, &macLen, in,
+                                 req.inSz, key, keyLen, NULL, devId);
+    }
+
+    if (ret == 0) {
+        memset(&res, 0, sizeof(res));
+        res.outSz = macLen;
+        memcpy((uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HmacResponse),
+               mac, macLen);
+        ret =
+            wh_MessageCrypto_TranslateHmacResponse(magic, &res, cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(res) + res.outSz;
+        }
+    }
+
+    wc_ForceZero(keyBuf, sizeof(keyBuf));
+    wc_ForceZero(mac, sizeof(mac));
+    WH_DEBUG_SERVER_VERBOSE("hmac end ret:%d\n", ret);
+    return ret;
+}
+#endif /* !NO_HMAC */
+
 #ifndef NO_SHA256
 static int _HandleSha256(whServerContext* ctx, uint16_t magic, int devId,
                          const void* cryptoDataIn, uint16_t inSize,
@@ -6246,6 +6355,13 @@ int wh_Server_HandleCryptoRequest(whServerContext* ctx, uint16_t magic,
                               cryptoInSize, cryptoDataOut, &cryptoOutSize);
             break;
 #endif
+
+#ifndef NO_HMAC
+        case WC_ALGO_TYPE_HMAC:
+            ret = _HandleHmac(ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                              cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !NO_HMAC */
 
         case WC_ALGO_TYPE_HASH:
             switch (rqstHeader.algoType) {
@@ -9156,6 +9272,100 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
 }
 #endif /* WOLFSSL_CMAC && !NO_AES && WOLFSSL_AES_DIRECT */
 
+#ifndef NO_HMAC
+static int _HandleHmacDma(whServerContext* ctx, uint16_t magic, int devId,
+                          const void* cryptoDataIn, uint16_t inSize,
+                          void* cryptoDataOut, uint16_t* outSize)
+{
+    int                             ret;
+    int                             preOk = 0;
+    whMessageCrypto_HmacDmaRequest  req;
+    whMessageCrypto_HmacDmaResponse res;
+    void*                           inAddr = NULL;
+    const uint8_t*                  key    = NULL;
+    uint32_t                        keyLen = 0;
+    uint8_t keyBuf[WOLFHSM_CFG_SERVER_HMAC_MAX_KEY_SIZE];
+    /* The request and response use the same buffer. Make the MAC here and
+     * copy it out after the key is used. */
+    uint8_t mac[WC_MAX_DIGEST_SIZE];
+    word32  macLen = sizeof(mac);
+    Hmac    hmac[1];
+
+    if (inSize < sizeof(whMessageCrypto_HmacDmaRequest)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    ret = wh_MessageCrypto_TranslateHmacDmaRequest(
+        magic, (const whMessageCrypto_HmacDmaRequest*)cryptoDataIn, &req);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
+
+    /* The key size comes from the client. It must fit in the request
+     * received. */
+    if (req.keySz > (inSize - sizeof(whMessageCrypto_HmacDmaRequest))) {
+        return WH_ERROR_BADARGS;
+    }
+    /* wolfCrypt takes a 32-bit message size */
+    if (req.input.sz > UINT32_MAX) {
+        return WH_ERROR_BADARGS;
+    }
+
+    memset(&res, 0, sizeof(res));
+
+    WH_DEBUG_SERVER_VERBOSE(
+        "dma hmac hashType:%d dmaInSz:%d keySz:%d keyId:%x\n",
+        (int)req.hashType, (int)req.input.sz, (int)req.keySz, req.keyId);
+
+    ret = _HmacResolveKey(ctx,
+                          (const uint8_t*)cryptoDataIn +
+                              sizeof(whMessageCrypto_HmacDmaRequest),
+                          req.keySz, req.keyId, keyBuf, &key, &keyLen);
+
+    if (ret == WH_ERROR_OK && req.input.sz != 0) {
+        ret = wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
+        if (ret == WH_ERROR_OK) {
+            preOk = 1;
+        }
+        else if (ret == WH_ERROR_ACCESS) {
+            res.dmaAddrStatus.badAddr = req.input;
+        }
+    }
+
+    if (ret == WH_ERROR_OK) {
+        ret =
+            wc_HmacGenerate_ex(hmac, (int)req.hashType, mac, &macLen, inAddr,
+                               (word32)req.input.sz, key, keyLen, NULL, devId);
+    }
+
+    /* Each PRE that passed must have a POST, even if the MAC failed */
+    if (preOk) {
+        (void)wh_Server_DmaProcessClientAddress(
+            ctx, req.input.addr, &inAddr, req.input.sz,
+            WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
+    }
+
+    if (ret == 0) {
+        res.outSz = macLen;
+        memcpy((uint8_t*)cryptoDataOut +
+                   sizeof(whMessageCrypto_HmacDmaResponse),
+               mac, macLen);
+        ret = wh_MessageCrypto_TranslateHmacDmaResponse(
+            magic, &res, (whMessageCrypto_HmacDmaResponse*)cryptoDataOut);
+        if (ret == 0) {
+            *outSize = sizeof(res) + res.outSz;
+        }
+    }
+
+    wc_ForceZero(keyBuf, sizeof(keyBuf));
+    wc_ForceZero(mac, sizeof(mac));
+    WH_DEBUG_SERVER_VERBOSE("dma hmac end ret:%d\n", ret);
+    return ret;
+}
+#endif /* !NO_HMAC */
+
 #ifndef WC_NO_RNG
 static int _HandleRngDma(whServerContext* ctx, uint16_t magic, int devId,
                          uint16_t seq, const void* cryptoDataIn,
@@ -9423,6 +9633,13 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                                  cryptoInSize, cryptoDataOut, &cryptoOutSize);
             break;
 #endif /* WOLFSSL_CMAC */
+
+#ifndef NO_HMAC
+        case WC_ALGO_TYPE_HMAC:
+            ret = _HandleHmacDma(ctx, magic, devId, cryptoDataIn, cryptoInSize,
+                                 cryptoDataOut, &cryptoOutSize);
+            break;
+#endif /* !NO_HMAC */
 
 #ifndef WC_NO_RNG
         case WC_ALGO_TYPE_RNG:
