@@ -483,8 +483,8 @@ int wh_Client_RngGenerateDma(whClientContext* ctx, uint8_t* out, uint32_t size)
 #ifndef NO_AES
 
 #ifdef WOLFSSL_AES_COUNTER
-int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
-                            const uint8_t* in, uint32_t len)
+int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, const uint8_t* in,
+                            uint32_t len)
 {
     whMessageCrypto_AesCtrRequest* req;
     uint8_t*                       dataPtr;
@@ -531,7 +531,6 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     req_iv  = req_key + key_len;
     req_tmp = req_iv + AES_IV_SIZE;
 
-    req->enc    = enc;
     req->keyLen = key_len;
     req->sz     = len;
     req->keyId  = key_id;
@@ -546,8 +545,8 @@ int wh_Client_AesCtrRequest(whClientContext* ctx, Aes* aes, int enc,
     memcpy(req_iv, (uint8_t*)aes->reg, AES_IV_SIZE);
     memcpy(req_tmp, (uint8_t*)aes->tmp, AES_BLOCK_SIZE);
 
-    WH_DEBUG_CLIENT_VERBOSE("AesCtr req: enc=%d keylen=%u insz=%u reqsz=%u\n",
-                            enc, (unsigned int)key_len, (unsigned int)len,
+    WH_DEBUG_CLIENT_VERBOSE("AesCtr req: keylen=%u insz=%u reqsz=%u\n",
+                            (unsigned int)key_len, (unsigned int)len,
                             (unsigned int)req_len);
 
     return wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO,
@@ -607,7 +606,7 @@ int wh_Client_AesCtrResponse(whClientContext* ctx, Aes* aes, uint8_t* out,
     return ret;
 }
 
-int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
+int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, const uint8_t* in,
                      uint32_t len, uint8_t* out)
 {
     int ret;
@@ -616,7 +615,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_AesCtrRequest(ctx, aes, enc, in, len);
+    ret = wh_Client_AesCtrRequest(ctx, aes, in, len);
     if (ret == WH_ERROR_OK) {
         do {
             ret = wh_Client_AesCtrResponse(ctx, aes, out, NULL);
@@ -626,7 +625,7 @@ int wh_Client_AesCtr(whClientContext* ctx, Aes* aes, int enc, const uint8_t* in,
 }
 
 #ifdef WOLFHSM_CFG_DMA
-int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
+int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes,
                                const uint8_t* in, uint32_t len, uint8_t* out)
 {
     int                               ret     = WH_ERROR_OK;
@@ -665,7 +664,6 @@ int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
               AES_IV_SIZE + AES_BLOCK_SIZE;
 
     memset(req, 0, sizeof(*req));
-    req->enc  = enc;
     req->left = aes->left;
 
     req->keyId = WH_KEYID_FROM_WC(aes);
@@ -719,9 +717,9 @@ int wh_Client_AesCtrDmaRequest(whClientContext* ctx, Aes* aes, int enc,
         ctx->dma.asyncCtx.aes.outSz         = outAcq ? len : 0;
         ctx->dma.asyncCtx.aes.aadSz         = 0;
 
-        WH_DEBUG_CLIENT_VERBOSE(
-            "AesCtr DMA req: enc=%d keysz=%u insz=%u reqsz=%u\n", enc,
-            (unsigned int)req->keySz, (unsigned int)len, (unsigned int)req_len);
+        WH_DEBUG_CLIENT_VERBOSE("AesCtr DMA req: keysz=%u insz=%u reqsz=%u\n",
+                                (unsigned int)req->keySz, (unsigned int)len,
+                                (unsigned int)req_len);
 
         ret = wh_Client_SendRequest(ctx, WH_MESSAGE_GROUP_CRYPTO_DMA,
                                     WC_ALGO_TYPE_CIPHER, req_len, dataPtr);
@@ -808,8 +806,8 @@ int wh_Client_AesCtrDmaResponse(whClientContext* ctx, Aes* aes)
     return ret;
 }
 
-int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
-                        const uint8_t* in, uint32_t len, uint8_t* out)
+int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, const uint8_t* in,
+                        uint32_t len, uint8_t* out)
 {
     int ret;
 
@@ -817,7 +815,7 @@ int wh_Client_AesCtrDma(whClientContext* ctx, Aes* aes, int enc,
         return WH_ERROR_BADARGS;
     }
 
-    ret = wh_Client_AesCtrDmaRequest(ctx, aes, enc, in, len, out);
+    ret = wh_Client_AesCtrDmaRequest(ctx, aes, in, len, out);
     if (ret == WH_ERROR_OK) {
         do {
             ret = wh_Client_AesCtrDmaResponse(ctx, aes);

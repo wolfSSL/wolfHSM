@@ -79,10 +79,6 @@ int wh_TransportNsc_ClientSend(void* context, uint16_t size, const void* data)
     if (size == 0U || size > WH_TRANSPORT_NSC_BUFFER_SIZE) {
         return WH_ERROR_BADARGS;
     }
-    /* prior response must be consumed before next Send */
-    if (ctx->last_rsp_size != 0U) {
-        return WH_ERROR_NOTREADY;
-    }
 
     rspSz = (uint32_t)WH_TRANSPORT_NSC_BUFFER_SIZE;
     rc    = wcs_wolfhsm_transmit((const uint8_t*)data, (uint32_t)size,
