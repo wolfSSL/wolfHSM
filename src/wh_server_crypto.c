@@ -7204,6 +7204,8 @@ static int _HandleMlDsaSignDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_MlDsaSignDmaRequest req;
     whMessageCrypto_MlDsaSignDmaResponse res;
 
+    memset(&res, 0, sizeof(res));
+
     if (inSize < sizeof(whMessageCrypto_MlDsaSignDmaRequest)) {
         return WH_ERROR_BADARGS;
     }
@@ -7341,6 +7343,8 @@ static int _HandleMlDsaVerifyDma(whServerContext* ctx, uint16_t magic,
 
     whMessageCrypto_MlDsaVerifyDmaRequest req;
     whMessageCrypto_MlDsaVerifyDmaResponse res;
+
+    memset(&res, 0, sizeof(res));
 
     if (inSize < sizeof(whMessageCrypto_MlDsaVerifyDmaRequest)) {
         return WH_ERROR_BADARGS;
@@ -9379,6 +9383,8 @@ static int _HandleRngDma(whServerContext* ctx, uint16_t magic, int devId,
     whMessageCrypto_RngDmaRequest  req;
     whMessageCrypto_RngDmaResponse res;
     void*                          outAddr = NULL;
+
+    memset(&res, 0, sizeof(res));
 
     if (inSize < sizeof(whMessageCrypto_RngDmaRequest)) {
         return WH_ERROR_BADARGS;
