@@ -30,4 +30,6 @@ int wh_DemoClient_CryptoCmacKdfExport(whClientContext* clientContext);
 int wh_DemoClient_CryptoCmacKdfCache(whClientContext* clientContext);
 int wh_DemoClient_CryptoCmacKdfCacheInputs(whClientContext* clientContext);
 
+int wh_DemoClient_CryptoSlhDsa(whClientContext* clientContext);
+
 #endif /* !DEMO_CLIENT_CRYPTO_H_ */
