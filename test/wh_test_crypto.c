@@ -10253,6 +10253,107 @@ static int whTestCrypto_Aes(whClientContext* ctx, int devId, WC_RNG* rng)
     return ret;
 }
 
+#if defined(HAVE_AESGCM) && defined(WOLFHSM_CFG_TEST_POSIX)
+/* Largest GCM input whose output and 16 byte tag fit in one response */
+#define WH_TEST_AESGCM_MAX_SZ                        \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                     \
+     sizeof(whMessageCrypto_GenericResponseHeader) - \
+     sizeof(whMessageCrypto_AesGcmResponse) - AES_BLOCK_SIZE)
+
+/* Large static buffers, so only built for the POSIX test harness */
+static uint8_t whTestCrypto_AesGcmBigIn[WH_TEST_AESGCM_MAX_SZ + 1];
+static uint8_t whTestCrypto_AesGcmBigOut[WH_TEST_AESGCM_MAX_SZ + 1];
+static uint8_t whTestCrypto_AesGcmBigRef[WH_TEST_AESGCM_MAX_SZ];
+
+/* GCM output that fills the response, one byte more, and an oversized tag */
+static int whTestCrypto_AesGcmResCapacity(whClientContext* ctx)
+{
+    int            ret = 0;
+    int            tmp;
+    Aes            aes[1];
+    whKeyId        keyId                     = WH_KEYID_ERASED;
+    uint8_t        labelIn[WH_NVM_LABEL_LEN] = "AES-GCM Capacity";
+    uint8_t        tag[AES_BLOCK_SIZE];
+    uint8_t        refTag[AES_BLOCK_SIZE];
+    uint8_t*       in                    = whTestCrypto_AesGcmBigIn;
+    uint8_t*       out                   = whTestCrypto_AesGcmBigOut;
+    uint8_t*       ref                   = whTestCrypto_AesGcmBigRef;
+    const uint32_t maxSz                 = WH_TEST_AESGCM_MAX_SZ;
+    const uint8_t  key[AES_128_KEY_SIZE] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae,
+                                            0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88,
+                                            0x09, 0xcf, 0x4f, 0x3c};
+    const uint8_t  iv[GCM_NONCE_MID_SZ]  = {0xca, 0xfe, 0xba, 0xbe, 0xfa, 0xce,
+                                            0xdb, 0xad, 0xde, 0xca, 0xf8, 0x88};
+    uint32_t       i;
+
+    for (i = 0; i < sizeof(whTestCrypto_AesGcmBigIn); i++) {
+        in[i] = (uint8_t)((i * 13u + 5u) & 0xff);
+    }
+
+    ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_AesGcmSetKey(aes, key, sizeof(key));
+        if (ret == 0) {
+            ret = wc_AesGcmEncrypt(aes, ref, in, maxSz, iv, sizeof(iv), refTag,
+                                   sizeof(refTag), NULL, 0);
+        }
+        (void)wc_AesFree(aes);
+    }
+    if (ret == 0) {
+        ret = wh_Client_KeyCache(ctx, WH_NVM_FLAGS_USAGE_ENCRYPT, labelIn,
+                                 sizeof(labelIn), key, sizeof(key), &keyId);
+    }
+    if (ret == 0) {
+        ret = wc_AesInit(aes, NULL, INVALID_DEVID);
+        if (ret == 0) {
+            ret = wh_Client_AesSetKeyId(aes, keyId);
+        }
+        if (ret == 0) {
+            ret = wh_Client_AesGcm(ctx, aes, 1, in, maxSz, iv, sizeof(iv), NULL,
+                                   0, NULL, tag, sizeof(tag), out);
+            if (ret == 0 && (memcmp(out, ref, maxSz) != 0 ||
+                             memcmp(tag, refTag, sizeof(tag)) != 0)) {
+                WH_ERROR_PRINT("AES-GCM capacity: max size output mismatch\n");
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            tmp = wh_Client_AesGcm(ctx, aes, 1, in, maxSz + 1, iv, sizeof(iv),
+                                   NULL, 0, NULL, tag, sizeof(tag), out);
+            if (tmp != WH_ERROR_BADARGS) {
+                WH_ERROR_PRINT("AES-GCM capacity: max size + 1 expected "
+                               "BADARGS, got %d\n",
+                               tmp);
+                ret = -1;
+            }
+        }
+        if (ret == 0) {
+            ret =
+                wh_Client_AesGcmRequest(ctx, aes, 1, in, AES_BLOCK_SIZE, iv,
+                                        sizeof(iv), NULL, 0, NULL, UINT32_MAX);
+            if (ret == 0) {
+                do {
+                    tmp = wh_Client_AesGcmResponse(
+                        ctx, aes, out, AES_BLOCK_SIZE, NULL, tag, sizeof(tag));
+                } while (tmp == WH_ERROR_NOTREADY);
+                if (tmp != WH_ERROR_BADARGS) {
+                    WH_ERROR_PRINT("AES-GCM capacity: max tag size expected "
+                                   "BADARGS, got %d\n",
+                                   tmp);
+                    ret = -1;
+                }
+            }
+        }
+        (void)wc_AesFree(aes);
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("AES GCM RESPONSE CAPACITY SUCCESS\n");
+    }
+    return ret;
+}
+#endif /* HAVE_AESGCM && WOLFHSM_CFG_TEST_POSIX */
+
 /* Direct exercise of the native async AES primitives
  * (wh_Client_AesXxxRequest / wh_Client_AesXxxResponse).
  * Covers each mode's round-trip, state continuity, and argument rejection. */
@@ -18837,6 +18938,11 @@ int whTest_CryptoClientConfig(whClientConfig* config)
             i++;
         }
     }
+#if defined(HAVE_AESGCM) && defined(WOLFHSM_CFG_TEST_POSIX)
+    if (ret == WH_ERROR_OK) {
+        ret = whTestCrypto_AesGcmResCapacity(client);
+    }
+#endif /* HAVE_AESGCM && WOLFHSM_CFG_TEST_POSIX */
 #ifdef WOLFHSM_CFG_DMA
     /* Dedicated async DMA tests drive the wh_Client_*Dma APIs directly; prefer
      * DMA so any wolfCrypt-routed operations also take the DMA path. */
