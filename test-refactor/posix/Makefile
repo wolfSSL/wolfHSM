@@ -202,6 +202,11 @@ ifeq ($(CERT_VERIFY_CACHE_FULLCHAIN),1)
     DEF += -DWOLFHSM_CFG_CERTIFICATE_VERIFY_CACHE_FULLCHAIN
 endif
 
+# Let clients load keys into port keys, and enable its unit test
+ifeq ($(PORTKEY_LOAD),1)
+    DEF += -DWOLFHSM_CFG_PORTKEY_LOAD
+endif
+
 # Build the wolfCrypt test suite as a wolfHSM client
 ifeq ($(TESTWOLFCRYPT),1)
     DEF += -DWOLFHSM_CFG_TEST_WOLFCRYPTTEST

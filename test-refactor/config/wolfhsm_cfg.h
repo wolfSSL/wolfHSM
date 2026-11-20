@@ -52,7 +52,7 @@
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 #define WOLFHSM_CFG_KEYWRAP
-#define WOLFHSM_CFG_HWKEYSTORE
+#define WOLFHSM_CFG_PORTKEY
 #endif
 
 /* Test-only SHE key management APIs. Bypass authenticated update protocols. */
