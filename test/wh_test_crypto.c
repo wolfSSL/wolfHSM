@@ -16515,6 +16515,21 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("LMS labeled keygen returned no keyId\n");
             ret = WH_ERROR_ABORTED;
         }
+        /* No usage flags, so sign and verify must both be refused */
+        if (ret == 0) {
+            word32 tmpSigLen = sigCap;
+            int    vres      = 0;
+            int    signRet   = wh_Client_LmsSignDma(
+                ctx, msg, msgSz, whTest_LmsSigBuf, &tmpSigLen, lblKey);
+            int verifyRet = wh_Client_LmsVerifyDma(
+                ctx, whTest_LmsSigBuf, sigCap, msg, msgSz, &vres, lblKey);
+            if ((signRet != WH_ERROR_USAGE) || (verifyRet != WH_ERROR_USAGE)) {
+                WH_ERROR_PRINT("LMS key without usage flags: sign ret=%d "
+                               "verify ret=%d (expected WH_ERROR_USAGE)\n",
+                               signRet, verifyRet);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
         /* Keygen is write-through, so erase (cache + NVM) to avoid leaking a
          * committed key. */
         if (!WH_KEYID_ISERASED(lblId)) {
@@ -16652,7 +16667,7 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
 
     /* Public-key import: provision a verify-only copy of this key's public
      * half under a new keyId, verify the signature made above against it, and
-     * confirm signing with it is refused (no private state). */
+     * confirm signing with it is refused (no SIGN usage). */
     if (ret == 0) {
         LmsKey  pubKey[1];
         int     pubInited = 0;
@@ -16683,8 +16698,9 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
         /* EPHEMERAL keeps it cache-only for an easy cleanup; production would
          * pin with WH_NVM_FLAGS_NONMODIFIABLE and commit. */
         if (ret == 0) {
-            ret = wh_Client_LmsImportPubKey(ctx, pubKey, &pubKeyId,
-                                            WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+            ret = wh_Client_LmsImportPubKey(
+                ctx, pubKey, &pubKeyId,
+                WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL);
             if (ret != 0) {
                 WH_ERROR_PRINT("LMS import pub failed: ret=%d\n", ret);
             }
@@ -16702,9 +16718,35 @@ static int whTestCrypto_LmsCryptoCb(whClientContext* ctx, int devId,
             int    signRet =
                 wh_Client_LmsSignDma(ctx, msg, msgSz, whTest_LmsSigBuf,
                                      &tmpSigLen, pubKey);
-            if (signRet == 0) {
-                WH_ERROR_PRINT("LMS sign with verify-only key unexpectedly "
-                               "succeeded\n");
+            if (signRet != WH_ERROR_USAGE) {
+                WH_ERROR_PRINT("LMS sign with verify-only key: ret=%d "
+                               "(expected WH_ERROR_USAGE)\n",
+                               signRet);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        /* SIGN usage only: verify is refused, sign fails with no private key */
+        if (ret == 0) {
+            (void)wh_Client_KeyEvict(ctx, pubKeyId);
+            pubKeyId = WH_KEYID_ERASED;
+            ret      = wh_Client_LmsImportPubKey(
+                ctx, pubKey, &pubKeyId,
+                WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_SIGN, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("LMS import sign-only pub failed: ret=%d\n",
+                               ret);
+            }
+        }
+        if (ret == 0) {
+            word32 tmpSigLen = (word32)sizeof(whTest_LmsSigBuf);
+            int    verifyRet = wh_Client_LmsVerifyDma(
+                ctx, whTest_LmsSigBuf, sigLen, msg, msgSz, &vres, pubKey);
+            int signRet = wh_Client_LmsSignDma(
+                ctx, msg, msgSz, whTest_LmsSigBuf, &tmpSigLen, pubKey);
+            if ((verifyRet != WH_ERROR_USAGE) || (signRet == 0) ||
+                (signRet == WH_ERROR_USAGE)) {
+                WH_ERROR_PRINT("LMS sign-only pub: verify ret=%d sign ret=%d\n",
+                               verifyRet, signRet);
                 ret = WH_ERROR_ABORTED;
             }
         }
@@ -17004,6 +17046,21 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
             WH_ERROR_PRINT("XMSS labeled keygen returned no keyId\n");
             ret = WH_ERROR_ABORTED;
         }
+        /* No usage flags, so sign and verify must both be refused */
+        if (ret == 0) {
+            word32 tmpSigLen = sigCap;
+            int    vres      = 0;
+            int    signRet   = wh_Client_XmssSignDma(
+                ctx, msg, msgSz, whTest_XmssSigBuf, &tmpSigLen, lblKey);
+            int verifyRet = wh_Client_XmssVerifyDma(
+                ctx, whTest_XmssSigBuf, sigCap, msg, msgSz, &vres, lblKey);
+            if ((signRet != WH_ERROR_USAGE) || (verifyRet != WH_ERROR_USAGE)) {
+                WH_ERROR_PRINT("XMSS key without usage flags: sign ret=%d "
+                               "verify ret=%d (expected WH_ERROR_USAGE)\n",
+                               signRet, verifyRet);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
         /* Keygen is write-through, so erase (cache + NVM) to avoid leaking a
          * committed key. */
         if (!WH_KEYID_ISERASED(lblId)) {
@@ -17135,7 +17192,7 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
 
     /* Public-key import: provision a verify-only copy of this key's public
      * half under a new keyId, verify the signature made above against it, and
-     * confirm signing with it is refused (no private state). */
+     * confirm signing with it is refused (no SIGN usage). */
     if (ret == 0) {
         XmssKey pubKey[1];
         int     pubInited = 0;
@@ -17164,8 +17221,9 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
         /* EPHEMERAL keeps it cache-only for an easy cleanup; production would
          * pin with WH_NVM_FLAGS_NONMODIFIABLE and commit. */
         if (ret == 0) {
-            ret = wh_Client_XmssImportPubKey(ctx, pubKey, &pubKeyId,
-                                             WH_NVM_FLAGS_EPHEMERAL, 0, NULL);
+            ret = wh_Client_XmssImportPubKey(
+                ctx, pubKey, &pubKeyId,
+                WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_VERIFY, 0, NULL);
             if (ret != 0) {
                 WH_ERROR_PRINT("XMSS import pub failed: ret=%d\n", ret);
             }
@@ -17183,9 +17241,36 @@ static int whTestCrypto_XmssCryptoCb(whClientContext* ctx, int devId,
             int    signRet =
                 wh_Client_XmssSignDma(ctx, msg, msgSz, whTest_XmssSigBuf,
                                       &tmpSigLen, pubKey);
-            if (signRet == 0) {
-                WH_ERROR_PRINT("XMSS sign with verify-only key unexpectedly "
-                               "succeeded\n");
+            if (signRet != WH_ERROR_USAGE) {
+                WH_ERROR_PRINT("XMSS sign with verify-only key: ret=%d "
+                               "(expected WH_ERROR_USAGE)\n",
+                               signRet);
+                ret = WH_ERROR_ABORTED;
+            }
+        }
+        /* SIGN usage only: verify is refused, sign fails with no private key */
+        if (ret == 0) {
+            (void)wh_Client_KeyEvict(ctx, pubKeyId);
+            pubKeyId = WH_KEYID_ERASED;
+            ret      = wh_Client_XmssImportPubKey(
+                ctx, pubKey, &pubKeyId,
+                WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_SIGN, 0, NULL);
+            if (ret != 0) {
+                WH_ERROR_PRINT("XMSS import sign-only pub failed: ret=%d\n",
+                               ret);
+            }
+        }
+        if (ret == 0) {
+            word32 tmpSigLen = (word32)sizeof(whTest_XmssSigBuf);
+            int    verifyRet = wh_Client_XmssVerifyDma(
+                ctx, whTest_XmssSigBuf, sigLen, msg, msgSz, &vres, pubKey);
+            int signRet = wh_Client_XmssSignDma(
+                ctx, msg, msgSz, whTest_XmssSigBuf, &tmpSigLen, pubKey);
+            if ((verifyRet != WH_ERROR_USAGE) || (signRet == 0) ||
+                (signRet == WH_ERROR_USAGE)) {
+                WH_ERROR_PRINT("XMSS sign-only pub: verify ret=%d "
+                               "sign ret=%d\n",
+                               verifyRet, signRet);
                 ret = WH_ERROR_ABORTED;
             }
         }

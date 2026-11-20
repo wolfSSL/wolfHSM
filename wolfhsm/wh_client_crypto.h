@@ -3793,9 +3793,9 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
 /**
  * @brief Convenience wrapper for keygen that returns the public key via DMA.
  *
- * Equivalent to wh_Client_LmsMakeKeyDma with a server-assigned keyId. As with
- * that call the key is committed to the keystore before its public key is
- * returned.
+ * Equivalent to wh_Client_LmsMakeKeyDma with a server-assigned keyId and
+ * WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY. Key is committed to the
+ * keystore before the public key is returned.
  *
  * @param[in]     ctx Pointer to the client context.
  * @param[in,out] key LmsKey with its parameter set bound.
@@ -3864,7 +3864,8 @@ int wh_Client_LmsSigsLeftDma(whClientContext* ctx, LmsKey* key);
  * @param[in,out] inout_keyId On entry a specific keyId to provision, or
  *                            WH_KEYID_ERASED to be assigned one; on success the
  *                            keyId. May be NULL.
- * @param[in]     flags       NVM flags; WH_NVM_FLAGS_NONMODIFIABLE pins the
+ * @param[in]     flags       NVM flags; WH_NVM_FLAGS_USAGE_VERIFY is required
+ *                            to verify, WH_NVM_FLAGS_NONMODIFIABLE pins the
  *                            key, and it is committed to NVM unless
  *                            WH_NVM_FLAGS_EPHEMERAL is set.
  * @param[in]     label_len   Length of label in bytes (0 if none).
@@ -3927,9 +3928,9 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
 /**
  * @brief Convenience wrapper for keygen that returns the public key via DMA.
  *
- * Equivalent to wh_Client_XmssMakeKeyDma with a server-assigned keyId. As with
- * that call the key is committed to the keystore before its public key is
- * returned.
+ * Equivalent to wh_Client_XmssMakeKeyDma with a server-assigned keyId and
+ * WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY. Key is committed to the
+ * keystore before the public key is returned.
  *
  * @param[in]     ctx Pointer to the client context.
  * @param[in,out] key XmssKey with its parameter string bound.

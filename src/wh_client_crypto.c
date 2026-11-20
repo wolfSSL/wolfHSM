@@ -12652,7 +12652,9 @@ int wh_Client_LmsMakeKeyDma(whClientContext* ctx, LmsKey* key,
 
 int wh_Client_LmsMakeExportKeyDma(whClientContext* ctx, LmsKey* key)
 {
-    return wh_Client_LmsMakeKeyDma(ctx, key, NULL, WH_NVM_FLAGS_NONE, 0, NULL);
+    return wh_Client_LmsMakeKeyDma(
+        ctx, key, NULL, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+        NULL);
 }
 
 int wh_Client_LmsSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
@@ -13149,7 +13151,9 @@ int wh_Client_XmssMakeKeyDma(whClientContext* ctx, XmssKey* key,
 
 int wh_Client_XmssMakeExportKeyDma(whClientContext* ctx, XmssKey* key)
 {
-    return wh_Client_XmssMakeKeyDma(ctx, key, NULL, WH_NVM_FLAGS_NONE, 0, NULL);
+    return wh_Client_XmssMakeKeyDma(
+        ctx, key, NULL, WH_NVM_FLAGS_USAGE_SIGN | WH_NVM_FLAGS_USAGE_VERIFY, 0,
+        NULL);
 }
 
 int wh_Client_XmssSignDma(whClientContext* ctx, const byte* msg, word32 msgSz,
