@@ -390,8 +390,8 @@ static int _HandleRsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     /* Get pointer to where key data would be stored (after response struct) */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_RsaKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_RsaKeyGenResponse);
     uint16_t der_size = 0;
 
     /* init the rsa key */
@@ -498,11 +498,16 @@ static int _HandleRsaFunction(whServerContext* ctx, uint16_t magic, int devId,
           WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
     word32 in_len  = (word32)(req.inLen);
     word32 out_len = (word32)(req.outLen);
+    const word32 max_len =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_RsaResponse);
 
     /* Ensure input data fits within request payload */
     uint32_t available = inSize - sizeof(whMessageCrypto_RsaRequest);
     if (in_len > available) {
         return WH_ERROR_BADARGS;
+    }
+    if (out_len > max_len) {
+        out_len = max_len;
     }
 
     /* in and out are after the fixed size fields */
@@ -1426,8 +1431,8 @@ static int _HandleEccKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     uint8_t* res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_EccKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_EccKeyGenResponse);
     uint16_t res_size = 0;
 
     /* init ecc key */
@@ -1538,8 +1543,8 @@ static int _HandleEccSharedSecret(whServerContext* ctx, uint16_t magic,
     /* Response message */
     byte* res_out =
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EcdhResponse);
-    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                              (res_out - (uint8_t*)cryptoDataOut));
+    word32 max_len =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_EcdhResponse);
     word32 res_len = 0;
 
     /* init ecc keys */
@@ -1673,8 +1678,8 @@ static int _HandleEccSign(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     byte* res_out =
         (byte*)cryptoDataOut + sizeof(whMessageCrypto_EccSignResponse);
-    word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                              (res_out - (uint8_t*)cryptoDataOut));
+    word32 max_len =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_EccSignResponse);
     word32 res_len = max_len;
 
     /* init private key */
@@ -1760,8 +1765,8 @@ static int _HandleEccVerify(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     byte* res_pub =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccVerifyResponse);
-    word32   max_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                               (res_pub - (uint8_t*)cryptoDataOut));
+    word32 max_size =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_EccVerifyResponse);
     uint32_t pub_size = 0;
     int      result   = 0;
 
@@ -1844,9 +1849,8 @@ static int _HandleEccMakePub(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     byte* res_pub =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_EccMakePubResponse);
-    word32 pub_size = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                               sizeof(whMessageCrypto_GenericResponseHeader) -
-                               sizeof(whMessageCrypto_EccMakePubResponse));
+    word32 pub_size =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_EccMakePubResponse);
 
     /* Deliberately no wh_Server_KeystoreFindEnforceKeyUsage(): this operation
      * only produces public material, which keystore policy treats as
@@ -2011,11 +2015,7 @@ static int _HandleRng(whServerContext* ctx, uint16_t magic, int devId,
         return ret;
     }
 
-    /* Calculate maximum data size server can respond with (subtract headers) */
-    const uint32_t server_max_data =
-        WOLFHSM_CFG_COMM_DATA_LEN -
-        sizeof(whMessageCrypto_GenericResponseHeader) -
-        sizeof(whMessageCrypto_RngResponse);
+    const uint32_t server_max_data = WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ;
 
     /* Server responds with minimum of requested size and server max capacity */
     uint32_t actual_size =
@@ -2199,10 +2199,8 @@ static int _HandleHkdf(whServerContext* ctx, uint16_t magic, int devId,
      * Declared before the first goto so no jump skips an initialization. */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_HkdfResponse);
-    uint16_t max_size =
-        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                   sizeof(whMessageCrypto_GenericResponseHeader) -
-                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_HkdfResponse);
 
     /* Check if we should use cached key as input */
     if (inKeySz == 0 && !WH_KEYID_ISERASED(keyIdIn)) {
@@ -2344,10 +2342,8 @@ static int _HandleCmacKdf(whServerContext* ctx, uint16_t magic, int devId,
     /* Declared before the first goto so no jump skips an initialization */
     uint8_t* out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_CmacKdfResponse);
-    uint16_t max_size =
-        (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                   sizeof(whMessageCrypto_GenericResponseHeader) -
-                   ((uint8_t*)out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_CmacKdfResponse);
 
     if (saltSz == 0) {
         if (WH_KEYID_ISERASED(saltKeyId)) {
@@ -2478,9 +2474,10 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
     /* Response Message */
     uint8_t* out = (uint8_t*)cryptoDataOut +
                    sizeof(whMessageCrypto_Curve25519KeyGenResponse);
+    const uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_Curve25519KeyGenResponse);
     /* Initialize the key size to the max size of the buffer */
-    uint16_t ser_size =
-        (word32)(WOLFHSM_CFG_COMM_DATA_LEN - (out - (uint8_t*)cryptoDataOut));
+    uint16_t ser_size = max_size;
 
     /* init key */
     ret = wc_curve25519_init_ex(key, NULL, devId);
@@ -2495,9 +2492,6 @@ static int _HandleCurve25519KeyGen(whServerContext* ctx, uint16_t magic,
                 ret    = wh_Crypto_Curve25519SerializeKey(key, out, &ser_size);
             }
             else {
-                uint16_t max_size =
-                    (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                               (out - (uint8_t*)cryptoDataOut));
                 ser_size = 0;
                 /* Must import the key into the cache and return keyid */
                 /* Hold the NVM lock so id allocation and cache import are
@@ -2595,8 +2589,8 @@ static int _HandleCurve25519SharedSecret(whServerContext* ctx, uint16_t magic,
     /* Response message */
     uint8_t* res_out       = (uint8_t*)cryptoDataOut +
                              sizeof(whMessageCrypto_Curve25519Response);
-    uint16_t max_len      = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                            (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t max_len = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_Curve25519Response);
     word32 res_len      = max_len;
 
     /* init private key */
@@ -2724,8 +2718,8 @@ static int _HandleEd25519KeyGen(whServerContext* ctx, uint16_t magic, int devId,
 
     uint8_t* res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_Ed25519KeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_Ed25519KeyGenResponse);
     uint16_t ser_size = 0;
 
     ret = wc_ed25519_init_ex(key, NULL, devId);
@@ -2858,9 +2852,8 @@ static int _HandleEd25519Sign(whServerContext* ctx, uint16_t magic, int devId,
         }
         wc_ed25519_free(key);
     }
-    if (sig_len > WOLFHSM_CFG_COMM_DATA_LEN -
-                      sizeof(whMessageCrypto_Ed25519SignResponse) -
-                      sizeof(whMessageCrypto_GenericResponseHeader)) {
+    if (sig_len > WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+                      whMessageCrypto_Ed25519SignResponse)) {
         ret = WH_ERROR_ABORTED;
     }
     if (ret == 0) {
@@ -4342,14 +4335,14 @@ static int _HandleAesGcm(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t* out = (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_AesGcmResponse);
     uint8_t* out_tag = out + len;
 
-    uint32_t res_len = sizeof(whMessageCrypto_AesGcmResponse) + len +
-                       ((enc == 0) ? 0 : tag_len);
-
     /* Ensure the response output and tag fit within the comm data buffer */
-    if (res_len > (WOLFHSM_CFG_COMM_DATA_LEN -
-                   sizeof(whMessageCrypto_GenericResponseHeader))) {
+    uint64_t out_len = (uint64_t)len + (uint64_t)((enc == 0) ? 0 : tag_len);
+    if (out_len >
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_AesGcmResponse)) {
         return WH_ERROR_BADARGS;
     }
+    uint32_t res_len =
+        sizeof(whMessageCrypto_AesGcmResponse) + (uint32_t)out_len;
 
     WH_DEBUG_SERVER_VERBOSE("AESGCM: enc:%d keylen:%d ivsz:%d insz:%d authinsz:%d "
             "authtagsz:%d reqsz:%u ressz:%u\n",
@@ -5656,8 +5649,8 @@ static int _HandleMlDsaKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     uint8_t* res_out =
         (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlDsaKeyGenResponse);
-    uint16_t max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                   (res_out - (uint8_t*)cryptoDataOut));
+    uint16_t max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_MlDsaKeyGenResponse);
     uint16_t res_size = 0;
 
     /* TODO key_sz is not used. Should this instead be used as max_size? Figure
@@ -5806,8 +5799,8 @@ static int _HandleMlDsaSign(whServerContext* ctx, uint16_t magic, int devId,
     /* Response message */
     byte* res_out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_MlDsaSignResponse);
-    const word32 max_len = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-                                    (res_out - (uint8_t*)cryptoDataOut));
+    const word32 max_len =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_MlDsaSignResponse);
     word32       res_len = max_len;
 
     /* init private key */
@@ -6029,8 +6022,8 @@ static int _HandleMlKemKeyGen(whServerContext* ctx, uint16_t magic, int devId,
     key_id = wh_KeyId_TranslateFromClient(WH_KEYTYPE_CRYPTO, ctx->comm->client_id,
                                           req.keyId);
     res_out = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemKeyGenResponse);
-    max_size = (uint16_t)(WOLFHSM_CFG_COMM_DATA_LEN -
-                          (res_out - (uint8_t*)cryptoDataOut));
+    max_size = (uint16_t)WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+        whMessageCrypto_MlKemKeyGenResponse);
 
     if (!_IsMlKemLevelSupported((int)req.level)) {
         return WH_ERROR_BADARGS;
@@ -6167,8 +6160,8 @@ static int _HandleMlKemEncaps(whServerContext* ctx, uint16_t magic, int devId,
     if (ret == WH_ERROR_OK) {
         res_ct = (uint8_t*)cryptoDataOut + sizeof(whMessageCrypto_MlKemEncapsResponse);
         res_ss = res_ct + ct_len;
-        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ct - (uint8_t*)cryptoDataOut));
+        max_out = WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+            whMessageCrypto_MlKemEncapsResponse);
         if (ct_len + ss_len > max_out) {
             ret = WH_ERROR_BADARGS;
         }
@@ -6273,8 +6266,8 @@ static int _HandleMlKemDecaps(whServerContext* ctx, uint16_t magic, int devId,
 
     if (ret == WH_ERROR_OK) {
         res_ss = (byte*)cryptoDataOut + sizeof(whMessageCrypto_MlKemDecapsResponse);
-        max_out = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        max_out = WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+            whMessageCrypto_MlKemDecapsResponse);
         if (ss_len > max_out) {
             ret = WH_ERROR_BADARGS;
         }
@@ -8033,8 +8026,8 @@ static int _HandleMlKemEncapsDma(whServerContext* ctx, uint16_t magic,
     if (ret == WH_ERROR_OK) {
         res_ss = (uint8_t*)cryptoDataOut +
                  sizeof(whMessageCrypto_MlKemEncapsDmaResponse);
-        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        max_ss = WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+            whMessageCrypto_MlKemEncapsDmaResponse);
         if (ssLen > max_ss) {
             ret = WH_ERROR_BADARGS;
         }
@@ -8158,8 +8151,8 @@ static int _HandleMlKemDecapsDma(whServerContext* ctx, uint16_t magic,
     if (ret == WH_ERROR_OK) {
         res_ss = (uint8_t*)cryptoDataOut +
                  sizeof(whMessageCrypto_MlKemDecapsDmaResponse);
-        max_ss = (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
-            ((uint8_t*)res_ss - (uint8_t*)cryptoDataOut));
+        max_ss = WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(
+            whMessageCrypto_MlKemDecapsDmaResponse);
         if (ssLen > max_ss) {
             ret = WH_ERROR_BADARGS;
         }
