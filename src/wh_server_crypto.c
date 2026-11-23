@@ -1312,8 +1312,9 @@ int wh_Server_LmsKeyCacheImport(whServerContext* ctx, LmsKey* key,
 }
 #endif /* !WOLFSSL_LMS_VERIFY_ONLY */
 
-int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
-                                LmsKey* key)
+/* Caller holds the NVM lock */
+static int _LmsKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                     whNvmFlags requiredUsage, LmsKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -1325,10 +1326,19 @@ int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
     ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta, requiredUsage);
+    }
+    if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_LmsDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
                                           key);
     }
     return ret;
+}
+
+int wh_Server_LmsKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                LmsKey* key)
+{
+    return _LmsKeyCacheExportEnforce(ctx, keyId, WH_NVM_FLAGS_NONE, key);
 }
 #endif /* WOLFSSL_HAVE_LMS */
 
@@ -1375,8 +1385,9 @@ int wh_Server_XmssKeyCacheImport(whServerContext* ctx, XmssKey* key,
 }
 #endif /* !WOLFSSL_XMSS_VERIFY_ONLY */
 
-int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
-                                 XmssKey* key)
+/* Caller holds the NVM lock */
+static int _XmssKeyCacheExportEnforce(whServerContext* ctx, whKeyId keyId,
+                                      whNvmFlags requiredUsage, XmssKey* key)
 {
     uint8_t*       cacheBuf;
     whNvmMetadata* cacheMeta;
@@ -1388,10 +1399,19 @@ int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
 
     ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta, requiredUsage);
+    }
+    if (ret == WH_ERROR_OK) {
         ret = wh_Crypto_XmssDeserializeKey(cacheBuf, (uint16_t)cacheMeta->len,
                                            key);
     }
     return ret;
+}
+
+int wh_Server_XmssKeyCacheExport(whServerContext* ctx, whKeyId keyId,
+                                 XmssKey* key)
+{
+    return _XmssKeyCacheExportEnforce(ctx, keyId, WH_NVM_FLAGS_NONE, key);
 }
 #endif /* WOLFSSL_HAVE_XMSS */
 
@@ -8532,6 +8552,10 @@ static int _HandleLmsSignDma(whServerContext* ctx, uint16_t magic, int devId,
 
     ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta,
+                                                WH_NVM_FLAGS_USAGE_SIGN);
+    }
+    if (ret == WH_ERROR_OK) {
         ret = wc_LmsKey_Init(key, NULL, devId);
         if (ret == 0) {
             keyInited = 1;
@@ -8653,7 +8677,8 @@ static int _HandleLmsVerifyDma(whServerContext* ctx, uint16_t magic, int devId,
         /* Lock while reading the key in case of concurrent sign op */
         ret = WH_SERVER_NVM_LOCK(ctx);
         if (ret == WH_ERROR_OK) {
-            ret = wh_Server_LmsKeyCacheExport(ctx, keyId, key);
+            ret = _LmsKeyCacheExportEnforce(ctx, keyId,
+                                            WH_NVM_FLAGS_USAGE_VERIFY, key);
             (void)WH_SERVER_NVM_UNLOCK(ctx);
         } /* WH_SERVER_NVM_LOCK() */
     }
@@ -9035,6 +9060,10 @@ static int _HandleXmssSignDma(whServerContext* ctx, uint16_t magic, int devId,
 
     ret = wh_Server_KeystoreFreshenKey(ctx, keyId, &cacheBuf, &cacheMeta);
     if (ret == WH_ERROR_OK) {
+        ret = wh_Server_KeystoreEnforceKeyUsage(cacheMeta,
+                                                WH_NVM_FLAGS_USAGE_SIGN);
+    }
+    if (ret == WH_ERROR_OK) {
         ret = wc_XmssKey_Init(key, NULL, devId);
         if (ret == 0) {
             keyInited = 1;
@@ -9145,7 +9174,8 @@ static int _HandleXmssVerifyDma(whServerContext* ctx, uint16_t magic,
         /* Lock while reading the key in case of concurrent sign op */
         ret = WH_SERVER_NVM_LOCK(ctx);
         if (ret == WH_ERROR_OK) {
-            ret = wh_Server_XmssKeyCacheExport(ctx, keyId, key);
+            ret = _XmssKeyCacheExportEnforce(ctx, keyId,
+                                             WH_NVM_FLAGS_USAGE_VERIFY, key);
             (void)WH_SERVER_NVM_UNLOCK(ctx);
         } /* WH_SERVER_NVM_LOCK() */
     }

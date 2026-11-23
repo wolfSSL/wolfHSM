@@ -349,10 +349,10 @@ static int _benchXmssVerify(whClientContext* client, whBenchOpContext* ctx,
 
     /* Provision the verify-only public key into the HSM cache. EPHEMERAL keeps
      * it out of NVM; it is evicted during cleanup. */
-    ret = wh_Client_XmssImportPubKey(client, &key, &keyId,
-                                     WH_NVM_FLAGS_EPHEMERAL,
-                                     (uint16_t)strlen(keyLabel),
-                                     (uint8_t*)keyLabel);
+    ret = wh_Client_XmssImportPubKey(
+        client, &key, &keyId,
+        WH_NVM_FLAGS_EPHEMERAL | WH_NVM_FLAGS_USAGE_VERIFY,
+        (uint16_t)strlen(keyLabel), (uint8_t*)keyLabel);
     if (ret != 0) {
         WH_BENCH_PRINTF("Failed to wh_Client_XmssImportPubKey %d\n", ret);
         goto exit;
