@@ -102,6 +102,13 @@ typedef union {
     whMessageCrypto_GenericResponseHeader response;
 } whMessageCrypto_GenericHeader;
 
+/* Max number of bytes that can follow the generic crypto response header and
+ * the given response struct in a single message buf */
+#define WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(resType)           \
+    (WOLFHSM_CFG_COMM_DATA_LEN -                               \
+     (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
+     (uint32_t)sizeof(resType))
+
 int wh_MessageCrypto_TranslateGenericRequestHeader(
     uint16_t magic, const whMessageCrypto_GenericRequestHeader* src,
     whMessageCrypto_GenericRequestHeader* dest);
@@ -132,10 +139,8 @@ typedef struct {
  * crypto response header and the RngResponse struct) in a single comm-buffer
  * message. Async callers must chunk requests larger than this; the blocking
  * wrapper handles chunking automatically. */
-#define WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ                    \
-    (WOLFHSM_CFG_COMM_DATA_LEN -                               \
-     (uint32_t)sizeof(whMessageCrypto_GenericResponseHeader) - \
-     (uint32_t)sizeof(whMessageCrypto_RngResponse))
+#define WH_MESSAGE_CRYPTO_RNG_MAX_INLINE_SZ \
+    WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_RngResponse)
 
 int wh_MessageCrypto_TranslateRngRequest(uint16_t magic,
                                          const whMessageCrypto_RngRequest* src,
