@@ -4819,6 +4819,12 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesResponse);
 
+    /* Bound outSz to the space available in the communication buffer */
+    const word32 max_out =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_CmacAesResponse);
+    const word32 out_sz =
+        ((word32)req.outSz > max_out) ? max_out : (word32)req.outSz;
+
     memset(&res, 0, sizeof(res));
 
     uint8_t tmpKey[AES_256_KEY_SIZE];
@@ -4832,7 +4838,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
-        word32 len = (word32)req.outSz;
+        word32 len = out_sz;
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
@@ -4885,7 +4891,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            word32 len = (word32)req.outSz;
+            word32 len = out_sz;
             WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
             res.outSz = (uint32_t)len;
@@ -9411,6 +9417,12 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesDmaResponse);
 
+    /* Bound outSz to the space available in the communication buffer */
+    const word32 max_out =
+        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_CmacAesDmaResponse);
+    const word32 out_sz =
+        ((word32)req.outSz > max_out) ? max_out : (word32)req.outSz;
+
     memset(&res, 0, sizeof(res));
 
     /* DMA translated address for input */
@@ -9425,7 +9437,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
      * streaming protocol never produces outSz>0 with DMA input (Final is
      * inline-only), so this branch is only taken by CmacGenerateDma. */
     if (req.inlineInSz == 0 && req.input.sz != 0 && req.outSz != 0) {
-        len = req.outSz;
+        len = out_sz;
 
         /* Translate DMA address for input */
         ret = wh_Server_DmaProcessClientAddress(
@@ -9520,7 +9532,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            len = req.outSz;
+            len = out_sz;
             WH_DEBUG_SERVER_VERBOSE("dma cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
             res.outSz = len;
