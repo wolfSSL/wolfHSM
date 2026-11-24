@@ -940,6 +940,20 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
          * return code. Errors from SendResponse are propagated back to the
          * caller in rc */
     }
+    else if (rc == WH_ERROR_REQUEST_SIZE) {
+        /* Malformed request length: complete the exchange with an empty
+         * response so the client gets an error and the channel is usable
+         * again. Like a handler error, this is not fatal to the server. */
+        do {
+            rc = wh_CommServer_SendEmptyResponse(server->comm);
+        } while (rc == WH_ERROR_NOTREADY);
+
+        WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR,
+                          WH_ERROR_REQUEST_SIZE,
+                          "Dropped request with out-of-range length, rc=%d",
+                          rc);
+        rc = (rc == WH_ERROR_OK) ? WH_ERROR_OK : WH_ERROR_ABORTED;
+    }
     else if (rc != WH_ERROR_NOTREADY) {
         /* Log error code from processing request, if present */
         WH_LOG_ON_ERROR_F(

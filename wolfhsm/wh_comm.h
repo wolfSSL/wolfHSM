@@ -323,10 +323,25 @@ int wh_CommServer_Init(whCommServer* context, const whCommServerConfig* config,
  * if the received payload exceeds it, returns WH_ERROR_BUFFER_SIZE with
  * *out_size set to the required size. On success *out_size holds the actual
  * payload size.
+ * A request whose length is out of range is rejected with
+ * WH_ERROR_REQUEST_SIZE and no response is sent: the caller must complete the
+ * exchange with wh_CommServer_SendEmptyResponse(), or the client stays pending.
  */
 int wh_CommServer_RecvRequest(whCommServer* context,
         uint16_t* out_magic, uint16_t* out_kind, uint16_t* out_seq,
         uint16_t* out_size, uint16_t data_size, void* data);
+
+/* Send an empty (zero-length) response. The client treats it as a malformed
+ * response: it clears its pending request and fails it, without needing a
+ * valid header from the request. Used to complete an exchange that
+ * wh_CommServer_RecvRequest rejected with WH_ERROR_REQUEST_SIZE.
+ * Returns: 0 on success,
+ *          WH_ERROR_BADARGS if NULL or uninitialized context, or no Send
+ *          WH_ERROR_NOTREADY if send buffer is not free. Retry.
+ *          WH_ERROR_ABORTED if the transport can't send an empty packet (e.g.
+ *          TCP) or a fatal error occurred.
+ */
+int wh_CommServer_SendEmptyResponse(whCommServer* context);
 
 /* Upon completion of the request, send the response packet using the same seq
  * as the incoming request.  Note that overriding the seq number should only be
