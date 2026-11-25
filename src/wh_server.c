@@ -948,10 +948,9 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
             rc = wh_CommServer_SendEmptyResponse(server->comm);
         } while (rc == WH_ERROR_NOTREADY);
 
-        WH_LOG_ON_ERROR_F(&server->log, WH_LOG_LEVEL_ERROR,
-                          WH_ERROR_REQUEST_SIZE,
-                          "Dropped request with out-of-range length, rc=%d",
-                          rc);
+        WH_LOG_ON_ERROR_F(
+            &server->log, WH_LOG_LEVEL_ERROR, WH_ERROR_REQUEST_SIZE,
+            "Dropped request with out-of-range length, rc=%d", rc);
         rc = (rc == WH_ERROR_OK) ? WH_ERROR_OK : WH_ERROR_ABORTED;
     }
     else if (rc != WH_ERROR_NOTREADY) {
