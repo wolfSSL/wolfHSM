@@ -83,6 +83,9 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
         return rc;
     }
 
+    /* Reply type defaults to the request type. The callback may change it. */
+    resp.type = req.type;
+
     if (server->customHandlerTable[action] != NULL) {
         /* If this isn't a query to check if the callback exists, invoke the
          * registered callback, storing the return value in the response  */

@@ -92,6 +92,7 @@ Translated tests:
 | `wh_test_clientserver.c` (NVM CRUD + OOB read clamping paths) | `client-server/wh_test_nvm_ops.c::{whTest_NvmCrud, whTest_NvmReadOob}` | Client | each test cleans up its own slots; OOB test covers UINT16_MAX overflow regression |
 | `wh_test_clientserver.c` (NVM DMA CRUD path) | `client-server/wh_test_nvm_dma.c::whTest_NvmCrudDma` | Client | gated on `WOLFHSM_CFG_DMA` |
 | `wh_test_clientserver.c::_testClientCounter` | `client-server/wh_test_counter.c::whTest_Counter` | Client | exercises saturate-on-overflow and slot-leak detection |
+| `wh_test_clientserver.c::_testCallbacks` | `misc/wh_test_customcb.c::whTest_CustomCb` | Misc | registers its own server callbacks, so it runs its own client/server pair with a sequential split-API pump; covers the registered check, the unregistered error, and the reply type and data reaching the client |
 | `wh_test_wolfcrypt_test.c::whTest_WolfCryptTest` | `client-server/wh_test_wolfcrypt.c::whTest_WolfCryptTest` | Client | |
 | `wh_test_flash_ramsim.c::whTest_Flash_RamSim` | `posix/wh_test_flash_ramsim.c::{whTest_FlashWriteLock, whTest_FlashEraseProgramVerify, whTest_FlashUnitOps}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group |
 | `wh_test_nvm_flash.c::{whTest_NvmFlash, whTest_NvmFlash_Recovery, whTest_NvmFlash_Crc16}` | `posix/wh_test_nvm_flash.c::{whTest_NvmAddOverwriteDestroy, whTest_NvmFlashLog, whTest_NvmRecovery, whTest_NvmCrc16}` | POSIX port-specific (`whTestGroup_RunOne`) | remove ramsim coupling and migrate to server group; flash-log backend exercised by `whTest_NvmFlashLog` (skipped unless `WOLFHSM_CFG_SERVER_NVM_FLASH_LOG`); CRC16 integrity checks exercised by `whTest_NvmCrc16` (skipped unless built with `NVM_FLASH_CRC=1`) |
@@ -114,7 +115,7 @@ Not yet migrated (still live in `wolfHSM/test/`):
 | Legacy (`wolfHSM/test/`) | Notes |
 |---|---|
 | `wh_test_comm.c::whTest_Comm` | Pthread mem/tcp/shmem variants only; sequential mem variant has been ported |
-| `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining coverage is the custom-callback round-trip (`_testCallbacks`) and the server-side DMA register/copy/allowlist exercise (`_testDma`). The sequential test is dropped, as is the FLASH_LOG NVM matrix variant. |
+| `wh_test_clientserver.c::whTest_ClientServer` | Pthread variant: remaining coverage is the server-side DMA register/copy/allowlist exercise (`_testDma`). The sequential test is dropped, as is the FLASH_LOG NVM matrix variant. |
 | `wh_test_crypto.c::whTest_Crypto` | Remaining crypto coverage not yet split out: the AES async family (comm-buffer `whTest_CryptoAesAsync`/`AesAsyncKat` + DMA `whTest_CryptoAesDmaAsync`/`AesDmaAsyncKat`, round-trip & KAT). ECC DMA export-public and the ML-DSA wolfCrypt-API path are now migrated. |
 | `wh_test_keywrap.c::whTest_KeyWrapClientConfig` | Policy coverage (sw-KEK round trip, trusted-KEK negatives, data-wrap usage) and the key/data unwrap underflow negatives are ported to `client-server/wh_test_keywrap.c`; the unwrap oversize negatives are not. The legacy port-KEK tests, including cryptocb use of a cached wrapped key, no longer build: legacy `test/` does not enable `WOLFHSM_CFG_PORTKEY` |
 | `wh_test_timeout.c::whTest_TimeoutPosix` | |

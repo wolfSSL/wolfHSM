@@ -128,6 +128,26 @@ static int _customServerCb(whServerContext*                 server,
 
     return req->id;
 }
+
+/* Reply type and fill byte used by _customServerOwnTypeCb */
+#define TEST_CUSTOMCB_REPLY_TYPE \
+    (WH_MESSAGE_CUSTOM_CB_TYPE_USER_DEFINED_START + 1)
+#define TEST_CUSTOMCB_REPLY_BYTE ((uint8_t)0x5A)
+
+/* Dummy callback that replies with its own type and a full data buffer */
+static int _customServerOwnTypeCb(whServerContext*                 server,
+                                  const whMessageCustomCb_Request* req,
+                                  whMessageCustomCb_Response*      resp)
+{
+    (void)server;
+    (void)req;
+
+    resp->type = TEST_CUSTOMCB_REPLY_TYPE;
+    memset(resp->data.buffer.data, TEST_CUSTOMCB_REPLY_BYTE,
+           sizeof(resp->data.buffer.data));
+
+    return 0;
+}
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -201,9 +221,33 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_ASSERT_RETURN(resp.rc == (int32_t)counter);
         WH_TEST_ASSERT_RETURN(0 == memcmp(output, input, sizeof(input)));
 
+        /* The reply type and the size the callback wrote must come back */
+        WH_TEST_ASSERT_RETURN(resp.type == req.type);
+        if (req.type == WH_MESSAGE_CUSTOM_CB_TYPE_DMA64) {
+            WH_TEST_ASSERT_RETURN(resp.data.dma64.client_sz == sizeof(input));
+        }
+        else {
+            WH_TEST_ASSERT_RETURN(resp.data.dma32.client_sz == sizeof(input));
+        }
+
         memset(output, 0, sizeof(output));
         memset(&req, 0, sizeof(req));
         memset(&resp, 0, sizeof(resp));
+    }
+
+    /* A callback can reply with a type other than the request type */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_RegisterCustomCb(server, 0, _customServerOwnTypeCb));
+    req.id   = 0;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_DMA32;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(resp.type == TEST_CUSTOMCB_REPLY_TYPE);
+    for (counter = 0; counter < sizeof(resp.data.buffer.data); counter++) {
+        WH_TEST_ASSERT_RETURN(resp.data.buffer.data[counter] ==
+                              TEST_CUSTOMCB_REPLY_BYTE);
     }
 
     return WH_ERROR_OK;

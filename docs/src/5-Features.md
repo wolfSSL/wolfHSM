@@ -1400,7 +1400,7 @@ typedef struct {
 } whMessageCustomCb_Response;
 ```
 
-The `id` field carries the action ID, echoed back unchanged on the response for client-side bookkeeping. The `type` field is a hint to the callback describing how to interpret `data`. The response additionally carries `rc` (the callback's own return value) and `err` (a wolfHSM-defined error code populated by the framework or by the callback).
+The `id` field carries the action ID, echoed back unchanged on the response for client-side bookkeeping. The `type` field is a hint to the callback describing how to interpret `data`. The response's `type` defaults to the request's `type`; a callback that replies with a different data shape sets `resp->type` itself. The response additionally carries `rc` (the callback's own return value) and `err` (a wolfHSM-defined error code populated by the framework or by the callback).
 
 The `data` field is a union that exposes three pre-defined shapes plus a raw buffer for application-specific schemas:
 
