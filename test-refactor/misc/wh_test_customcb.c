@@ -20,8 +20,8 @@
 /*
  * test-refactor/misc/wh_test_customcb.c
  *
- * Server custom callbacks: registration, the registered check, and the
- * request and reply round trip.
+ * Server custom callbacks: registration, the registered check, the request
+ * and reply round trip, and the errors wolfHSM reports in err.
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -33,6 +33,7 @@
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_customcb.h"
 #include "wolfhsm/wh_transport_mem.h"
 #include "wolfhsm/wh_client.h"
@@ -116,6 +117,17 @@ static int _ownTypeCb(whServerContext*                 server,
            sizeof(resp->data.buffer.data));
 
     return 0;
+}
+
+/* Returns an error and also writes resp->err, which wolfHSM replaces */
+static int _errCb(whServerContext* server, const whMessageCustomCb_Request* req,
+                  whMessageCustomCb_Response* resp)
+{
+    (void)server;
+    (void)req;
+
+    resp->err = WH_ERROR_ACCESS;
+    return WH_ERROR_BADARGS;
 }
 
 static int _SetupClientServer(TestCtx* t)
@@ -283,6 +295,87 @@ static int _whTest_CustomCbOwnReplyType(TestCtx* t)
     return WH_ERROR_OK;
 }
 
+/* The callback's error reaches the client in rc. err is set only by wolfHSM */
+static int _whTest_CustomCbCallbackError(TestCtx* t)
+{
+    whMessageCustomCb_Request  req;
+    whMessageCustomCb_Response resp;
+
+    WH_TEST_RETURN_ON_FAIL(wh_Server_RegisterCustomCb(t->server, 0, _errCb));
+
+    memset(&req, 0, sizeof(req));
+    req.id   = 0;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_USER_DEFINED_START;
+
+    WH_TEST_RETURN_ON_FAIL(_Call(t, &req, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+
+    return WH_ERROR_OK;
+}
+
+/* An ID past the end of the callback table is reported like an ID with no
+ * callback */
+static int _whTest_CustomCbIdOutOfRange(TestCtx* t)
+{
+    whMessageCustomCb_Request  req;
+    whMessageCustomCb_Response resp;
+
+    memset(&req, 0, sizeof(req));
+    req.id   = WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_USER_DEFINED_START;
+
+    WH_TEST_RETURN_ON_FAIL(_CheckRegistered(t, req.id, WH_ERROR_NOHANDLER));
+    WH_TEST_RETURN_ON_FAIL(_Call(t, &req, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NOHANDLER);
+    WH_TEST_ASSERT_RETURN(resp.id == req.id);
+
+    return WH_ERROR_OK;
+}
+
+/* A request of the wrong size gets an error reply and the callback does not
+ * run. The reply must not carry old bytes from the server buffer */
+static int _whTest_CustomCbMalformed(TestCtx* t)
+{
+    whMessageCustomCb_Request  req;
+    whMessageCustomCb_Response resp;
+    size_t                     i;
+
+    /* A normal call first, to leave non-zero bytes in the server buffer */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_RegisterCustomCb(t->server, 0, _ownTypeCb));
+    memset(&req, 0, sizeof(req));
+    req.id   = 0;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_USER_DEFINED_START;
+    WH_TEST_RETURN_ON_FAIL(_Call(t, &req, &resp));
+    WH_TEST_ASSERT_RETURN(resp.data.buffer.data[0] == TEST_REPLY_BYTE);
+
+    /* Send only the ID and type */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        t->client, WH_MESSAGE_GROUP_CUSTOM, 0,
+        (uint16_t)(sizeof(req.id) + sizeof(req.type)), &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(t->client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_ABORTED);
+    WH_TEST_ASSERT_RETURN(resp.id == 0);
+    WH_TEST_ASSERT_RETURN(resp.rc == 0);
+    for (i = 0; i < sizeof(resp.data.buffer.data); i++) {
+        WH_TEST_ASSERT_RETURN(resp.data.buffer.data[i] == 0);
+    }
+
+    return WH_ERROR_OK;
+}
+
+static int _whTest_CustomCbAll(TestCtx* t)
+{
+    WH_TEST_RETURN_ON_FAIL(_whTest_CustomCbLoopback(t));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CustomCbOwnReplyType(t));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CustomCbCallbackError(t));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CustomCbIdOutOfRange(t));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CustomCbMalformed(t));
+    return WH_ERROR_OK;
+}
+
 int whTest_CustomCb(void* ctx)
 {
     int      ret;
@@ -294,10 +387,7 @@ int whTest_CustomCb(void* ctx)
 
     WH_TEST_RETURN_ON_FAIL(_SetupClientServer(t));
 
-    ret = _whTest_CustomCbLoopback(t);
-    if (ret == WH_ERROR_OK) {
-        ret = _whTest_CustomCbOwnReplyType(t);
-    }
+    ret = _whTest_CustomCbAll(t);
 
     _CleanupClientServer(t);
 

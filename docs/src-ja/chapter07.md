@@ -254,7 +254,7 @@ typedef int (*whServerCustomCb)(
 コールバックは入力データに基づいて処理を行い、`whMessageCustomCb_Response`引数を通じてクライアントに返される出力データを生成できます。
 入力/出力クライアントデータの送受信はwolfHSMによって外部で処理されるため、カスタムコールバックでこれらを処理する必要はありません。
 レスポンス構造体には、クライアントに伝播させるためのエラーコードとリターンコードのフィールドも含まれています。
-エラーコードはコールバックによって設定され、リターンコードはカスタムコールバックからの戻り値に設定されます。
+エラーコードはwolfHSMが設定し、リターンコードにはカスタムコールバックからの戻り値が設定されます。コールバックはエラーを戻り値で報告します。
 
 ### クライアント側
 
@@ -353,15 +353,13 @@ static int customServerCb(whServerContext*                 server,
 {
     int rc;
 
-    resp->err = WH_ERROR_OK;
-
     /* DMAリクエストを検出して処理 */
     if (req->type == WH_MESSAGE_CUSTOM_CB_TYPE_DMA32) {
         uint8_t* clientPtr = (uint8_t*)((uintptr_t)req->data.dma32.client_addr);
         size_t clientSz = req->data.dma32.client_sz;
 
         if (clientPtr == NULL) {
-            resp->err = WH_ERROR_BADARGS;
+            rc = WH_ERROR_BADARGS;
         }
         else {
             rc = doWorkOnClientAddr(clientPtr, clientSz);
@@ -370,18 +368,14 @@ static int customServerCb(whServerContext*                 server,
     else if (req->type == MY_TYPE_A) {
         myCustomCbDataA *data = (myCustomCbDataA*)((uintptr_t)req->data.data);
         rc = doWorkWithTypeA(data);
-        /* 必要に応じてエラーコードを設定 */
-        if (/* エラー条件 */) {
-            resp->err = WH_ERROR_ABORTED;
-        }
     }
     else if (req->type == MY_TYPE_B) {
         myCustomCbDataB *data = (myCustomCbDataB)((uintptr_t)req->data.data);
         rc = doWorkWithTypeB(data);
-        /* 必要に応じてエラーコードを設定 */
-        if (/* エラー条件 */) {
-            resp->err = WH_ERROR_ABORTED;
-        }
+    }
+    else {
+        /* 不明なタイプ。エラーは戻り値で報告 */
+        rc = WH_ERROR_BADARGS;
     }
 
     return rc;

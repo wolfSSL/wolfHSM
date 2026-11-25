@@ -1358,7 +1358,7 @@ typedef int (*whServerCustomCb)(
 );
 ```
 
-The callback receives the dispatching server context, a translated request structure populated from the client's message, and an output response structure that wolfHSM will marshal back to the client when the callback returns. The callback populates `resp->data` with any output payload and may set `resp->err` to a wolfHSM error code; the callback's own return value is reported to the client as `resp->rc`. The library does not interpret either field — they are simply propagated to the client unchanged, with the convention that `rc` is invalid whenever `err` is non-zero.
+The callback receives the dispatching server context, a translated request structure populated from the client's message, and an output response structure that wolfHSM will marshal back to the client when the callback returns. The callback populates `resp->data` with any output payload, and its return value is reported to the client as `resp->rc`. The library does not interpret either field, and both are propagated to the client unchanged. `resp->err` carries wolfHSM's own result and is set by the library. A callback should only report a failure through `resp->rc`. Client applications should consider `rc` to be invalid whenever `err` is non-zero.
 
 Callbacks are registered against a 16-bit **action ID** in the server's dispatch table:
 
@@ -1367,7 +1367,7 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
                                whServerCustomCb handler);
 ```
 
-The table is statically sized at build time by `WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT`, and the action ID is the index into it. Action IDs are application-defined: they have no meaning to wolfHSM beyond identifying which slot in the table to dispatch to. Registration may occur at any point in the server's lifetime — there is no requirement to install all callbacks before the server starts handling requests — so a server application can register or replace handlers dynamically based on its own state. A request that arrives for an action ID with no registered handler is reported back to the client with `resp->err == WH_ERROR_NOHANDLER`.
+The table is statically sized at build time by `WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT`, and the action ID is the index into it. Action IDs are application-defined: they have no meaning to wolfHSM beyond identifying which slot in the table to dispatch to. Registration may occur at any point in the server's lifetime — there is no requirement to install all callbacks before the server starts handling requests — so a server application can register or replace handlers dynamically based on its own state. A request that arrives for an action ID with no registered handler, including an ID outside the table, is reported back to the client with `resp->err == WH_ERROR_NOHANDLER`.
 
 ### Client-Side Invocation
 
@@ -1400,7 +1400,7 @@ typedef struct {
 } whMessageCustomCb_Response;
 ```
 
-The `id` field carries the action ID, echoed back unchanged on the response for client-side bookkeeping. The `type` field is a hint to the callback describing how to interpret `data`. The response's `type` defaults to the request's `type`; a callback that replies with a different data shape sets `resp->type` itself. The response additionally carries `rc` (the callback's own return value) and `err` (a wolfHSM-defined error code populated by the framework or by the callback).
+The `id` field carries the action ID, echoed back unchanged on the response for client-side bookkeeping. The `type` field is a hint to the callback describing how to interpret `data`. The response's `type` defaults to the request's `type`, but can be overridden by the callback. The response additionally carries `rc` (the callback's own return value) and `err` (wolfHSM's own result, set by the library).
 
 The `data` field is a union that exposes three pre-defined shapes plus a raw buffer for application-specific schemas:
 
@@ -1420,7 +1420,7 @@ The `type` field is an enum (`whMessageCustomCb_Type`) whose first eight values 
 
 - The maximum number of registered callbacks is fixed at build time by `WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT`. Valid action IDs are in the range `[0, WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT)`.
 - The data payload in either direction is bounded by `WOLFHSM_CFG_CUSTOMCB_LEN`. Operations whose payload exceeds this limit must either split across multiple requests or use the `dma32` / `dma64` shapes to point at a larger buffer in shared memory.
-- The callback's return value is reported to the client through `resp->rc`; wolfHSM error semantics are conveyed by the library separately through `resp->err`. Callbacks should reserve `err` for genuine wolfHSM-defined failures (the `WH_ERROR_*` set) and use `rc` for application-defined results.
+- The callback's return value is reported to the client through `resp->rc`. The library reports its own result separately through `resp->err`, which is `WH_ERROR_OK` when a callback is registered at the action ID and `WH_ERROR_NOHANDLER` when none is.
 
 ### Example
 
@@ -1452,7 +1452,6 @@ static int myCustomCb(whServerContext*                 server,
                       whMessageCustomCb_Response*      resp)
 {
     int rc = 0;
-    resp->err = WH_ERROR_OK;
 
     switch (req->type) {
         case WH_MESSAGE_CUSTOM_CB_TYPE_DMA32: {
@@ -1467,7 +1466,8 @@ static int myCustomCb(whServerContext*                 server,
             rc = doWorkWithTypeB((myCustomCbDataB*)req->data.buffer.data);
             break;
         default:
-            resp->err = WH_ERROR_BADARGS;
+            /* Unknown type: report it through the return value */
+            rc = WH_ERROR_BADARGS;
             break;
     }
     return rc;

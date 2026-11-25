@@ -148,6 +148,19 @@ static int _customServerOwnTypeCb(whServerContext*                 server,
 
     return 0;
 }
+
+/* Dummy callback that returns an error and also writes resp->err, which
+ * wolfHSM replaces */
+static int _customServerErrCb(whServerContext*                 server,
+                              const whMessageCustomCb_Request* req,
+                              whMessageCustomCb_Response*      resp)
+{
+    (void)server;
+    (void)req;
+
+    resp->err = WH_ERROR_ACCESS;
+    return WH_ERROR_BADARGS;
+}
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */
 
 #if defined(WOLFHSM_CFG_ENABLE_CLIENT) && defined(WOLFHSM_CFG_ENABLE_SERVER)
@@ -248,6 +261,58 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     for (counter = 0; counter < sizeof(resp.data.buffer.data); counter++) {
         WH_TEST_ASSERT_RETURN(resp.data.buffer.data[counter] ==
                               TEST_CUSTOMCB_REPLY_BYTE);
+    }
+
+    /* The callback's error reaches the client in rc. err is set only by
+     * wolfHSM */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_RegisterCustomCb(server, 0, _customServerErrCb));
+    memset(&req, 0, sizeof(req));
+    req.id   = 0;
+    req.type = WH_MESSAGE_CUSTOM_CB_TYPE_USER_DEFINED_START;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(resp.rc == WH_ERROR_BADARGS);
+
+    /* An ID past the end of the callback table is reported like an ID with no
+     * callback */
+    req.id = WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CustomCheckRegisteredRequest(client, req.id));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_CustomCbCheckRegisteredResponse(client, &outId, &respErr));
+    WH_TEST_ASSERT_RETURN(outId == req.id);
+    WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NOHANDLER);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_NOHANDLER);
+    WH_TEST_ASSERT_RETURN(resp.id == req.id);
+
+    /* A request of the wrong size gets an error reply and the callback does
+     * not run. A normal call first leaves non-zero bytes in the server buffer,
+     * which must not come back in the reply */
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Server_RegisterCustomCb(server, 0, _customServerOwnTypeCb));
+    req.id = 0;
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.data.buffer.data[0] == TEST_CUSTOMCB_REPLY_BYTE);
+    /* Send only the ID and type */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_SendRequest(
+        client, WH_MESSAGE_GROUP_CUSTOM, 0,
+        (uint16_t)(sizeof(req.id) + sizeof(req.type)), &req));
+    WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
+    WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));
+    WH_TEST_ASSERT_RETURN(resp.err == WH_ERROR_ABORTED);
+    WH_TEST_ASSERT_RETURN(resp.id == 0);
+    WH_TEST_ASSERT_RETURN(resp.rc == 0);
+    for (counter = 0; counter < sizeof(resp.data.buffer.data); counter++) {
+        WH_TEST_ASSERT_RETURN(resp.data.buffer.data[counter] == 0);
     }
 
     return WH_ERROR_OK;
