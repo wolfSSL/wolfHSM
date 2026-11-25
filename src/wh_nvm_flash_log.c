@@ -146,6 +146,17 @@ static whNvmFlashLogMetadata* nfl_ObjNext(whNvmFlashLogContext*  ctx,
     return (whNvmFlashLogMetadata*)next;
 }
 
+/* The directory holds header.size bytes of back-to-back objects. Nothing past
+ * that is an object, whatever the bytes there look like: an add stages its
+ * object in RAM before committing, and a failed commit only restores the
+ * committed bytes. */
+static whNvmFlashLogMetadata* nfl_ObjFirst(whNvmFlashLogContext* ctx)
+{
+    if (ctx == NULL || ctx->directory.header.size == 0)
+        return NULL;
+    return (whNvmFlashLogMetadata*)ctx->directory.data;
+}
+
 static int nfl_PartitionErase(whNvmFlashLogContext* ctx, uint32_t partition)
 {
     uint32_t off;
@@ -280,12 +291,10 @@ static whNvmFlashLogMetadata* nfl_ObjectFindById(whNvmFlashLogContext* ctx,
     if (ctx == NULL || id == WH_NVM_ID_INVALID)
         return NULL;
 
-    obj = (whNvmFlashLogMetadata*)ctx->directory.data;
-    while (obj != NULL && obj->meta.id != WH_NVM_ID_INVALID) {
+    for (obj = nfl_ObjFirst(ctx); obj != NULL; obj = nfl_ObjNext(ctx, obj)) {
         if (obj->meta.id == id) {
             return obj;
         }
-        obj = nfl_ObjNext(ctx, obj);
     }
     return NULL;
 }
@@ -297,9 +306,10 @@ static int nfl_ObjectDestroy(whNvmFlashLogContext* ctx, whNvmId id)
     uint32_t               off;
     uint32_t               tail;
 
-    if (ctx == NULL || id == WH_NVM_ID_INVALID)
+    if (ctx == NULL)
         return WH_ERROR_BADARGS;
 
+    /* An absent id, WH_NVM_ID_INVALID included, is not an error */
     obj = nfl_ObjectFindById(ctx, id);
     if (obj == NULL)
         return WH_ERROR_OK;
@@ -323,7 +333,10 @@ static int nfl_ObjectCount(whNvmFlashLogContext*  ctx,
         return 0;
 
     if (startObj == NULL) {
-        startObj = (whNvmFlashLogMetadata*)ctx->directory.data;
+        startObj = nfl_ObjFirst(ctx);
+    }
+    if (startObj == NULL) {
+        return 0;
     }
 
     if ((uint8_t*)startObj < ctx->directory.data ||
@@ -333,9 +346,6 @@ static int nfl_ObjectCount(whNvmFlashLogContext*  ctx,
     }
 
     while (startObj != NULL) {
-        if (startObj->meta.id == WH_NVM_ID_INVALID) {
-            break;
-        }
         count++;
         startObj = nfl_ObjNext(ctx, startObj);
     }
@@ -523,15 +533,15 @@ int wh_NvmFlashLog_List(void* c, whNvmAccess access, whNvmFlags flags,
 
     /* list all obects if start_id is WH_NVM_ID_INVALID */
     if (start_id == WH_NVM_ID_INVALID) {
-        next_obj = (whNvmFlashLogMetadata*)ctx->directory.data;
+        next_obj = nfl_ObjFirst(ctx);
     }
     else {
         start_obj = nfl_ObjectFindById(ctx, start_id);
-        if (start_obj != NULL && start_obj->meta.id != WH_NVM_ID_INVALID)
+        if (start_obj != NULL)
             next_obj = nfl_ObjNext(ctx, start_obj);
     }
 
-    if (next_obj == NULL || next_obj->meta.id == WH_NVM_ID_INVALID) {
+    if (next_obj == NULL) {
         if (out_avail_objects != NULL)
             *out_avail_objects = 0;
         if (out_id != NULL)
@@ -610,7 +620,7 @@ int wh_NvmFlashLog_AddObject(void* c, whNvmMetadata* meta, whNvmSize data_len,
     uint32_t               count;
 
     if (ctx == NULL || !ctx->is_initialized || meta == NULL ||
-        (data_len > 0 && data == NULL))
+        meta->id == WH_NVM_ID_INVALID || (data_len > 0 && data == NULL))
         return WH_ERROR_BADARGS;
 
     count           = nfl_ObjectCount(ctx, NULL);
