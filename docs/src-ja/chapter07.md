@@ -263,9 +263,9 @@ APIは、クライアントAPIの他の関数と同様のリクエスト関数�
 クライアントはカスタムリクエスト構造体のインスタンスを宣言し、カスタムデータを設定し、`wh_Client_CustomCbRequest()`を使用してサーバーに送信する必要があります。
 サーバーのレスポンスは`wh_Client_CustomCbResponse()`を使用してポーリングすることができ、正常に受信された場合、レスポンスデータは出力の`whMessageCustomCb_Response()`に格納されます。
 
-クライアントは`wh_Client_CustomCheckRegistered()`系の関数を使用して、特定のコールバックIDの登録状態を確認することもできます。
+クライアントは`wh_Client_CustomCbCheckRegistered()`を使用して、特定のコールバックIDの登録状態を確認することもできます。
 この関数は、指定されたコールバックIDがサーバーの内部コールバックテーブルに登録されているかどうかをサーバーに問い合わせます。
-サーバーは登録状態を示すtrueまたはfalseで応答します。
+登録されている場合は`WH_ERROR_OK`、登録されていない場合は`WH_ERROR_NOHANDLER`を返します。それ以外のエラーは、確認自体が失敗したことを示します。
 
 ### カスタムメッセージ
 
@@ -415,9 +415,9 @@ whClientConfig  clientCfg = {
 
 whClient_Init(&clientCtx, &clientCfg);
 
-bool isRegistered = wh_Client_CustomCheckRegistered(&client, MY_CUSTOM_CB_ID);
+int rc = wh_Client_CustomCbCheckRegistered(&clientCtx, MY_CUSTOM_CB_ID);
 
-if (isRegistered) {
+if (rc == WH_ERROR_OK) {
     uint8_t buffer[LARGE_SIZE] = {/* データ */};
     myCustomCbDataA typeA = {/* データ */};
     myCustomCbDataB typeB = {/* データ */};

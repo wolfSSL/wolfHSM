@@ -762,12 +762,13 @@ int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id)
 }
 
 
-int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outId, int* responseError)
+int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
+                                              uint16_t*        outId)
 {
     int rc = 0;
     whMessageCustomCb_Response resp = {0};
 
-    if (c == NULL || outId == NULL || responseError == NULL) {
+    if (c == NULL || outId == NULL) {
         return WH_ERROR_BADARGS;
     }
 
@@ -787,17 +788,17 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c, uint16_t* outI
     }
 
     *outId = resp.id;
-    *responseError = resp.err;
 
-    return WH_ERROR_OK;
+    /* WH_ERROR_OK if a callback is registered, WH_ERROR_NOHANDLER if not */
+    return resp.err;
 }
 
 
-int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* responseError)
+int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id)
 {
     int rc = 0;
 
-    if (NULL == c || NULL == responseError) {
+    if (NULL == c) {
         return WH_ERROR_BADARGS;
     }
 
@@ -807,7 +808,7 @@ int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id, int* resp
 
     if (rc == WH_ERROR_OK) {
         do {
-            rc = wh_Client_CustomCbCheckRegisteredResponse(c, &id, responseError);
+            rc = wh_Client_CustomCbCheckRegisteredResponse(c, &id);
         } while (rc == WH_ERROR_NOTREADY);
     }
 

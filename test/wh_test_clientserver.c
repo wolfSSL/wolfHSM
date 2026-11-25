@@ -169,10 +169,10 @@ static int _customServerErrCb(whServerContext*                 server,
 static int _testCallbacks(whServerContext* server, whClientContext* client)
 {
     size_t                     counter;
-    whMessageCustomCb_Request  req     = {0};
-    whMessageCustomCb_Response resp    = {0};
-    uint16_t                   outId   = 0;
-    int                        respErr = 0;
+    whMessageCustomCb_Request  req   = {0};
+    whMessageCustomCb_Response resp  = {0};
+    uint16_t                   outId = 0;
+    int                        rc    = 0;
 
     const char input[] = "The answer to the ultimate question of life, the "
                          "universe and everything is 42";
@@ -185,10 +185,9 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_RETURN_ON_FAIL(
             wh_Client_CustomCheckRegisteredRequest(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbCheckRegisteredResponse(
-            client, &outId, &respErr));
+        rc = wh_Client_CustomCbCheckRegisteredResponse(client, &outId);
+        WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOHANDLER);
         WH_TEST_ASSERT_RETURN(outId == req.id);
-        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NOHANDLER);
 
         /* Test that calling an unregistered callback returns error */
         WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
@@ -204,10 +203,9 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
         WH_TEST_RETURN_ON_FAIL(
             wh_Client_CustomCheckRegisteredRequest(client, req.id));
         WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-        WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbCheckRegisteredResponse(
-            client, &outId, &respErr));
+        WH_TEST_RETURN_ON_FAIL(
+            wh_Client_CustomCbCheckRegisteredResponse(client, &outId));
         WH_TEST_ASSERT_RETURN(outId == req.id);
-        WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_OK);
 
         /* prepare the rest of the request */
         if (sizeof(uintptr_t) == sizeof(uint64_t)) {
@@ -282,10 +280,9 @@ static int _testCallbacks(whServerContext* server, whClientContext* client)
     WH_TEST_RETURN_ON_FAIL(
         wh_Client_CustomCheckRegisteredRequest(client, req.id));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_CustomCbCheckRegisteredResponse(client, &outId, &respErr));
+    rc = wh_Client_CustomCbCheckRegisteredResponse(client, &outId);
+    WH_TEST_ASSERT_RETURN(rc == WH_ERROR_NOHANDLER);
     WH_TEST_ASSERT_RETURN(outId == req.id);
-    WH_TEST_ASSERT_RETURN(respErr == WH_ERROR_NOHANDLER);
     WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbRequest(client, &req));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(server));
     WH_TEST_RETURN_ON_FAIL(wh_Client_CustomCbResponse(client, &resp));

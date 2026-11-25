@@ -1378,7 +1378,7 @@ A client invokes a registered callback by populating a `whMessageCustomCb_Reques
 
 The two functions follow the same non-blocking pattern as the rest of the client API. Because dispatch is by action ID, the client must agree with the server on the meaning of each ID — application code typically defines a shared header that names every action ID and the data layout for each.
 
-To allow a client to query the server before invoking a callback whose presence it is unsure of, `wh_Client_CustomCbCheckRegistered()` returns `WH_ERROR_OK` if the supplied action ID has a handler installed and `WH_ERROR_NOHANDLER` if it does not.
+To allow a client to query the server before invoking a callback whose presence it is unsure of, `wh_Client_CustomCbCheckRegistered()` returns `WH_ERROR_OK` if the supplied action ID has a handler installed and `WH_ERROR_NOHANDLER` if it does not. Any other error means the check itself failed.
 
 ### Request and Response Messages
 
@@ -1495,13 +1495,12 @@ The client verifies the callback is registered, then issues requests against the
 int main(void) {
     whClientContext clientCtx;
     whClientConfig  clientCfg = { /* client config */ };
-    int err = 0;
 
     wh_Client_Init(&clientCtx, &clientCfg);
 
-    if (wh_Client_CustomCbCheckRegistered(&clientCtx, MY_CUSTOM_CB_ID, &err)
+    if (wh_Client_CustomCbCheckRegistered(&clientCtx, MY_CUSTOM_CB_ID)
             != WH_ERROR_OK) {
-        return -1; /* callback not registered on this server */
+        return -1; /* not registered, or the check failed */
     }
 
     whMessageCustomCb_Request  req  = {0};

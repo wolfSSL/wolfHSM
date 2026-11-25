@@ -200,16 +200,15 @@ static int _Call(TestCtx* t, const whMessageCustomCb_Request* req,
 /* Ask the server if a callback is registered and check the answer */
 static int _CheckRegistered(TestCtx* t, uint32_t id, int expectErr)
 {
-    uint16_t outId   = 0;
-    int      respErr = 0;
+    uint16_t outId = 0;
+    int      rc    = 0;
 
     WH_TEST_RETURN_ON_FAIL(
         wh_Client_CustomCheckRegisteredRequest(t->client, id));
     WH_TEST_RETURN_ON_FAIL(wh_Server_HandleRequestMessage(t->server));
-    WH_TEST_RETURN_ON_FAIL(
-        wh_Client_CustomCbCheckRegisteredResponse(t->client, &outId, &respErr));
+    rc = wh_Client_CustomCbCheckRegisteredResponse(t->client, &outId);
+    WH_TEST_ASSERT_RETURN(rc == expectErr);
     WH_TEST_ASSERT_RETURN(outId == id);
-    WH_TEST_ASSERT_RETURN(respErr == expectErr);
     return WH_ERROR_OK;
 }
 
