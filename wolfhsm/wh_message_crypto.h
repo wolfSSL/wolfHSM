@@ -1976,27 +1976,6 @@ int wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
     const whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* src,
     whMessageCrypto_PqcStatefulSigSigsLeftDmaResponse* dest);
 
-/* Ed25519 DMA Sign Request */
-typedef struct {
-    whMessageCrypto_DmaBuffer msg; /* Message buffer */
-    whMessageCrypto_DmaBuffer sig; /* Signature buffer */
-    whMessageCrypto_DmaBuffer pub; /* Signature buffer */
-    uint32_t                  options;
-    uint32_t                  keyId;
-    uint32_t                  type;      /* wolfCrypt Ed25519 mode */
-    uint32_t                  ctxSz;     /* Optional context length */
-    /* Data follows:
-     * uint8_t ctx[ctxSz];
-     */
-} whMessageCrypto_Ed25519SignDmaRequest;
-
-/* Ed25519 DMA Sign Response */
-typedef struct {
-    whMessageCrypto_DmaAddrStatus dmaAddrStatus;
-    uint32_t                      sigSz;
-    uint32_t                      pubSz;
-} whMessageCrypto_Ed25519SignDmaResponse;
-
 /* Ed25519 DMA Verify Request */
 typedef struct {
     whMessageCrypto_DmaBuffer sig; /* Signature buffer */
@@ -2017,14 +1996,6 @@ typedef struct {
     int32_t                       verifyResult;
     uint32_t                      pubSz;
 } whMessageCrypto_Ed25519VerifyDmaResponse;
-
-int wh_MessageCrypto_TranslateEd25519SignDmaRequest(
-    uint16_t magic, const whMessageCrypto_Ed25519SignDmaRequest* src,
-    whMessageCrypto_Ed25519SignDmaRequest* dest);
-
-int wh_MessageCrypto_TranslateEd25519SignDmaResponse(
-    uint16_t magic, const whMessageCrypto_Ed25519SignDmaResponse* src,
-    whMessageCrypto_Ed25519SignDmaResponse* dest);
 
 int wh_MessageCrypto_TranslateEd25519VerifyDmaRequest(
     uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaRequest* src,
