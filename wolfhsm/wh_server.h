@@ -353,9 +353,9 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
  * @param[in] req_packet Pointer to the request packet data.
  * @param[out] out_resp_size Pointer to store the size of the response packet.
  * @param[out] resp_packet Pointer to store the response packet data.
- * @return int Returns WH_ERROR_OK on success, WH_ERROR_BADARGS if the arguments
- * are invalid, WH_ERROR_ABORTED if the request is malformed, or a negative
- * error code on failure.
+ * @return int Returns WH_ERROR_OK when the reply is ready, even if its err
+ * field reports an error, WH_ERROR_BADARGS if the arguments are invalid, or a
+ * negative error code on failure.
  */
 int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t action, uint16_t seq,

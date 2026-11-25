@@ -46,6 +46,7 @@ WH_TEST_DECL(whTest_ClientIdBinding);
 WH_TEST_DECL(whTest_Comm);
 WH_TEST_DECL(whTest_CryptoAffinity);
 WH_TEST_DECL(whTest_CryptoAesGcmDmaAad);
+WH_TEST_DECL(whTest_CustomCb);
 WH_TEST_DECL(whTest_Dma);
 WH_TEST_DECL(whTest_DmaNonCoherent);
 WH_TEST_DECL(whTest_PortKey);
@@ -125,6 +126,7 @@ const whTestCase whTestsMisc[] = {
     {"whTest_ClientDevId",         whTest_ClientDevId        },
     {"whTest_ClientIdBinding",     whTest_ClientIdBinding    },
     {"whTest_Comm",                whTest_Comm               },
+    {"whTest_CustomCb",            whTest_CustomCb           },
     {"whTest_Dma",                 whTest_Dma                },
     {"whTest_DmaNonCoherent",      whTest_DmaNonCoherent     },
     {"whTest_CryptoAffinity",      whTest_CryptoAffinity     },

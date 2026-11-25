@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_error.h"
@@ -50,6 +51,24 @@ int wh_Server_RegisterCustomCb(whServerContext* server, uint16_t action,
     return WH_ERROR_OK;
 }
 
+/* Write the reply into the packet and set its size */
+static int _FormatResponse(uint16_t                          magic,
+                           const whMessageCustomCb_Response* resp,
+                           uint16_t* out_resp_size, void* resp_packet)
+{
+    int rc;
+
+    /* Clear the packet first. The translation does not write every byte, and
+     * old bytes in the buffer must not go back to the client */
+    memset(resp_packet, 0, sizeof(*resp));
+
+    rc = wh_MessageCustomCb_TranslateResponse(magic, resp, resp_packet);
+    if (rc == WH_ERROR_OK) {
+        *out_resp_size = sizeof(*resp);
+    }
+    return rc;
+}
+
 int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
                                     uint16_t action, uint16_t seq,
                                     uint16_t req_size, const void* req_packet,
@@ -66,15 +85,12 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
         return WH_ERROR_BADARGS;
     }
 
-    if (action >= WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT) {
-        /* Invalid callback index  */
-        /* TODO: is this the appropriate error to return? */
-        return WH_ERROR_BADARGS;
-    }
-
     if (req_size != sizeof(whMessageCustomCb_Request)) {
-        /* Request is malformed */
-        return WH_ERROR_ABORTED;
+        /* Request is malformed, so only the callback ID in the message header
+         * is known. Reply with that and the error */
+        resp.id  = action;
+        resp.err = WH_ERROR_ABORTED;
+        return _FormatResponse(magic, &resp, out_resp_size, resp_packet);
     }
 
     /* Translate the request */
@@ -83,34 +99,29 @@ int wh_Server_HandleCustomCbRequest(whServerContext* server, uint16_t magic,
         return rc;
     }
 
-    if (server->customHandlerTable[action] != NULL) {
+    /* Reply type defaults to the request type. The callback may change it. */
+    resp.type = req.type;
+
+    if ((action < WOLFHSM_CFG_SERVER_CUSTOMCB_COUNT) &&
+        (server->customHandlerTable[action] != NULL)) {
         /* If this isn't a query to check if the callback exists, invoke the
          * registered callback, storing the return value in the response  */
         if (req.type != WH_MESSAGE_CUSTOM_CB_TYPE_QUERY) {
             resp.rc = server->customHandlerTable[action](server, &req, &resp);
         }
-        /* TODO: propagate other wolfHSM error codes (requires modifying caller
-         * function) once generic server code supports it */
+        /* err is wolfHSM's own result. The callback reports errors through its
+         * return value, so this replaces anything it wrote to err */
         resp.err = WH_ERROR_OK;
     }
     else {
-        /* No callback was registered, populate response error. We must
-         * return success to ensure the "error" response is sent  */
+        /* No callback at this ID, or the ID is past the end of the table */
         resp.err = WH_ERROR_NOHANDLER;
     }
 
     /* tag response with requested callback ID for client-side bookkeeping*/
     resp.id = req.id;
 
-    /* Translate the response */
-    if ((rc = wh_MessageCustomCb_TranslateResponse(
-             magic, &resp, resp_packet)) != WH_ERROR_OK) {
-        return rc;
-    }
-
-    *out_resp_size = sizeof(resp);
-
-    return WH_ERROR_OK;
+    return _FormatResponse(magic, &resp, out_resp_size, resp_packet);
 }
 
 #endif /* WOLFHSM_CFG_ENABLE_SERVER */

@@ -2462,19 +2462,16 @@ int wh_Client_CustomCheckRegisteredRequest(whClientContext* c, uint32_t id);
  *
  * This function attempts to process a response message from the server after
  * checking if a custom callback is registered. It validates the response and
- * extracts the return code and callback ID. This function does not block; it
- * returns WH_ERROR_NOTREADY if a response has not been received.
+ * extracts the callback ID. This function does not block; it returns
+ * WH_ERROR_NOTREADY if a response has not been received.
  *
  * @param[in] c Pointer to the client context.
  * @param[out] outId Pointer to store the callback ID from the server.
- * @param[out] responseError Pointer to store the response error code from the
- * server.
  * @return int Returns 0 if the callback is registered, WH_ERROR_NOHANDLER if it
- * is not registered, or a negative error code on failure.
+ * is not registered, or another negative error code if the check failed.
  */
 int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
-                                              uint16_t*        outId,
-                                              int*             responseError);
+                                              uint16_t*        outId);
 
 /**
  * @brief Sends a request to the server and receives a response to check if a
@@ -2487,13 +2484,10 @@ int wh_Client_CustomCbCheckRegisteredResponse(whClientContext* c,
  *
  * @param[in] c Pointer to the client context.
  * @param[in] id The ID of the custom callback to check.
- * @param[out] responseError Pointer to store the response error code from the
- * server.
  * @return int Returns 0 if the callback is registered, WH_ERROR_NOHANDLER if it
- * is not registered, or a negative error code on failure.
+ * is not registered, or another negative error code if the check failed.
  */
-int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id,
-                                      int* responseError);
+int wh_Client_CustomCbCheckRegistered(whClientContext* c, uint16_t id);
 
 /* Auth Manager functions */
 
