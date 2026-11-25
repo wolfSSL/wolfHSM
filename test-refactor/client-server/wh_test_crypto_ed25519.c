@@ -28,14 +28,14 @@
  *                                    DMA variant)
  *   _whTest_CryptoEd25519DmaDevId  - wolfCrypt sign/verify (pure and ph)
  *                                    with server-held keys: sign works in DMA
- *                                    mode, fails on WH_DEV_ID_DMA
+ *                                    mode, verify works on WH_DEV_ID_DMA
  *   _whTest_CryptoEd25519SignMsgSize - the inline sign request limit, with and
  *                                    without a context
  *   _whTest_CryptoEd25519DmaModeMsgSize - in DMA mode sign is limited to the
  *                                    comm buffer; Ed25519ph covers longer
  *                                    messages
- *   _whTest_CryptoEd25519SignDmaRefused - the server refuses a raw DMA sign
- *                                    request
+ *   _whTest_CryptoEd25519SignDmaRefused - the DMA callback declines sign and
+ *                                    the server refuses a raw DMA sign request
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -56,6 +56,7 @@
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_client_cryptocb.h"
 #include "wolfhsm/wh_comm.h"
 #include "wolfhsm/wh_message.h"
 #include "wolfhsm/wh_message_crypto.h"
@@ -484,8 +485,8 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
  * DMA variant, so the DMA callback reports it unavailable:
  *  - in DMA dispatch mode, sign (pure and prehashed) is retried as a standard
  *    request and succeeds, while verify uses DMA;
- *  - on WH_DEV_ID_DMA, which never sends standard requests, sign fails (the
- *    wolfCrypt software fallback has no private key), while verify works. */
+ *  - on WH_DEV_ID_DMA verify works (sign being declined there is checked in
+ *    _whTest_CryptoEd25519SignDmaRefused). */
 static int _whTest_CryptoEd25519DmaDevId(whClientContext* ctx)
 {
     int         ret = 0;
@@ -576,42 +577,12 @@ static int _whTest_CryptoEd25519DmaDevId(whClientContext* ctx)
     }
     (void)wh_Client_SetDmaMode(ctx, prevDma);
 
-    /* WH_DEV_ID_DMA: sign is unavailable, verify still works */
-    if (ret == 0) {
-        wc_ed25519_free(key);
-        ret = wc_ed25519_init_ex(key, NULL, WH_DEV_ID_DMA);
-        if (ret == 0) {
-            ret = wh_Client_Ed25519SetKeyId(key, signKeyId);
-        }
-    }
+    /* WH_DEV_ID_DMA: verify works */
     if (ret == 0) {
         wc_ed25519_free(pubKey);
         ret = wc_ed25519_init_ex(pubKey, NULL, WH_DEV_ID_DMA);
         if (ret == 0) {
             ret = wh_Client_Ed25519SetKeyId(pubKey, verifyKeyId);
-        }
-    }
-    if (ret == 0) {
-        byte   sig2[ED25519_SIG_SIZE];
-        word32 sig2Sz = sizeof(sig2);
-        int    rc;
-
-        /* The callback declines and wolfCrypt's software path has no key */
-        rc = wc_ed25519_sign_msg(msg, sizeof(msg), sig2, &sig2Sz, key);
-        if (rc != BAD_FUNC_ARG) {
-            WH_ERROR_PRINT("Ed25519 sign on WH_DEV_ID_DMA returned %d, "
-                           "expected BAD_FUNC_ARG\n",
-                           rc);
-            ret = WH_TEST_FAIL;
-        }
-        sig2Sz = sizeof(sig2);
-        rc = wc_ed25519ph_sign_msg(msg, sizeof(msg), sig2, &sig2Sz, key, NULL,
-                                   0);
-        if ((ret == 0) && (rc != BAD_FUNC_ARG)) {
-            WH_ERROR_PRINT("Ed25519ph sign on WH_DEV_ID_DMA returned %d, "
-                           "expected BAD_FUNC_ARG\n",
-                           rc);
-            ret = WH_TEST_FAIL;
         }
     }
     if (ret == 0) {
@@ -624,54 +595,6 @@ static int _whTest_CryptoEd25519DmaDevId(whClientContext* ctx)
             ret = (ret != 0) ? ret : WH_TEST_FAIL;
         }
     }
-    if (ret == 0) {
-        /* A key holding its private part locally is signed in client software
-         * on WH_DEV_ID_DMA, since the callback declines */
-        ed25519_key swKey[1]    = {0};
-        ed25519_key localKey[1] = {0};
-        byte        priv[ED25519_PRV_KEY_SIZE];
-        word32      privSz = sizeof(priv);
-        byte        sig3[ED25519_SIG_SIZE];
-        word32      sig3Sz = sizeof(sig3);
-
-        ret = wc_ed25519_init_ex(swKey, NULL, INVALID_DEVID);
-        if (ret == 0) {
-            ret = wc_ed25519_init_ex(localKey, NULL, WH_DEV_ID_DMA);
-        }
-        if (ret == 0) {
-            ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, swKey);
-        }
-        if (ret == 0) {
-            ret = wc_ed25519_export_private(swKey, priv, &privSz);
-        }
-        if (ret == 0) {
-            ret = wc_ed25519_import_private_key(priv, ED25519_KEY_SIZE,
-                                                priv + ED25519_KEY_SIZE,
-                                                ED25519_PUB_KEY_SIZE, localKey);
-        }
-        if (ret == 0) {
-            ret =
-                wc_ed25519_sign_msg(msg, sizeof(msg), sig3, &sig3Sz, localKey);
-            if (ret != 0) {
-                WH_ERROR_PRINT("Ed25519 local-key sign on WH_DEV_ID_DMA "
-                               "failed: %d\n",
-                               ret);
-            }
-        }
-        if (ret == 0) {
-            verified = 0;
-            ret      = wc_ed25519_verify_msg(sig3, sig3Sz, msg, sizeof(msg),
-                                             &verified, swKey);
-            if ((ret != 0) || (verified != 1)) {
-                WH_ERROR_PRINT("Ed25519 local-key verify failed: %d %d\n", ret,
-                               verified);
-                ret = (ret != 0) ? ret : WH_TEST_FAIL;
-            }
-        }
-        wc_ed25519_free(localKey);
-        wc_ed25519_free(swKey);
-    }
-
     if (!WH_KEYID_ISERASED(signKeyId)) {
         (void)wh_Client_KeyEvict(ctx, signKeyId);
     }
@@ -827,11 +750,14 @@ static int _whTest_CryptoEd25519DmaModeMsgSize(whClientContext* ctx)
 }
 #endif /* !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
 
-/* The server has no DMA handler for Ed25519 sign: it would read the message
- * twice in client memory, and a client changing it in between recovers the
- * private key. Send a raw DMA sign request, as a client not using the wolfHSM
- * client library could, and check that the server refuses it before reading
- * the body. The body has the size of the removed request struct. */
+/* Ed25519 sign has no DMA variant: the server would read the message twice in
+ * client memory, and a client changing it in between recovers the private
+ * key. Check both ends:
+ *  - the client DMA callback declines the operation without contacting the
+ *    server;
+ *  - the server refuses a raw DMA sign request, as a client not using the
+ *    wolfHSM client library could send, before reading the body. The body has
+ *    the size of the removed request struct. */
 static int _whTest_CryptoEd25519SignDmaRefused(whClientContext* ctx)
 {
     whMessageCrypto_GenericRequestHeader*  reqHdr;
@@ -842,6 +768,37 @@ static int _whTest_CryptoEd25519SignDmaRefused(whClientContext* ctx)
     uint16_t reqLen  = (uint16_t)(sizeof(*reqHdr) + 64);
     uint16_t resLen  = 0;
     int      ret;
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* The DMA callback fails every operation in this configuration */
+    const int cbExpected = WC_HW_E;
+#else
+    const int cbExpected = CRYPTOCB_UNAVAILABLE;
+#endif
+    wc_CryptoInfo info;
+    ed25519_key   key[1];
+    byte          msg[] = "Ed25519 DMA sign declined";
+    byte          sig[ED25519_SIG_SIZE];
+    word32        sigSz = sizeof(sig);
+
+    ret = wc_ed25519_init_ex(key, NULL, WH_DEV_ID_DMA);
+    WH_TEST_ASSERT_RETURN(ret == 0);
+    memset(&info, 0, sizeof(info));
+    info.algo_type             = WC_ALGO_TYPE_PK;
+    info.pk.type               = WC_PK_TYPE_ED25519_SIGN;
+    info.pk.ed25519sign.key    = key;
+    info.pk.ed25519sign.in     = msg;
+    info.pk.ed25519sign.inLen  = sizeof(msg);
+    info.pk.ed25519sign.out    = sig;
+    info.pk.ed25519sign.outLen = &sigSz;
+    info.pk.ed25519sign.type   = (byte)Ed25519;
+    ret = wh_Client_CryptoCbDma(WH_DEV_ID_DMA, &info, ctx);
+    wc_ed25519_free(key);
+    if (ret != cbExpected) {
+        WH_ERROR_PRINT("Ed25519 sign on the DMA callback returned %d, "
+                       "expected %d\n",
+                       ret, cbExpected);
+        return WH_TEST_FAIL;
+    }
 
     WH_TEST_ASSERT_RETURN(dataPtr != NULL);
     memset(dataPtr, 0, reqLen);
@@ -868,7 +825,7 @@ static int _whTest_CryptoEd25519SignDmaRefused(whClientContext* ctx)
                        (int)resHdr->rc, NOT_COMPILED_IN);
         return WH_TEST_FAIL;
     }
-    WH_TEST_PRINT("Ed25519 DMA SIGN REQUEST REFUSED SUCCESS\n");
+    WH_TEST_PRINT("Ed25519 DMA SIGN DECLINED AND REFUSED SUCCESS\n");
     return 0;
 }
 #endif /* WOLFHSM_CFG_DMA */
