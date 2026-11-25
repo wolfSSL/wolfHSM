@@ -89,19 +89,19 @@ static int _destroyNvmId(whClientContext* ctx, whNvmId id)
 
 /*
  * Add (or re-Add) one object via ops->add and verify:
- *   - avail_objects drops by 1 (a new slot is always consumed,
- *     even on re-Add, since the log is append-only)
- *   - reclaim_objects rises by reclaim_grow (0 for a fresh Add,
- *     1 for a re-Add that supersedes a prior version)
+ *   - avail_objects + reclaim_objects drops by 1 for a fresh Add
+ *     and is unchanged for a re-Add (is_update). The sum is what
+ *     every backend agrees on: an append-only backend takes a new
+ *     slot and turns the superseded one reclaimable, while one
+ *     that replaces in place moves neither count.
  *   - GetMetadata reports the just-written id/access/flags/len/label
  *   - ops->read returns the just-written payload
  */
-static int _addAndVerifyOne(whClientContext* ctx,
-    const WhNvmTestObjectOps* ops, whNvmId id,
-    whNvmAccess access, whNvmFlags flags,
-    const uint8_t* label, whNvmSize label_len,
-    const uint8_t* data, whNvmSize data_len,
-    int reclaim_grow)
+static int _addAndVerifyOne(whClientContext* ctx, const WhNvmTestObjectOps* ops,
+                            whNvmId id, whNvmAccess access, whNvmFlags flags,
+                            const uint8_t* label, whNvmSize label_len,
+                            const uint8_t* data, whNvmSize data_len,
+                            int is_update)
 {
     int32_t   server_rc       = 0;
     uint32_t  avail_size      = 0;
@@ -133,9 +133,9 @@ static int _addAndVerifyOne(whClientContext* ctx,
         ctx, &server_rc, &avail_size, &avail_objects,
         &reclaim_size, &reclaim_objects));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(prev_avail - 1 == avail_objects);
     WH_TEST_ASSERT_RETURN(
-        (whNvmId)(prev_reclaim + reclaim_grow) == reclaim_objects);
+        (whNvmId)(prev_avail + prev_reclaim - (is_update ? 0 : 1)) ==
+        (whNvmId)(avail_objects + reclaim_objects));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(
         ctx, id, &server_rc,

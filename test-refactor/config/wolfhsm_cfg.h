@@ -60,6 +60,9 @@
 
 /* Test log-based NVM flash backend */
 #define WOLFHSM_CFG_SERVER_NVM_FLASH_LOG
+/* The default 4 KB log partition cannot hold the comm-buffer-sized objects
+ * the server and client groups store, so give the test build a larger one. */
+#define WH_NVM_FLASH_LOG_PARTITION_SIZE (64 * 1024)
 
 /* WOLFHSM_CFG_TEST_ALLOW_PERSISTENT_NVM_ARTIFACTS is intentionally NOT
  * defined here. Not implemented yet. */

@@ -398,7 +398,7 @@ check run: build_app
 	@$(RUN_ENV) $(BUILD_DIR)/$(BIN).elf 2>&1 \
 	    | tee test-suite.log \
 	    | grep --line-buffered -E \
-	        '^whTest_|^All [0-9]+ tests passed|^[0-9]+ passed, [0-9]+ skipped'; \
+	        '^whTest_|^--- NVM backend|^All [0-9]+ tests passed|^[0-9]+ passed, [0-9]+ skipped'; \
 	    rc=$${PIPESTATUS[0]}; \
 	    if [ $$rc -ne 0 ]; then \
 	        echo "test run exited $$rc (see test-suite.log for full output)"; \
