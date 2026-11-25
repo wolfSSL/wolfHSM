@@ -49,6 +49,7 @@
 #include "wh_test_posix_server.h"
 #include "wh_test_keygen_unique_id.h"
 #include "wh_test_keyread_race.h"
+#include "wh_test_comm_abort.h"
 
 /* POSIX-only thread-safety stress test. Called directly rather
  * than through the suite runner: the legacy test owns its own
@@ -368,6 +369,10 @@ int main(void)
             miscRc = rc;
         }
         rc = whTestGroup_RunOne("whTest_KeyReadRace", whTest_KeyReadRace, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_CommAbort", whTest_CommAbort, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }

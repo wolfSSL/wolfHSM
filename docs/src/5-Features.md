@@ -568,7 +568,8 @@ A client uses a port key ID like any other key ID. It binds the ID to a wolfCryp
 
 | Operation | Required Usage Flags |
 |---|---|
-| AES-ECB, AES-CBC, AES-CTR and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
+| AES-ECB, AES-CBC and AES-GCM | `WH_NVM_FLAGS_USAGE_ENCRYPT` to encrypt, `WH_NVM_FLAGS_USAGE_DECRYPT` to decrypt |
+| AES-CTR | `WH_NVM_FLAGS_USAGE_ENCRYPT`, in both directions |
 | AES-CMAC, one-shot or multi-step | `WH_NVM_FLAGS_USAGE_SIGN` or `WH_NVM_FLAGS_USAGE_VERIFY` |
 | Every key wrap and data wrap operation, as the KEK | `WH_NVM_FLAGS_USAGE_WRAP`. Wrap-export and unwrap-and-cache also need a [trusted KEK](#trusted-keks), so they take only fixed keys |
 
@@ -1050,7 +1051,7 @@ Define `WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT` for these targets. Every 
 ```c
 WH_DMA_ALIGNED uint8_t cipher[WH_DMA_PAD_SIZE(sizeof(plain))];
 
-ret = wh_Client_AesCtrDma(client, aes, 1, plain, sizeof(plain), cipher);
+ret = wh_Client_AesCtrDma(client, aes, plain, sizeof(plain), cipher);
 ```
 
 `WH_DMA_ALIGNED` and `WH_DMA_PAD_SIZE()` are no-ops without `WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT`. wolfHSM's own internal output buffers follow the rule. For caller buffers, the port's callback can check the start with `WH_DMA_IS_ALIGNED()` (as `posixTransportShm_ClientStaticMemDmaCallback` does for buffers it uses in place) or copy through an aligned, padded bounce buffer (as that callback does with `posixTransportShm_DmaAlloc()` for buffers outside the DMA area); padding cannot be checked.

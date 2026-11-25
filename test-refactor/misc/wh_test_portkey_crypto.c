@@ -848,16 +848,16 @@ static int _Cbc(whClientContext* c, Aes* aes, int dma, int enc,
     return wh_Client_AesCbc(c, aes, enc, in, sz, out);
 }
 
-static int _Ctr(whClientContext* c, Aes* aes, int dma, int enc,
-                const uint8_t* in, uint8_t* out, uint32_t sz)
+static int _Ctr(whClientContext* c, Aes* aes, int dma, const uint8_t* in,
+                uint8_t* out, uint32_t sz)
 {
 #ifdef WOLFHSM_CFG_DMA
     if (dma) {
-        return wh_Client_AesCtrDma(c, aes, enc, in, sz, out);
+        return wh_Client_AesCtrDma(c, aes, in, sz, out);
     }
 #endif
     (void)dma;
-    return wh_Client_AesCtr(c, aes, enc, in, sz, out);
+    return wh_Client_AesCtr(c, aes, in, sz, out);
 }
 
 static int _Gcm(whClientContext* c, Aes* aes, int dma, int enc,
@@ -1024,7 +1024,7 @@ static int _TryAes(whClientContext* c, whKeyId keyId, int mode, int dma,
                 ret = _Cbc(c, aes, dma, enc, _msg, out, AES_BLOCK_SIZE);
                 break;
             case MODE_CTR:
-                ret = _Ctr(c, aes, dma, enc, _msg, out, AES_BLOCK_SIZE);
+                ret = _Ctr(c, aes, dma, _msg, out, AES_BLOCK_SIZE);
                 break;
             case MODE_GCM:
                 if (enc) {
@@ -1122,13 +1122,13 @@ static int _CheckModes(whClientContext* c, whKeyId keyId, const uint8_t* key,
     /* CTR, in two requests that split a block */
     ops = _mock.ops;
     WH_TEST_RETURN_ON_FAIL(_AesStart(aes, keyId, _iv));
-    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, 1, _msg, out, 20));
+    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, _msg, out, 20));
     WH_TEST_RETURN_ON_FAIL(
-        _Ctr(c, aes, dma, 1, _msg + 20, out + 20, TEST_CTR_SZ - 20));
+        _Ctr(c, aes, dma, _msg + 20, out + 20, TEST_CTR_SZ - 20));
     WH_TEST_ASSERT_RETURN(memcmp(out, e.ctr, TEST_CTR_SZ) == 0);
     wc_AesFree(aes);
     WH_TEST_RETURN_ON_FAIL(_AesStart(aes, keyId, _iv));
-    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, 1, out, back, TEST_CTR_SZ));
+    WH_TEST_RETURN_ON_FAIL(_Ctr(c, aes, dma, out, back, TEST_CTR_SZ));
     WH_TEST_ASSERT_RETURN(memcmp(back, _msg, TEST_CTR_SZ) == 0);
     wc_AesFree(aes);
     CHECK_RAN(ops, hw);
@@ -1347,8 +1347,8 @@ static int _whTest_PortKeyOwner(TestCtx* t)
     return WH_ERROR_OK;
 }
 
-/* The copy keeps the source key's usage flags. Each AES request needs the
- * usage for its direction and CMAC needs sign or verify, standard and DMA */
+/* The copy keeps the source key's usage flags, checked for each AES mode and
+ * CMAC, standard and DMA */
 static int _whTest_PortKeyUsage(TestCtx* t)
 {
     whClientContext* c = t->pair[0].client;
@@ -1364,8 +1364,8 @@ static int _whTest_PortKeyUsage(TestCtx* t)
 
     WH_TEST_RETURN_ON_FAIL(_SwExpected(_keyA, &e));
 
-    /* Encrypt only and decrypt only: each works one way in every AES mode, and
-     * neither can do CMAC */
+    /* Encrypt only and decrypt only: each works one way in every AES mode but
+     * CTR, which needs only encrypt, and neither can do CMAC */
     src1 = WH_KEYID_ERASED;
     src2 = WH_KEYID_ERASED;
     WH_TEST_RETURN_ON_FAIL(
@@ -1381,11 +1381,17 @@ static int _whTest_PortKeyUsage(TestCtx* t)
     for (dma = 0; dma < WH_TEST_DMA_MODE_CNT; dma++) {
         for (mode = 0; mode < MODE_COUNT; mode++) {
             WH_TEST_RETURN_ON_FAIL(_TryAes(c, port1, mode, dma, 1, &e));
-            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, port1, mode, dma, 0, &e));
-            WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
-            WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
-                                  _TryAes(c, port2, mode, dma, 1, &e));
+            if (mode == MODE_CTR) {
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port2, mode, dma, 1, &e));
+            }
+            else {
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port1, mode, dma, 0, &e));
+                WH_TEST_RETURN_ON_FAIL(_TryAes(c, port2, mode, dma, 0, &e));
+                WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE ==
+                                      _TryAes(c, port2, mode, dma, 1, &e));
+            }
         }
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _Cmac(c, port1, dma, tag));
         WH_TEST_ASSERT_RETURN(WH_ERROR_USAGE == _CmacSteps(c, port1, dma, tag));

@@ -31,14 +31,7 @@ int wh_Bench_Mod_Echo(whClientContext* client, whBenchOpContext* benchCtx,
 int wh_Bench_Mod_Aes128CTREncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
 
-int wh_Bench_Mod_Aes128CTRDecrypt(whClientContext*  client,
-                                  whBenchOpContext* ctx, int id, void* params);
-
 int wh_Bench_Mod_Aes128CTREncryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id,
-                                     void* params);
-
-int wh_Bench_Mod_Aes128CTRDecryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
                                      void* params);
 
@@ -86,13 +79,6 @@ int wh_Bench_Mod_Aes128GCMDecryptDma(whClientContext*  client,
 
 int wh_Bench_Mod_Aes256CTREncrypt(whClientContext*  client,
                                   whBenchOpContext* ctx, int id, void* params);
-
-int wh_Bench_Mod_Aes256CTRDecrypt(whClientContext*  client,
-                                  whBenchOpContext* ctx, int id, void* params);
-
-int wh_Bench_Mod_Aes256CTRDecryptDma(whClientContext*  client,
-                                     whBenchOpContext* ctx, int id,
-                                     void* params);
 
 int wh_Bench_Mod_Aes256CTREncryptDma(whClientContext*  client,
                                      whBenchOpContext* ctx, int id,
