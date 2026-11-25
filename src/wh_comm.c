@@ -189,10 +189,13 @@ int wh_CommClient_RecvResponse(whCommClient* context, uint16_t* out_magic,
 #endif
         if ((size < sizeof(*context->hdr)) ||
             (size > WH_COMM_MTU)) {
-            /* Size out of range - transport-level corruption (the transport
-             * clamps its copy, but reports the true peer-controlled length, so
-             * an oversized value here means a truncated/bogus message). Treat as
-             * fatal and clear pending since the caller must tear down anyway. */
+            /* Size out of range: either transport-level corruption (the
+             * transport clamps its copy, but reports the true peer-controlled
+             * length, so an oversized value here means a truncated/bogus
+             * message), or the empty response the server sends to reject a
+             * request with an out-of-range length. In the latter case the
+             * exchange is complete and the channel can be used again. Either
+             * way clear pending and fail the request. */
             context->pending = 0;
             rc = WH_ERROR_ABORTED;
         }
@@ -383,10 +386,12 @@ int wh_CommServer_RecvRequest(whCommServer* context,
             context->packet);
     if (rc == 0) {
         /* size is the true peer-controlled length; the transport clamps its own
-         * copy, so an out-of-range value here is transport-level corruption. */
+         * copy. An out-of-range value (corruption, or a peer built with a
+         * different WOLFHSM_CFG_COMM_DATA_LEN) is rejected. The caller must
+         * complete the exchange with wh_CommServer_SendEmptyResponse(). */
         if ((size < sizeof(*context->hdr)) ||
             (size > WH_COMM_MTU)) {
-            rc = WH_ERROR_ABORTED;
+            rc = WH_ERROR_REQUEST_SIZE;
         }
         if (rc == 0) {
             req_size = size - sizeof(*context->hdr);
@@ -410,6 +415,25 @@ int wh_CommServer_RecvRequest(whCommServer* context,
             if (out_seq != NULL) *out_seq = seq;
             if (out_size != NULL) *out_size = req_size;
         }
+    }
+    return rc;
+}
+
+int wh_CommServer_SendEmptyResponse(whCommServer* context)
+{
+    int rc;
+
+    if ((context == NULL) || (context->initialized == 0) ||
+        (context->transport_cb == NULL) ||
+        (context->transport_cb->Send == NULL)) {
+        return WH_ERROR_BADARGS;
+    }
+
+    rc = context->transport_cb->Send(context->transport_context, 0,
+                                     context->packet);
+    if ((rc != WH_ERROR_OK) && (rc != WH_ERROR_NOTREADY)) {
+        /* e.g. the TCP transport refuses zero-length sends */
+        rc = WH_ERROR_ABORTED;
     }
     return rc;
 }
