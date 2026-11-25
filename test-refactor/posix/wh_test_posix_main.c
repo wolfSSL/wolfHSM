@@ -79,6 +79,8 @@ int whTest_NvmInitStates(void* ctx);
 int whTest_NvmFlashEndianLayout(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
+int whTest_NvmInvalidId(void* ctx);
+int whTest_NvmFlashLogFailedAdd(void* ctx);
 int whTest_NvmRecovery(void* ctx);
 int whTest_NvmCrc16(void* ctx);
 
@@ -332,6 +334,16 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmFlashLog",
             whTest_NvmFlashLog, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmInvalidId", whTest_NvmInvalidId,
+                                NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmFlashLogFailedAdd",
+                                whTest_NvmFlashLogFailedAdd, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
