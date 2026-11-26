@@ -999,7 +999,7 @@ For wolfCrypt-mediated operations, opt-in to DMA is a per-client dispatch mode r
 
 The global `WH_DEV_ID_DMA` device ID is also always registered when `WOLFHSM_CFG_DMA` is enabled and always produces DMA-flavored requests for the most recently initialized client; unlike the DMA dispatch mode, it does not fall back to the standard path for algorithms without a DMA variant. See [Transparent Offload via Crypto Callbacks](#transparent-offload-via-crypto-callbacks) for the global device IDs' single-client-per-process scope.
 
-Ed25519 signing has no DMA variant: Ed25519 reads the message twice, and the server reads DMA input in place, so a client that changes the message between the reads can recover the private key. The message always travels inline in the request and must fit in `WOLFHSM_CFG_COMM_DATA_LEN`.
+Ed25519 signing has no DMA variant because the algorithm requires multiple reads of the input data, introducing a window in which client-side modifications could allow private key recovery. Mitigating this risk requires copying the input, negating the benefits of DMA. Messages must therefore be passed inline and are subject to the `WOLFHSM_CFG_COMM_DATA_LEN` size limit.
 
 For the non-crypto subsystems (NVM, certificate manager, image manager, key cache/export, and the data-wrap API) the DMA-aware request kinds are exposed as `*Dma` variants of the corresponding client API functions — `wh_Client_NvmAddObjectDma`, `wh_Client_KeyCacheDma`, `wh_Client_KeyExportDma`, `wh_Client_CertVerifyDma`, and so on. See the [client API reference](10-API-docs-client.md) for the full set.
 

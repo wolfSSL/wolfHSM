@@ -1146,9 +1146,6 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
                             int* out_res);
 
 #ifdef WOLFHSM_CFG_DMA
-/* There is no DMA variant of Ed25519 sign: the server would read the message
- * twice in place, letting a client recover the private key. Use
- * wh_Client_Ed25519Sign. */
 
 /**
  * @brief Verify a signature using an Ed25519 key via DMA.

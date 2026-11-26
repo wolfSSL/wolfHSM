@@ -4661,7 +4661,7 @@ static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
                                            &verifyKeyId);
     }
 
-    /* Sign has no DMA variant */
+    /* obtain a sign without DMA, because sign has no DMA variant */
     if (ret == 0) {
         ret = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
                                     (uint8_t)Ed25519, NULL, 0, sig, &sigSz);

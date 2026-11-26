@@ -1686,10 +1686,8 @@ int wh_Client_CryptoCbDma(int devId, wc_CryptoInfo* info, void* inCtx)
             } break;
 
             /* No WC_PK_TYPE_ED25519_SIGN case: Ed25519 sign has no DMA
-             * variant, because the server would read the message twice in
-             * place (see wh_server_crypto.c). It returns
-             * CRYPTOCB_UNAVAILABLE, so DMA dispatch mode retries it as a
-             * standard request. */
+             * variant, because it introduces a TOCTOU window that could
+             * lead to private key disclosure */
             case WC_PK_TYPE_ED25519_VERIFY: {
                 ed25519_key*   key    = info->pk.ed25519verify.key;
                 const uint8_t* sig    = info->pk.ed25519verify.sig;
