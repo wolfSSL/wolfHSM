@@ -4681,6 +4681,28 @@ static int _HandleAesGcmDma(whServerContext* ctx, uint16_t magic, int devId,
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
 
+/* The response must always have room for the largest CMAC tag */
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_GenericResponseHeader) +
+                               sizeof(whMessageCrypto_CmacAesResponse) +
+                               WC_CMAC_TAG_MAX_SZ <=
+                           WOLFHSM_CFG_COMM_DATA_LEN,
+                       "comm buffer too small for a CMAC tag");
+WH_UTILS_STATIC_ASSERT(sizeof(whMessageCrypto_GenericResponseHeader) +
+                               sizeof(whMessageCrypto_CmacAesDmaResponse) +
+                               WC_CMAC_TAG_MAX_SZ <=
+                           WOLFHSM_CFG_COMM_DATA_LEN,
+                       "comm buffer too small for a DMA CMAC tag");
+
+/* Tag length must be 0 (no output) or within the CMAC tag size range */
+static int _CmacValidateTagLen(uint32_t outMacLen)
+{
+    if (outMacLen > 0 &&
+        (outMacLen < WC_CMAC_TAG_MIN_SZ || outMacLen > WC_CMAC_TAG_MAX_SZ)) {
+        return WH_ERROR_BUFFER_SIZE;
+    }
+    return WH_ERROR_OK;
+}
+
 /* Resolve CMAC key from request (inline key or keystore ID). The outKey
  * buffer must hold the largest AES key, AES_256_KEY_SIZE bytes. A port key is
  * returned in *outPortKey instead, to use by reference */
@@ -4810,7 +4832,10 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
     if (req.keySz > AES_256_KEY_SIZE) {
         return WH_ERROR_BADARGS;
     }
-
+    ret = _CmacValidateTagLen(req.outSz);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     /* Setup fixed size fields */
     uint8_t* in =
@@ -4818,12 +4843,6 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t* key = in + req.inSz;
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesResponse);
-
-    /* Bound outSz to the space available in the communication buffer */
-    const word32 max_out =
-        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_CmacAesResponse);
-    const word32 out_sz =
-        ((word32)req.outSz > max_out) ? max_out : (word32)req.outSz;
 
     memset(&res, 0, sizeof(res));
 
@@ -4838,7 +4857,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
     /* Oneshot: input and output are both present */
     if (ret == 0 && req.inSz != 0 && req.outSz != 0) {
-        word32 len = out_sz;
+        word32 len = (word32)req.outSz;
 
         WH_DEBUG_SERVER_VERBOSE("cmac generate oneshot\n");
 
@@ -4891,7 +4910,7 @@ static int _HandleCmac(whServerContext* ctx, uint16_t magic, int devId,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            word32 len = out_sz;
+            word32 len = (word32)req.outSz;
             WH_DEBUG_SERVER_VERBOSE("cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
             res.outSz = (uint32_t)len;
@@ -9407,6 +9426,10 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     if (req.keySz > AES_256_KEY_SIZE) {
         return WH_ERROR_BADARGS;
     }
+    ret = _CmacValidateTagLen(req.outSz);
+    if (ret != WH_ERROR_OK) {
+        return ret;
+    }
 
     word32 len;
 
@@ -9416,12 +9439,6 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
     uint8_t* key = inlineIn + req.inlineInSz;
     uint8_t* out =
         (uint8_t*)(cryptoDataOut) + sizeof(whMessageCrypto_CmacAesDmaResponse);
-
-    /* Bound outSz to the space available in the communication buffer */
-    const word32 max_out =
-        WH_MESSAGE_CRYPTO_RES_MAX_INLINE_SZ(whMessageCrypto_CmacAesDmaResponse);
-    const word32 out_sz =
-        ((word32)req.outSz > max_out) ? max_out : (word32)req.outSz;
 
     memset(&res, 0, sizeof(res));
 
@@ -9437,7 +9454,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
      * streaming protocol never produces outSz>0 with DMA input (Final is
      * inline-only), so this branch is only taken by CmacGenerateDma. */
     if (req.inlineInSz == 0 && req.input.sz != 0 && req.outSz != 0) {
-        len = out_sz;
+        len = req.outSz;
 
         /* Translate DMA address for input */
         ret = wh_Server_DmaProcessClientAddress(
@@ -9532,7 +9549,7 @@ static int _HandleCmacDma(whServerContext* ctx, uint16_t magic, int devId,
 
         if (ret == 0 && req.outSz != 0) {
             /* Finalize CMAC operation */
-            len = out_sz;
+            len = req.outSz;
             WH_DEBUG_SERVER_VERBOSE("dma cmac final len:%d\n", len);
             ret       = wc_CmacFinal(cmac, out, &len);
             res.outSz = len;
