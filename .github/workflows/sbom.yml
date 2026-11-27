@@ -1,0 +1,111 @@
+name: SBOM
+
+on:
+  push:
+    branches: [ 'main', 'release/**' ]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [ '*' ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  posix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: wolfSSL/wolfssl
+          path: wolfssl
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install the SPDX checker
+        run: pip install spdx-tools
+      - name: Record the default POSIX build
+        run: |
+          set -euo pipefail
+          make -C test sbom sbom-app WOLFSSL_DIR="$GITHUB_WORKSPACE/wolfssl"
+          python3 tools/sbom/validate_sbom.py --name-prefix wolfhsm \
+            test/wolfhsm-[0-9]*.cdx.json test/wolfhsm-[0-9]*.spdx.json \
+            test/wolfhsm-test-*.cdx.json test/wolfhsm-test-*.spdx.json
+          python3 - <<'PY'
+          import glob, json
+          libs = sorted(glob.glob("test/wolfhsm-[0-9]*.cdx.json"))
+          apps = sorted(glob.glob("test/wolfhsm-test-*.cdx.json"))
+          assert len(libs) == 1 and len(apps) == 1, (libs, apps)
+          for path in libs + apps:
+              cdx = json.load(open(path))
+              text = open(path).read()
+              names = [p.get("name", "") for p in cdx["metadata"]["component"].get("properties", [])]
+              comps = [c.get("name") for c in cdx.get("components", [])]
+              assert "wolfssl" in comps, (path, comps)
+              assert any(n.endswith("WOLFHSM_CFG_GLOBAL_KEYS") for n in names), path
+              assert not any(n.endswith("WOLFSSL_USER_SETTINGS") for n in names), path
+              assert "/home/" not in text and "/Users/" not in text, path
+          assert json.load(open(apps[0]))["metadata"]["component"]["name"] == "wolfhsm-test"
+          print("posix ok")
+          PY
+          SOURCE_DATE_EPOCH=1700000000 make -C test sbom \
+            WOLFSSL_DIR="$GITHUB_WORKSPACE/wolfssl" \
+            SBOM_CDX_OUT=/tmp/hsm-a.cdx.json SBOM_SPDX_OUT=/tmp/hsm-a.spdx.json
+          SOURCE_DATE_EPOCH=1700000000 make -C test sbom \
+            WOLFSSL_DIR="$GITHUB_WORKSPACE/wolfssl" \
+            SBOM_CDX_OUT=/tmp/hsm-b.cdx.json SBOM_SPDX_OUT=/tmp/hsm-b.spdx.json
+          cmp /tmp/hsm-a.cdx.json /tmp/hsm-b.cdx.json
+          cmp /tmp/hsm-a.spdx.json /tmp/hsm-b.spdx.json
+
+  nocrypto:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install the SPDX checker
+        run: pip install spdx-tools
+      - name: Record the builds that do not use wolfSSL
+        run: |
+          set -euo pipefail
+          make -C test sbom NOCRYPTO=1
+          make -C benchmark sbom NOCRYPTO=1
+          make -C examples/posix/wh_posix_server sbom NOCRYPTO=1
+          make -C examples/posix/wh_posix_client sbom NOCRYPTO=1
+          make -C test-refactor/posix sbom NOCRYPTO=1
+          make -C tools/whnvmtool sbom sbom-app NOCRYPTO=1
+          python3 tools/sbom/validate_sbom.py --name-prefix wolfhsm \
+            test/wolfhsm-[0-9]*.cdx.json test/wolfhsm-[0-9]*.spdx.json \
+            tools/whnvmtool/wolfhsm-nvmtool-*.cdx.json \
+            tools/whnvmtool/wolfhsm-nvmtool-*.spdx.json
+          python3 - <<'PY'
+          import glob, json
+          lib = json.load(open(glob.glob("test/wolfhsm-[0-9]*.cdx.json")[0]))
+          names = [p.get("name", "") for p in lib["metadata"]["component"].get("properties", [])]
+          comps = [c.get("name") for c in lib.get("components", [])]
+          assert "wolfssl" not in comps, comps
+          assert any(n.endswith("WOLFHSM_CFG_NO_CRYPTO") for n in names)
+          nvm = json.load(open(glob.glob("tools/whnvmtool/wolfhsm-nvmtool-*.cdx.json")[0]))
+          nvm_names = [p.get("name", "") for p in nvm["metadata"]["component"].get("properties", [])]
+          assert any(n.endswith("WOLFHSM_CFG_ENABLE_SERVER") for n in nvm_names)
+          assert not any(n.endswith("WOLFHSM_CFG_GLOBAL_KEYS") for n in nvm_names)
+          print("nocrypto ok")
+          PY
+
+  drift:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the vendored toolkit
+        run: |
+          set -euo pipefail
+          rev=$(tr -d '[:space:]' < tools/sbom/.wolfssl-compliance-tooling-rev)
+          git clone https://github.com/wolfSSL/wolfssl-compliance-tooling.git /tmp/tooling
+          git -C /tmp/tooling checkout "$rev"
+          python3 /tmp/tooling/tools/wolfssl-compliance-tooling-sync \
+            --dest "$GITHUB_WORKSPACE" --prune --check

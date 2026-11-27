@@ -224,6 +224,9 @@ scan:$(BUILD_DIR)
 	            --exclude $(WOLFSSL_DIR)/src \
 	            --status-bugs $(MAKE) analyze 2> $(WOLFHSM_DIR)/scan_out/$(SCAN_LOG)
 
+WOLFHSM_SBOM_APP_NAME := wolfhsm-posix-client
+include $(WOLFHSM_DIR)/mk/sbom.mk
+
 clean:
 	@echo "Cleaning build files"
 	@rm -f 	\

@@ -1,5 +1,5 @@
 
-.PHONY: all test benchmark tools examples clean
+.PHONY: all test benchmark tools examples clean sbom
 
 export DEBUG
 export DEBUG_VERBOSE
@@ -56,3 +56,8 @@ clean:
 	make -C benchmark clean
 	make -C tools clean
 	make -C examples clean
+
+# Library SBOM for the POSIX test configuration, plus the test program.
+sbom:
+	$(MAKE) -C test sbom
+	$(MAKE) -C test sbom-app

@@ -1,5 +1,9 @@
 .DS_Store
 Build/
+# tools/sbom/build is the vendored Make fragment. Build/ matches it
+# on a case-insensitive file system.
+!tools/sbom/build/
+!tools/sbom/build/**
 *.o
 *.a
 *.la
@@ -9,6 +13,10 @@ tools/testcertgen/*.der
 *.code-workspace
 .vscode
 compile_commands.json
+.*-wolfssl-compliance-tooling-srcs.txt
+wolfhsm-*.cdx.json
+wolfhsm-*.spdx.json
+wolfhsm-*.spdx
 **/.cache
 
 # Static analysis
