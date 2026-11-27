@@ -172,7 +172,7 @@ clean-test:
 .PHONY: all clean test-gen test-invalid test
 
 WOLFHSM_PORT_DIR := $(WOLFHSM_DIR)/port/posix
-WOLFHSM_SBOM_CFLAGS := $(CFLAGS)
+WOLFHSM_SBOM_CFLAGS := $(CFLAGS) $(CFLAGS_EXTRA)
 WOLFHSM_SBOM_APP_NAME := wolfhsm-nvmtool
 WOLFHSM_SBOM_APP_SRCS := $(CURDIR)/whnvmtool.c
 include $(WOLFHSM_DIR)/mk/sbom.mk

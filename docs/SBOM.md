@@ -43,7 +43,9 @@ The program SBOM lists the C files of that program. It omits the wolfHSM library
 
 The settings header is `wolfhsm/wh_settings.h`. The record keeps macros that start with `WOLFHSM_`.
 
-`tools/whnvmtool` has no `WOLFHSM_CFG` define. Its SBOM records the `-D` flags in that Makefile.
+The capture uses `$(CFLAGS) $(DEF) $(INC)`, in that order. That is the compile recipe.
+
+`tools/whnvmtool` has no `WOLFHSM_CFG` define. Its SBOM records `$(CFLAGS) $(CFLAGS_EXTRA)`.
 
 The package version comes from the `wolfHSM Release` line in `ChangeLog.md`.
 

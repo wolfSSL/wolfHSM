@@ -7,7 +7,7 @@
 # this Makefile as `sbom-app`. Those sources are SRC_C with the
 # wolfHSM library, the POSIX port, and wolfSSL removed.
 # Set WOLFHSM_SBOM_APP_SRCS to name the program sources yourself.
-# Set WOLFHSM_SBOM_CFLAGS to pass a flag list other than DEF.
+# Set WOLFHSM_SBOM_CFLAGS to pass a flag list other than the compile line.
 # NOCRYPTO=1 records no wolfSSL dependency.
 
 ifeq ($(WOLFHSM_DIR),)
@@ -26,7 +26,9 @@ SBOM_VERSION := $(shell sed -n 's/^\# wolfHSM Release v\([0-9][0-9.]*\).*/\1/p' 
 ifeq ($(SBOM_VERSION),)
 $(error ChangeLog.md has no wolfHSM Release version line)
 endif
-SBOM_CFLAGS := $(if $(WOLFHSM_SBOM_CFLAGS),$(WOLFHSM_SBOM_CFLAGS),$(DEF))
+# The compile recipe is $(CC) $(CFLAGS) $(DEF) $(INC). Keep that order so
+# a -D in CFLAGS and the first matching -I are the ones the build uses.
+SBOM_CFLAGS := $(if $(WOLFHSM_SBOM_CFLAGS),$(WOLFHSM_SBOM_CFLAGS),$(CFLAGS) $(DEF) $(INC))
 SBOM_SETTINGS_H := $(SBOM_ROOT)/wolfhsm/wh_settings.h
 SBOM_INCLUDE_DIRS :=
 ifneq ($(CONFIG_DIR),)
