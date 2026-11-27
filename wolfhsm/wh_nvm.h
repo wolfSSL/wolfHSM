@@ -91,14 +91,17 @@ typedef struct {
 
     /**
      * Add a new object. Duplicate IDs are allowed, but only the most recent
-     * version will be accessible.
+     * version will be accessible. WH_NVM_ID_INVALID never names a stored
+     * object and must be rejected with WH_ERROR_BADARGS.
      */
     int (*AddObject)(void* context, whNvmMetadata* meta, whNvmSize data_len,
                      const uint8_t* data);
 
     /**
      * Retrieve the next matching ID starting at start_id. Sets out_count to
-     * the total number of IDs that match access and flags.
+     * the total number of IDs that match access and flags. A start_id of
+     * WH_NVM_ID_INVALID starts from the first object, and an out_id of
+     * WH_NVM_ID_INVALID means there is no next object.
      */
     int (*List)(void* context, whNvmAccess access, whNvmFlags flags,
                 whNvmId start_id, whNvmId* out_count, whNvmId* out_id);
@@ -260,7 +263,8 @@ int wh_Nvm_GetAvailable(whNvmContext* context, uint32_t* out_avail_size,
  * @param[in] dataLen Length of the object data in bytes.
  * @param[in] data Pointer to the object data.
  * @return int WH_ERROR_OK on success.
- *             WH_ERROR_BADARGS if context is NULL.
+ *             WH_ERROR_BADARGS if context is NULL or meta->id is
+ *             WH_NVM_ID_INVALID.
  *             WH_ERROR_NOSPACE if insufficient space even after reclaim.
  *             Other negative error codes on backend failure.
  */
@@ -278,7 +282,8 @@ int wh_Nvm_AddObjectWithReclaim(whNvmContext* context, whNvmMetadata* meta,
  * @param[in] data_len Length of the object data in bytes.
  * @param[in] data Pointer to the object data.
  * @return int WH_ERROR_OK on success.
- *             WH_ERROR_BADARGS if context is NULL or not initialized.
+ *             WH_ERROR_BADARGS if context is NULL or not initialized, or
+ *             if meta->id is WH_NVM_ID_INVALID.
  *             WH_ERROR_ABORTED if the backend callback is NULL.
  *             Other negative error codes on backend failure.
  */
@@ -308,7 +313,8 @@ int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata* meta,
  * @return int WH_ERROR_OK on success.
  *             WH_ERROR_ACCESS if the existing object is non-modifiable or a
  *             server-only key.
- *             WH_ERROR_BADARGS if context is NULL or not initialized.
+ *             WH_ERROR_BADARGS if context is NULL or not initialized, or
+ *             if meta->id is WH_NVM_ID_INVALID.
  *             Other negative error codes on backend failure.
  */
 int wh_Nvm_AddObjectChecked(whNvmContext* context, const whNvmMetadata* meta,
@@ -324,7 +330,8 @@ int wh_Nvm_AddObjectChecked(whNvmContext* context, const whNvmMetadata* meta,
  * @param[in] context Pointer to the NVM context. Must not be NULL.
  * @param[in] access Access level filter for matching objects.
  * @param[in] flags Flags filter for matching objects.
- * @param[in] start_id ID to start searching from.
+ * @param[in] start_id ID to start searching from. WH_NVM_ID_INVALID starts
+ *            from the first object.
  * @param[out] out_count Total count of matching objects (optional).
  * @param[out] out_id Next matching object ID (optional).
  * @return int WH_ERROR_OK on success.
@@ -375,6 +382,8 @@ int wh_Nvm_GetMetadata(whNvmContext* context, whNvmId id, whNvmMetadata* meta);
  * @param[in] context Pointer to the NVM context. Must not be NULL.
  * @param[in] list_count Number of IDs in the list (0 for compaction only).
  * @param[in] id_list Array of object IDs to destroy (NULL if list_count is 0).
+ *            IDs that name no stored object, WH_NVM_ID_INVALID included, are
+ *            ignored.
  * @return int WH_ERROR_OK on success.
  *             WH_ERROR_BADARGS if context is NULL or not initialized.
  *             WH_ERROR_ABORTED if the backend callback is NULL.

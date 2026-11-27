@@ -80,6 +80,8 @@ int whTest_NvmInitStates(void* ctx);
 int whTest_NvmFlashEndianLayout(void* ctx);
 int whTest_NvmAddOverwriteDestroy(void* ctx);
 int whTest_NvmFlashLog(void* ctx);
+int whTest_NvmInvalidId(void* ctx);
+int whTest_NvmFlashLogFailedAdd(void* ctx);
 int whTest_NvmRecovery(void* ctx);
 int whTest_NvmCrc16(void* ctx);
 
@@ -124,6 +126,22 @@ static int             _serverReady = 0;
 static int _serverRc = 0;
 static int _clientRc = 0;
 
+/* NVM backend the server thread builds the shared server on. main runs the
+ * server and client groups once per backend. */
+static whTestNvmBackendType _nvmBackend = WH_NVM_TEST_BACKEND_FLASH;
+
+
+static const char* _nvmBackendName(whTestNvmBackendType type)
+{
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    if (type == WH_NVM_TEST_BACKEND_FLASH_LOG) {
+        return "flash-log";
+    }
+#endif
+    (void)type;
+    return "flash";
+}
+
 
 static void _signalServerReady(void)
 {
@@ -151,7 +169,7 @@ static void* _serverThread(void* arg)
 
     (void)arg;
 
-    rc = whTestPosix_Server_Init(&_server);
+    rc = whTestPosix_Server_Init(&_server, _nvmBackend);
     if (rc != 0) {
         _serverRc = rc;
         /* Release the client thread so it doesn't stall on the
@@ -240,8 +258,9 @@ static void* _clientThread(void* arg)
     && !defined(WOLFHSM_CFG_NO_CRYPTO) \
     && !defined(__APPLE__) /* pthread_barrier_t unavailable on macOS */
     /* Run the POSIX-only stress test after the portable client
-     * group so a failure there doesn't mask earlier results. */
-    if (_clientRc == 0) {
+     * group so a failure there doesn't mask earlier results. It owns its
+     * NVM, so it runs once, not per backend. */
+    if (_clientRc == 0 && _nvmBackend == WH_NVM_TEST_BACKEND_FLASH) {
         rc = whTest_ThreadSafeStress();
         if (rc != 0) {
             _clientRc = rc;
@@ -265,6 +284,9 @@ int main(void)
     pthread_t cthread;
     int       rc;
     int       miscRc;
+    int       backend;
+    int       groupServerRc = 0;
+    int       groupClientRc = 0;
 
     /* Run everything to the end so the summary reflects the
      * whole suite; a misc failure doesn't skip the client or
@@ -313,6 +335,16 @@ int main(void)
         }
         rc = whTestGroup_RunOne("whTest_NvmFlashLog",
             whTest_NvmFlashLog, NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmInvalidId", whTest_NvmInvalidId,
+                                NULL);
+        if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
+            miscRc = rc;
+        }
+        rc = whTestGroup_RunOne("whTest_NvmFlashLogFailedAdd",
+                                whTest_NvmFlashLogFailedAdd, NULL);
         if (rc != 0 && rc != WH_TEST_SKIPPED && miscRc == 0) {
             miscRc = rc;
         }
@@ -378,35 +410,53 @@ int main(void)
         }
     }
 
-    rc = pthread_create(&sthread, NULL, _serverThread, NULL);
-    if (rc != 0) {
-        (void)whTestGroup_Summary();
-        return rc;
-    }
+    /* Run the server and client groups against each NVM backend. A failure
+     * on one backend doesn't skip the next; the first failure is reported. */
+    for (backend = 0; backend < (int)WH_NVM_TEST_BACKEND_COUNT; backend++) {
+        _nvmBackend  = (whTestNvmBackendType)backend;
+        _serverReady = 0;
+        _serverRc    = 0;
+        _clientRc    = 0;
 
-    rc = pthread_create(&cthread, NULL, _clientThread, NULL);
-    if (rc != 0) {
-        /* Drop the server out of its loop so the best-effort
-         * join below doesn't block forever. */
-        (void)wh_Server_SetConnected(&_server,
-            WH_COMM_DISCONNECTED);
+        WOLFHSM_CFG_PRINTF("--- NVM backend: %s ---\n",
+                           _nvmBackendName(_nvmBackend));
+
+        rc = pthread_create(&sthread, NULL, _serverThread, NULL);
+        if (rc != 0) {
+            (void)whTestGroup_Summary();
+            return rc;
+        }
+
+        rc = pthread_create(&cthread, NULL, _clientThread, NULL);
+        if (rc != 0) {
+            /* Drop the server out of its loop so the best-effort
+             * join below doesn't block forever. */
+            (void)wh_Server_SetConnected(&_server, WH_COMM_DISCONNECTED);
+            (void)pthread_join(sthread, NULL);
+            (void)whTestGroup_Summary();
+            return rc;
+        }
+
+        (void)pthread_join(cthread, NULL);
         (void)pthread_join(sthread, NULL);
-        (void)whTestGroup_Summary();
-        return rc;
-    }
 
-    (void)pthread_join(cthread, NULL);
-    (void)pthread_join(sthread, NULL);
+        if (groupServerRc == 0) {
+            groupServerRc = _serverRc;
+        }
+        if (groupClientRc == 0) {
+            groupClientRc = _clientRc;
+        }
+    }
 
     (void)whTestGroup_Summary();
 
     if (miscRc != 0) {
         return miscRc;
     }
-    if (_serverRc != 0) {
-        return _serverRc;
+    if (groupServerRc != 0) {
+        return groupServerRc;
     }
-    return _clientRc;
+    return groupClientRc;
 }
 
 

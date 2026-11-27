@@ -213,6 +213,59 @@ static int _whTest_NvmPolicyRevokedCacheOnlyEraseDenied(whServerContext* server)
     return WH_ERROR_OK;
 }
 
+/* Id 0 (WH_NVM_ID_INVALID) never names a stored object: every add entry
+ * point rejects it, and a destroy batch naming it treats it as absent. */
+static int _whTest_NvmPolicyInvalidId(whServerContext* server)
+{
+    whNvmMetadata meta[1];
+    whNvmMetadata outMeta[1];
+    uint8_t       data[]  = {0xA1, 0xB2, 0xC3, 0xD4};
+    whNvmId       present = 0x0312;
+    whNvmId       later   = 0x0313;
+    whNvmId       list[2];
+
+    memset(meta, 0, sizeof(meta));
+    meta->id     = WH_NVM_ID_INVALID;
+    meta->len    = (whNvmSize)sizeof(data);
+    meta->access = WH_NVM_ACCESS_ANY;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Nvm_AddObject(server->nvm, meta, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Nvm_AddObjectWithReclaim(server->nvm, meta, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        wh_Nvm_AddObjectChecked(server->nvm, meta, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOTFOUND ==
+        wh_Nvm_GetMetadata(server->nvm, WH_NVM_ID_INVALID, outMeta));
+
+    meta->id = present;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Nvm_AddObjectChecked(server->nvm, meta, sizeof(data), data));
+
+    list[0] = present;
+    list[1] = WH_NVM_ID_INVALID;
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjectsChecked(server->nvm, 2, list));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          wh_Nvm_GetMetadata(server->nvm, present, outMeta));
+
+    /* The store still takes and finds new objects */
+    meta->id = later;
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_OK ==
+        wh_Nvm_AddObjectChecked(server->nvm, meta, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_GetMetadata(server->nvm, later, outMeta));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_OK ==
+                          wh_Nvm_DestroyObjectsChecked(server->nvm, 1, &later));
+
+    return WH_ERROR_OK;
+}
+
 int whTest_NvmPolicyChecked(whServerContext* ctx)
 {
     if (ctx == NULL) {
@@ -221,6 +274,7 @@ int whTest_NvmPolicyChecked(whServerContext* ctx)
 
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyDestroyBatchMissingId(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyDestroyAllAbsentNoChurn(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyInvalidId(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyMissingKeyEraseSucceeds(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmPolicyRevokedCacheOnlyEraseDenied(ctx));
 

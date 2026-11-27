@@ -225,8 +225,10 @@ int wh_Nvm_AddObjectWithReclaim(whNvmContext* context, whNvmMetadata *meta,
     uint16_t availableObjects;
     uint16_t reclaimObjects;
 
-    /* Note that meta and data pointers are validated by AddObject later */
-    if (context == NULL) {
+    /* Note that meta and data pointers are validated by AddObject later.
+     * Reject the invalid id here so it can't trigger a reclaim first. */
+    if ((context == NULL) ||
+        ((meta != NULL) && (meta->id == WH_NVM_ID_INVALID))) {
         return WH_ERROR_BADARGS;
     }
 
@@ -259,6 +261,11 @@ int wh_Nvm_AddObject(whNvmContext* context, whNvmMetadata *meta,
 {
     if (    (context == NULL) ||
             (context->cb == NULL) ) {
+        return WH_ERROR_BADARGS;
+    }
+
+    /* WH_NVM_ID_INVALID never names a stored object */
+    if ((meta != NULL) && (meta->id == WH_NVM_ID_INVALID)) {
         return WH_ERROR_BADARGS;
     }
 

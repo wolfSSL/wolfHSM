@@ -1398,9 +1398,8 @@ int wh_NvmFlash_AddObject(void* c, whNvmMetadata *meta,
     uint16_t           crc_meta = 0;
     uint16_t           crc_data = 0;
 
-    if (    (context == NULL) ||
-            (meta == NULL) ||
-            ((data_len > 0) && (data == NULL)) ) {
+    if ((context == NULL) || (meta == NULL) ||
+        (meta->id == WH_NVM_ID_INVALID) || ((data_len > 0) && (data == NULL))) {
         return WH_ERROR_BADARGS;
     }
     if (context->directory_bad != 0) {

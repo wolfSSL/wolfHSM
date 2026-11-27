@@ -529,6 +529,243 @@ int whTest_NvmFlashLog(void* ctx)
 }
 
 
+/* ---- Invalid id (WH_NVM_ID_INVALID) handling ---- */
+
+static uint8_t _rebootBackup[NVM_FLASH_SIZE];
+
+/*
+ * Simulate a reboot: tear the backend down and bring it back up over
+ * a snapshot of the flash, so only committed state survives.
+ */
+static int _rebootNvm(const whNvmCb* cb, void* context, const void* cfg)
+{
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    memcpy(_rebootBackup, _ctx.memory, sizeof(_rebootBackup));
+    _ctx.flashCfg.initData = _rebootBackup;
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
+    return 0;
+}
+
+
+/* Walk List from the start and count the objects it enumerates */
+static int _listCount(const whNvmCb* cb, void* context, int* outCount)
+{
+    whNvmId id    = WH_NVM_ID_INVALID;
+    whNvmId avail = 0;
+    int     found = 0;
+
+    do {
+        WH_TEST_RETURN_ON_FAIL(cb->List(context, WH_NVM_ACCESS_ANY,
+                                        WH_NVM_FLAGS_ANY, id, &avail, &id));
+        if (avail > 0) {
+            found++;
+        }
+        /* A backend that fails to advance must not hang the test */
+        WH_TEST_ASSERT_RETURN(found <= WOLFHSM_CFG_NVM_OBJECT_COUNT);
+    } while (avail > 1);
+
+    *outCount = found;
+    return 0;
+}
+
+
+/*
+ * Backend-agnostic checks that id 0 (WH_NVM_ID_INVALID) never names a
+ * stored object. It is the List "start"/"none" value, so a stored
+ * object with that id can't be enumerated, and the flash-log backend
+ * also uses it to terminate its directory:
+ *   - AddObject with id 0 is rejected and stores nothing
+ *   - objects added or updated afterwards stay reachable
+ *   - a destroy list naming id 0 treats it as absent: the present ids
+ *     are destroyed and the result is committed
+ * all of which must still hold after a reboot.
+ */
+static int _invalidIdHandling(const whNvmCb* cb, void* context, const void* cfg)
+{
+    uint8_t data[]    = "Data";
+    uint8_t update[]  = "UpdatedData";
+    whNvmId destroy[] = {10, WH_NVM_ID_INVALID};
+    whNvmId invalid[] = {WH_NVM_ID_INVALID};
+
+    whNvmMetadata metaInvalid = {.id = WH_NVM_ID_INVALID, .label = "L0"};
+    whNvmMetadata meta1       = {.id = 10, .label = "L1"};
+    whNvmMetadata meta2       = {.id = 20, .label = "L2"};
+    whNvmMetadata meta3       = {.id = 30, .label = "L3"};
+
+    whNvmMetadata readMeta = {0};
+    uint8_t       readBuf[32];
+    int           count = 0;
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, cfg));
+
+    WH_TEST_RETURN_ON_FAIL(
+        _addAndCheck(cb, context, &meta1, sizeof(data), data));
+
+    /* Id 0 can't be added and is never found */
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_BADARGS ==
+        cb->AddObject(context, &metaInvalid, sizeof(data), data));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOTFOUND ==
+        cb->GetMetadata(context, WH_NVM_ID_INVALID, &readMeta));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->Read(context,
+                                                        WH_NVM_ID_INVALID, 0,
+                                                        sizeof(data), readBuf));
+
+    /* The rejected add must not hide later adds or updates */
+    WH_TEST_RETURN_ON_FAIL(
+        _addAndCheck(cb, context, &meta2, sizeof(data), data));
+    WH_TEST_RETURN_ON_FAIL(
+        _addAndCheck(cb, context, &meta1, sizeof(update), update));
+    WH_TEST_RETURN_ON_FAIL(_listCount(cb, context, &count));
+    WH_TEST_ASSERT_RETURN(count == 2);
+
+    /* Id 0 in a destroy list is an absent id: the present one still goes */
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 2, destroy));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, meta1.id, &readMeta));
+    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &readMeta));
+
+    /* Destroying only id 0 changes nothing */
+    WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 1, invalid));
+    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &readMeta));
+
+    /* What the live context reports is what was committed */
+    WH_TEST_RETURN_ON_FAIL(_rebootNvm(cb, context, cfg));
+    WH_TEST_ASSERT_RETURN(
+        WH_ERROR_NOTFOUND ==
+        cb->GetMetadata(context, WH_NVM_ID_INVALID, &readMeta));
+    WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                          cb->GetMetadata(context, meta1.id, &readMeta));
+    WH_TEST_RETURN_ON_FAIL(cb->GetMetadata(context, meta2.id, &readMeta));
+    WH_TEST_RETURN_ON_FAIL(_listCount(cb, context, &count));
+    WH_TEST_ASSERT_RETURN(count == 1);
+
+    /* The store keeps working after the reboot */
+    WH_TEST_RETURN_ON_FAIL(
+        _addAndCheck(cb, context, &meta3, sizeof(data), data));
+    WH_TEST_RETURN_ON_FAIL(_listCount(cb, context, &count));
+    WH_TEST_ASSERT_RETURN(count == 2);
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+
+    return 0;
+}
+
+
+/*
+ * Invalid-id handling against every NVM backend built in.
+ */
+int whTest_NvmInvalidId(void* ctx)
+{
+    int type;
+
+    (void)ctx;
+    for (type = 0; type < (int)WH_NVM_TEST_BACKEND_COUNT; type++) {
+        _setup();
+        WH_TEST_RETURN_ON_FAIL(_selectNvm((whTestNvmBackendType)type));
+        WH_TEST_RETURN_ON_FAIL(_invalidIdHandling(
+            _ctx.nvmCfg.cb, _ctx.nvmCfg.context, _ctx.nvmCfg.config));
+    }
+    return 0;
+}
+
+
+/* ---- Flash-log failed add ---- */
+
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+static whNvmFlashLogContext _failedAddLogCtx;
+#endif
+
+/*
+ * An add whose flash write fails must leave no trace in the live
+ * flash-log context. The object is staged in the RAM directory before
+ * the commit, and the fallback only restores the committed bytes, so on
+ * an empty store the staged copy is still sitting at the start of the
+ * directory. It must not be found, listed, or block a retry, and
+ * destroying its id must be a no-op.
+ */
+int whTest_NvmFlashLogFailedAdd(void* ctx)
+{
+#if defined(WOLFHSM_CFG_SERVER_NVM_FLASH_LOG)
+    uint8_t               data[]      = "FailedAddData";
+    whNvmMetadata         meta        = {.id = 42, .label = "FailedAdd"};
+    whNvmId               ids[]       = {42};
+    const whFlashCb       faultCb[1]  = {WH_FLASH_FAULTINJECT_CB};
+    whFlashFaultInjectCtx faultCtx[1] = {0};
+    whFlashFaultInjectCfg faultCfg[1] = {0};
+    const whNvmCb         cb[1]       = {WH_NVM_FLASH_LOG_CB};
+    whNvmFlashLogConfig   cfg         = {0};
+    void*                 context     = &_failedAddLogCtx;
+    whNvmMetadata         readMeta    = {0};
+    uint8_t               readBuf[32];
+    whNvmId               availBefore = 0;
+    whNvmId               avail       = 0;
+    whNvmId               listId      = 0;
+    whNvmId               listCount   = 0;
+    int                   pass;
+
+    (void)ctx;
+    _setup();
+    _ctx.flashCfg.size       = 2 * WH_NVM_FLASH_LOG_PARTITION_SIZE;
+    _ctx.flashCfg.sectorSize = WH_NVM_FLASH_LOG_PARTITION_SIZE;
+
+    faultCfg->realCb  = &_ctx.flashCb;
+    faultCfg->realCtx = &_ctx.flashCtx;
+    faultCfg->realCfg = &_ctx.flashCfg;
+    cfg.flash_cb      = faultCb;
+    cfg.flash_ctx     = faultCtx;
+    cfg.flash_cfg     = faultCfg;
+
+    WH_TEST_RETURN_ON_FAIL(cb->Init(context, &cfg));
+    WH_TEST_RETURN_ON_FAIL(
+        cb->GetAvailable(context, NULL, &availBefore, NULL, NULL));
+
+    /* Twice: the first failed add is followed by a retry, the second by a
+     * destroy of the id that was never stored */
+    for (pass = 0; pass < 2; pass++) {
+        faultCtx->failAfterPrograms = 1;
+        WH_TEST_ASSERT_RETURN(
+            WH_ERROR_OK != cb->AddObject(context, &meta, sizeof(data), data));
+        faultCtx->failAfterPrograms = 0;
+
+        /* Nothing was stored */
+        WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                              cb->GetMetadata(context, meta.id, &readMeta));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND == cb->Read(context, meta.id, 0,
+                                                            sizeof(data),
+                                                            readBuf));
+        WH_TEST_RETURN_ON_FAIL(cb->List(context, WH_NVM_ACCESS_ANY,
+                                        WH_NVM_FLAGS_ANY, WH_NVM_ID_INVALID,
+                                        &listCount, &listId));
+        WH_TEST_ASSERT_RETURN(listCount == 0);
+        WH_TEST_ASSERT_RETURN(listId == WH_NVM_ID_INVALID);
+        WH_TEST_RETURN_ON_FAIL(
+            cb->GetAvailable(context, NULL, &avail, NULL, NULL));
+        WH_TEST_ASSERT_RETURN(avail == availBefore);
+
+        if (pass == 0) {
+            /* The same add succeeds once the flash works again */
+            WH_TEST_RETURN_ON_FAIL(
+                _addAndCheck(cb, context, &meta, sizeof(data), data));
+        }
+        WH_TEST_RETURN_ON_FAIL(cb->DestroyObjects(context, 1, ids));
+        WH_TEST_ASSERT_RETURN(WH_ERROR_NOTFOUND ==
+                              cb->GetMetadata(context, meta.id, &readMeta));
+        WH_TEST_RETURN_ON_FAIL(
+            cb->GetAvailable(context, NULL, &avail, NULL, NULL));
+        WH_TEST_ASSERT_RETURN(avail == availBefore);
+    }
+
+    WH_TEST_RETURN_ON_FAIL(cb->Cleanup(context));
+    return 0;
+#else
+    (void)ctx;
+    return WH_TEST_SKIPPED;
+#endif
+}
+
+
 /* ---- NVM recovery ---- */
 
 /*

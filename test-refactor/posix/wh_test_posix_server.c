@@ -69,11 +69,10 @@ static whFlashRamsimCtx _flashCtx;
 static whFlashRamsimCfg _flashCfg;
 static const whFlashCb  _flashCb = WH_FLASH_RAMSIM_CB;
 
-/* NVM wrapping the flash */
-static whNvmFlashContext _nvmFlashCtx;
-static whNvmFlashConfig  _nvmFlashCfg;
-static whNvmCb           _nvmCb = WH_NVM_FLASH_CB;
-static whNvmContext      _nvm;
+/* NVM wrapping the flash. The backend (flash or flash-log) is picked per
+ * whTestPosix_Server_Init call. */
+static whTestNvmBackendUnion _nvmSetup;
+static whNvmContext          _nvm;
 
 #ifndef WOLFHSM_CFG_NO_CRYPTO
 static whServerCryptoContext _crypto;
@@ -133,7 +132,8 @@ static const whTransportServerCb   _tsCb = WH_TRANSPORT_MEM_SERVER_CB;
 static whCommServerConfig          _commCfg;
 
 
-int whTestPosix_Server_Init(whServerContext* server)
+int whTestPosix_Server_Init(whServerContext*     server,
+                            whTestNvmBackendType nvmBackend)
 {
     whNvmConfig    nvmCfg;
     whServerConfig sCfg;
@@ -151,7 +151,12 @@ int whTestPosix_Server_Init(whServerContext* server)
     _flashCfg.erasedByte = 0xFF;
     _flashCfg.memory     = _flashMem;
 
-    /* Transport */
+    /* Transport. Zero the shared buffers: a previous server/client run
+     * leaves its notify counters behind, and the client's InitClear zeroes
+     * request then response, so stale counters would briefly look like a
+     * pending request to a server that is already polling. */
+    memset(_req, 0, sizeof(_req));
+    memset(_resp, 0, sizeof(_resp));
     memset(&_tmCfg, 0, sizeof(_tmCfg));
     _tmCfg.req       = (whTransportMemCsr*)_req;
     _tmCfg.req_size  = sizeof(_req);
@@ -164,16 +169,11 @@ int whTestPosix_Server_Init(whServerContext* server)
     _commCfg.transport_config  = (void*)&_tmCfg;
     _commCfg.server_id         = 1;
 
-    /* NVM -- flash ctx/cfg/cb wired by pointer */
-    memset(&_nvmFlashCfg, 0, sizeof(_nvmFlashCfg));
-    _nvmFlashCfg.cb      = &_flashCb;
-    _nvmFlashCfg.context = &_flashCtx;
-    _nvmFlashCfg.config  = &_flashCfg;
-
+    /* NVM -- requested backend over the ramsim flash */
+    memset(&_nvmSetup, 0, sizeof(_nvmSetup));
     memset(&nvmCfg, 0, sizeof(nvmCfg));
-    nvmCfg.cb      = &_nvmCb;
-    nvmCfg.context = &_nvmFlashCtx;
-    nvmCfg.config  = &_nvmFlashCfg;
+    WH_TEST_RETURN_ON_FAIL(whTest_NvmCfgBackend(
+        nvmBackend, &_nvmSetup, &nvmCfg, &_flashCfg, &_flashCtx, &_flashCb));
 
     WH_TEST_RETURN_ON_FAIL(wh_Nvm_Init(&_nvm, &nvmCfg));
 
@@ -199,6 +199,8 @@ int whTestPosix_Server_Init(whServerContext* server)
         int               i;
 
         authCfg.cb = &_authCb;
+        /* Count per server lifetime so each backend pass is checked */
+        _checkReqAuthCount = 0;
         WH_TEST_RETURN_ON_FAIL(wh_Auth_Init(&_auth, &authCfg));
 
         /* Admin user: full permissions, no key-id restrictions. */

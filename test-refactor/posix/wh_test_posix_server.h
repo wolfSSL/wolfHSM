@@ -36,11 +36,15 @@
 #include "wolfhsm/wh_server.h"
 #include "wolfhsm/wh_transport_mem.h"
 
+#include "wh_test_common.h"
+
 /*
  * Initialize the server context plus all backing state
- * (flash, NVM, crypto, transport). Caller owns `server`.
+ * (flash, NVM, crypto, transport) over the requested NVM
+ * backend. Caller owns `server`.
  */
-int whTestPosix_Server_Init(whServerContext* server);
+int whTestPosix_Server_Init(whServerContext*     server,
+                            whTestNvmBackendType nvmBackend);
 
 /*
  * Tear down the server context plus backing state. Matches

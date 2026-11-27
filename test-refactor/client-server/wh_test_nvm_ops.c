@@ -43,6 +43,7 @@
 #define NVM_TEST_OBJECT_ID_BASE      20
 #define NVM_TEST_OOB_ID            30
 #define NVM_TEST_DMA_ID_BASE       40
+#define NVM_TEST_INVALID_ID_BASE 50
 
 
 /*
@@ -89,19 +90,19 @@ static int _destroyNvmId(whClientContext* ctx, whNvmId id)
 
 /*
  * Add (or re-Add) one object via ops->add and verify:
- *   - avail_objects drops by 1 (a new slot is always consumed,
- *     even on re-Add, since the log is append-only)
- *   - reclaim_objects rises by reclaim_grow (0 for a fresh Add,
- *     1 for a re-Add that supersedes a prior version)
+ *   - avail_objects + reclaim_objects drops by 1 for a fresh Add
+ *     and is unchanged for a re-Add (is_update). The sum is what
+ *     every backend agrees on: an append-only backend takes a new
+ *     slot and turns the superseded one reclaimable, while one
+ *     that replaces in place moves neither count.
  *   - GetMetadata reports the just-written id/access/flags/len/label
  *   - ops->read returns the just-written payload
  */
-static int _addAndVerifyOne(whClientContext* ctx,
-    const WhNvmTestObjectOps* ops, whNvmId id,
-    whNvmAccess access, whNvmFlags flags,
-    const uint8_t* label, whNvmSize label_len,
-    const uint8_t* data, whNvmSize data_len,
-    int reclaim_grow)
+static int _addAndVerifyOne(whClientContext* ctx, const WhNvmTestObjectOps* ops,
+                            whNvmId id, whNvmAccess access, whNvmFlags flags,
+                            const uint8_t* label, whNvmSize label_len,
+                            const uint8_t* data, whNvmSize data_len,
+                            int is_update)
 {
     int32_t   server_rc       = 0;
     uint32_t  avail_size      = 0;
@@ -133,9 +134,9 @@ static int _addAndVerifyOne(whClientContext* ctx,
         ctx, &server_rc, &avail_size, &avail_objects,
         &reclaim_size, &reclaim_objects));
     WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
-    WH_TEST_ASSERT_RETURN(prev_avail - 1 == avail_objects);
     WH_TEST_ASSERT_RETURN(
-        (whNvmId)(prev_reclaim + reclaim_grow) == reclaim_objects);
+        (whNvmId)(prev_avail + prev_reclaim - (is_update ? 0 : 1)) ==
+        (whNvmId)(avail_objects + reclaim_objects));
 
     WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(
         ctx, id, &server_rc,
@@ -399,11 +400,79 @@ static int _whTest_NvmOpsReadOob(whClientContext* ctx)
 }
 
 
+/*
+ * A client can't create an object under id 0, and a destroy list naming
+ * id 0 next to a real object destroys the real one. `ns` selects the
+ * namespace: 0 for the client's own ids, or the global flag.
+ */
+static int _nvmInvalidIdInNamespace(whClientContext* ctx, whNvmId ns)
+{
+    int32_t server_rc = 0;
+    uint8_t label[]   = "invalid-id";
+    uint8_t data[]    = "data";
+    whNvmId id        = (whNvmId)(ns | NVM_TEST_INVALID_ID_BASE);
+    whNvmId list[2];
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        ctx, ns, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, sizeof(label), label,
+        sizeof(data), data, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_BADARGS);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(ctx, ns, &server_rc, NULL,
+                                                    NULL, NULL, NULL, 0, NULL));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        ctx, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, sizeof(label), label,
+        sizeof(data), data, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    list[0] = id;
+    list[1] = ns;
+    WH_TEST_RETURN_ON_FAIL(
+        wh_Client_NvmDestroyObjects(ctx, 2, list, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(ctx, id, &server_rc, NULL,
+                                                    NULL, NULL, NULL, 0, NULL));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_NOTFOUND);
+
+    /* The store still takes, finds and destroys objects afterwards */
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmAddObject(
+        ctx, id, WH_NVM_ACCESS_ANY, WH_NVM_FLAGS_NONE, sizeof(label), label,
+        sizeof(data), data, &server_rc));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+    WH_TEST_RETURN_ON_FAIL(wh_Client_NvmGetMetadata(ctx, id, &server_rc, NULL,
+                                                    NULL, NULL, NULL, 0, NULL));
+    WH_TEST_ASSERT_RETURN(server_rc == WH_ERROR_OK);
+
+    return _destroyNvmId(ctx, id);
+}
+
+
+/*
+ * Id 0 handling through the client NVM API. With translated ids the
+ * global namespace is the one whose id 0 maps to the server's internal
+ * id 0 (WH_NVM_ID_INVALID); with WOLFHSM_CFG_LEGACY_CLIENT_NVM the
+ * client's id 0 reaches the NVM layer as is.
+ */
+static int _whTest_NvmOpsInvalidId(whClientContext* ctx)
+{
+    WH_TEST_RETURN_ON_FAIL(_nvmInvalidIdInNamespace(ctx, 0));
+#if defined(WOLFHSM_CFG_GLOBAL_KEYS) && !defined(WOLFHSM_CFG_LEGACY_CLIENT_NVM)
+    WH_TEST_RETURN_ON_FAIL(
+        _nvmInvalidIdInNamespace(ctx, WH_KEYID_CLIENT_GLOBAL_FLAG));
+#endif
+    return WH_ERROR_OK;
+}
+
+
 int whTest_NvmOps(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_runNvmObjectTest(
         ctx, &g_blockingTestOps, NVM_TEST_OBJECT_ID_BASE));
     WH_TEST_RETURN_ON_FAIL(_whTest_NvmOpsReadOob(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_NvmOpsInvalidId(ctx));
 
     return WH_ERROR_OK;
 }

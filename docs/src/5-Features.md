@@ -300,7 +300,7 @@ This translation requires the client ID assigned during COMM INIT. The server re
 
 Client-facing NVM IDs use the same encoding as client-facing `whKeyId` values.
 
-- **Bits 0 to 7** contain the numeric object ID from 1 to 255. ID 0 is reserved as an erased sentinel and is rejected by `wh_Client_NvmAddObject`.
+- **Bits 0 to 7** contain the numeric object ID from 1 to 255. ID 0 is reserved as an erased sentinel, and the server rejects a `wh_Client_NvmAddObject` request that uses it.
 - **Bit 8** (`WH_KEYID_CLIENT_GLOBAL_FLAG`) selects the shared global namespace when `WOLFHSM_CFG_GLOBAL_KEYS` is defined. Without that define, every NVM function rejects IDs with this flag set and returns `WH_ERROR_BADARGS`.
 - **Bits 9 and 10** represent wrapped and port key flags. These are invalid for NVM objects, and NVM functions reject IDs with these bits set. Bits above bit 10 are also rejected.
 
