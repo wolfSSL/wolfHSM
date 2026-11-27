@@ -1127,6 +1127,9 @@ int wh_Client_Ed25519MakeCacheKeyAndExportPublic(whClientContext* ctx,
 
 /**
  * @brief Sign a message using an Ed25519 key on the server.
+ *
+ * The message and context travel inline in the request and must fit in
+ * WOLFHSM_CFG_COMM_DATA_LEN, otherwise WH_ERROR_REQUEST_SIZE is returned.
  */
 int wh_Client_Ed25519Sign(whClientContext* ctx, ed25519_key* key,
                           const uint8_t* msg, uint32_t msgLen, uint8_t type,
@@ -1143,13 +1146,6 @@ int wh_Client_Ed25519Verify(whClientContext* ctx, ed25519_key* key,
                             int* out_res);
 
 #ifdef WOLFHSM_CFG_DMA
-/**
- * @brief Sign a message using an Ed25519 key via DMA.
- */
-int wh_Client_Ed25519SignDma(whClientContext* ctx, ed25519_key* key,
-                             const uint8_t* msg, uint32_t msgLen, uint8_t type,
-                             const uint8_t* context, uint32_t contextLen,
-                             uint8_t* sig, uint32_t* inout_sig_len);
 
 /**
  * @brief Verify a signature using an Ed25519 key via DMA.

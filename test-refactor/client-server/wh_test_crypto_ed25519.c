@@ -24,7 +24,18 @@
  *   _whTest_CryptoEd25519Inline    - pure wolfCrypt (sign+verify locally,
  *                                    plus negative case for tampered sig)
  *   _whTest_CryptoEd25519ServerKey - server-cached sign and verify keyIds
- *   _whTest_CryptoEd25519Dma       - same, via the DMA messaging path
+ *   _whTest_CryptoEd25519Dma       - same, with verify over DMA (sign has no
+ *                                    DMA variant)
+ *   _whTest_CryptoEd25519DmaDevId  - wolfCrypt sign/verify (pure and ph)
+ *                                    with server-held keys: sign works in DMA
+ *                                    mode, verify works on WH_DEV_ID_DMA
+ *   _whTest_CryptoEd25519SignMsgSize - the inline sign request limit, with and
+ *                                    without a context
+ *   _whTest_CryptoEd25519DmaModeMsgSize - in DMA mode sign is limited to the
+ *                                    comm buffer; Ed25519ph covers longer
+ *                                    messages
+ *   _whTest_CryptoEd25519SignDmaRefused - the DMA callback declines sign and
+ *                                    the server refuses a raw DMA sign request
  */
 
 #include "wolfhsm/wh_settings.h"
@@ -39,11 +50,16 @@
 #include "wolfssl/wolfcrypt/ed25519.h"
 #include "wolfssl/wolfcrypt/asn.h"
 #include "wolfssl/wolfcrypt/random.h"
+#include "wolfssl/wolfcrypt/error-crypt.h"
 
 #include "wolfhsm/wh_error.h"
 #include "wolfhsm/wh_common.h"
 #include "wolfhsm/wh_client.h"
 #include "wolfhsm/wh_client_crypto.h"
+#include "wolfhsm/wh_client_cryptocb.h"
+#include "wolfhsm/wh_comm.h"
+#include "wolfhsm/wh_message.h"
+#include "wolfhsm/wh_message_crypto.h"
 
 #include "wh_test_common.h"
 #include "wh_test_list.h"
@@ -372,7 +388,7 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
     whKeyId     signKeyId   = WH_KEYID_ERASED;
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 DMA message";
-    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(ED25519_SIG_SIZE)];
+    byte        sig[ED25519_SIG_SIZE];
     uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 DMA Key";
@@ -409,11 +425,12 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
                                            &verifyKeyId);
     }
 
+    /* Sign has no DMA variant */
     if (ret == 0) {
-        ret = wh_Client_Ed25519SignDma(ctx, key, msg, (uint32_t)sizeof(msg),
-                                       (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        ret = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
         if (ret != 0) {
-            WH_ERROR_PRINT("Failed to sign via DMA Ed25519 key: %d\n", ret);
+            WH_ERROR_PRINT("Failed to sign with Ed25519 key: %d\n", ret);
         }
     }
 
@@ -461,6 +478,355 @@ static int _whTest_CryptoEd25519Dma(whClientContext* ctx)
     wc_ed25519_free(key);
     (void)wc_FreeRng(rng);
     return ret;
+}
+
+#ifndef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+/* wolfCrypt Ed25519 with keys held only by the server, with DMA. Sign has no
+ * DMA variant, so the DMA callback reports it unavailable:
+ *  - in DMA dispatch mode, sign (pure and prehashed) is retried as a standard
+ *    request and succeeds, while verify uses DMA;
+ *  - on WH_DEV_ID_DMA verify works (sign being declined there is checked in
+ *    _whTest_CryptoEd25519SignDmaRefused). */
+static int _whTest_CryptoEd25519DmaDevId(whClientContext* ctx)
+{
+    int         ret = 0;
+    WC_RNG      rng[1];
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        msg[]       = "Ed25519 DMA devId message";
+    byte        sig[ED25519_SIG_SIZE];
+    byte        sigPh[ED25519_SIG_SIZE];
+    word32      sigSz    = sizeof(sig);
+    word32      sigPhSz  = sizeof(sigPh);
+    int         verified = 0;
+    int         prevDma  = 0;
+    uint8_t     label[]  = "Ed25519 DMA devId";
+
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        /* Rebinds both structs to the client devId and their server keyIds */
+        ret = whTest_Ed25519ImportToServer(ctx, WH_CLIENT_DEVID(ctx), key,
+                                           pubKey, label, sizeof(label),
+                                           &signKeyId, &verifyKeyId);
+    }
+
+    /* DMA dispatch mode: sign falls back to a standard request */
+    if (ret == 0) {
+        ret = wh_Client_GetDmaMode(ctx, &prevDma);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SetDmaMode(ctx, 1);
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_sign_msg(msg, sizeof(msg), sig, &sigSz, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 sign in DMA mode failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, sizeof(msg), &verified,
+                                    pubKey);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519 verify in DMA mode failed: %d %d\n", ret,
+                           verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    if (ret == 0) {
+        verified = 0;
+        ret      = wc_ed25519ph_sign_msg(msg, sizeof(msg), sigPh, &sigPhSz, key,
+                                         NULL, 0);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519ph sign in DMA mode failed: %d\n", ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519ph_verify_msg(sigPh, sigPhSz, msg, sizeof(msg),
+                                      &verified, pubKey, NULL, 0);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519ph verify in DMA mode failed: %d %d\n", ret,
+                           verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    (void)wh_Client_SetDmaMode(ctx, prevDma);
+
+    /* WH_DEV_ID_DMA: verify works */
+    if (ret == 0) {
+        wc_ed25519_free(pubKey);
+        ret = wc_ed25519_init_ex(pubKey, NULL, WH_DEV_ID_DMA);
+        if (ret == 0) {
+            ret = wh_Client_Ed25519SetKeyId(pubKey, verifyKeyId);
+        }
+    }
+    if (ret == 0) {
+        verified = 0;
+        ret = wc_ed25519_verify_msg(sig, sigSz, msg, sizeof(msg), &verified,
+                                    pubKey);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519 verify on WH_DEV_ID_DMA failed: %d %d\n",
+                           ret, verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT(
+            "Ed25519 DMA MODE AND WH_DEV_ID_DMA SIGN/VERIFY SUCCESS\n");
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+/* Without a DMA variant, Ed25519 sign in DMA mode carries the message inline,
+ * so it must fit in the comm buffer. The largest message that fits signs and
+ * verifies, a longer one is refused with an error (not passed to wolfCrypt's
+ * software path), and Ed25519ph, which sends only the prehash, signs it. */
+static int _whTest_CryptoEd25519DmaModeMsgSize(whClientContext* ctx)
+{
+    /* static: keep the comm-buffer-sized message off the stack */
+    static byte  bigMsg[WOLFHSM_CFG_COMM_DATA_LEN + 1];
+    const word32 maxMsgLen =
+        (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                 sizeof(whMessageCrypto_GenericRequestHeader) -
+                 sizeof(whMessageCrypto_Ed25519SignRequest));
+    int         ret = 0;
+    WC_RNG      rng[1];
+    ed25519_key key[1]      = {0};
+    ed25519_key pubKey[1]   = {0};
+    whKeyId     signKeyId   = WH_KEYID_ERASED;
+    whKeyId     verifyKeyId = WH_KEYID_ERASED;
+    byte        sig[ED25519_SIG_SIZE];
+    word32      sigSz    = sizeof(sig);
+    int         verified = 0;
+    int         prevDma  = 0;
+    uint8_t     label[]  = "Ed25519 DMA msg size";
+
+    memset(bigMsg, 0xA5, sizeof(bigMsg));
+
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 key: %d\n", ret);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_init_ex(pubKey, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to initialize Ed25519 public key: %d\n", ret);
+        wc_ed25519_free(key);
+        (void)wc_FreeRng(rng);
+        return ret;
+    }
+
+    ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to generate Ed25519 key: %d\n", ret);
+    }
+    else {
+        ret = whTest_Ed25519ImportToServer(ctx, WH_CLIENT_DEVID(ctx), key,
+                                           pubKey, label, sizeof(label),
+                                           &signKeyId, &verifyKeyId);
+    }
+
+    if (ret == 0) {
+        ret = wh_Client_GetDmaMode(ctx, &prevDma);
+    }
+    if (ret == 0) {
+        ret = wh_Client_SetDmaMode(ctx, 1);
+    }
+
+    /* The largest message that fits */
+    if (ret == 0) {
+        ret = wc_ed25519_sign_msg(bigMsg, maxMsgLen, sig, &sigSz, key);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519 sign of %u bytes in DMA mode failed: %d\n",
+                           (unsigned)maxMsgLen, ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_verify_msg(sig, sigSz, bigMsg, maxMsgLen, &verified,
+                                    pubKey);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519 verify of %u bytes failed: %d %d\n",
+                           (unsigned)maxMsgLen, ret, verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+
+    /* One byte more is refused */
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wc_ed25519_sign_msg(bigMsg, maxMsgLen + 1, sig, &sigSz, key);
+        if (ret != BAD_FUNC_ARG) {
+            WH_ERROR_PRINT("Oversized Ed25519 sign in DMA mode returned %d, "
+                           "expected BAD_FUNC_ARG\n",
+                           ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* Ed25519ph signs the oversized message */
+    if (ret == 0) {
+        sigSz    = sizeof(sig);
+        verified = 0;
+        ret = wc_ed25519ph_sign_msg(bigMsg, maxMsgLen + 1, sig, &sigSz, key,
+                                    NULL, 0);
+        if (ret != 0) {
+            WH_ERROR_PRINT("Ed25519ph sign of oversized message failed: %d\n",
+                           ret);
+        }
+    }
+    if (ret == 0) {
+        ret = wc_ed25519ph_verify_msg(sig, sigSz, bigMsg, maxMsgLen + 1,
+                                      &verified, pubKey, NULL, 0);
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519ph verify of oversized message failed: "
+                           "%d %d\n",
+                           ret, verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    (void)wh_Client_SetDmaMode(ctx, prevDma);
+
+    if (!WH_KEYID_ISERASED(signKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, signKeyId);
+    }
+    if (!WH_KEYID_ISERASED(verifyKeyId)) {
+        (void)wh_Client_KeyEvict(ctx, verifyKeyId);
+    }
+
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 DMA MODE MESSAGE SIZE SUCCESS\n");
+    }
+
+    wc_ed25519_free(pubKey);
+    wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+#endif /* !WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT */
+
+/* Ed25519 sign has no DMA variant: the server would read the message twice in
+ * client memory, and a client changing it in between recovers the private
+ * key. Check both ends:
+ *  - the client DMA callback declines the operation without contacting the
+ *    server;
+ *  - the server refuses a raw DMA sign request, as a client not using the
+ *    wolfHSM client library could send, before reading the body. The body has
+ *    the size of the removed request struct. */
+static int _whTest_CryptoEd25519SignDmaRefused(whClientContext* ctx)
+{
+    whMessageCrypto_GenericRequestHeader*  reqHdr;
+    whMessageCrypto_GenericResponseHeader* resHdr;
+    uint8_t* dataPtr = (uint8_t*)wh_CommClient_GetDataPtr(ctx->comm);
+    uint16_t group   = WH_MESSAGE_GROUP_CRYPTO_DMA;
+    uint16_t action  = WC_ALGO_TYPE_PK;
+    uint16_t reqLen  = (uint16_t)(sizeof(*reqHdr) + 64);
+    uint16_t resLen  = 0;
+    int      ret;
+#ifdef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    /* The DMA callback fails every operation in this configuration */
+    const int cbExpected = WC_HW_E;
+#else
+    const int cbExpected = CRYPTOCB_UNAVAILABLE;
+#endif
+    wc_CryptoInfo info;
+    ed25519_key   key[1];
+    byte          msg[] = "Ed25519 DMA sign declined";
+    byte          sig[ED25519_SIG_SIZE];
+    word32        sigSz = sizeof(sig);
+
+    ret = wc_ed25519_init_ex(key, NULL, WH_DEV_ID_DMA);
+    WH_TEST_ASSERT_RETURN(ret == 0);
+    memset(&info, 0, sizeof(info));
+    info.algo_type             = WC_ALGO_TYPE_PK;
+    info.pk.type               = WC_PK_TYPE_ED25519_SIGN;
+    info.pk.ed25519sign.key    = key;
+    info.pk.ed25519sign.in     = msg;
+    info.pk.ed25519sign.inLen  = sizeof(msg);
+    info.pk.ed25519sign.out    = sig;
+    info.pk.ed25519sign.outLen = &sigSz;
+    info.pk.ed25519sign.type   = (byte)Ed25519;
+    ret = wh_Client_CryptoCbDma(WH_DEV_ID_DMA, &info, ctx);
+    wc_ed25519_free(key);
+    if (ret != cbExpected) {
+        WH_ERROR_PRINT("Ed25519 sign on the DMA callback returned %d, "
+                       "expected %d\n",
+                       ret, cbExpected);
+        return WH_TEST_FAIL;
+    }
+
+    WH_TEST_ASSERT_RETURN(dataPtr != NULL);
+    memset(dataPtr, 0, reqLen);
+    reqHdr              = (whMessageCrypto_GenericRequestHeader*)dataPtr;
+    reqHdr->algoType    = WC_PK_TYPE_ED25519_SIGN;
+    reqHdr->algoSubType = WH_MESSAGE_CRYPTO_ALGO_SUBTYPE_NONE;
+    reqHdr->affinity    = ctx->cryptoAffinity;
+
+    ret = wh_Client_SendRequest(ctx, group, action, reqLen, dataPtr);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);
+    do {
+        ret = wh_Client_RecvResponse(ctx, &group, &action, &resLen,
+                                     WOLFHSM_CFG_COMM_DATA_LEN, dataPtr);
+    } while (ret == WH_ERROR_NOTREADY);
+    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_OK);
+    WH_TEST_ASSERT_RETURN(group == WH_MESSAGE_GROUP_CRYPTO_DMA);
+    WH_TEST_ASSERT_RETURN(action == WC_ALGO_TYPE_PK);
+    WH_TEST_ASSERT_RETURN(resLen == sizeof(*resHdr));
+
+    resHdr = (whMessageCrypto_GenericResponseHeader*)dataPtr;
+    if (resHdr->rc != NOT_COMPILED_IN) {
+        WH_ERROR_PRINT("Raw Ed25519 DMA sign request returned %d, expected "
+                       "NOT_COMPILED_IN (%d)\n",
+                       (int)resHdr->rc, NOT_COMPILED_IN);
+        return WH_TEST_FAIL;
+    }
+    WH_TEST_PRINT("Ed25519 DMA SIGN DECLINED AND REFUSED SUCCESS\n");
+    return 0;
 }
 #endif /* WOLFHSM_CFG_DMA */
 
@@ -776,9 +1142,6 @@ static int _whTest_CryptoEd25519NullKey(whClientContext* ctx)
                                   NULL, 0, &res);
     WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
 #ifdef WOLFHSM_CFG_DMA
-    ret = wh_Client_Ed25519SignDma(ctx, NULL, msg, (uint32_t)sizeof(msg),
-                                   (uint8_t)Ed25519, NULL, 0, sig, &sigLen);
-    WH_TEST_ASSERT_RETURN(ret == WH_ERROR_BADARGS);
     ret = wh_Client_Ed25519VerifyDma(ctx, NULL, sig, (uint32_t)sizeof(sig),
                                      msg, (uint32_t)sizeof(msg),
                                      (uint8_t)Ed25519, NULL, 0, &res);
@@ -788,12 +1151,145 @@ static int _whTest_CryptoEd25519NullKey(whClientContext* ctx)
     return 0;
 }
 
+/* wh_Client_Ed25519Sign carries the message and context inline, so together
+ * they must fit in the comm buffer. Sign at the limit, with and without a
+ * context, and check that one byte more is refused with
+ * WH_ERROR_REQUEST_SIZE. Signatures are verified locally. */
+static int _whTest_CryptoEd25519SignMsgSize(whClientContext* ctx)
+{
+    /* static: keep the comm-buffer-sized message off the stack */
+    static byte  bigMsg[WOLFHSM_CFG_COMM_DATA_LEN];
+    const word32 maxLen =
+        (word32)(WOLFHSM_CFG_COMM_DATA_LEN -
+                 sizeof(whMessageCrypto_GenericRequestHeader) -
+                 sizeof(whMessageCrypto_Ed25519SignRequest));
+    const byte   context[]  = "Ed25519ctx size-limit context";
+    const word32 contextLen = (word32)sizeof(context);
+    int          ret        = 0;
+    WC_RNG       rng[1];
+    ed25519_key  key[1]    = {0};
+    ed25519_key  hsmKey[1] = {0};
+    whKeyId      keyId     = WH_KEYID_ERASED;
+    byte         sig[ED25519_SIG_SIZE];
+    uint32_t     sigSz    = sizeof(sig);
+    int          verified = 0;
+    uint8_t      label[]  = "Ed25519 msg size";
+
+    memset(bigMsg, 0x5A, sizeof(bigMsg));
+
+    ret = wc_InitRng_ex(rng, NULL, WH_CLIENT_DEVID(ctx));
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to wc_InitRng_ex %d\n", ret);
+        return ret;
+    }
+
+    /* key stays local for verification, hsmKey references the server copy */
+    ret = wc_ed25519_init_ex(key, NULL, INVALID_DEVID);
+    if (ret == 0) {
+        ret = wc_ed25519_make_key(rng, ED25519_KEY_SIZE, key);
+    }
+    if (ret == 0) {
+        ret = wh_Client_Ed25519ImportKey(
+            ctx, key, &keyId, WH_NVM_FLAGS_USAGE_SIGN, sizeof(label), label);
+    }
+    if (ret == 0) {
+        ret = wc_ed25519_init_ex(hsmKey, NULL, WH_CLIENT_DEVID(ctx));
+    }
+    if (ret == 0) {
+        ret = wh_Client_Ed25519SetKeyId(hsmKey, keyId);
+    }
+    if (ret != 0) {
+        WH_ERROR_PRINT("Failed to set up Ed25519 key: %d\n", ret);
+    }
+
+    /* Pure Ed25519: the largest message signs, one byte more is refused */
+    if (ret == 0) {
+        ret = wh_Client_Ed25519Sign(ctx, hsmKey, bigMsg, maxLen,
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret == 0) {
+            ret = wc_ed25519_verify_msg(sig, sigSz, bigMsg, maxLen, &verified,
+                                        key);
+        }
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519 sign of %u bytes failed: %d %d\n",
+                           (unsigned)maxLen, ret, verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wh_Client_Ed25519Sign(ctx, hsmKey, bigMsg, maxLen + 1,
+                                      (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        if (ret != WH_ERROR_REQUEST_SIZE) {
+            WH_ERROR_PRINT("Oversized Ed25519 sign returned %d, expected "
+                           "WH_ERROR_REQUEST_SIZE\n",
+                           ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    /* Ed25519ctx: the context counts towards the same limit */
+    if (ret == 0) {
+        sigSz    = sizeof(sig);
+        verified = 0;
+        ret = wh_Client_Ed25519Sign(ctx, hsmKey, bigMsg, maxLen - contextLen,
+                                    (uint8_t)Ed25519ctx, context, contextLen,
+                                    sig, &sigSz);
+        if (ret == 0) {
+            ret = wc_ed25519ctx_verify_msg(sig, sigSz, bigMsg,
+                                           maxLen - contextLen, &verified, key,
+                                           context, (byte)contextLen);
+        }
+        if ((ret != 0) || (verified != 1)) {
+            WH_ERROR_PRINT("Ed25519ctx sign at the limit failed: %d %d\n", ret,
+                           verified);
+            ret = (ret != 0) ? ret : WH_TEST_FAIL;
+        }
+    }
+    if (ret == 0) {
+        sigSz = sizeof(sig);
+        ret   = wh_Client_Ed25519Sign(
+            ctx, hsmKey, bigMsg, maxLen - contextLen + 1, (uint8_t)Ed25519ctx,
+            context, contextLen, sig, &sigSz);
+        if (ret != WH_ERROR_REQUEST_SIZE) {
+            WH_ERROR_PRINT("Oversized Ed25519ctx sign returned %d, expected "
+                           "WH_ERROR_REQUEST_SIZE\n",
+                           ret);
+            ret = WH_TEST_FAIL;
+        }
+        else {
+            ret = 0;
+        }
+    }
+
+    if (!WH_KEYID_ISERASED(keyId)) {
+        (void)wh_Client_KeyEvict(ctx, keyId);
+    }
+    if (ret == 0) {
+        WH_TEST_PRINT("Ed25519 SIGN MESSAGE SIZE SUCCESS\n");
+    }
+
+    wc_ed25519_free(hsmKey);
+    wc_ed25519_free(key);
+    (void)wc_FreeRng(rng);
+    return ret;
+}
+
 int whTest_Crypto_Ed25519(whClientContext* ctx)
 {
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Inline(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ServerKey(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519SignMsgSize(ctx));
 #ifdef WOLFHSM_CFG_DMA
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519Dma(ctx));
+#ifndef WOLFHSM_CFG_DMA_REQUIRE_ALIGNED_PADDED_OUTPUT
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519DmaDevId(ctx));
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519DmaModeMsgSize(ctx));
+#endif
+    WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519SignDmaRefused(ctx));
 #endif
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519ExportPublicKey(ctx));
     WH_TEST_RETURN_ON_FAIL(_whTest_CryptoEd25519CacheKeyAndExportPublic(ctx));

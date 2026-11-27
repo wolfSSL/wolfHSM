@@ -1744,61 +1744,6 @@ int wh_MessageCrypto_TranslatePqcStatefulSigSigsLeftDmaResponse(
     return 0;
 }
 
-/* Ed25519 DMA Sign Request translation */
-int wh_MessageCrypto_TranslateEd25519SignDmaRequest(
-    uint16_t magic, const whMessageCrypto_Ed25519SignDmaRequest* src,
-    whMessageCrypto_Ed25519SignDmaRequest* dest)
-{
-    int ret;
-
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->msg, &dest->msg);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->sig, &dest->sig);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaBuffer(magic, &src->pub, &dest->pub);
-    if (ret != 0) {
-        return ret;
-    }
-
-    WH_T32(magic, dest, src, options);
-    WH_T32(magic, dest, src, keyId);
-    WH_T32(magic, dest, src, type);
-    WH_T32(magic, dest, src, ctxSz);
-    return 0;
-}
-
-/* Ed25519 DMA Sign Response translation */
-int wh_MessageCrypto_TranslateEd25519SignDmaResponse(
-    uint16_t magic, const whMessageCrypto_Ed25519SignDmaResponse* src,
-    whMessageCrypto_Ed25519SignDmaResponse* dest)
-{
-    int ret;
-
-    if ((src == NULL) || (dest == NULL)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = wh_MessageCrypto_TranslateDmaAddrStatus(magic, &src->dmaAddrStatus,
-                                                  &dest->dmaAddrStatus);
-    if (ret != 0) {
-        return ret;
-    }
-
-    WH_T32(magic, dest, src, sigSz);
-    WH_T32(magic, dest, src, pubSz);
-    return 0;
-}
-
 /* Ed25519 DMA Verify Request translation */
 int wh_MessageCrypto_TranslateEd25519VerifyDmaRequest(
     uint16_t magic, const whMessageCrypto_Ed25519VerifyDmaRequest* src,

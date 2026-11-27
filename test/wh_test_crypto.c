@@ -4632,7 +4632,7 @@ static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
     whKeyId     signKeyId   = WH_KEYID_ERASED;
     whKeyId     verifyKeyId = WH_KEYID_ERASED;
     byte        msg[]       = "Ed25519 DMA message";
-    WH_DMA_ALIGNED byte sig[WH_DMA_PAD_SIZE(ED25519_SIG_SIZE)];
+    byte        sig[ED25519_SIG_SIZE];
     uint32_t    sigSz    = sizeof(sig);
     int         verified = 0;
     uint8_t     label[]  = "Ed25519 DMA Key";
@@ -4661,11 +4661,12 @@ static int whTest_CryptoEd25519Dma(whClientContext* ctx, int devId, WC_RNG* rng)
                                            &verifyKeyId);
     }
 
+    /* obtain a sign without DMA, because sign has no DMA variant */
     if (ret == 0) {
-        ret = wh_Client_Ed25519SignDma(ctx, key, msg, (uint32_t)sizeof(msg),
-                                       (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
+        ret = wh_Client_Ed25519Sign(ctx, key, msg, (uint32_t)sizeof(msg),
+                                    (uint8_t)Ed25519, NULL, 0, sig, &sigSz);
         if (ret != 0) {
-            WH_ERROR_PRINT("Failed to sign via DMA Ed25519 key: %d\n", ret);
+            WH_ERROR_PRINT("Failed to sign with Ed25519 key: %d\n", ret);
         }
     }
 

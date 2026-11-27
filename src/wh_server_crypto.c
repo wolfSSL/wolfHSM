@@ -181,10 +181,6 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic, int devId,
                                 const void* cryptoDataIn, uint16_t inSize,
                                 void* cryptoDataOut, uint16_t* outSize);
 #ifdef WOLFHSM_CFG_DMA
-static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
-                                 int devId, const void* cryptoDataIn,
-                                 uint16_t inSize, void* cryptoDataOut,
-                                 uint16_t* outSize);
 static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
                                    int devId, const void* cryptoDataIn,
                                    uint16_t inSize, void* cryptoDataOut,
@@ -2981,108 +2977,6 @@ static int _HandleEd25519Verify(whServerContext* ctx, uint16_t magic, int devId,
     return ret;
 }
 #ifdef WOLFHSM_CFG_DMA
-static int _HandleEd25519SignDma(whServerContext* ctx, uint16_t magic,
-                                 int devId, const void* cryptoDataIn,
-                                 uint16_t inSize, void* cryptoDataOut,
-                                 uint16_t* outSize)
-{
-    int                                    ret = 0;
-    ed25519_key                            key[1];
-    void*                                  msgAddr = NULL;
-    void*                                  sigAddr = NULL;
-    whMessageCrypto_Ed25519SignDmaRequest  req;
-    whMessageCrypto_Ed25519SignDmaResponse res;
-    word32                                 sigLen = 0;
-
-    if (inSize < sizeof(req)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    ret = wh_MessageCrypto_TranslateEd25519SignDmaRequest(
-        magic, (const whMessageCrypto_Ed25519SignDmaRequest*)cryptoDataIn,
-        &req);
-    if (ret != WH_ERROR_OK) {
-        return ret;
-    }
-
-    uint32_t available = inSize - sizeof(req);
-    if (req.ctxSz > available) {
-        return WH_ERROR_BADARGS;
-    }
-    if (req.ctxSz > WH_CRYPTO_ED25519_MAX_CTX_LEN) {
-        return WH_ERROR_BADARGS;
-    }
-    uint8_t* req_ctx = (uint8_t*)cryptoDataIn + sizeof(req);
-
-    if ((req.type != (byte)Ed25519) && (req.type != (byte)Ed25519ctx) &&
-        (req.type != (byte)Ed25519ph)) {
-        return WH_ERROR_BADARGS;
-    }
-
-    whKeyId key_id = wh_KeyId_TranslateFromClient(
-        WH_KEYTYPE_CRYPTO, ctx->comm->client_id, req.keyId);
-    int evict = !!(req.options & WH_MESSAGE_CRYPTO_ED25519_SIGN_OPTIONS_EVICT);
-
-    memset(&res, 0, sizeof(res));
-
-    sigLen = req.sig.sz;
-    ret    = wh_Server_DmaProcessClientAddress(
-        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
-        WH_DMA_OPER_CLIENT_READ_PRE, (whServerDmaFlags){0});
-    if (ret != WH_ERROR_OK) {
-        res.dmaAddrStatus.badAddr = req.msg;
-    }
-    if (ret == WH_ERROR_OK) {
-        ret = wh_Server_DmaProcessClientAddress(
-            ctx, (uintptr_t)req.sig.addr, &sigAddr, req.sig.sz,
-            WH_DMA_OPER_CLIENT_WRITE_PRE, (whServerDmaFlags){0});
-        if (ret != WH_ERROR_OK) {
-            res.dmaAddrStatus.badAddr = req.sig;
-        }
-    }
-    if (ret == WH_ERROR_OK) {
-        ret = wc_ed25519_init_ex(key, NULL, devId);
-        if (ret == 0) {
-            /* load the private key, enforcing the sign usage policy against
-             * the same locked snapshot that is exported */
-            ret = _CacheExportEd25519KeyEnforce(ctx, key_id,
-                                                WH_NVM_FLAGS_USAGE_SIGN, key);
-            if (ret == WH_ERROR_OK) {
-                ret = wc_ed25519_sign_msg_ex(msgAddr, req.msg.sz, sigAddr,
-                                             &sigLen, key, (byte)req.type,
-                                             req_ctx, (byte)req.ctxSz);
-                if (ret == WH_ERROR_OK) {
-                    res.sigSz = sigLen;
-                }
-            }
-            if ((ret != WH_ERROR_OK) && (res.dmaAddrStatus.badAddr.sz == 0)) {
-                res.dmaAddrStatus.badAddr = req.sig;
-            }
-        }
-        wc_ed25519_free(key);
-    }
-
-    (void)wh_Server_DmaProcessClientAddress(
-        ctx, (uintptr_t)req.sig.addr, &sigAddr, sigLen,
-        WH_DMA_OPER_CLIENT_WRITE_POST, (whServerDmaFlags){0});
-    (void)wh_Server_DmaProcessClientAddress(
-        ctx, (uintptr_t)req.msg.addr, &msgAddr, req.msg.sz,
-        WH_DMA_OPER_CLIENT_READ_POST, (whServerDmaFlags){0});
-
-    if (evict != 0) {
-        _CryptoEvictKeyLocked(ctx, key_id);
-    }
-
-    if (ret == WH_ERROR_OK) {
-        (void)wh_MessageCrypto_TranslateEd25519SignDmaResponse(
-            magic, &res,
-            (whMessageCrypto_Ed25519SignDmaResponse*)cryptoDataOut);
-        *outSize = sizeof(res);
-    }
-
-    return ret;
-}
-
 static int _HandleEd25519VerifyDma(whServerContext* ctx, uint16_t magic,
                                    int devId, const void* cryptoDataIn,
                                    uint16_t inSize, void* cryptoDataOut,
@@ -9927,11 +9821,12 @@ int wh_Server_HandleCryptoDmaRequest(whServerContext* ctx, uint16_t magic,
                     break;
 #endif /* WOLFSSL_HAVE_LMS || WOLFSSL_HAVE_XMSS */
 #ifdef HAVE_ED25519
-                case WC_PK_TYPE_ED25519_SIGN:
-                    ret = _HandleEd25519SignDma(ctx, magic, devId, cryptoDataIn,
-                                                cryptoInSize, cryptoDataOut,
-                                                &cryptoOutSize);
-                    break;
+                /* No WC_PK_TYPE_ED25519_SIGN case: wc_ed25519_sign_msg_ex reads
+                 * the message twice, once for the nonce r = H(prefix || M) and
+                 * again for the challenge h = H(R || A || M). DMA input is read
+                 * in place, so a client that rewrites the message between the
+                 * two reads gets two signatures with the same r and different
+                 * h, and recovers the private scalar from them. */
                 case WC_PK_TYPE_ED25519_VERIFY:
                     ret = _HandleEd25519VerifyDma(
                         ctx, magic, devId, cryptoDataIn, cryptoInSize,
