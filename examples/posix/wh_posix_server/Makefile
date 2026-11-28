@@ -215,6 +215,9 @@ $(BUILD_DIR)/$(BIN).a: $(OBJS_ASM) $(OBJS_C)
 	@echo "Building static library: $(notdir $@)"
 	$(CMD_ECHO) $(AR) -r $@ $^
 
+WOLFHSM_SBOM_APP_NAME := wolfhsm-posix-server
+include $(WOLFHSM_DIR)/mk/sbom.mk
+
 clean:
 	@echo "Cleaning build files"
 	@rm -f 	\

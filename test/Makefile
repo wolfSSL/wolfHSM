@@ -498,3 +498,6 @@ coverage-json:
 # Prevent make from trying to build these as targets
 %:
 	@:
+
+WOLFHSM_SBOM_APP_NAME := wolfhsm-test
+include $(WOLFHSM_DIR)/mk/sbom.mk

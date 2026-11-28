@@ -408,3 +408,6 @@ check run: build_app
 # Prevent make from trying to build these as targets
 %:
 	@:
+
+WOLFHSM_SBOM_APP_NAME := wolfhsm-test-refactor
+include $(WOLFHSM_DIR)/mk/sbom.mk

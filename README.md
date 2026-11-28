@@ -25,3 +25,11 @@ please refer to the following resources.
 - [wolfHSM Manual](https://www.wolfssl.com/documentation/manuals/wolfhsm/index.html)
 - [wolfHSM API Reference](https://www.wolfssl.com/documentation/manuals/wolfhsm/appendix01.html)
 - [wolfHSM Examples](https://github.com/wolfSSL/wolfHSM/tree/main/examples)
+
+## SBOM
+
+The public POSIX builds write a CycloneDX file and an SPDX file. See [docs/SBOM.md](docs/SBOM.md).
+
+```
+make sbom
+```

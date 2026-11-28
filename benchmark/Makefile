@@ -236,6 +236,9 @@ clean:
 			$(BUILD_DIR)/*.sym \
 			$(BUILD_DIR)/*.disasm
 
+WOLFHSM_SBOM_APP_NAME := wolfhsm-benchmark
+include $(WOLFHSM_DIR)/mk/sbom.mk
+
 # No prereq's here to stop from rebuilding with different options
 run:
 ifeq (,$(wildcard $(BUILD_DIR)/$(BIN).elf))
